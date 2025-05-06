@@ -21260,15 +21260,20 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(t1Name, t2Name)));
 
-        assertTrue(result.records().contains(
-            newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
-                    mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1)),
-                    mkShareGroupStateMetadataEntry(t2Uuid, t2Name, List.of(0, 1))
-                )),
-                Map.of(),
-                Map.of()
-            ))
+        CoordinatorRecord expected = newShareGroupStatePartitionMetadataRecord(
+            groupId,
+            mkShareGroupStateMap(List.of(
+                mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1)),
+                mkShareGroupStateMetadataEntry(t2Uuid, t2Name, List.of(0, 1))
+            )),
+            Map.of(),
+            Map.of()
         );
+
+        Optional<CoordinatorRecord> actual = result.records().stream().filter(record -> record.key() instanceof ShareGroupStatePartitionMetadataKey)
+            .findAny();
+        assertTrue(actual.isPresent());
+        assertRecordEquals(expected, actual.get());
 
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
@@ -21330,17 +21335,22 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(1)
                 .setSubscribedTopicNames(null));
 
-        assertTrue(result.records().contains(
-            newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
-                    mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(2, 3))
-                )),
-                mkShareGroupStateMap(List.of(
-                    mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1)),
-                    mkShareGroupStateMetadataEntry(t2Uuid, t2Name, List.of(0, 1))
-                )),
-                Map.of()
-            ))
+        expected = newShareGroupStatePartitionMetadataRecord(
+            groupId,
+            mkShareGroupStateMap(List.of(
+                mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(2, 3))
+            )),
+            mkShareGroupStateMap(List.of(
+                mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1)),
+                mkShareGroupStateMetadataEntry(t2Uuid, t2Name, List.of(0, 1))
+            )),
+            Map.of()
         );
+
+        actual = result.records().stream().filter(record -> record.key() instanceof ShareGroupStatePartitionMetadataKey)
+            .findAny();
+        assertTrue(actual.isPresent());
+        assertRecordEquals(expected, actual.get());
 
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
@@ -21357,7 +21367,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testShareGroupHeartbeatNoPersisterRequestWithInitializing() {
+    public void testShareGroupHeartbeatPersisterRequestWithInitializing() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -21401,7 +21411,7 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(t1Name)));
 
-        assertFalse(result.records().contains(
+        assertTrue(result.records().contains(
             newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
                     mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1))
                 )),
@@ -21412,10 +21422,10 @@ public class GroupMetadataManagerTest {
 
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
-            Map.of(),
+            Map.of(t1Uuid, Set.of(0, 1)),
             groupId,
-            0,
-            false
+            1,
+            true
         );
     }
 
@@ -21620,6 +21630,7 @@ public class GroupMetadataManagerTest {
         // Since t1 is initializing and t2 is initialized due to replay above.
         assertEquals(
             Map.of(
+                t1Id, Set.of(0, 1),
                 t3Id, Set.of(0, 1, 2)
             ),
             context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of(
