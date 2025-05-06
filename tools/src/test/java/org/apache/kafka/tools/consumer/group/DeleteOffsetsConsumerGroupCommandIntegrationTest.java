@@ -80,8 +80,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         String group = "missing.group";
         String topic = "foo:1";
         try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = consumerGroupService(getArgs(group, topic))) {
-            Entry<Throwable, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(group, Collections.singletonList(topic));
-            assertEquals(Errors.GROUP_ID_NOT_FOUND, Errors.forException(res.getKey()));
+            Entry<Errors, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(group, Collections.singletonList(topic));
+            assertEquals(Errors.GROUP_ID_NOT_FOUND, res.getKey());
         }
     }
 
@@ -197,17 +197,13 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         return () -> {
             String topic = inputPartition >= 0 ? inputTopic + ":" + inputPartition : inputTopic;
             try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = consumerGroupService(getArgs(inputGroup, topic))) {
-                Entry<Throwable, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(inputGroup, Collections.singletonList(topic));
-                Throwable topLevelError = res.getKey();
+                Entry<Errors, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(inputGroup, Collections.singletonList(topic));
+                Errors topLevelError = res.getKey();
                 Map<TopicPartition, Throwable> partitions = res.getValue();
                 TopicPartition tp = new TopicPartition(inputTopic, expectedPartition);
                 // Partition level error should propagate to top level, unless this is due to a missed partition attempt.
                 if (inputPartition >= 0) {
-                    if (topLevelError == null) {
-                        assertEquals(expectedError, Errors.NONE);
-                    } else {
-                        assertEquals(expectedError, Errors.forException(topLevelError));
-                    }
+                    assertEquals(expectedError, topLevelError);
                 }
                 if (expectedError == Errors.NONE)
                     assertNull(partitions.get(tp));

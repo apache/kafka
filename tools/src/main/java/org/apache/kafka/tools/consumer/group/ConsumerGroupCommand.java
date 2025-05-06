@@ -708,7 +708,7 @@ public class ConsumerGroupCommand {
             }
         }
 
-        Entry<Throwable, Map<TopicPartition, Throwable>> deleteOffsets(String groupId, List<String> topics) {
+        Entry<Errors, Map<TopicPartition, Throwable>> deleteOffsets(String groupId, List<String> topics) {
             Map<TopicPartition, Throwable> partitionLevelResult = new HashMap<>();
             Set<String> topicWithPartitions = new HashSet<>();
             Set<String> topicWithoutPartitions = new HashSet<>();
@@ -748,12 +748,12 @@ public class ConsumerGroupCommand {
                 withTimeoutMs(new DeleteConsumerGroupOffsetsOptions())
             );
 
-            Throwable topLevelException = null;
+            Errors topLevelException = Errors.NONE;
 
             try {
                 deleteResult.all().get();
             } catch (ExecutionException | InterruptedException e) {
-                topLevelException = e.getCause();
+                topLevelException = Errors.forException(e.getCause());
             }
 
             partitions.forEach(partition -> {
@@ -772,30 +772,28 @@ public class ConsumerGroupCommand {
             String groupId = opts.options.valueOf(opts.groupOpt);
             List<String> topics = opts.options.valuesOf(opts.topicOpt);
 
-            Entry<Throwable, Map<TopicPartition, Throwable>> res = deleteOffsets(groupId, topics);
+            Entry<Errors, Map<TopicPartition, Throwable>> res = deleteOffsets(groupId, topics);
 
-            Throwable topLevelResult = res.getKey();
+            Errors topLevelResult = res.getKey();
             Map<TopicPartition, Throwable> partitionLevelResult = res.getValue();
 
-            if (topLevelResult == null) {
-                System.out.println("Request succeeded for deleting offsets from group " + groupId + ".");
-            } else {
-                Errors topLevelError = Errors.forException(topLevelResult);
-                switch (topLevelError) {
-                    case INVALID_GROUP_ID:
-                    case GROUP_ID_NOT_FOUND:
-                    case GROUP_AUTHORIZATION_FAILED:
-                    case NON_EMPTY_GROUP:
-                        printError(topLevelResult.getMessage(), Optional.empty());
-                        break;
-                    case GROUP_SUBSCRIBED_TO_TOPIC:
-                    case TOPIC_AUTHORIZATION_FAILED:
-                    case UNKNOWN_TOPIC_OR_PARTITION:
-                        printError("Encountered some partition-level error, see the follow-up details:", Optional.empty());
-                        break;
-                    default:
-                        printError("Encountered some unknown error: " + topLevelResult, Optional.empty());
-                }
+            switch (topLevelResult) {
+                case NONE:
+                    System.out.println("Request succeeded for deleting offsets from group " + groupId + ".");
+                    break;
+                case INVALID_GROUP_ID:
+                case GROUP_ID_NOT_FOUND:
+                case GROUP_AUTHORIZATION_FAILED:
+                case NON_EMPTY_GROUP:
+                    printError(topLevelResult.message(), Optional.empty());
+                    break;
+                case GROUP_SUBSCRIBED_TO_TOPIC:
+                case TOPIC_AUTHORIZATION_FAILED:
+                case UNKNOWN_TOPIC_OR_PARTITION:
+                    printError("Encountered some partition-level error, see the follow-up details.", Optional.empty());
+                    break;
+                default:
+                    printError("Encountered some unknown error: " + topLevelResult, Optional.empty());
             }
 
             int maxTopicLen = 15;
