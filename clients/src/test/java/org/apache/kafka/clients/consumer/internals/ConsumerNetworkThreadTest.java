@@ -35,7 +35,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -115,10 +114,7 @@ public class ConsumerNetworkThreadTest {
     @ParameterizedTest
     @ValueSource(longs = {ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS - 1, ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS + 1})
     public void testConsumerNetworkThreadPollTimeComputations(long exampleTime) {
-        List<RequestManager> list = new ArrayList<>();
-        list.add(coordinatorRequestManager);
-        list.add(heartbeatRequestManager);
-
+        List<RequestManager> list = List.of(coordinatorRequestManager, heartbeatRequestManager);
         when(requestManagers.entries()).thenReturn(list);
 
         NetworkClientDelegate.PollResult pollResult = new NetworkClientDelegate.PollResult(exampleTime);
@@ -156,10 +152,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testRequestsTransferFromManagersToClientOnThreadRun() {
-        List<RequestManager> list = new ArrayList<>();
-        list.add(coordinatorRequestManager);
-        list.add(heartbeatRequestManager);
-        list.add(offsetsRequestManager);
+        List<RequestManager> list = List.of(coordinatorRequestManager, heartbeatRequestManager, offsetsRequestManager);
 
         when(requestManagers.entries()).thenReturn(list);
         when(coordinatorRequestManager.poll(anyLong())).thenReturn(mock(NetworkClientDelegate.PollResult.class));
