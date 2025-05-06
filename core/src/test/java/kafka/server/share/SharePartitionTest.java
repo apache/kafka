@@ -55,6 +55,7 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
 import org.apache.kafka.server.share.persister.NoOpStatePersister;
@@ -1670,7 +1671,11 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeSingleRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         MemoryRecords records1 = memoryRecords(1, 0);
         MemoryRecords records2 = memoryRecords(1, 1);
@@ -1693,11 +1698,18 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(1L).batchState());
         assertEquals(1, sharePartition.cachedState().get(1L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(1L).offsetState());
+        // Should not invoke completeDelayedShareFetchRequest as the first offset is not acknowledged yet.
+        Mockito.verify(replicaManager, Mockito.times(0))
+            .completeDelayedShareFetchRequest(new DelayedShareFetchGroupKey(GROUP_ID, TOPIC_ID_PARTITION));
     }
 
     @Test
     public void testAcknowledgeMultipleRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         MemoryRecords records = memoryRecords(10, 5);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records, 10);
@@ -1711,6 +1723,9 @@ public class SharePartitionTest {
 
         assertEquals(15, sharePartition.nextFetchOffset());
         assertEquals(0, sharePartition.cachedState().size());
+        // Should invoke completeDelayedShareFetchRequest as the start offset is moved.
+        Mockito.verify(replicaManager, Mockito.times(1))
+            .completeDelayedShareFetchRequest(new DelayedShareFetchGroupKey(GROUP_ID, TOPIC_ID_PARTITION));
     }
 
     @Test
