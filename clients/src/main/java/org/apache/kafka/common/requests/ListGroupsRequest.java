@@ -53,7 +53,7 @@ public class ListGroupsRequest extends AbstractRequest {
                         "v" + version + ", but we need v4 or newer to request groups by states.");
             }
             if (!data.typesFilter().isEmpty() && version < 5) {
-                // Types filter is supported by brokers with version 4.0.0 or later. Older brokers only support
+                // Types filter is supported by brokers with version 3.8.0 or later. Older brokers only support
                 // classic groups, so listing consumer groups on an older broker does not need to use a types filter.
                 // If the types filter is only for consumer and classic, or just classic groups, it can be safely omitted.
                 // This allows a modern admin client to list consumer groups on older brokers in a straightforward way.
