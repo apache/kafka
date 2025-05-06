@@ -23,8 +23,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /**
- * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents,
- * interpreting them as a JWT access key in the serialized form.
+ * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
+ * of a file, interpreting them as a JWT access key in the serialized form.
  *
  * @see JwtRetriever
  */
