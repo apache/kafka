@@ -174,7 +174,7 @@ class ControllerServer(
         sharedServer.socketFactory)
 
       val listenerInfo = ListenerInfo
-        .create(config.effectiveAdvertisedControllerListeners.map(_.toPublic).asJava)
+        .create(config.effectiveAdvertisedControllerListeners.asJava)
         .withWildcardHostnamesResolved()
         .withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())

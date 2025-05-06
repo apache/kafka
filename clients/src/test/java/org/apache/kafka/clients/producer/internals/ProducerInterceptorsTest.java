@@ -69,9 +69,10 @@ public class ProducerInterceptorsTest {
             onAckCount++;
             if (exception != null) {
                 onErrorAckCount++;
-                // the length check is just to call topic() method and let it throw an exception
-                // if RecordMetadata.TopicPartition is null
-                if (metadata != null && metadata.topic().length() >= 0) {
+                if (metadata != null) {
+                    if (metadata.topic() == null) {
+                        throw new NullPointerException("Topic is null");
+                    }
                     onErrorAckWithTopicSetCount++;
                     if (metadata.partition() >= 0)
                         onErrorAckWithTopicPartitionSetCount++;
@@ -124,9 +125,10 @@ public class ProducerInterceptorsTest {
             onAckCount++;
             if (exception != null) {
                 onErrorAckCount++;
-                // the length check is just to call topic() method and let it throw an exception
-                // if RecordMetadata.TopicPartition is null
-                if (metadata != null && metadata.topic().length() >= 0) {
+                if (metadata != null) {
+                    if (metadata.topic() == null) {
+                        throw new NullPointerException("Topic is null");
+                    }
                     onErrorAckWithTopicSetCount++;
                     if (metadata.partition() >= 0)
                         onErrorAckWithTopicPartitionSetCount++;
