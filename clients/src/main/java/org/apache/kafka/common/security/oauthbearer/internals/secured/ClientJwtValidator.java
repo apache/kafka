@@ -47,7 +47,7 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
  *         <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section 2.1</a>
  *     </li>
  *     <li>Basic conversion of the token into an in-memory map</li>
- *     <li>Presence of scope, <code>exp</code>, subject, and <code>iat</code> claims</li>
+ *     <li>Presence of <code>scope</code>, <code>exp</code>, <code>subject</code>, and <code>iat</code> claims</li>
  * </ol>
  */
 
