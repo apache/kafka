@@ -73,7 +73,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     private final Map<String, ListConsumerGroupOffsetsSpec> singleRequestMap = Collections.singletonMap(groupZero,
             new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t0p1, t1p0, t1p1)));
     private final Map<String, ListConsumerGroupOffsetsSpec> batchedRequestMap =
-            new HashMap<String, ListConsumerGroupOffsetsSpec>() {{
+            new HashMap<>() {{
                 put(groupZero, new ListConsumerGroupOffsetsSpec().topicPartitions(singletonList(t0p0)));
                 put(groupOne, new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t1p0, t1p1)));
                 put(groupTwo, new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t1p0, t1p1, t2p0, t2p1, t2p2)));
