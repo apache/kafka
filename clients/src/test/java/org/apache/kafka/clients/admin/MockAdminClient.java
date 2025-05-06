@@ -68,6 +68,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -1118,11 +1119,7 @@ public class MockAdminClient extends AdminClient {
                         DescribeLogDirsResponse.INVALID_OFFSET_LAG));
                 } else {
                     ReplicaLogDirInfo info = replicaMoves.get(replica);
-                    if (info == null) {
-                        future.complete(new ReplicaLogDirInfo(currentLogDir, 0, null, 0));
-                    } else {
-                        future.complete(info);
-                    }
+                    future.complete(Objects.requireNonNullElseGet(info, () -> new ReplicaLogDirInfo(currentLogDir, 0, null, 0)));
                 }
             }
         }

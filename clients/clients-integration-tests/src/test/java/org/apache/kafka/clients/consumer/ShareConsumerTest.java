@@ -2854,10 +2854,6 @@ public class ShareConsumerTest {
             this.configs.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         }
 
-        void stop() {
-            state.done().set(true);
-        }
-
         @Override
         public void run() {
             try (ShareConsumer<K, V> consumer = new KafkaShareConsumer<>(configs)) {
