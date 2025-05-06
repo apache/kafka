@@ -197,7 +197,7 @@ public class FormatterTest {
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext formatter1 = testEnv.newFormatter();
             String originalDirectoryId = Uuid.randomUuid().toString();
-            String newDirectoryId = Uuid.ONE_UUID.toString();
+            String newDirectoryId = Uuid.randomUuid().toString();
             formatter1.formatter
                 .setInitialControllers(DynamicVoters.parse("1@localhost:8020:" + originalDirectoryId))
                 .run();
