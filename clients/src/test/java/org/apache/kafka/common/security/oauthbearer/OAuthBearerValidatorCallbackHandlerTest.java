@@ -17,9 +17,11 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 import org.apache.kafka.common.utils.Utils;
@@ -27,6 +29,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
@@ -79,6 +82,52 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         assertInvalidAccessTokenFails("this.isn't.valid", substring);
         assertInvalidAccessTokenFails(createAccessKey("this", "isn't", "valid"), substring);
         assertInvalidAccessTokenFails(createAccessKey("{}", "{}", "{}"), substring);
+    }
+
+    @Test
+    public void testConfigureThrowsExceptionOnJwtValidatorInit() throws IOException {
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        JwtRetriever jwtRetriever = new JwtRetriever() {
+            @Override
+            public void init() throws IOException {
+                throw new IOException("My init had an error!");
+            }
+
+            @Override
+            public String retrieve() {
+                return "dummy";
+            }
+        };
+
+        Map<String, ?> configs = getSaslConfigs();
+
+        try (JwtValidator jwtValidator = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM)) {
+            assertThrowsWithMessage(
+                KafkaException.class, () -> handler.init(jwtRetriever, jwtValidator), "encountered an error when initializing");
+        }
+    }
+
+    @Test
+    public void testConfigureThrowsExceptionOnJwtValidatorClose() throws IOException {
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        JwtRetriever jwtRetriever = new JwtRetriever() {
+            @Override
+            public void close() throws IOException {
+                throw new IOException("My close had an error!");
+            }
+            @Override
+            public String retrieve() {
+                return "dummy";
+            }
+        };
+
+        Map<String, ?> configs = getSaslConfigs();
+        try (JwtValidator jwtValidator = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM)) {
+            handler.init(jwtRetriever, jwtValidator);
+
+            // Basically asserting this doesn't throw an exception :(
+            handler.close();
+        }
     }
 
     private void assertInvalidAccessTokenFails(String accessToken, String expectedMessageSubstring) throws Exception {
