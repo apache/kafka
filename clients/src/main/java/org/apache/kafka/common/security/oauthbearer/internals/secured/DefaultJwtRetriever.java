@@ -109,7 +109,7 @@ public class DefaultJwtRetriever implements JwtRetriever {
      * {@link HttpJwtRetriever} constructor.
      */
     static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
-        Boolean urlencodeHeader = configurationUtils.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
+        Boolean urlencodeHeader = configurationUtils.get(SASL_OAUTHBEARER_HEADER_URLENCODE);
 
         if (urlencodeHeader != null)
             return urlencodeHeader;
