@@ -30,6 +30,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+
 import org.junit.jupiter.api.BeforeEach;
 
 import java.time.Duration;
