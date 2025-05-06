@@ -159,7 +159,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
             } else {
                 var offsets = new HashMap<TopicPartition, OffsetAndMetadata>();
 
-                group.topics().forEach(topic -> {
+                group.topics().forEach(topic ->
                     topic.partitions().forEach(partition -> {
                         var tp = new TopicPartition(topic.name(), partition.partitionIndex());
                         var partitionError = Errors.forCode(partition.errorCode());
@@ -178,8 +178,8 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                         } else {
                             log.warn("Skipping return offset for {} due to error {}.", tp, partitionError);
                         }
-                    });
-                });
+                    })
+                );
 
                 completed.put(coordinatorKey, offsets);
             }

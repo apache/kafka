@@ -1735,7 +1735,7 @@ public class CommitRequestManagerTest {
         AbstractRequest abstractRequest = request.requestBuilder().build();
         assertInstanceOf(OffsetFetchRequest.class, abstractRequest);
         OffsetFetchRequest offsetFetchRequest = (OffsetFetchRequest) abstractRequest;
-        OffsetFetchResponse response = new OffsetFetchResponse(List.of(groupResponse), ApiKeys.OFFSET_FETCH.latestVersion());
+        OffsetFetchResponse response = new OffsetFetchResponse.Builder(groupResponse).build(ApiKeys.OFFSET_FETCH.latestVersion());
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FETCH, offsetFetchRequest.version(), "", 1),
                 request.handler(),

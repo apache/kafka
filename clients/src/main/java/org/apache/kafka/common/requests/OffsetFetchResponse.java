@@ -33,6 +33,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.requests.OffsetFetchRequest.BATCH_MIN_VERSION;
+import static org.apache.kafka.common.requests.OffsetFetchRequest.TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION;
 
 /**
  * Possible error codes:
@@ -62,52 +64,66 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     private final short version;
     private final OffsetFetchResponseData data;
+    // Lazily initialized when OffsetFetchResponse#group is called.
+    private Map<String, OffsetFetchResponseData.OffsetFetchResponseGroup> groups = null;
 
-    public OffsetFetchResponse(List<OffsetFetchResponseGroup> groups, short version) {
-        super(ApiKeys.OFFSET_FETCH);
-        this.data = new OffsetFetchResponseData();
-        this.version = version;
+    public static class Builder {
+        private final List<OffsetFetchResponseGroup> groups;
 
-        if (version >= 8) {
-            data.setGroups(groups);
-        } else {
-            if (groups.size() != 1) {
-                throw new UnsupportedVersionException(
-                    "Version " + version + " of OffsetFetchResponse only supports one group."
-                );
+        public Builder(OffsetFetchResponseGroup group) {
+            this(List.of(group));
+        }
+
+        public Builder(List<OffsetFetchResponseGroup> groups) {
+            this.groups = groups;
+        }
+
+        public OffsetFetchResponse build(short version) {
+            var data = new OffsetFetchResponseData();
+
+            if (version >= BATCH_MIN_VERSION) {
+                data.setGroups(groups);
+            } else {
+                if (groups.size() != 1) {
+                    throw new UnsupportedVersionException(
+                        "Version " + version + " of OffsetFetchResponse only supports one group."
+                    );
+                }
+
+                OffsetFetchResponseGroup group = groups.get(0);
+                data.setErrorCode(group.errorCode());
+
+                group.topics().forEach(topic -> {
+                    OffsetFetchResponseTopic newTopic = new OffsetFetchResponseTopic().setName(topic.name());
+                    data.topics().add(newTopic);
+
+                    topic.partitions().forEach(partition -> {
+                        OffsetFetchResponsePartition newPartition;
+
+                        if (version < TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION && group.errorCode() != Errors.NONE.code()) {
+                            // Versions prior to version 2 do not support a top level error. Therefore,
+                            // we put it at the partition level.
+                            newPartition = new OffsetFetchResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(group.errorCode())
+                                .setCommittedOffset(INVALID_OFFSET)
+                                .setMetadata(NO_METADATA)
+                                .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH);
+                        } else {
+                            newPartition = new OffsetFetchResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(partition.errorCode())
+                                .setCommittedOffset(partition.committedOffset())
+                                .setMetadata(partition.metadata())
+                                .setCommittedLeaderEpoch(partition.committedLeaderEpoch());
+                        }
+
+                        newTopic.partitions().add(newPartition);
+                    });
+                });
             }
 
-            OffsetFetchResponseGroup group = groups.get(0);
-            data.setErrorCode(group.errorCode());
-
-            group.topics().forEach(topic -> {
-                OffsetFetchResponseTopic newTopic = new OffsetFetchResponseTopic().setName(topic.name());
-                data.topics().add(newTopic);
-
-                topic.partitions().forEach(partition -> {
-                    OffsetFetchResponsePartition newPartition;
-
-                    if (version < 2 && group.errorCode() != Errors.NONE.code()) {
-                        // Versions prior to version 2 do not support a top level error. Therefore,
-                        // we put it at the partition level.
-                        newPartition = new OffsetFetchResponsePartition()
-                            .setPartitionIndex(partition.partitionIndex())
-                            .setErrorCode(group.errorCode())
-                            .setCommittedOffset(INVALID_OFFSET)
-                            .setMetadata(NO_METADATA)
-                            .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH);
-                    } else {
-                        newPartition = new OffsetFetchResponsePartition()
-                            .setPartitionIndex(partition.partitionIndex())
-                            .setErrorCode(partition.errorCode())
-                            .setCommittedOffset(partition.committedOffset())
-                            .setMetadata(partition.metadata())
-                            .setCommittedLeaderEpoch(partition.committedLeaderEpoch());
-                    }
-
-                    newTopic.partitions().add(newPartition);
-                });
-            });
+            return new OffsetFetchResponse(data, version);
         }
     }
 
@@ -117,18 +133,16 @@ public class OffsetFetchResponse extends AbstractResponse {
         this.version = version;
     }
 
-    private Map<String, OffsetFetchResponseData.OffsetFetchResponseGroup> groups = null;
-
     public OffsetFetchResponseData.OffsetFetchResponseGroup group(String groupId) {
-        if (version < 8) {
-            // for version 2 and later use the top-level error code (in ERROR_CODE_KEY_NAME) from the response.
+        if (version < BATCH_MIN_VERSION) {
+            // for version 2 and later use the top-level error code from the response.
             // for older versions there is no top-level error in the response and all errors are partition errors,
             // so if there is a group or coordinator error at the partition level use that as the top-level error.
             // this way clients can depend on the top-level error regardless of the offset fetch version.
             // we return the error differently starting with version 8, so we will only populate the
             // error field if we are between version 2 and 7. if we are in version 8 or greater, then
             // we will populate the map of group id to error codes.
-            short topLevelError = version < 2 ? topLevelError(data).code() : data.errorCode();
+            short topLevelError = version < TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION ? topLevelError(data).code() : data.errorCode();
             if (topLevelError != Errors.NONE.code()) {
                 return new OffsetFetchResponseGroup()
                     .setGroupId(groupId)
@@ -189,8 +203,8 @@ public class OffsetFetchResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
-        if (version < 8) {
-            if (version >= 2) {
+        if (version < BATCH_MIN_VERSION) {
+            if (version >= TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION) {
                 updateErrorCounts(counts, Errors.forCode(data.errorCode()));
             }
             data.topics().forEach(topic ->

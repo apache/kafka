@@ -2500,7 +2500,7 @@ public class RequestResponseTest {
                             .setMetadata(null)
                     ))
             ));
-        return new OffsetFetchResponse(List.of(group), version);
+        return new OffsetFetchResponse.Builder(group).build(version);
     }
 
     private ProduceRequest createProduceRequest(short version) {
