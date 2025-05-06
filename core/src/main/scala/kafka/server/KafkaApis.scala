@@ -77,6 +77,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.stream.Collectors
+import java.util.function.Supplier
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
@@ -109,7 +110,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val tokenManager: DelegationTokenManager,
                 val apiVersionManager: ApiVersionManager,
                 val clientMetricsManager: ClientMetricsManager,
-                val groupConfigManager: GroupConfigManager
+                val groupConfigManager: GroupConfigManager,
+                val brokerEpochSupplier: Supplier[java.lang.Long]
 ) extends ApiRequestHandler with Logging {
 
   type ProduceResponseStats = Map[TopicIdPartition, RecordValidationStats]
@@ -245,6 +247,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_SHARE_GROUP_OFFSETS => handleDeleteShareGroupOffsetsRequest(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_DESCRIBE => handleStreamsGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_HEARTBEAT => handleStreamsGroupHeartbeat(request).exceptionally(handleError)
+        case ApiKeys.GET_REPLICA_LOG_INFO => handleGetReplicaLogInfo(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -260,6 +263,64 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
+  }
+
+  def handleGetReplicaLogInfo(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    val getReplicaLogInfoRequest = request.body[GetReplicaLogInfoRequest]
+    val data = getReplicaLogInfoRequest.data()
+    var partitionCount = 0
+    val partitionInfoList = data.topicPartitions().asScala.map(topic => {
+      val maybeTopicName = metadataCache.getTopicName(topic.topicId())
+      val topicPartitionLogInfo = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+          .setTopicId(topic.topicId())
+      val logInfos = if (maybeTopicName.isPresent) {
+        val topicName = maybeTopicName.get()
+        topic.partitions().asScala
+          .map(new TopicPartition(topicName, _))
+          .map((topicPartition: TopicPartition) => {
+            val logInfo = if (partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
+              replicaManager.getPartitionOrError(topicPartition) match {
+                case Left(err) => new GetReplicaLogInfoResponseData.PartitionLogInfo()
+                  .setPartition(topicPartition.partition())
+                  .setErrorCode(err.code())
+                case Right(partition) => partition.log match {
+                  case None => new GetReplicaLogInfoResponseData.PartitionLogInfo()
+                    .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
+                  case Some(log) => {
+                    val logEndOffset = log.logEndOffset
+                    val lastLeaderEpoch = log.latestEpoch.orElse(-1)
+                    val leaderEpoch = partition.getLeaderEpoch
+                    new GetReplicaLogInfoResponseData.PartitionLogInfo()
+                      .setPartition(partition.partitionId)
+                      .setLogEndOffset(logEndOffset)
+                      .setCurrentLeaderEpoch(leaderEpoch)
+                      .setLastWrittenLeaderEpoch(lastLeaderEpoch)
+                  }
+                }
+              }
+            } else {
+              new GetReplicaLogInfoResponseData.PartitionLogInfo()
+                .setPartition(topicPartition.partition())
+                .setErrorCode(Errors.POLICY_VIOLATION.code())
+                .setErrorMessage(s"No more than ${GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST} partitions per request are allowed")
+            }
+            partitionCount += 1
+            logInfo
+          })
+      } else {
+        topic.partitions().asScala.map { partition =>
+          new GetReplicaLogInfoResponseData.PartitionLogInfo()
+            .setPartition(partition)
+            .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code())
+        }
+      }
+      topicPartitionLogInfo.setPartitionLogInfo(logInfos asJava)
+    })
+    val responseData = new GetReplicaLogInfoResponseData()
+      .setTopicPartitionLogInfoList(partitionInfoList.asJava)
+      .setBrokerEpoch(brokerEpochSupplier.get())
+    requestHelper.sendMaybeThrottle(request, new GetReplicaLogInfoResponse(responseData))
   }
 
   override def tryCompleteActions(): Unit = {

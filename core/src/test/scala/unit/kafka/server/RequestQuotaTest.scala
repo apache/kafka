@@ -163,7 +163,7 @@ class RequestQuotaTest extends BaseRequestTest {
   @Test
   def testExemptRequestTime(): Unit = {
     // Exclude `DESCRIBE_QUORUM`, maybe it shouldn't be a cluster action
-    val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope -- RequestQuotaTest.ShareGroupState - ApiKeys.DESCRIBE_QUORUM
+    val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope -- RequestQuotaTest.ShareGroupState - ApiKeys.DESCRIBE_QUORUM - ApiKeys.GET_REPLICA_LOG_INFO
     for (apiKey <- actions) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
     }
@@ -191,7 +191,7 @@ class RequestQuotaTest extends BaseRequestTest {
     ApiKeys.brokerApis.asScala.filter(_.clusterAction).toSet
   }
 
-  private def clusterActionsWithThrottleForBroker: Set[ApiKeys] = {
+  private def clusterActionsWithThrottleForBroker: Set[ApiKeys] = {RequestQuotaTest
     // Exclude `ALLOCATE_PRODUCER_IDS`, it is enabled for kraft controller instead of broker
     Set(ApiKeys.UPDATE_FEATURES)
   }
@@ -697,6 +697,9 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.DELETE_SHARE_GROUP_OFFSETS =>
           new DeleteShareGroupOffsetsRequest.Builder(new DeleteShareGroupOffsetsRequestData())
+
+        case ApiKeys.GET_REPLICA_LOG_INFO =>
+          new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData())
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
