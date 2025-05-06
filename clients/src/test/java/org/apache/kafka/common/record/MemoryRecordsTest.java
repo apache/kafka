@@ -35,6 +35,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1074,7 +1075,7 @@ public class MemoryRecordsTest {
 
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
-    public void testSlice(Args args) {
+    public void testSlice(Args args) throws IOException {
         // Create a MemoryRecords instance with multiple batches. Prior RecordBatch.MAGIC_VALUE_V2,
         // every append in a batch is a new batch. After RecordBatch.MAGIC_VALUE_V2, we can have multiple
         // batches in a single MemoryRecords instance. Though with compression, we can have multiple
@@ -1086,10 +1087,10 @@ public class MemoryRecordsTest {
         MemoryRecords records = createMemoryRecords(args, recordsPerOffset);
 
         // Test slicing from start
-        MemoryRecords sliced = records.slice(0, records.sizeInBytes());
+        Records sliced = records.slice(0, records.sizeInBytes());
         assertEquals(records.sizeInBytes(), sliced.sizeInBytes());
-        assertEquals(records.validBytes(), sliced.validBytes());
-        TestUtils.checkEquals(records.batches(), sliced.batches());
+        assertEquals(records.validBytes(), ((MemoryRecords) sliced).validBytes());
+        TestUtils.checkEquals(records.batches(), ((MemoryRecords) sliced).batches());
 
         List<RecordBatch> items = batches(records);
         // Test slicing first message.
@@ -1097,19 +1098,19 @@ public class MemoryRecordsTest {
         sliced = records.slice(first.sizeInBytes(), records.sizeInBytes() - first.sizeInBytes());
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
 
         // Read from second message and size is past the end of the file.
         sliced = records.slice(first.sizeInBytes(), records.sizeInBytes());
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
 
         // Read from second message and position + size overflows.
         sliced = records.slice(first.sizeInBytes(), Integer.MAX_VALUE);
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
 
         // Read a single message starting from second message.
         RecordBatch second = items.get(1);
@@ -1130,14 +1131,14 @@ public class MemoryRecordsTest {
             .slice(first.sizeInBytes() - 1, records.sizeInBytes());
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
 
         // Read from second message and position + size overflows on the already sliced view.
         sliced = records.slice(1, records.sizeInBytes() - 1)
             .slice(first.sizeInBytes() - 1, Integer.MAX_VALUE);
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
     }
 
     @ParameterizedTest
@@ -1158,9 +1159,8 @@ public class MemoryRecordsTest {
     @Test
     public void testSliceEmptyRecords() {
         MemoryRecords empty = MemoryRecords.EMPTY;
-        MemoryRecords sliced = empty.slice(0, 0);
+        Records sliced = empty.slice(0, 0);
         assertEquals(0, sliced.sizeInBytes());
-        assertEquals(0, sliced.validBytes());
         assertEquals(0, batches(sliced).size());
     }
 
@@ -1170,7 +1170,7 @@ public class MemoryRecordsTest {
      */
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
-    public void testSliceForAlreadySlicedFileRecords(Args args) {
+    public void testSliceForAlreadySlicedFileRecords(Args args) throws IOException {
         LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
         recordsPerOffset.put(args.firstOffset, 5);
         recordsPerOffset.put(args.firstOffset + 5L, 10);
@@ -1182,7 +1182,7 @@ public class MemoryRecordsTest {
 
         // Slice from third message until the end.
         int position = IntStream.range(0, 2).map(i -> items.get(i).sizeInBytes()).sum();
-        MemoryRecords sliced  = records.slice(position, records.sizeInBytes() - position);
+        Records sliced  = records.slice(position, records.sizeInBytes() - position);
         assertEquals(records.sizeInBytes() - position, sliced.sizeInBytes());
         assertEquals(items.subList(2, items.size()), batches(sliced), "Read starting from the third message");
 
@@ -1191,7 +1191,7 @@ public class MemoryRecordsTest {
         // position to slice is relative hence reset position to second message in the sliced memory
         // records i.e. reset with the size of the third message from the original memory records.
         position = items.get(2).sizeInBytes();
-        MemoryRecords finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
+        Records finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
         assertEquals(sliced.sizeInBytes() - position, finalSliced.sizeInBytes());
         assertEquals(items.subList(3, items.size()), batches(finalSliced), "Read starting from the fourth message");
     }

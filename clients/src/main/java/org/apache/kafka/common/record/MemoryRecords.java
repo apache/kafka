@@ -312,7 +312,7 @@ public class MemoryRecords extends AbstractRecords {
      * @return A sliced buffer on this message set limited based on the given position and size
      */
     @Override
-    public MemoryRecords slice(int position, int size) {
+    public Records slice(int position, int size) {
         if (position < 0)
             throw new IllegalArgumentException("Invalid position: " + position + " in read from " + this);
         if (position > buffer.limit())
