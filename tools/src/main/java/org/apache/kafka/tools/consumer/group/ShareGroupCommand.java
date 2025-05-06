@@ -325,26 +325,26 @@ public class ShareGroupCommand {
 
                     Set<SharePartitionOffsetInformation> partitionOffsets = new HashSet<>();
 
-                    for (Entry<TopicPartition, OffsetAndMetadata> tp : startOffsets.entrySet()) {
-                        OffsetAndMetadata offset = startOffsets.get(tp.getKey());
-                        if (offset != null) {
+                    startOffsets.forEach((tp, offsetAndMetadata) -> {
+                        if (offsetAndMetadata != null) {
                             partitionOffsets.add(new SharePartitionOffsetInformation(
                                 groupId,
-                                tp.getKey().topic(),
-                                tp.getKey().partition(),
-                                Optional.of(offset.offset()),
-                                offset.leaderEpoch()
+                                tp.topic(),
+                                tp.partition(),
+                                Optional.of(offsetAndMetadata.offset()),
+                                offsetAndMetadata.leaderEpoch()
                             ));
                         } else {
                             partitionOffsets.add(new SharePartitionOffsetInformation(
                                 groupId,
-                                tp.getKey().topic(),
-                                tp.getKey().partition(),
+                                tp.topic(),
+                                tp.partition(),
                                 Optional.empty(),
                                 Optional.empty()
                             ));
                         }
-                    }
+                    });
+
                     groupOffsets.put(groupId, new SimpleImmutableEntry<>(shareGroup, partitionOffsets));
                 } catch (InterruptedException | ExecutionException e) {
                     throw new RuntimeException(e);
