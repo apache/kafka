@@ -1970,6 +1970,7 @@ project(':clients:clients-integration-tests') {
   }
 
   dependencies {
+    testImplementation libs.metrics
     testImplementation libs.slf4jApi
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
