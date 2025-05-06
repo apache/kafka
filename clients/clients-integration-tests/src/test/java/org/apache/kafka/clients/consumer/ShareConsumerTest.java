@@ -1809,8 +1809,7 @@ public class ShareConsumerTest {
         // Set the auto offset reset to 3 hours before current time
         // so the consumer should consume all messages (3 records)
         alterShareAutoOffsetReset("group2", "by_duration:PT3H");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group2");
-             Producer<byte[], byte[]> producer = createProducer()) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group2")) {
 
             shareConsumer.subscribe(Set.of(tp.topic()));
             List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 3);
@@ -1820,7 +1819,7 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testShareAutoOffsetResetByDurationInvalidFormat() throws Exception {
+    public void testShareAutoOffsetResetByDurationInvalidFormat() {
         // Test invalid duration format
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
@@ -1966,10 +1965,7 @@ public class ShareConsumerTest {
         );
 
         // top the producer after some time (but after coordinator shutdown)
-        service.schedule(() -> {
-                prodState.done().set(true);
-            }, 10L, TimeUnit.SECONDS
-        );
+        service.schedule(() -> prodState.done().set(true), 10L, TimeUnit.SECONDS);
 
         // wait for both producer and consumer to finish
         TestUtils.waitForCondition(
@@ -2097,10 +2093,7 @@ public class ShareConsumerTest {
         );
 
         // let the complex consumer read the messages
-        service.schedule(() -> {
-                prodState.done().set(true);
-            }, 10L, TimeUnit.SECONDS
-        );
+        service.schedule(() -> prodState.done().set(true), 10L, TimeUnit.SECONDS);
 
         // all messages which can be read are read, some would be redelivered
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
@@ -2594,8 +2587,7 @@ public class ShareConsumerTest {
                                 int maxPolls,
                                 boolean commit) {
         return assertDoesNotThrow(() -> {
-            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
-                groupId)) {
+            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
                 shareConsumer.subscribe(Set.of(tp.topic()));
                 return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
             }
@@ -2860,10 +2852,6 @@ public class ShareConsumerTest {
             this.configs.putAll(additionalProperties);
             this.configs.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
             this.configs.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-        }
-
-        void stop() {
-            state.done().set(true);
         }
 
         @Override

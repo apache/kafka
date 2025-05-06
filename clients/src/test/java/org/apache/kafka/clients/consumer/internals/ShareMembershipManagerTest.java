@@ -23,7 +23,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData.Assignment;
-import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
@@ -57,7 +56,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.TOPIC_PARTITION_COMPARATOR;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.common.requests.ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -1228,23 +1226,6 @@ public class ShareMembershipManagerTest {
         return membershipManager;
     }
 
-    private void mockPartitionOwnedAndNewPartitionAdded(String topicName,
-                                                        int partitionOwned,
-                                                        int partitionAdded,
-                                                        CounterConsumerRebalanceListener listener,
-                                                        ShareMembershipManager membershipManager) {
-        Uuid topicId = Uuid.randomUuid();
-        TopicPartition owned = new TopicPartition(topicName, partitionOwned);
-        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(owned));
-        membershipManager.updateAssignment(Collections.singletonMap(topicId, mkSortedSet(partitionOwned)));
-        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
-        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.ofNullable(listener));
-
-        // Receive assignment adding a new partition
-        receiveAssignment(topicId, Arrays.asList(partitionOwned, partitionAdded), membershipManager);
-    }
-
     private SortedSet<TopicIdPartition> topicIdPartitionsSet(Uuid topicId, String topicName, int... partitions) {
         SortedSet<TopicIdPartition> topicIdPartitions = new TreeSet<>(new Utils.TopicIdPartitionComparator());
 
@@ -1573,17 +1554,6 @@ public class ShareMembershipManagerTest {
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
     }
 
-    private void mockPrepareLeaving(ShareMembershipManager membershipManager) {
-        String topicName = "topic1";
-        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
-
-        // Start leaving group, blocked waiting for callback to complete.
-        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
-        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        doNothing().when(subscriptionState).markPendingRevocation(anySet());
-        membershipManager.leaveGroup();
-    }
-
     private void testStateUpdateOnFatalFailure(ShareMembershipManager membershipManager) {
         String memberId = membershipManager.memberId();
         int lastEpoch = membershipManager.memberEpoch();
@@ -1639,10 +1609,6 @@ public class ShareMembershipManagerTest {
                                 .setTopicId(topic2)
                                 .setPartitions(Arrays.asList(3, 4, 5))
                 ));
-    }
-
-    private KafkaMetric getMetric(final String name) {
-        return metrics.metrics().get(metrics.metricName(name, CONSUMER_SHARE_METRIC_GROUP_PREFIX + "-coordinator-metrics"));
     }
 
     private ShareMembershipManager memberJoinWithAssignment() {

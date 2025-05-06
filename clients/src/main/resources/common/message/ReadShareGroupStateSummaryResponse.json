@@ -41,6 +41,8 @@
           "about": "The error message, or null if there was no error." },
         { "name": "StateEpoch", "type": "int32", "versions": "0+",
           "about": "The state epoch of the share-partition." },
+        { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+          "about": "The leader epoch of the share-partition." },
         { "name": "StartOffset", "type": "int64", "versions": "0+",
           "about": "The share-partition start offset." }
       ]}
