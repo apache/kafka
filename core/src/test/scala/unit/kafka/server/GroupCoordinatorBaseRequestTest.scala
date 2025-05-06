@@ -37,6 +37,7 @@ import java.net.Socket
 import java.util.{Comparator, Properties}
 import java.util.stream.Collectors
 import scala.collection.Seq
+import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -46,6 +47,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   private def controllerServers(): Seq[ControllerServer] = cluster.controllers().values().asScala.toSeq
 
   protected var producer: KafkaProducer[String, String] = _
+
+  protected var openSockets: ListBuffer[Socket] = ListBuffer[Socket]()
 
   protected def createOffsetsTopic(): Unit = {
     val admin = cluster.admin()
@@ -139,6 +142,16 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def initProducer(): Unit = {
     producer = TestUtils.createProducer(cluster.bootstrapServers(),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
+  }
+
+  protected def closeSockets(): Unit = {
+    while (openSockets.nonEmpty) {
+      val socket = openSockets.head
+      if (!socket.isClosed) {
+        socket.close()
+      }
+      openSockets.remove(0)
+    }
   }
 
   protected def closeProducer(): Unit = {
@@ -902,18 +915,22 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedResponseData.results.asScala.toSet, deleteGroupsResponse.data.results.asScala.toSet)
   }
 
-  protected def createSocket(): Socket = {
-    IntegrationTestUtils.connect(
+  protected def connectAny(): Socket = {
+    val socket: Socket = IntegrationTestUtils.connect(
       cluster.anyBrokerSocketServer(),
       cluster.clientListener()
     )
+    openSockets += socket
+    socket
   }
 
-  protected def createSocket(destination: Int): Socket = {
-    IntegrationTestUtils.connect(
+  protected def connect(destination: Int): Socket = {
+    val socket: Socket = IntegrationTestUtils.connect(
       brokerSocketServer(destination),
       cluster.clientListener()
     )
+    openSockets += socket
+    socket
   }
 
   protected def connectAndReceive[T <: AbstractResponse](
@@ -935,13 +952,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       brokerSocketServer(destination),
       cluster.clientListener()
     )
-  }
-
-  protected def sendAndReceiveFromExistingSocket[T <: AbstractResponse](
-    request: AbstractRequest,
-    socket: Socket
-  )(implicit classTag: ClassTag[T]): T = {
-    IntegrationTestUtils.sendAndReceive[T](request, socket)
   }
 
   private def brokerSocketServer(brokerId: Int): SocketServer = {
