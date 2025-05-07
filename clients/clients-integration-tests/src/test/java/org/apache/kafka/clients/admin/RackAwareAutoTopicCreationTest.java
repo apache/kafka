@@ -112,9 +112,7 @@ public class RackAwareAutoTopicCreationTest {
     private static Map<Integer, String> getBrokerToRackMap(ClusterInstance cluster) throws Exception {
         Map<Integer, String> actualBrokerToRackMap = new HashMap<>();
         try (Admin admin = cluster.admin()) {
-            admin.describeCluster().nodes().get().forEach(node -> {
-                actualBrokerToRackMap.put(node.id(), node.rack());
-            });
+            admin.describeCluster().nodes().get().forEach(node -> actualBrokerToRackMap.put(node.id(), node.rack()));
         }
         return actualBrokerToRackMap;
     }

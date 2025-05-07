@@ -17,7 +17,8 @@
 
 package org.apache.kafka.jmh.producer;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ProduceResponse;
@@ -47,9 +48,11 @@ import java.util.stream.IntStream;
 public class ProducerResponseBenchmark {
     private static final int NUMBER_OF_PARTITIONS = 3;
     private static final int NUMBER_OF_RECORDS = 3;
-    private static final Map<TopicPartition, ProduceResponse.PartitionResponse> PARTITION_RESPONSE_MAP = IntStream.range(0, NUMBER_OF_PARTITIONS)
+    private static final Uuid TOPIC_ID = Uuid.randomUuid();
+    private static final String TOPIC_NAME = "tp";
+    private static final Map<TopicIdPartition, ProduceResponse.PartitionResponse> PARTITION_RESPONSE_MAP = IntStream.range(0, NUMBER_OF_PARTITIONS)
         .mapToObj(partitionIndex -> new AbstractMap.SimpleEntry<>(
-            new TopicPartition("tp", partitionIndex),
+            new TopicIdPartition(TOPIC_ID, partitionIndex, TOPIC_NAME),
             new ProduceResponse.PartitionResponse(
                 Errors.NONE,
                 0,

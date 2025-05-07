@@ -163,7 +163,7 @@ public abstract class ConsumerCoordinatorTest {
     private final String consumerId2 = "consumer2";
 
     private MockClient client;
-    private final MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+    private final MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<>() {
         {
             put(topic1, 1);
             put(topic2, 1);
@@ -367,7 +367,7 @@ public abstract class ConsumerCoordinatorTest {
 
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : memberSubscriptions.entrySet()) {
-            ByteBuffer buf = null;
+            ByteBuffer buf;
             if (subscriptionEntry.getKey().equals(consumerId)) {
                 buf = ConsumerProtocol.serializeSubscription(subscriptionConsumer1);
             } else {
@@ -614,9 +614,7 @@ public abstract class ConsumerCoordinatorTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(tp, new OffsetAndMetadata(123));
 
         final AtomicBoolean committed = new AtomicBoolean();
-        coordinator.commitOffsetsAsync(offsets, (committedOffsets, exception) -> {
-            committed.set(true);
-        });
+        coordinator.commitOffsetsAsync(offsets, (committedOffsets, exception) -> committed.set(true));
 
         assertFalse(coordinator.commitOffsetsSync(Collections.emptyMap(), time.timer(100L)), "expected sync commit to fail");
         assertFalse(committed.get());
@@ -683,7 +681,7 @@ public abstract class ConsumerCoordinatorTest {
                 );
 
         consumerClient.send(coordinator.checkAndGetCoordinator(), OffsetCommitRequest.Builder.forTopicNames(offsetCommitRequestData))
-                .compose(new RequestFutureAdapter<ClientResponse, Object>() {
+                .compose(new RequestFutureAdapter<>() {
                     @Override
                     public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
 
@@ -1294,7 +1292,7 @@ public abstract class ConsumerCoordinatorTest {
     public void testForceMetadataDeleteForPatternSubscriptionDuringRebalance() {
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
             subscriptions.subscribe(Pattern.compile("test.*"), Optional.of(rebalanceListener));
-            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<>() {
                 {
                     put(topic1, 1);
                     put(topic2, 1);
@@ -1306,11 +1304,7 @@ public abstract class ConsumerCoordinatorTest {
             client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
             coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
-            MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
-                {
-                    put(topic1, 1);
-                }
-            });
+            MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, Map.of(topic1, 1));
             // Instrument the test so that metadata will contain only one topic after next refresh.
             client.prepareMetadataUpdate(deletedMetadataResponse);
 
@@ -2697,12 +2691,7 @@ public abstract class ConsumerCoordinatorTest {
         final OffsetAndMetadata firstOffset = new OffsetAndMetadata(0L);
         final OffsetAndMetadata secondOffset = new OffsetAndMetadata(1L);
 
-        coordinator.commitOffsetsAsync(singletonMap(t1p, firstOffset), new OffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                committedOffsets.add(firstOffset);
-            }
-        });
+        coordinator.commitOffsetsAsync(singletonMap(t1p, firstOffset), (offsets, exception) -> committedOffsets.add(firstOffset));
 
         // Do a synchronous commit in the background so that we can send both responses at the same time
         Thread thread = new Thread() {
