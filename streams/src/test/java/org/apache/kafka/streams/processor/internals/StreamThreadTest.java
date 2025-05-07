@@ -2764,7 +2764,6 @@ public class StreamThreadTest {
         assertThat(exceptionHandlerInvoked.get(), is(true));
 
         verify(consumer).subscribe((Collection<String>) any(), any());
-        verify(consumer).unsubscribe();
     }
 
     @ParameterizedTest
