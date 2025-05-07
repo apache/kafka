@@ -171,14 +171,14 @@ public class StaticBrokerConfigTest {
     }
 
     private void assertNotContainsInternalConfig(Config config, Map<String, ConfigDef.ConfigKey> configKeyMap,
-                                                 Set<String> whiteListSet) {
+                                                 Set<String> ignoreConfigNames) {
         assertFalse(config.entries().isEmpty());
         for (ConfigEntry topicConfigEntry : config.entries()) {
             String configName = topicConfigEntry.name();
             ConfigDef.ConfigKey configKey = configKeyMap.get(configName);
 
             assertNotNull(configKey);
-            if (!whiteListSet.contains(configName)) {
+            if (!ignoreConfigNames.contains(configName)) {
                 assertFalse(configKey.internalConfig);
             }
         }
