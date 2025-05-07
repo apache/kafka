@@ -1609,6 +1609,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val offsetFetchRequest = createOffsetFetchRequestAllPartitions
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     assertEquals(Errors.NONE, Errors.forCode(offsetFetchResponse.group(group).errorCode()))
+    assertTrue(offsetFetchResponse.group(group).topics.isEmpty)
 
     // now add describe permission on the topic and verify that the offset can be fetched
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResource)
