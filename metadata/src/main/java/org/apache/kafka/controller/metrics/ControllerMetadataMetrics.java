@@ -250,7 +250,10 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     }
 
     public int brokerRegistrationState(int brokerId) {
-        return this.brokerRegistrationStates.getOrDefault(brokerId, new AtomicInteger(-1)).get();
+        return this.brokerRegistrationStates.getOrDefault(
+            brokerId,
+            new AtomicInteger(BrokerRegistrationState.UNREGISTERED.state())
+        ).get();
     }
     
     public void setGlobalTopicCount(int topicCount) {

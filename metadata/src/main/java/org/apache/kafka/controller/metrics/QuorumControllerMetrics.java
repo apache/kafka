@@ -260,6 +260,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     public void updateBrokerContactTime(int brokerId) {
         brokerContactTimesMs.putIfAbsent(brokerId, new AtomicLong(time.milliseconds()));
     }
+
     public int timeSinceLastHeartbeatMs(int brokerId) {
         if (!brokerContactTimesMs.containsKey(brokerId)) {
             return sessionTimeoutMs;

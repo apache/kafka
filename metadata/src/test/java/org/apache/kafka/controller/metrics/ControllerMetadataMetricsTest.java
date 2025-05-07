@@ -42,7 +42,13 @@ public class ControllerMetadataMetricsTest {
         try {
             try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
                 metrics.addBrokerRegistrationStateMetric(1);
-                metrics.setBrokerRegistrationState(1, new BrokerRegistration.Builder().setFenced(false).setInControlledShutdown(false).build());
+                metrics.setBrokerRegistrationState(
+                    1,
+                    new BrokerRegistration.Builder()
+                        .setFenced(false)
+                        .setInControlledShutdown(false)
+                        .build()
+                );
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
                     new HashSet<>(List.of(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
@@ -158,22 +164,31 @@ public class ControllerMetadataMetricsTest {
         try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             int brokerId = 1;
             metrics.addBrokerRegistrationStateMetric(brokerId);
-            BrokerRegistration activeRegistration = new BrokerRegistration.Builder()
-                .setFenced(false)
-                .setInControlledShutdown(false)
-                .build();
-            metrics.setBrokerRegistrationState(1, activeRegistration);
-            Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "BrokerRegistrationState", "broker=1"));
+            Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics()
+                .get(metricName("KafkaController", "BrokerRegistrationState", "broker=1"));
+
+            metrics.setBrokerRegistrationState(brokerId, brokerRegistration(brokerId, false, false));
             assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.ACTIVE.state(), registrationState.value());
-            BrokerRegistration fencedRegistration = new BrokerRegistration.Builder()
-                .setFenced(true)
-                .setInControlledShutdown(false)
-                .build();
-            metrics.setBrokerRegistrationState(1, fencedRegistration);
+
+            metrics.setBrokerRegistrationState(brokerId, brokerRegistration(brokerId, true, false));
             assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.FENCED.state(), registrationState.value());
+
+            metrics.setBrokerRegistrationState(brokerId, brokerRegistration(brokerId, false, true));
+            assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.CONTROLLED_SHUTDOWN.state(), registrationState.value());
+
+            metrics.setBrokerRegistrationState(brokerId, null);
+            assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.UNREGISTERED.state(), registrationState.value());
         } finally {
             registry.shutdown();
         }
+    }
+
+    private BrokerRegistration brokerRegistration(int id, boolean fenced, boolean inControlledShutdown) {
+        return new BrokerRegistration.Builder()
+            .setId(id)
+            .setFenced(fenced)
+            .setInControlledShutdown(inControlledShutdown)
+            .build();
     }
 
     @SuppressWarnings("unchecked") // suppress warning about Gauge typecast
