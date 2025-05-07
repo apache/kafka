@@ -41,7 +41,6 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -117,11 +116,16 @@ public class MockLog implements ReplicatedLog {
                 snapshots.headMap(snapshotId, false).clear();
                 snapshots.get(snapshotId).records().batches().forEach(batch -> {
                     if (batch.isControlBatch()) {
-                        Iterator<Record> recordIterator = batch.iterator();
+                        final var recordIterator = batch.iterator();
                         while (recordIterator.hasNext()) {
-                            var record = recordIterator.next();
+                            final var record = recordIterator.next();
                             if (ControlRecordType.parse(record.key()) == ControlRecordType.KRAFT_VOTERS) {
-                                voterSets.put(record.offset(), VoterSet.fromVotersRecord(ControlRecordUtils.deserializeVotersRecord(record.value())));
+                                voterSets.put(
+                                    record.offset(),
+                                    VoterSet.fromVotersRecord(
+                                        ControlRecordUtils.deserializeVotersRecord(record.value())
+                                    )
+                                );
                             }
                         }
                     }
@@ -372,9 +376,10 @@ public class MockLog implements ReplicatedLog {
             appendBatch(logBatch);
             if (logBatch.isControlBatch) {
                 for (LogEntry entry : logBatch.entries) {
-                    ControlRecordType type = ControlRecordType.parse(entry.record.key());
-                    if (type == ControlRecordType.KRAFT_VOTERS) {
-                        var newVoters = VoterSet.fromVotersRecord(ControlRecordUtils.deserializeVotersRecord(entry.record.value()));
+                    if (ControlRecordType.parse(entry.record.key()) == ControlRecordType.KRAFT_VOTERS) {
+                        var newVoters = VoterSet.fromVotersRecord(
+                            ControlRecordUtils.deserializeVotersRecord(entry.record.value())
+                        );
                         // Set the offset to be the last offset of the batch since this is what we check during truncation
                         voterSets.put(logBatch.lastOffset(), newVoters);
                     }

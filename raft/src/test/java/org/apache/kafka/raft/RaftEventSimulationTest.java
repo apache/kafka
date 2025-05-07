@@ -1306,8 +1306,8 @@ public class RaftEventSimulationTest {
             ApiKeys apiKey = ApiKeys.forId(request.data().apiKey());
             switch (apiKey) {
                 case API_VERSIONS:
-                    ApiVersionsResponseData apiVersionsResponse = new ApiVersionsResponse.Builder().
-                        setSupportedFeatures(
+                    ApiVersionsResponseData apiVersionsResponse = new ApiVersionsResponse.Builder()
+                        .setSupportedFeatures(
                             Features.supportedFeatures(
                                 Collections.singletonMap(
                                     KRaftVersion.FEATURE_NAME,
@@ -1317,12 +1317,15 @@ public class RaftEventSimulationTest {
                                     )
                                 )
                             )
-                        ).
-                        setApiVersions(new ApiVersionsResponseData.ApiVersionCollection()).
-                        setFinalizedFeatures(Collections.emptyMap()).
-                        build().
-                        data();
-                    var apiVersions = new RaftResponse.Outbound(request.correlationId(), apiVersionsResponse);
+                        )
+                        .setApiVersions(new ApiVersionsResponseData.ApiVersionCollection())
+                        .setFinalizedFeatures(Collections.emptyMap())
+                        .build()
+                        .data();
+                    var apiVersions = new RaftResponse.Outbound(
+                        request.correlationId(),
+                        apiVersionsResponse
+                    );
                     request.completion.complete(apiVersions);
                     break;
                 default:
