@@ -125,8 +125,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         try (JwtValidator jwtValidator = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM)) {
             handler.init(jwtRetriever, jwtValidator);
 
-            // Basically asserting this doesn't throw an exception :(
-            handler.close();
+            assertDoesNotThrow(handler::close);
         }
     }
 
