@@ -168,7 +168,7 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  */
 @SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity", "ParameterNumber", "NPathComplexity", "JavaNCSS" })
 public final class KafkaRaftClient<T> implements RaftClient<T> {
-    private static final int RETRY_BACKOFF_BASE_MS = 100;
+    private static final int RETRY_BACKOFF_BASE_MS = 50;
     private static final int MAX_NUMBER_OF_BATCHES = 10;
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
@@ -1052,10 +1052,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (retries <= 0) {
             throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
         }
-        // upper limit exponential co-efficients at 20 to avoid overflow
+        // take minimum of exponential backoff calculation (maxes out to ~1.7 minutes)
+        // and configurable electionBackoffMaxMs + jitter. jitter is added to prevent deadlock of elections
         return Math.min(
-            RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries - 1)),
-            quorumConfig.electionBackoffMaxMs()
+            RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(10, retries - 1)),
+            quorumConfig.electionBackoffMaxMs() + random.nextInt(RETRY_BACKOFF_BASE_MS)
         );
     }
 
