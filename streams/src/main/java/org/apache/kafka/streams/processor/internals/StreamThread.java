@@ -864,7 +864,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
-            completeShutdown(cleanRun, false);
+            completeShutdown(cleanRun);
         }
     }
 
@@ -1791,13 +1791,16 @@ public class StreamThread extends Thread implements ProcessingThread {
     public void shutdown(final boolean leaveGroup) {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
+        if (leaveGroup) {
+            requestLeaveGroupDuringShutdown();
+        }
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
-            completeShutdown(true, leaveGroup);
+            completeShutdown(true);
         }
     }
 
-    private void completeShutdown(final boolean cleanRun, final boolean leaveGroup) {
+    private void completeShutdown(final boolean cleanRun) {
         // set the state to pending shutdown first as it may be called due to error;
         // its state may already be PENDING_SHUTDOWN so it will return false but we
         // intentionally do not check the returned flag
@@ -1823,14 +1826,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
-            if (leaveGroupRequested.get()) {
-                mainConsumer.unsubscribe();
-            }
-        } catch (final Throwable e) {
-            log.error("Failed to unsubscribe due to the following error: ", e);
-        }
-        try {
-            final GroupMembershipOperation membershipOperation = leaveGroup ? LEAVE_GROUP : REMAIN_IN_GROUP;
+            final GroupMembershipOperation membershipOperation = leaveGroupRequested.get() ? LEAVE_GROUP : REMAIN_IN_GROUP;
             mainConsumer.close(CloseOptions.groupMembershipOperation(membershipOperation));
         } catch (final Throwable e) {
             log.error("Failed to close consumer due to the following error:", e);
