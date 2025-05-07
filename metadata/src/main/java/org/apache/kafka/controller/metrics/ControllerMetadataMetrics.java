@@ -17,6 +17,8 @@
 
 package org.apache.kafka.controller.metrics;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Gauge;
@@ -42,10 +44,23 @@ import java.util.concurrent.atomic.AtomicInteger;
  * {@link org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
 public final class ControllerMetadataMetrics implements AutoCloseable {
-    public static final int BROKER_UNREGISTERED_STATE = -1;
-    public static final int BROKER_FENCED_STATE = 10;
-    public static final int BROKER_CONTROLLED_SHUTDOWN_STATE = 20;
-    public static final int BROKER_ACTIVE_STATE = 30;
+    @InterfaceStability.Stable
+    public enum BrokerRegistrationState {
+        UNREGISTERED(-1),
+        FENCED(10),
+        CONTROLLED_SHUTDOWN(20),
+        ACTIVE(30);
+
+        private final int state;
+
+        BrokerRegistrationState(int state) {
+            this.state = state;
+        }
+
+        public int state() {
+            return state;
+        }
+    }
 
     private static final MetricName FENCED_BROKER_COUNT = getMetricName(
         "KafkaController", "FencedBrokerCount");
@@ -213,11 +228,24 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         return this.controllerShutdownBrokerCount.get();
     }
 
-    public void setBrokerRegistrationState(int brokerId, int brokerState) {
+    public void setBrokerRegistrationState(int brokerId, BrokerRegistration brokerRegistration) {
+        BrokerRegistrationState brokerState = getBrokerRegistrationState(brokerRegistration);
         if (brokerRegistrationStates.containsKey(brokerId)) {
-            brokerRegistrationStates.get(brokerId).set(brokerState);
+            brokerRegistrationStates.get(brokerId).set(brokerState.state);
         } else {
-            brokerRegistrationStates.put(brokerId, new AtomicInteger(brokerState));
+            brokerRegistrationStates.put(brokerId, new AtomicInteger(brokerState.state));
+        }
+    }
+
+    private BrokerRegistrationState getBrokerRegistrationState(BrokerRegistration brokerRegistration) {
+        if (brokerRegistration == null) {
+            return BrokerRegistrationState.UNREGISTERED;
+        } else if (brokerRegistration.fenced()) {
+            return BrokerRegistrationState.FENCED;
+        } else if (brokerRegistration.inControlledShutdown()) {
+            return BrokerRegistrationState.CONTROLLED_SHUTDOWN;
+        } else {
+            return BrokerRegistrationState.ACTIVE;
         }
     }
 
@@ -317,11 +345,11 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         }
     }
 
-    public static MetricName getMetricName(String type, String name) {
+    private static MetricName getMetricName(String type, String name) {
         return KafkaYammerMetrics.getMetricName("kafka.controller", type, name);
     }
 
-    public static MetricName getBrokerIdTagMetricName(String type, String name, int brokerId) {
+    private static MetricName getBrokerIdTagMetricName(String type, String name, int brokerId) {
         LinkedHashMap<String, String> brokerIdTag = new LinkedHashMap<>();
         brokerIdTag.put(BROKER_ID_TAG, Integer.toString(brokerId));
         return KafkaYammerMetrics.getMetricName("kafka.controller", type, name, brokerIdTag);

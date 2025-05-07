@@ -94,21 +94,17 @@ class ControllerMetricsChanges {
         boolean isFenced = false;
         boolean isActive = false;
         boolean isInControlledShutdown = false;
+        final int brokerId;
         if (next != null) {
             isFenced = next.fenced();
             isActive = !next.fenced();
             isInControlledShutdown = next.inControlledShutdown();
-            if (isFenced) {
-                metrics.setBrokerRegistrationState(next.id(), ControllerMetadataMetrics.BROKER_FENCED_STATE);
-            } else if (isInControlledShutdown) {
-                metrics.setBrokerRegistrationState(next.id(), ControllerMetadataMetrics.BROKER_CONTROLLED_SHUTDOWN_STATE);
-            } else {
-                metrics.setBrokerRegistrationState(next.id(), ControllerMetadataMetrics.BROKER_ACTIVE_STATE);
-            }
+            brokerId = next.id();
         } else {
-            metrics.removeBrokerRegistrationStateMetric(prev.id());
-            metrics.setBrokerRegistrationState(prev.id(), ControllerMetadataMetrics.BROKER_UNREGISTERED_STATE);
+            brokerId = prev.id();
+            metrics.removeBrokerRegistrationStateMetric(brokerId);
         }
+        metrics.setBrokerRegistrationState(brokerId, next);
         fencedBrokersChange += delta(wasFenced, isFenced);
         activeBrokersChange += delta(wasActive, isActive);
         controlledShutdownBrokersChange += delta(wasInControlledShutdown, isInControlledShutdown);

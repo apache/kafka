@@ -22,6 +22,7 @@ import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -40,7 +41,7 @@ public class ControllerMetadataMetricsTest {
         try {
             try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
                 metrics.addBrokerRegistrationStateMetric(1);
-                metrics.setBrokerRegistrationState(1, ControllerMetadataMetrics.BROKER_ACTIVE_STATE);
+                metrics.setBrokerRegistrationState(1, new BrokerRegistration.Builder().setFenced(false).setInControlledShutdown(false).build());
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
                     new HashSet<>(List.of(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
@@ -156,11 +157,19 @@ public class ControllerMetadataMetricsTest {
         try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             int brokerId = 1;
             metrics.addBrokerRegistrationStateMetric(brokerId);
-            metrics.setBrokerRegistrationState(1, ControllerMetadataMetrics.BROKER_ACTIVE_STATE);
+            BrokerRegistration activeRegistration = new BrokerRegistration.Builder()
+                .setFenced(false)
+                .setInControlledShutdown(false)
+                .build();
+            metrics.setBrokerRegistrationState(1, activeRegistration);
             Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "BrokerRegistrationState", "broker=1"));
-            assertEquals(ControllerMetadataMetrics.BROKER_ACTIVE_STATE, registrationState.value());
-            metrics.setBrokerRegistrationState(1, ControllerMetadataMetrics.BROKER_FENCED_STATE);
-            assertEquals(ControllerMetadataMetrics.BROKER_FENCED_STATE, registrationState.value());
+            assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.ACTIVE.state(), registrationState.value());
+            BrokerRegistration fencedRegistration = new BrokerRegistration.Builder()
+                .setFenced(true)
+                .setInControlledShutdown(false)
+                .build();
+            metrics.setBrokerRegistrationState(1, fencedRegistration);
+            assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.FENCED.state(), registrationState.value());
         } finally {
             registry.shutdown();
         }
