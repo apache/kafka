@@ -18,6 +18,9 @@ package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
+import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
@@ -32,14 +35,17 @@ import org.apache.kafka.clients.admin.StreamsGroupSubtopologyDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -47,6 +53,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -61,9 +68,9 @@ public class StreamsGroupCommand {
             opts.checkArgs();
 
             // should have exactly one action
-            long numberOfActions = Stream.of(opts.listOpt, opts.describeOpt).filter(opts.options::has).count();
+            long numberOfActions = Stream.of(opts.listOpt, opts.describeOpt, opts.deleteOpt).filter(opts.options::has).count();
             if (numberOfActions != 1)
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, or --describe.");
+                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, or --delete.");
 
             run(opts);
         } catch (OptionException e) {
@@ -77,6 +84,8 @@ public class StreamsGroupCommand {
                 streamsGroupService.listGroups();
             } else if (opts.options.has(opts.describeOpt)) {
                 streamsGroupService.describeGroups();
+            } else if (opts.options.has(opts.deleteOpt)) {
+                streamsGroupService.deleteGroups();
             } else {
                 throw new IllegalArgumentException("Unknown action!");
             }
@@ -398,6 +407,107 @@ public class StreamsGroupCommand {
             props.putAll(configOverrides);
             return Admin.create(props);
         }
+
+        Map<String, Throwable> deleteGroups() {
+            List<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? listStreamsGroups()
+                : opts.options.valuesOf(opts.groupOpt);
+
+
+
+//            Map<String, Throwable> GroupDeletionRes = deleteGroups(groupIds);
+//            Map<String, Throwable> internalTopicsDeletionFailures = deleteInternalTopics(groupIds);
+            Map<String, Throwable> success = new HashMap<>();
+            Map<String, Throwable> failed = new HashMap<>();
+
+            Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteStreamsGroups(
+                groupIds
+            ).deletedGroups();
+
+            groupsToDelete.forEach((g, f) -> {
+                try {
+                    f.get();
+                    success.put(g, null);
+                } catch (InterruptedException ie) {
+                    failed.put(g, ie);
+                } catch (ExecutionException e) {
+                    failed.put(g, e.getCause());
+                }
+            });
+
+            if (failed.isEmpty()) {
+                System.out.println("Deletion of requested Streams groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
+            }
+            else {
+                printError("Deletion of some Streams groups failed:", Optional.empty());
+                failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
+
+                if (!success.isEmpty()) {
+                    System.out.println("\nThese Streams groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
+                }
+            }
+
+            Map<String, Throwable> internalTopicsDeletionFailures = new HashMap<>();
+            if (!success.isEmpty())
+                internalTopicsDeletionFailures = deleteInternalTopics(success.keySet().stream().toList());
+
+            failed.putAll(success);
+            failed.putAll(internalTopicsDeletionFailures);
+            return failed;
+        }
+
+        private Map<String, Throwable> deleteInternalTopics(List<String> groupIds) {
+//            try {
+//                List<String> internalTopics = adminClient.describeStreamsGroups(groupIds)
+//                    .all()
+//                    .get()
+//                    .values()
+//                    .stream()
+//                    .flatMap(description -> description.subtopologies().stream())
+//                    .flatMap(subtopology -> subtopology.repartitionSourceTopics().keySet().stream())
+//                    .toList();
+//            } catch (InterruptedException | ExecutionException e) {
+//                throw new RuntimeException("Failed to describe streams groups", e);
+//            }
+            Map<String, Throwable> failed = new HashMap<>();
+            List<String> internalTopics = new ArrayList<>();
+            try {
+                Map<String, StreamsGroupDescription> descriptionMap = adminClient.describeStreamsGroups(groupIds).all().get();
+                for (StreamsGroupDescription description : descriptionMap.values()) {
+                    for (StreamsGroupSubtopologyDescription subtopology : description.subtopologies()) {
+                        internalTopics.addAll(subtopology.repartitionSourceTopics().keySet());
+                    }
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                failed.put("Describe", e.getCause());
+            }
+            if (!internalTopics.isEmpty()) {
+                try {
+                    adminClient.deleteTopics(internalTopics).all().get();
+                } catch (InterruptedException | ExecutionException e) {
+                    failed.put("Delete", e.getCause());
+                }
+            }
+            if (failed.isEmpty()) {
+                System.out.println("Deletion of all associated internal topics was successful.");
+            } else {
+                if (failed.containsKey("Describe")) //todo message
+                    printError("No internal topic", Optional.of(failed.get("Describe")));
+                if (failed.containsKey("Delete"))
+                    printError("Deletion of some associated internal topics failed:", Optional.of(failed.get("Delete")));
+            }
+
+            return failed;
+        }
+
+        Collection<StreamsGroupMemberDescription> collectGroupMembers(String groupId) throws Exception {
+            return getDescribeGroup(groupId).members();
+        }
+
+        GroupState collectGroupState(String groupId) throws Exception {
+            return getDescribeGroup(groupId).groupState();
+        }
+
     }
 
     public record OffsetsInfo(Optional<Long> currentOffset, Optional<Integer> leaderEpoch, Long logEndOffset, Long lag) {
