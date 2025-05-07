@@ -23,6 +23,7 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.internals.RecordsIteratorTest.TestBatch;
@@ -88,7 +89,8 @@ class RecordsBatchReaderTest {
                 BufferSupplier.NO_CACHING,
                 MAX_BATCH_BYTES,
                 ignore -> { },
-                true
+                true,
+                new LogContext()
             )
         ) {
             assertTrue(reader.hasNext());
@@ -128,7 +130,8 @@ class RecordsBatchReaderTest {
             bufferSupplier,
             MAX_BATCH_BYTES,
             closeListener,
-            true
+            true,
+            new LogContext()
         );
         try {
             for (TestBatch<String> batch : expectedBatches) {
