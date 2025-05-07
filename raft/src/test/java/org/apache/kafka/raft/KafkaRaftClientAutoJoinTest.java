@@ -50,21 +50,16 @@ public class KafkaRaftClientAutoJoinTest {
             .withCanBecomeVoter(true)
             .build();
 
-        context.advanceTimeAndFetchToUpdateVoterSetTimer(epoch, leader.id());
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
 
-        context.time.sleep(context.fetchTimeoutMs - 1);
-        context.pollUntilRequest();
-        final var removeRequest = context.assertSentRemoveVoterRequest(oldFollower);
-        context.deliverResponse(
-            removeRequest.correlationId(),
-            removeRequest.destination(),
-            RaftUtil.removeVoterResponse(Errors.NONE, Errors.NONE.message())
-        );
+        // the next request should be a remove voter request
+        pollAndDeliverRemoveVoter(context, oldFollower);
 
         // after sending a remove voter the next request should be a fetch
-        context.pollUntilRequest();
-        final var fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+
+        // the replica should send remove voter again because the fetch did not update the voter set
+        pollAndDeliverRemoveVoter(context, oldFollower);
     }
 
     @Test
@@ -86,24 +81,16 @@ public class KafkaRaftClientAutoJoinTest {
             .withCanBecomeVoter(true)
             .build();
 
-        context.advanceTimeAndFetchToUpdateVoterSetTimer(epoch, leader.id());
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
 
-        context.time.sleep(context.fetchTimeoutMs - 1);
-        context.pollUntilRequest();
-        final var addRequest = context.assertSentAddVoterRequest(
-            newVoter,
-            context.client.quorum().localVoterNodeOrThrow().listeners()
-        );
-        context.deliverResponse(
-            addRequest.correlationId(),
-            addRequest.destination(),
-            RaftUtil.addVoterResponse(Errors.NONE, Errors.NONE.message())
-        );
+        // the next request should be an add voter request
+        pollAndDeliverAddVoter(context, newVoter);
 
         // after sending an add voter the next request should be a fetch
-        context.pollUntilRequest();
-        final var fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+
+        // the replica should send add voter again because the fetch did not update the voter set
+        pollAndDeliverAddVoter(context, newVoter);
     }
 
     @Test
@@ -126,91 +113,38 @@ public class KafkaRaftClientAutoJoinTest {
             .build();
 
         // advance time and complete a fetch to trigger the remove voter request
-        context.advanceTimeAndFetchToUpdateVoterSetTimer(epoch, leader.id());
-        context.time.sleep(context.fetchTimeoutMs - 1);
-        context.pollUntilRequest();
-        final var removeRequest = context.assertSentRemoveVoterRequest(oldFollower);
-        context.deliverResponse(
-            removeRequest.correlationId(),
-            removeRequest.destination(),
-            RaftUtil.removeVoterResponse(Errors.NONE, Errors.NONE.message())
-        );
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+
+        // the next request should be a remove voter request
+        pollAndDeliverRemoveVoter(context, oldFollower);
 
         // after sending a remove voter the next request should be a fetch
-        context.pollUntilRequest();
-        final var removeVoterFetch = context.assertSentFetchRequest();
-        context.assertFetchRequestData(
-            removeVoterFetch,
+        // this fetch will remove the old follower from the voter set
+        pollAndDeliverFetchToUpdateVoterSet(
+            context,
             epoch,
-            context.log.endOffset().offset(),
-            context.log.lastFetchedEpoch()
+            VoterSetTest.voterSet(Stream.of(leader))
         );
-
-        // deliver the fetch response with the updated voter set after removing the old voter
-        var localEndOffset = context.log.endOffset().offset();
-        context.deliverResponse(
-            removeVoterFetch.correlationId(),
-            removeVoterFetch.destination(),
-            context.fetchResponse(
-                epoch,
-                leader.id(),
-                MemoryRecords.withVotersRecord(
-                    localEndOffset,
-                    0,
-                    epoch,
-                    BufferSupplier.NO_CACHING.get(300),
-                    VoterSetTest.voterSet(Stream.of(leader)).toVotersRecord((short) 0)),
-                localEndOffset + 1,
-                Errors.NONE
-            )
-        );
-        // poll kraft to update the replica's voter set
-        context.client.poll();
 
         // advance time and complete a fetch to trigger the add voter request
-        context.advanceTimeAndFetchToUpdateVoterSetTimer(epoch, leader.id());
-        context.time.sleep(context.fetchTimeoutMs - 1);
-        context.pollUntilRequest();
-        final var addVoterRequest = context.assertSentAddVoterRequest(
-            newFollowerKey,
-            context.client.quorum().localVoterNodeOrThrow().listeners()
-        );
-        context.deliverResponse(
-            addVoterRequest.correlationId(),
-            addVoterRequest.destination(),
-            RaftUtil.addVoterResponse(Errors.NONE, Errors.NONE.message())
-        );
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+
+        // the next request should be an add voter request
+        pollAndDeliverAddVoter(context, newFollowerKey);
 
         // after sending an add voter the next request should be a fetch
-        context.pollUntilRequest();
-        final var addVoterFetch = context.assertSentFetchRequest();
-        context.assertFetchRequestData(
-            addVoterFetch,
+        // this fetch will add the new follower to the voter set
+        pollAndDeliverFetchToUpdateVoterSet(
+            context,
             epoch,
-            context.log.endOffset().offset(),
-            context.log.lastFetchedEpoch()
+            VoterSetTest.voterSet(Stream.of(leader, newFollowerKey))
         );
 
-        // deliver the fetch response with the updated voter set after adding the observer
-        localEndOffset = context.log.endOffset().offset();
-        context.deliverResponse(
-            addVoterFetch.correlationId(),
-            addVoterFetch.destination(),
-            context.fetchResponse(
-                epoch,
-                leader.id(),
-                MemoryRecords.withVotersRecord(
-                    localEndOffset,
-                    0,
-                    epoch,
-                    BufferSupplier.NO_CACHING.get(300),
-                    VoterSetTest.voterSet(Stream.of(leader, newFollowerKey)).toVotersRecord((short) 0)),
-                localEndOffset + 1,
-                Errors.NONE
-            )
-        );
-        // poll kraft to update the replica's voter set
-        context.client.poll();
+        // advance time and complete a fetch and expire the update voter set timer
+        // the next request should be a fetch because the log voter configuration is up-to-date
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.pollUntilRequest();
+        context.assertSentFetchRequest();
     }
 
 
@@ -233,7 +167,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withCanBecomeVoter(false)
             .build();
 
-        context.advanceTimeAndFetchToUpdateVoterSetTimer(epoch, leader.id());
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
 
         context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
@@ -262,7 +196,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withCanBecomeVoter(true)
             .build();
 
-        context.advanceTimeAndFetchToUpdateVoterSetTimer(epoch, leader.id());
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
 
         context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
@@ -291,7 +225,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withCanBecomeVoter(true)
             .build();
 
-        context.advanceTimeAndFetchToUpdateVoterSetTimer(epoch, leader.id());
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
 
         context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
@@ -300,6 +234,69 @@ public class KafkaRaftClientAutoJoinTest {
         final var fetchRequest = context.assertSentFetchRequest();
 
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+    }
+
+    private void pollAndDeliverRemoveVoter(
+        RaftClientTestContext context,
+        ReplicaKey oldFollower
+    ) throws Exception {
+        context.pollUntilRequest();
+        final var removeRequest = context.assertSentRemoveVoterRequest(oldFollower);
+        context.deliverResponse(
+            removeRequest.correlationId(),
+            removeRequest.destination(),
+            RaftUtil.removeVoterResponse(Errors.NONE, Errors.NONE.message())
+        );
+    }
+
+    private void pollAndDeliverAddVoter(
+        RaftClientTestContext context,
+        ReplicaKey newVoter
+    ) throws Exception {
+        context.pollUntilRequest();
+        final var addRequest = context.assertSentAddVoterRequest(
+            newVoter,
+            context.client.quorum().localVoterNodeOrThrow().listeners()
+        );
+        context.deliverResponse(
+            addRequest.correlationId(),
+            addRequest.destination(),
+            RaftUtil.addVoterResponse(Errors.NONE, Errors.NONE.message())
+        );
+    }
+
+    private void pollAndDeliverFetchToUpdateVoterSet(
+        RaftClientTestContext context,
+        int epoch,
+        VoterSet newVoterSet
+    ) throws Exception {
+        context.pollUntilRequest();
+        final var fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(
+            fetchRequest,
+            epoch,
+            context.log.endOffset().offset(),
+            context.log.lastFetchedEpoch()
+        );
+        // deliver the fetch response with the updated voter set
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(
+                epoch,
+                fetchRequest.destination().id(),
+                MemoryRecords.withVotersRecord(
+                    context.log.endOffset().offset(),
+                    0,
+                    epoch,
+                    BufferSupplier.NO_CACHING.get(300),
+                    newVoterSet.toVotersRecord((short) 0)),
+                context.log.endOffset().offset() + 1,
+                Errors.NONE
+            )
+        );
+        // poll kraft to update the replica's voter set
+        context.client.poll();
     }
 
     private int randomReplicaId() {

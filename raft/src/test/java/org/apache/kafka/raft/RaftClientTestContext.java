@@ -957,7 +957,16 @@ public final class RaftClientTestContext {
         channel.mockReceive(new RaftResponse.Inbound(correlationId, versionedResponse, source));
     }
 
-    void advanceTimeAndFetchToUpdateVoterSetTimer(int epoch, int leaderId) throws Exception {
+    /**
+     * Advance time and complete an empty fetch to reset the fetch timer.
+     * This is used to expire the update voter set timer without also expiring the fetch timer,
+     * which is needed for add, remove, and update voter tests.
+     * For voters and observers, polling after exiting this method should expire the update voter set timer.
+     * @param epoch - the current epoch 
+     * @param leaderId - the leader id
+     * @param expireUpdateVoterSetTimer - if true, advance time again to expire this timer
+     */
+    void advanceTimeAndCompleteFetch(int epoch, int leaderId, boolean expireUpdateVoterSetTimer) throws Exception {
         for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD; i++) {
             time.sleep(fetchTimeoutMs - 1);
             pollUntilRequest();
@@ -977,6 +986,10 @@ public final class RaftClientTestContext {
             );
             // poll kraft to handle the fetch response
             client.poll();
+        }
+        // advance time to expire the update voter set timer
+        if (expireUpdateVoterSetTimer) {
+            time.sleep(fetchTimeoutMs - 1);
         }
     }
 
