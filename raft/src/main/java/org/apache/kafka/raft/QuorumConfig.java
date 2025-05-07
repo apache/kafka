@@ -100,7 +100,7 @@ public class QuorumConfig {
     public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
     public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 20;
 
-    public static final String QUORUM_AUTO_JOIN_ENABLE = QUORUM_PREFIX + "auto.join.enable";
+    public static final String QUORUM_AUTO_JOIN_ENABLE_CONFIG = QUORUM_PREFIX + "auto.join.enable";
     public static final String QUORUM_AUTO_JOIN_ENABLE_DOC = "Controls whether a KRaft controller should automatically " +
         "join the cluster metadata partition for its cluster id.";
     public static final boolean DEFAULT_QUORUM_AUTO_JOIN_ENABLE = false;
@@ -114,7 +114,7 @@ public class QuorumConfig {
             .define(QUORUM_LINGER_MS_CONFIG, INT, DEFAULT_QUORUM_LINGER_MS, atLeast(0), MEDIUM, QUORUM_LINGER_MS_DOC)
             .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, atLeast(0), MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
             .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, atLeast(0), LOW, QUORUM_RETRY_BACKOFF_MS_DOC)
-            .define(QUORUM_AUTO_JOIN_ENABLE, BOOLEAN, DEFAULT_QUORUM_AUTO_JOIN_ENABLE, LOW, QUORUM_AUTO_JOIN_ENABLE_DOC);
+            .define(QUORUM_AUTO_JOIN_ENABLE_CONFIG, BOOLEAN, DEFAULT_QUORUM_AUTO_JOIN_ENABLE, LOW, QUORUM_AUTO_JOIN_ENABLE_DOC);
 
     private final List<String> voters;
     private final List<String> bootstrapServers;
@@ -135,7 +135,7 @@ public class QuorumConfig {
         this.electionBackoffMaxMs = abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
         this.fetchTimeoutMs = abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
         this.appendLingerMs = abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG);
-        this.autoJoin = abstractConfig.getBoolean(QUORUM_AUTO_JOIN_ENABLE);
+        this.autoJoin = abstractConfig.getBoolean(QUORUM_AUTO_JOIN_ENABLE_CONFIG);
     }
 
     public List<String> voters() {
