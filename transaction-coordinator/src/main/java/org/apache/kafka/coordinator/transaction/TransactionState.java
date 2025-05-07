@@ -92,14 +92,14 @@ public enum TransactionState {
     private final byte id;
     private final String stateName;
     public static final Map<TransactionState, Set<TransactionState>> VALID_PREVIOUS_STATES = Map.of(
-        EMPTY, Set.copyOf(EnumSet.of(EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT)),
-        ONGOING, Set.copyOf(EnumSet.of(ONGOING, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT)),
-        PREPARE_COMMIT, Set.copyOf(EnumSet.of(ONGOING)),
-        PREPARE_ABORT, Set.copyOf(EnumSet.of(ONGOING, PREPARE_EPOCH_FENCE, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT)),
-        COMPLETE_COMMIT, Set.copyOf(EnumSet.of(PREPARE_COMMIT)),
-        COMPLETE_ABORT, Set.copyOf(EnumSet.of(PREPARE_ABORT)),
-        DEAD, Set.copyOf(EnumSet.of(EMPTY, COMPLETE_ABORT, COMPLETE_COMMIT)),
-        PREPARE_EPOCH_FENCE, Set.copyOf(EnumSet.of(ONGOING))
+        EMPTY, Set.of(EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT),
+        ONGOING, Set.of(ONGOING, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT),
+        PREPARE_COMMIT, Set.of(ONGOING),
+        PREPARE_ABORT, Set.of(ONGOING, PREPARE_EPOCH_FENCE, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT),
+        COMPLETE_COMMIT, Set.of(PREPARE_COMMIT),
+        COMPLETE_ABORT, Set.of(PREPARE_ABORT),
+        DEAD, Set.of(EMPTY, COMPLETE_ABORT, COMPLETE_COMMIT),
+        PREPARE_EPOCH_FENCE, Set.of(ONGOING)
     );
 
     private final boolean expirationAllowed;
