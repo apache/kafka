@@ -68,12 +68,8 @@ public class DefaultJwtValidator implements JwtValidator {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
 
         if (verificationKeyResolver.isPresent()) {
-            Set<String> expectedAudiences = null;
-            List<String> l = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
-
-            if (l != null)
-                expectedAudiences = Set.copyOf(l);
-
+            List<String> expectedAudiencesList = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
+            Set<String> expectedAudiences = expectedAudiencesList != null ? Set.copyOf(expectedAudiencesList) : null;
             Integer clockSkew = cu.validateInteger(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
             String expectedIssuer = cu.validateString(SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
             String scopeClaimName = cu.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
