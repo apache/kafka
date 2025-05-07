@@ -19,11 +19,13 @@ package org.apache.kafka.raft;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
+import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.network.ListenerName;
@@ -31,11 +33,13 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AddRaftVoterRequest;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
+import org.apache.kafka.common.requests.RemoveRaftVoterRequest;
 import org.apache.kafka.common.requests.UpdateRaftVoterRequest;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.utils.Time;
@@ -178,6 +182,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
         requestThread.doWork();
     }
 
+    @SuppressWarnings("NPathComplexity")
     static AbstractRequest.Builder<? extends AbstractRequest> buildRequest(ApiMessage requestData) {
         if (requestData instanceof VoteRequestData)
             return new VoteRequest.Builder((VoteRequestData) requestData);
@@ -191,6 +196,10 @@ public class KafkaNetworkChannel implements NetworkChannel {
             return new FetchSnapshotRequest.Builder((FetchSnapshotRequestData) requestData);
         if (requestData instanceof UpdateRaftVoterRequestData)
             return new UpdateRaftVoterRequest.Builder((UpdateRaftVoterRequestData) requestData);
+        if (requestData instanceof AddRaftVoterRequestData)
+            return new AddRaftVoterRequest.Builder((AddRaftVoterRequestData) requestData);
+        if (requestData instanceof RemoveRaftVoterRequestData)
+            return new RemoveRaftVoterRequest.Builder((RemoveRaftVoterRequestData) requestData);
         if (requestData instanceof ApiVersionsRequestData)
             return new ApiVersionsRequest.Builder((ApiVersionsRequestData) requestData,
                 ApiKeys.API_VERSIONS.oldestVersion(),

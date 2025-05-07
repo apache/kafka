@@ -3776,7 +3776,7 @@ class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withKip853Rpc(withKip853Rpc)
-            .withAlwaysFlush(alwaysFlush)
+            .withCanBecomeVoter(alwaysFlush)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
