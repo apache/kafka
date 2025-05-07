@@ -17,12 +17,13 @@
 
 package org.apache.kafka.controller.metrics;
 
+import org.apache.kafka.metadata.BrokerRegistration;
+
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-import org.apache.kafka.metadata.BrokerRegistration;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
