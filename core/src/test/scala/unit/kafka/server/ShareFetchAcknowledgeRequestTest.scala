@@ -2130,6 +2130,78 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       new ClusterTest(
         serverProperties = Array(
           new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+          new ClusterConfigProperty(key = "group.share.max.share.sessions", value="1"),
+          new ClusterConfigProperty(key = "group.share.max.size", value="1")
+        )
+      ),
+      new ClusterTest(
+        serverProperties = Array(
+          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
+          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
+          new ClusterConfigProperty(key = "group.share.max.share.sessions", value="1"),
+          new ClusterConfigProperty(key = "group.share.max.size", value="1")
+        )
+      ),
+    )
+  )
+  def testShareSessionErrorAndThrottlingWhenCacheFull(): Unit = {
+    val groupId: String = "group"
+    val memberId1 = Uuid.randomUuid()
+    val memberId2 = Uuid.randomUuid()
+
+    val topic = "topic"
+    val partition = 0
+
+    createTopicAndReturnLeaders(topic, numPartitions = 3)
+    val topicIds = getTopicIds.asJava
+    val topicId = topicIds.get(topic)
+    val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topic, partition))
+
+    val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
+
+    val socket1: Socket = connectAny()
+    val socket2: Socket = connectAny()
+
+    // member1 sends share fetch request to register it's share session.
+    TestUtils.waitUntilTrue(() => {
+      val metadata = new ShareRequestMetadata(memberId1, ShareRequestMetadata.INITIAL_EPOCH)
+      val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
+      val shareFetchResponse = IntegrationTestUtils.sendAndReceive[ShareFetchResponse](shareFetchRequest, socket1)
+      val shareFetchResponseData = shareFetchResponse.data()
+      shareFetchResponseData.errorCode == Errors.NONE.code
+    }, "Share fetch request failed", 5000)
+
+    // member2 sends share fetch request to register it's share session. Since the group.share.max.share.sessions config
+    // value is 1, a second share session cannot be registered. A response with the error code SHARE_SESSION_LIMIT_REACHED
+    // is returned and the SHARE_FETCH request is throttled for maxWaitMs
+    TestUtils.waitUntilTrue(() => {
+      val metadata = new ShareRequestMetadata(memberId2, ShareRequestMetadata.INITIAL_EPOCH)
+      val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
+      val shareFetchResponse = IntegrationTestUtils.sendAndReceive[ShareFetchResponse](shareFetchRequest, socket2)
+      val shareFetchResponseData = shareFetchResponse.data()
+      shareFetchResponseData.errorCode == Errors.SHARE_SESSION_LIMIT_REACHED.code
+      shareFetchResponseData.throttleTimeMs() == MAX_WAIT_MS
+    }, "Share fetch request failed", 5000)
+
+    // member2 sends another share fetch request which should delayed by at least MAX_WAIT_MS.
+    val startTime = System.currentTimeMillis()
+    val metadata = new ShareRequestMetadata(memberId2, ShareRequestMetadata.INITIAL_EPOCH)
+    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
+    IntegrationTestUtils.sendAndReceive[ShareFetchResponse](shareFetchRequest, socket2)
+    val elapsedTime = System.currentTimeMillis() - startTime
+
+    assertTrue(elapsedTime >= MAX_WAIT_MS, s"Response was received too quickly: elapsedTime=$elapsedTime, expected at least $MAX_WAIT_MS")
+  }
+
+  @ClusterTests(
+    Array(
+      new ClusterTest(
+        serverProperties = Array(
+          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
           new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
         )
       ),
