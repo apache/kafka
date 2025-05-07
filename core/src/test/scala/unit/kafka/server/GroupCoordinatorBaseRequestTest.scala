@@ -147,9 +147,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def closeSockets(): Unit = {
     while (openSockets.nonEmpty) {
       val socket = openSockets.head
-      if (!socket.isClosed) {
-        socket.close()
-      }
+      socket.close()
       openSockets.remove(0)
     }
   }

@@ -67,8 +67,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     assertEquals(Errors.UNSUPPORTED_VERSION.code, shareFetchResponse.data.errorCode)
     assertEquals(0, shareFetchResponse.data.acquisitionLockTimeoutMs)
-
-    socket.close()
   }
 
   @ClusterTest(
@@ -86,8 +84,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareAcknowledgeResponse = IntegrationTestUtils.sendAndReceive[ShareAcknowledgeResponse](shareAcknowledgeRequest, socket)
 
     assertEquals(Errors.UNSUPPORTED_VERSION.code, shareAcknowledgeResponse.data.errorCode)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -140,8 +136,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val partitionData = shareFetchResponse.responseData(topicNames).get(topicIdPartition)
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
     assertEquals(leader, partitionData.currentLeader().leaderId())
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -206,8 +200,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -306,8 +298,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
         case 2 => compareFetchResponsePartitions(expectedPartitionData3, partitionData)
       }
     })
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -429,10 +419,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     compareFetchResponsePartitions(expectedPartitionData1, partitionData1)
     compareFetchResponsePartitions(expectedPartitionData2, partitionData2)
     compareFetchResponsePartitions(expectedPartitionData3, partitionData3)
-
-    socket1.close()
-    socket2.close()
-    socket3.close()
   }
 
   @ClusterTests(
@@ -548,8 +534,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -672,8 +656,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -786,8 +768,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -904,8 +884,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // they are re delivered, and records from 10 to 19 will have delivery count as 1 because they are newly acquired
     assertTrue(expectedFetchPartitionData.acquiredRecords().containsAll(acquiredRecords) &&
       acquiredRecords.containsAll(expectedFetchPartitionData.acquiredRecords()))
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -1021,8 +999,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -1143,8 +1119,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -1307,8 +1281,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -1404,10 +1376,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // There should be no common records between the 3 consumers as they are part of the same group
     assertTrue(partitionData1.acquiredRecords().get(0).lastOffset() < partitionData2.acquiredRecords().get(0).firstOffset())
     assertTrue(partitionData2.acquiredRecords().get(0).lastOffset() < partitionData3.acquiredRecords().get(0).firstOffset())
-
-    socket1.close()
-    socket2.close()
-    socket3.close()
   }
 
   @ClusterTests(
@@ -1508,10 +1476,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(partitionData1.acquiredRecords(), expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
     assertEquals(partitionData2.acquiredRecords(), expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
     assertEquals(partitionData3.acquiredRecords(), expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
-
-    socket1.close()
-    socket2.close()
-    socket3.close()
   }
 
   @ClusterTests(
@@ -1622,8 +1586,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(0, shareFetchResponseData.responses().size()) // responses list will be empty because there are no responses for the final fetch request
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -1743,8 +1705,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
     compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -1799,8 +1759,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // The response will have a top level error code because this is an Initial Fetch request with acknowledgement data present
     assertEquals(Errors.INVALID_REQUEST.code(), shareFetchResponseData.errorCode)
     assertEquals(0, shareFetchResponse.data.acquisitionLockTimeoutMs)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -1849,8 +1807,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.code, shareAcknowledgeResponseData.errorCode)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -1925,8 +1881,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.code, shareFetchResponseData.errorCode)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -2006,8 +1960,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.code, shareAcknowledgeResponseData.errorCode)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -2083,8 +2035,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code, shareFetchResponseData.errorCode)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -2159,21 +2109,20 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       shareFetchResponseData.errorCode == Errors.SHARE_SESSION_NOT_FOUND.code
     }, "Share fetch request failed", 5000)
 
-    // Now we will close the socket connections for the 1 member, mimicking a client disconnection
-    socket1.close()
+    // Now we will close the socket connections for the members, mimicking a client disconnection
+    closeSockets()
+
+    val socket4: Socket = connectAny()
 
     // Since one of the socket connections was closed before, the corresponding share session was dropped from the ShareSessionCache
     // on the broker. Now, since the cache is not full, new share sessions can be registered
     TestUtils.waitUntilTrue(() => {
       val metadata = new ShareRequestMetadata(memberId3, ShareRequestMetadata.INITIAL_EPOCH)
       val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
-      val shareFetchResponse = IntegrationTestUtils.sendAndReceive[ShareFetchResponse](shareFetchRequest, socket3)
+      val shareFetchResponse = IntegrationTestUtils.sendAndReceive[ShareFetchResponse](shareFetchRequest, socket4)
       val shareFetchResponseData = shareFetchResponse.data()
       shareFetchResponseData.errorCode == Errors.NONE.code
     }, "Share fetch request failed", 5000)
-
-    socket2.close()
-    socket3.close()
   }
 
   @ClusterTests(
@@ -2254,8 +2203,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code, shareAcknowledgeResponseData.errorCode)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -2356,8 +2303,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -2422,8 +2367,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val partitionData = shareFetchResponseData.responses.get(0).partitions.get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
-
-    socket.close()
   }
 
   @ClusterTests(
@@ -2488,8 +2431,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val partitionData = shareFetchResponseData.responses.get(0).partitions.get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
-
-    socket.close()
   }
 
   // For initial fetch request, the response may not be available in the first attempt when the share
