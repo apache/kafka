@@ -56,10 +56,11 @@ public class OffsetFetchResponse extends AbstractResponse {
     public static final long INVALID_OFFSET = -1L;
     public static final String NO_METADATA = "";
 
+    // We only need to track the partition errors returned in version 1. This
+    // is used to identify group level errors when the response is normalized.
     private static final List<Errors> PARTITION_ERRORS = Arrays.asList(
         Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        Errors.TOPIC_AUTHORIZATION_FAILED,
-        Errors.UNSTABLE_OFFSET_COMMIT
+        Errors.TOPIC_AUTHORIZATION_FAILED
     );
 
     private final short version;
