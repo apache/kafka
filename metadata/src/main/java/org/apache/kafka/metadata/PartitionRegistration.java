@@ -164,8 +164,8 @@ public class PartitionRegistration {
     public final int leaderEpoch;
     public final int partitionEpoch;
 
-    public static boolean electionWasUnclean(byte prevLeaderRecoveryState, byte nextLeaderRecoveryState) {
-        return prevLeaderRecoveryState == LeaderRecoveryState.RECOVERED.value() && nextLeaderRecoveryState == LeaderRecoveryState.RECOVERING.value();
+    public static boolean electionWasUnclean(byte leaderRecoveryState) {
+        return leaderRecoveryState == LeaderRecoveryState.RECOVERING.value();
     }
 
     private static List<Uuid> checkDirectories(PartitionRecord record) {
@@ -346,7 +346,7 @@ public class PartitionRegistration {
     }
 
     public void maybeLogPartitionChange(Logger log, String description, PartitionRegistration prev) {
-        if (electionWasUnclean(prev.leaderRecoveryState.value(), this.leaderRecoveryState.value())) {
+        if (electionWasUnclean(this.leaderRecoveryState.value())) {
             log.info("UNCLEAN partition change for {}: {}", description, diff(prev));
         } else if (log.isDebugEnabled()) {
             log.debug("partition change for {}: {}", description, diff(prev));

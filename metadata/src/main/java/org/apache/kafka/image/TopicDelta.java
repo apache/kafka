@@ -105,7 +105,7 @@ public final class TopicDelta {
     }
 
     private void updateElectionStats(int partitionId, PartitionRegistration prevPartition, int newLeader, byte newLeaderRecoveryState) {
-        if (PartitionRegistration.electionWasUnclean(prevPartition.leaderRecoveryState.value(), newLeaderRecoveryState)) {
+        if (PartitionRegistration.electionWasUnclean(newLeaderRecoveryState)) {
             partitionToUncleanLeaderElectionCount.put(partitionId, partitionToUncleanLeaderElectionCount.getOrDefault(partitionId, 0) + 1);
         }
         if (Replicas.contains(prevPartition.elr, newLeader)) {

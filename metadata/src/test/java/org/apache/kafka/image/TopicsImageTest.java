@@ -456,7 +456,7 @@ public class TopicsImageTest {
         delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(0).setIsr(List.of(0)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
         assertEquals(2, delta.partitionToUncleanLeaderElectionCount().get(0));
         delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(1).setIsr(List.of(1)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
-        assertEquals(2, delta.partitionToUncleanLeaderElectionCount().get(0));
+        assertEquals(3, delta.partitionToUncleanLeaderElectionCount().get(0));
         assertTrue(delta.partitionToElrElectionCount().isEmpty());
 
         delta.replay(new PartitionRecord().setPartitionId(1).setLeader(0).setIsr(List.of(0, 1)).setReplicas(List.of(0, 1, 2)));

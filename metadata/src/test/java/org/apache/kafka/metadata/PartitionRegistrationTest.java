@@ -56,9 +56,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class PartitionRegistrationTest {
     @Test
     public void testElectionWasUnclean() {
-        assertTrue(PartitionRegistration.electionWasUnclean(LeaderRecoveryState.RECOVERED.value(), LeaderRecoveryState.RECOVERING.value()));
-        assertFalse(PartitionRegistration.electionWasUnclean(LeaderRecoveryState.RECOVERING.value(), LeaderRecoveryState.RECOVERING.value()));
-        assertFalse(PartitionRegistration.electionWasUnclean(LeaderRecoveryState.RECOVERING.value(), LeaderRecoveryState.RECOVERED.value()));
+        assertFalse(PartitionRegistration.electionWasUnclean(LeaderRecoveryState.RECOVERED.value()));
+        assertTrue(PartitionRegistration.electionWasUnclean(LeaderRecoveryState.RECOVERING.value()));
     }
 
     @Test
