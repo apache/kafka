@@ -1015,10 +1015,10 @@ public class SharePartitionManagerTest {
         when(sp2.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
         when(sp3.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
         // Required mocks so that the share partitions can acquire record.
-        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
-        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
-        when(sp2.maybeAcquireFetchLock()).thenReturn(true);
-        when(sp3.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock(any())).thenReturn(true);
+        when(sp2.maybeAcquireFetchLock(any())).thenReturn(true);
+        when(sp3.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(true);
@@ -1119,7 +1119,7 @@ public class SharePartitionManagerTest {
         List<TopicIdPartition> topicIdPartitions = List.of(tp0);
 
         SharePartition sp0 = mock(SharePartition.class);
-        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp0.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
@@ -1688,9 +1688,9 @@ public class SharePartitionManagerTest {
         mockTopicIdPartitionToReturnDataEqualToMinBytes(mockReplicaManager, tp1, 2);
 
         // Initially you cannot acquire records for both sp1 and sp2.
-        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        when(sp2.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp2.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(false);
         when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(ShareAcquiredRecords.empty());
         when(sp2.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(ShareAcquiredRecords.empty());
@@ -1797,11 +1797,11 @@ public class SharePartitionManagerTest {
         mockReplicaManagerDelayedShareFetch(mockReplicaManager, delayedShareFetchPurgatory);
 
         // Initially you cannot acquire records for both all 3 share partitions.
-        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        when(sp2.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp2.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(false);
-        when(sp3.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp3.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp3.canAcquireRecords()).thenReturn(false);
 
         List<DelayedOperationKey> delayedShareFetchWatchKeys = new ArrayList<>();
@@ -1903,9 +1903,9 @@ public class SharePartitionManagerTest {
         mockTopicIdPartitionToReturnDataEqualToMinBytes(mockReplicaManager, tp1, 1);
 
         // Initially you cannot acquire records for both sp1 and sp2.
-        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        when(sp2.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp2.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(false);
 
         List<DelayedOperationKey> delayedShareFetchWatchKeys = new ArrayList<>();
@@ -2007,11 +2007,11 @@ public class SharePartitionManagerTest {
         mockReplicaManagerDelayedShareFetch(mockReplicaManager, delayedShareFetchPurgatory);
 
         // Initially you cannot acquire records for both all 3 share partitions.
-        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        when(sp2.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp2.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(false);
-        when(sp3.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp3.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp3.canAcquireRecords()).thenReturn(false);
 
         List<DelayedOperationKey> delayedShareFetchWatchKeys = new ArrayList<>();
@@ -2505,7 +2505,7 @@ public class SharePartitionManagerTest {
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionKey(groupId, tp1), sp1);
 
-        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp1.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
         when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(new ShareAcquiredRecords(List.of(), 0));
@@ -2569,7 +2569,7 @@ public class SharePartitionManagerTest {
         List<TopicIdPartition> topicIdPartitions = List.of(tp0);
 
         SharePartition sp0 = mock(SharePartition.class);
-        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
@@ -2622,14 +2622,14 @@ public class SharePartitionManagerTest {
         List<TopicIdPartition> topicIdPartitions = List.of(tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
-        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
 
         SharePartition sp1 = mock(SharePartition.class);
         // Do not make the share partition acquirable hence it shouldn't be removed from the cache,
         // as it won't be part of replica manager readFromLog request.
-        when(sp1.maybeAcquireFetchLock()).thenReturn(false);
+        when(sp1.maybeAcquireFetchLock(any())).thenReturn(false);
         when(sp1.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
 
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
@@ -2662,7 +2662,7 @@ public class SharePartitionManagerTest {
 
         // Make sp1 acquirable and add sp0 back in partition cache. Both share partitions should be
         // removed from the cache.
-        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Throw FencedStateEpochException from replica manager fetch which should evict instance from the cache.
