@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, MetadataLogConfig, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
@@ -418,7 +419,7 @@ final class KafkaMetadataLog private (
    */
   private def readSnapshotTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
     readSnapshot(snapshotId).toScala.map { reader =>
-      Snapshots.lastContainedLogTimestamp(reader)
+      Snapshots.lastContainedLogTimestamp(reader, new LogContext(logIdent))
     }
   }
 
