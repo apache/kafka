@@ -38,6 +38,7 @@ import java.util.Map;
 import javax.security.auth.callback.Callback;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -124,7 +125,6 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs();
         try (JwtValidator jwtValidator = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM)) {
             handler.init(jwtRetriever, jwtValidator);
-
             assertDoesNotThrow(handler::close);
         }
     }
