@@ -69,6 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 
 public class ConfigCommandIntegrationTest {
     private final String defaultBrokerId = "0";
@@ -214,6 +215,46 @@ public class ConfigCommandIntegrationTest {
 
         // Test for the --group alias
         verifyGroupConfigUpdate(asList("--group", defaultGroupName, "--alter"));
+    }
+
+    @ClusterTest
+    public void testDescribeStreamsGroupConfigs() {
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+
+        assertTrue(message.contains("streams.heartbeat.interval.ms=5000 sensitive=false synonyms={DEFAULT_CONFIG:streams.heartbeat.interval.ms=5000}"));
+        assertTrue(message.contains("streams.num.standby.replicas=0 sensitive=false synonyms={DEFAULT_CONFIG:streams.num.standby.replicas=0}"));
+        assertTrue(message.contains("streams.session.timeout.ms=45000 sensitive=false synonyms={DEFAULT_CONFIG:streams.session.timeout.ms=45000}"));
+    }
+
+    @ClusterTest
+    public void testAlterStreamsGroupNumOfStandbyReplicas() {
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.num.standby.replicas=0"));
+
+        // Alter number of standby replicas
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.num.standby.replicas=1"));
+        message = captureStandardOut(run(command));
+        assertEquals("Completed updating config for group group.", message);
+
+        // Verify the updated config
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.num.standby.replicas=1"));
     }
 
     private void verifyGroupConfigUpdate(List<String> alterOpts) throws Exception {
@@ -413,7 +454,7 @@ public class ConfigCommandIntegrationTest {
             AlterConfigsResult mockResult = AdminClientTestUtils.alterConfigsResult(
                     new ConfigResource(ConfigResource.Type.BROKER, ""), new UnsupportedVersionException("simulated error"));
             Mockito.doReturn(mockResult).when(spyAdmin)
-                    .incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+                    .incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
             assertEquals(
                     "The INCREMENTAL_ALTER_CONFIGS API is not supported by the cluster. The API is supported starting from version 2.3.0. You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.",
                     assertThrows(UnsupportedVersionException.class, () -> {
@@ -426,7 +467,7 @@ public class ConfigCommandIntegrationTest {
                                         "--entity-default"))));
                     }).getMessage()
             );
-            Mockito.verify(spyAdmin).incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+            Mockito.verify(spyAdmin).incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
         }
     }
 

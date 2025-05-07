@@ -25,8 +25,8 @@ import com.typesafe.scalalogging.Logger
 import javax.management.ObjectName
 import scala.collection._
 import scala.collection.Seq
-import org.apache.kafka.network.EndPoint
 import org.apache.commons.validator.routines.InetAddressValidator
+import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
@@ -122,22 +122,22 @@ object CoreUtils {
 
   def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.writeLock)(fun)
 
-  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[Endpoint] = {
     listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
 
-  private def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
+  private def checkDuplicateListenerPorts(endpoints: Seq[Endpoint], listeners: String): Unit = {
     val distinctPorts = endpoints.map(_.port).distinct
     require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
   }
 
-  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[Endpoint] = {
     def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean =
       (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
         (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
 
-    def validate(endPoints: Seq[EndPoint]): Unit = {
-      val distinctListenerNames = endPoints.map(_.listenerName).distinct
+    def validate(endPoints: Seq[Endpoint]): Unit = {
+      val distinctListenerNames = endPoints.map(_.listener).distinct
       require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
 
       val (duplicatePorts, _) = endPoints.filter {
@@ -186,8 +186,7 @@ object CoreUtils {
     }
 
     val endPoints = try {
-      SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap.asJava).
-        asScala.map(EndPoint.fromPublic)
+      SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap.asJava).asScala
     } catch {
       case e: Exception =>
         throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)

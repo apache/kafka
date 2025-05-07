@@ -111,12 +111,12 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
@@ -128,7 +128,6 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -179,11 +178,6 @@ public final class QuorumController implements Controller {
     private static final int DEFAULT_MAX_RECORDS_PER_BATCH = 10000;
 
     /**
-     * The default minimum event time that can be logged as a slow event.
-     */
-    private static final int DEFAULT_MIN_SLOW_EVENT_TIME_MS = 200;
-
-    /**
      * The maximum records any user-initiated operation is allowed to generate.
      *
      * For now, this is set to the maximum records in a single batch.
@@ -215,7 +209,7 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
-        private Map<String, Object> staticConfig = Collections.emptyMap();
+        private Map<String, Object> staticConfig = Map.of();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = DEFAULT_MAX_RECORDS_PER_BATCH;
         private long controllerPerformanceSamplePeriodMs = 60000L;
@@ -676,11 +670,6 @@ public final class QuorumController implements Controller {
         public String toString() {
             return name + "(" + System.identityHashCode(this) + ")";
         }
-    }
-
-    // Visible for testing
-    OffsetControlManager offsetControl() {
-        return offsetControl;
     }
 
     // Visible for testing
@@ -1530,6 +1519,7 @@ public final class QuorumController implements Controller {
             setQuorumFeatures(quorumFeatures).
             setSnapshotRegistry(snapshotRegistry).
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
+            setKRaftVersionAccessor(new RaftClientKRaftVersionAccessor(raftClient)).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -1703,7 +1693,7 @@ public final class QuorumController implements Controller {
         periodicControl.registerTask(new PeriodicTask("generatePeriodicPerformanceMessage",
             () -> {
                 performanceMonitor.generatePeriodicPerformanceMessage();
-                return ControllerResult.of(Collections.emptyList(), false);
+                return ControllerResult.of(List.of(), false);
             },
             performanceMonitor.periodNs(),
             EnumSet.noneOf(PeriodicTaskFlag.class)));
@@ -1802,7 +1792,7 @@ public final class QuorumController implements Controller {
         Collection<String> names
     ) {
         if (names.isEmpty())
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         return appendReadEvent("findTopicIds", context.deadlineNs(),
             () -> replicationControl.findTopicIds(offsetControl.lastStableOffset(), names));
     }
@@ -1821,7 +1811,7 @@ public final class QuorumController implements Controller {
         Collection<Uuid> ids
     ) {
         if (ids.isEmpty())
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         return appendReadEvent("findTopicNames", context.deadlineNs(),
             () -> replicationControl.findTopicNames(offsetControl.lastStableOffset(), ids));
     }
@@ -1832,7 +1822,7 @@ public final class QuorumController implements Controller {
         Collection<Uuid> ids
     ) {
         if (ids.isEmpty())
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         return appendWriteEvent("deleteTopics", context.deadlineNs(),
             () -> replicationControl.deleteTopics(context, ids));
     }
@@ -1875,7 +1865,7 @@ public final class QuorumController implements Controller {
         boolean validateOnly
     ) {
         if (configChanges.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
@@ -1920,7 +1910,7 @@ public final class QuorumController implements Controller {
         Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly
     ) {
         if (newConfigs.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
@@ -2014,7 +2004,7 @@ public final class QuorumController implements Controller {
         boolean validateOnly
     ) {
         if (quotaAlterations.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("alterClientQuotas", context.deadlineNs(), () -> {
             ControllerResult<Map<ClientQuotaEntity, ApiError>> result =
@@ -2052,7 +2042,7 @@ public final class QuorumController implements Controller {
                 upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
                 updates.put(featureName, featureUpdate.maxVersionLevel());
             });
-            return configurationControl.updateFeatures(updates, upgradeTypes, request.validateOnly());
+            return configurationControl.updateFeatures(updates, upgradeTypes, request.validateOnly(), curClaimEpoch);
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
 
@@ -2085,7 +2075,7 @@ public final class QuorumController implements Controller {
         boolean validateOnly
     ) {
         if (topics.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyList());
+            return CompletableFuture.completedFuture(List.of());
         }
 
         return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {

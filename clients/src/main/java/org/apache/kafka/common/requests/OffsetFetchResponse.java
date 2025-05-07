@@ -25,12 +25,12 @@ import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchRespon
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopics;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -325,7 +325,7 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         if (!groupLevelErrors.isEmpty()) {
             // built response with v8 or above
             for (Map.Entry<String, Errors> entry : groupLevelErrors.entrySet()) {
@@ -390,8 +390,8 @@ public class OffsetFetchResponse extends AbstractResponse {
         return buildResponseData(groupId);
     }
 
-    public static OffsetFetchResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetFetchResponse(new OffsetFetchResponseData(new ByteBufferAccessor(buffer), version), version);
+    public static OffsetFetchResponse parse(Readable readable, short version) {
+        return new OffsetFetchResponse(new OffsetFetchResponseData(readable, version), version);
     }
 
     @Override

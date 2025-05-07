@@ -87,7 +87,6 @@ public class PluginsRecommenders {
 
     public class ConnectorPluginVersionRecommender implements ConfigDef.Recommender {
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
             if (plugins == null) {

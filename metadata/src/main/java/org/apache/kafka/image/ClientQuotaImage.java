@@ -40,7 +40,7 @@ import java.util.Objects;
  * This class is thread-safe.
  */
 public final class ClientQuotaImage {
-    public static final ClientQuotaImage EMPTY = new ClientQuotaImage(Collections.emptyMap());
+    public static final ClientQuotaImage EMPTY = new ClientQuotaImage(Map.of());
 
     private final Map<String, Double> quotas;
 

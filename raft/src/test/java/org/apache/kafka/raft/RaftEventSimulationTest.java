@@ -52,7 +52,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -857,7 +856,7 @@ public class RaftEventSimulationTest {
 
         private static Endpoints endpointsFromId(int nodeId, ListenerName listenerName) {
             return Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     listenerName,
                     InetSocketAddress.createUnresolved(hostFromId(nodeId), PORT)
                 )
@@ -902,7 +901,7 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 true,
                 clusterId,
-                Collections.emptyList(),
+                List.of(),
                 endpointsFromId(nodeId, channel.listenerName()),
                 Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
@@ -928,6 +927,7 @@ public class RaftEventSimulationTest {
     }
 
     private static class RaftNode {
+        final LogContext logContext;
         final int nodeId;
         final KafkaRaftClient<Integer> client;
         final MockLog log;
@@ -949,6 +949,7 @@ public class RaftEventSimulationTest {
             Random random,
             RecordSerde<Integer> intSerde
         ) {
+            this.logContext = logContext;
             this.nodeId = nodeId;
             this.client = client;
             this.log = log;
@@ -997,6 +998,10 @@ public class RaftEventSimulationTest {
                 highWatermark(),
                 logEndOffset()
             );
+        }
+
+        LogContext logContext() {
+            return logContext;
         }
     }
 
@@ -1336,7 +1341,8 @@ public class RaftEventSimulationTest {
                         node.intSerde,
                         BufferSupplier.create(),
                         Integer.MAX_VALUE,
-                        true
+                        true,
+                        node.logContext()
                     )
                 ) {
                     // Since the state machine is only on e value we only expect one data record in the snapshot

@@ -19,11 +19,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 public class CreatePartitionsResponse extends AbstractResponse {
@@ -42,15 +41,15 @@ public class CreatePartitionsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         data.results().forEach(result ->
             updateErrorCounts(counts, Errors.forCode(result.errorCode()))
         );
         return counts;
     }
 
-    public static CreatePartitionsResponse parse(ByteBuffer buffer, short version) {
-        return new CreatePartitionsResponse(new CreatePartitionsResponseData(new ByteBufferAccessor(buffer), version));
+    public static CreatePartitionsResponse parse(Readable readable, short version) {
+        return new CreatePartitionsResponse(new CreatePartitionsResponseData(readable, version));
     }
 
     @Override

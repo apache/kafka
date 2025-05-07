@@ -18,9 +18,10 @@
 package kafka.server
 
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.{CoreUtils, Logging, TestUtils}
+import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, TopicRecord}
@@ -47,7 +48,8 @@ class LocalLeaderEndPointTest extends Logging {
   val topicId = Uuid.randomUuid()
   val topic = "test"
   val partition = 5
-  val topicPartition = new TopicPartition(topic, partition)
+  val topicIdPartition = new TopicIdPartition(topicId, partition, topic)
+  val topicPartition = topicIdPartition.topicPartition()
   val sourceBroker: BrokerEndPoint = new BrokerEndPoint(0, "localhost", 9092)
   var replicaManager: ReplicaManager = _
   var endPoint: LeaderEndPoint = _
@@ -61,7 +63,7 @@ class LocalLeaderEndPointTest extends Logging {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val alterPartitionManager = mock(classOf[AlterPartitionManager])
     val metrics = new Metrics
-    quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(config, metrics, time, "", "")
     replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -69,7 +71,7 @@ class LocalLeaderEndPointTest extends Logging {
       scheduler = new MockScheduler(time),
       logManager = mockLogMgr,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager
     )
@@ -114,23 +116,23 @@ class LocalLeaderEndPointTest extends Logging {
 
   @Test
   def testFetchLatestOffset(): Unit = {
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     assertEquals(new OffsetAndEpoch(3L, 0), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch = 0))
     bumpLeaderEpoch()
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     assertEquals(new OffsetAndEpoch(6L, 1), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch = 7))
   }
 
   @Test
   def testFetchEarliestOffset(): Unit = {
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 0))
 
     bumpLeaderEpoch()
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 3), _ => ())
     assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
@@ -138,12 +140,12 @@ class LocalLeaderEndPointTest extends Logging {
 
   @Test
   def testFetchEarliestLocalOffset(): Unit = {
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch = 0))
 
     bumpLeaderEpoch()
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     replicaManager.logManager.getLog(topicPartition).foreach(log => log.updateLocalLogStartOffset(3))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
@@ -152,7 +154,7 @@ class LocalLeaderEndPointTest extends Logging {
 
   @Test
   def testFetchEpochEndOffsets(): Unit = {
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
 
     var result = endPoint.fetchEpochEndOffsets(Map(
@@ -176,7 +178,7 @@ class LocalLeaderEndPointTest extends Logging {
     bumpLeaderEpoch()
     assertEquals(2, replicaManager.getPartitionOrException(topicPartition).getLeaderEpoch)
 
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
 
     result = endPoint.fetchEpochEndOffsets(Map(
@@ -262,12 +264,12 @@ class LocalLeaderEndPointTest extends Logging {
   }
 
   private def appendRecords(replicaManager: ReplicaManager,
-                            partition: TopicPartition,
+                            partition: TopicIdPartition,
                             records: MemoryRecords,
                             origin: AppendOrigin = AppendOrigin.CLIENT,
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
-    def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
+    def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
       val response = responses.get(partition)
       assertTrue(response.isDefined)
       result.fire(response.get)
@@ -278,7 +280,7 @@ class LocalLeaderEndPointTest extends Logging {
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
       origin = origin,
-      entriesPerPartition = Map(partition -> records),
+      entriesPerPartition = Map(topicIdPartition-> records),
       responseCallback = appendCallback)
 
     result
