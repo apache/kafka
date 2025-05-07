@@ -370,7 +370,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private void replaceTargetAssignmentWithNewAssignment(Map<Uuid, SortedSet<Integer>> assignment) {
         currentTargetAssignment.updateWith(assignment).ifPresent(updatedAssignment -> {
-            log.debug("Member {} updated it's target assignment from {} to {}. Member will reconcile it on the next poll.",
+            log.debug("Member {} updated its target assignment from {} to {}. Member will reconcile it on the next poll.",
                 memberId, currentTargetAssignment, updatedAssignment);
             currentTargetAssignment = updatedAssignment;
         });
@@ -706,7 +706,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 log.debug("Member {} with epoch {} transitioned to {} after a heartbeat was sent " +
                         "to ack a previous reconciliation. \n" +
                         "\t\tCurrent assignment: {} \n" +
-                        "\t\tNew assignment to reconcile: {}\n",
+                        "\t\tTarget assignment: {}\n",
                         memberId, memberEpoch, MemberState.RECONCILING, currentAssignment, currentTargetAssignment);
                 transitionTo(MemberState.RECONCILING);
             }

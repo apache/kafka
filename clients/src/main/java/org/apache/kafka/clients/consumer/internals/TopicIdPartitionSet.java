@@ -61,7 +61,7 @@ public class TopicIdPartitionSet {
     }
 
     /**
-     * Add a new topic (id+name) and partition. This will keep it, and also save references to the topic ID, topic name and partition,
+     * Add a new topic (id+name) and partition. This will keep it, and also save references to the topic ID, topic name and partition.
      */
     public void add(TopicIdPartition topicIdPartition) {
         topicIdPartitions.add(topicIdPartition);
