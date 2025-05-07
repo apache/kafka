@@ -913,6 +913,24 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedResponseData.results.asScala.toSet, deleteGroupsResponse.data.results.asScala.toSet)
   }
 
+  protected def connectAny(): Socket = {
+    val socket: Socket = IntegrationTestUtils.connect(
+      cluster.anyBrokerSocketServer(),
+      cluster.clientListener()
+    )
+    openSockets += socket
+    socket
+  }
+
+  protected def connect(destination: Int): Socket = {
+    val socket: Socket = IntegrationTestUtils.connect(
+      brokerSocketServer(destination),
+      cluster.clientListener()
+    )
+    openSockets += socket
+    socket
+  }
+
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
   )(implicit classTag: ClassTag[T]): T = {
@@ -932,23 +950,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       brokerSocketServer(destination),
       cluster.clientListener()
     )
-  }
-
-  protected def connectAndReceiveWithoutClosingSocket[T <: AbstractResponse](
-    request: AbstractRequest,
-    destination: Int
-  )(implicit classTag: ClassTag[T]): T = {
-    val socket = IntegrationTestUtils.connect(brokerSocketServer(destination), cluster.clientListener())
-    openSockets += socket
-    IntegrationTestUtils.sendAndReceive[T](request, socket)
-  }
-
-  protected def connectAndReceiveWithoutClosingSocket[T <: AbstractResponse](
-    request: AbstractRequest
-  )(implicit classTag: ClassTag[T]): T = {
-    val socket = IntegrationTestUtils.connect(cluster.anyBrokerSocketServer(), cluster.clientListener())
-    openSockets += socket
-    IntegrationTestUtils.sendAndReceive[T](request, socket)
   }
 
   private def brokerSocketServer(brokerId: Int): SocketServer = {

@@ -3153,7 +3153,7 @@ public class TransactionManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testMaybeResolveSequencesTransactionalProducer(boolean transactionV2Enabled) throws Exception {
+    public void testMaybeResolveSequencesTransactionalProducer(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.of(transactionalId), transactionV2Enabled);
 
         // Initialize transaction with initial producer ID and epoch.
@@ -4056,7 +4056,7 @@ public class TransactionManagerTest {
         long producerId,
         short producerEpoch
     ) {
-        prepareInitPidResponse(error, shouldDisconnect, producerId, producerEpoch, false, false, (long) -1, (short) -1);
+        prepareInitPidResponse(error, shouldDisconnect, producerId, producerEpoch, false, false, -1, (short) -1);
     }
 
     private void prepareInitPidResponse(

@@ -28,6 +28,8 @@
     <allow pkg="org.junit"/>
     <allow pkg="kafka"/>
 
+    <allow pkg="com.yammer.metrics.core" />
+
     <subpackage name="clients.producer">
         <allow pkg="org.opentest4j"/>
     </subpackage>

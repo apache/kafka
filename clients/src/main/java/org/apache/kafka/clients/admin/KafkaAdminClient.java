@@ -829,36 +829,6 @@ public class KafkaAdminClient extends AdminClient {
      * Provides the least loaded broker, or the active kcontroller if we're using
      * bootstrap.controllers.
      */
-    private class ConstantBrokerOrActiveKController implements NodeProvider {
-        private final int nodeId;
-
-        ConstantBrokerOrActiveKController(int nodeId) {
-            this.nodeId = nodeId;
-        }
-
-        @Override
-        public Node provide() {
-            if (metadataManager.isReady()) {
-                if (metadataManager.usingBootstrapControllers()) {
-                    return metadataManager.controller();
-                } else if (metadataManager.nodeById(nodeId) != null) {
-                    return metadataManager.nodeById(nodeId);
-                }
-            }
-            metadataManager.requestUpdate();
-            return null;
-        }
-
-        @Override
-        public boolean supportsUseControllers() {
-            return true;
-        }
-    }
-
-    /**
-     * Provides the least loaded broker, or the active kcontroller if we're using
-     * bootstrap.controllers.
-     */
     private class LeastLoadedBrokerOrActiveKController implements NodeProvider {
         @Override
         public Node provide() {
@@ -3779,7 +3749,10 @@ public class KafkaAdminClient extends AdminClient {
                 Map.Entry::getKey,
                 entry -> new ListConsumerGroupOffsetsSpec().topicPartitions(entry.getValue().topicPartitions())
             ));
-        return new ListStreamsGroupOffsetsResult(listConsumerGroupOffsets(consumerGroupSpecs, new ListConsumerGroupOffsetsOptions()));
+        ListConsumerGroupOffsetsOptions consumerGroupOptions = new ListConsumerGroupOffsetsOptions()
+            .requireStable(options.requireStable())
+            .timeoutMs(options.timeoutMs());
+        return new ListStreamsGroupOffsetsResult(listConsumerGroupOffsets(consumerGroupSpecs, consumerGroupOptions));
     }
 
     @Override
@@ -3794,7 +3767,9 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options) {
-        return new DeleteStreamsGroupsResult(deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions()));
+        DeleteConsumerGroupsOptions consumerGroupOptions = new DeleteConsumerGroupsOptions()
+            .timeoutMs(options.timeoutMs());
+        return new DeleteStreamsGroupsResult(deleteConsumerGroups(groupIds, consumerGroupOptions));
     }
 
     @Override
@@ -3814,7 +3789,9 @@ public class KafkaAdminClient extends AdminClient {
         String groupId,
         Set<TopicPartition> partitions,
         DeleteStreamsGroupOffsetsOptions options) {
-        return new DeleteStreamsGroupOffsetsResult(deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions()));
+        DeleteConsumerGroupOffsetsOptions consumerGroupOptions = new DeleteConsumerGroupOffsetsOptions()
+            .timeoutMs(options.timeoutMs());
+        return new DeleteStreamsGroupOffsetsResult(deleteConsumerGroupOffsets(groupId, partitions, consumerGroupOptions));
     }
 
     @Override
@@ -3839,7 +3816,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs,
                                                              final ListShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Long>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
         ListShareGroupOffsetsHandler handler = new ListShareGroupOffsetsHandler(groupSpecs, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListShareGroupOffsetsResult(future.all());
@@ -4273,7 +4250,9 @@ public class KafkaAdminClient extends AdminClient {
         Map<TopicPartition, OffsetAndMetadata> offsets,
         AlterStreamsGroupOffsetsOptions options
     ) {
-        return new AlterStreamsGroupOffsetsResult(alterConsumerGroupOffsets(groupId, offsets, new AlterConsumerGroupOffsetsOptions()));
+        AlterConsumerGroupOffsetsOptions consumerGroupOptions = new AlterConsumerGroupOffsetsOptions()
+            .timeoutMs(options.timeoutMs());
+        return new AlterStreamsGroupOffsetsResult(alterConsumerGroupOffsets(groupId, offsets, consumerGroupOptions));
     }
 
     @Override
