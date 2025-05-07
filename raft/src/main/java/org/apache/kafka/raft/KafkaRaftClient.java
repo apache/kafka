@@ -2287,7 +2287,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         final AddRaftVoterResponseData data = (AddRaftVoterResponseData) responseMetadata.data();
         final Errors error = Errors.forCode(data.errorCode());
 
-        if (error == Errors.NONE || error == Errors.REQUEST_TIMED_OUT || error == Errors.DUPLICATE_VOTER) {
+        /* These error codes indicate the replica was successfully added or the leader is unable to
+         * process the request. In either case, reset the update voter set timer to back off.
+         */
+        if (error == Errors.NONE || error == Errors.REQUEST_TIMED_OUT ||
+            error == Errors.DUPLICATE_VOTER) {
             quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
             return true;
         } else {
@@ -2345,7 +2349,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         final RemoveRaftVoterResponseData data = (RemoveRaftVoterResponseData) responseMetadata.data();
         final Errors error = Errors.forCode(data.errorCode());
 
-        if (error == Errors.NONE || error == Errors.REQUEST_TIMED_OUT || error == Errors.VOTER_NOT_FOUND) {
+        /* These error codes indicate the replica was successfully removed or the leader is unable to
+         * process the request. In either case, reset the update voter set timer to back off.
+         */
+        if (error == Errors.NONE || error == Errors.REQUEST_TIMED_OUT ||
+            error == Errors.VOTER_NOT_FOUND) {
             quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
             return true;
         } else {
@@ -3314,7 +3322,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return maybeSendFetchToAnyBootstrap(currentTimeMs);
         } else if (partitionState.lastKraftVersion().isReconfigSupported() && canBecomeVoter &&
             quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs)) {
-            /* Only replicas that are always flushing and are configured to auto join should
+            /* Only replicas that can become a voter and are configured to auto join should
              * attempt to automatically join the voter set for the configured topic partition.
              */
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
@@ -3421,7 +3429,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private RequestSendResult maybeSendAddVoterRequest(FollowerState state, long currentTimeMs) {
+    private RequestSendResult maybeSendAddVoterRequest(
+        FollowerState state,
+        long currentTimeMs
+    ) {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
@@ -3429,7 +3440,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private RequestSendResult maybeSendRemoveVoterRequest(FollowerState state, long currentTimeMs, ReplicaKey replicaKey) {
+    private RequestSendResult maybeSendRemoveVoterRequest(
+        FollowerState state,
+        long currentTimeMs,
+        ReplicaKey replicaKey
+    ) {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),

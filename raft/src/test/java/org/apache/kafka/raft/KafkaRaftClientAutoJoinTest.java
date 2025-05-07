@@ -290,7 +290,8 @@ public class KafkaRaftClientAutoJoinTest {
                     0,
                     epoch,
                     BufferSupplier.NO_CACHING.get(300),
-                    newVoterSet.toVotersRecord((short) 0)),
+                    newVoterSet.toVotersRecord((short) 0)
+                ),
                 context.log.endOffset().offset() + 1,
                 Errors.NONE
             )
