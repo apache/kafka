@@ -70,7 +70,7 @@ help|-h|--help
     Display this help message
 
 up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
-        [-C|--custom-ducktape DIR] [-e|--expose-ports ports]
+        [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [--ipv6]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
@@ -83,6 +83,8 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     on the host. The argument can be a single port (like 5005), a port range like (5005-5009)
     or a combination of port/port-range separated by comma (like 2181,9092 or 2181,5005-5008).
     By default no port is exposed. See README.md for more detail on this option.
+
+    If --ipv6 is specified, we will create a Docker network with IPv6 enabled.
     
     Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678 
     on your local machine to enable debugging in VS Code.
@@ -349,6 +351,7 @@ ducker_up() {
             -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
             -e|--expose-ports) set_once expose_ports "${2}" "the ports to expose"; shift 2;;
             -m|--kafka_mode) set_once kafka_mode "${2}" "the mode in which kafka will run"; shift 2;;
+            --ipv6) set_once ipv6 "true" "enable IPv6"; shift;;
             *) set_once image_name "${1}" "docker image name"; shift;;
         esac
     done
@@ -356,6 +359,7 @@ ducker_up() {
     [[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"
     [[ -n "${kafka_mode}" ]] || kafka_mode="${default_kafka_mode}"
     [[ -n "${image_name}" ]] || image_name="${default_image_name}-${jdk_version/:/-}"
+    [[ -n "${ipv6}" ]] || ipv6="false"
     [[ "${num_nodes}" =~ ^-?[0-9]+$ ]] || \
         die "ducker_up: the number of nodes must be an integer."
     [[ "${num_nodes}" -gt 0 ]] || die "ducker_up: the number of nodes must be greater than 0."
@@ -399,7 +403,12 @@ attempting to start new ones."
     if docker network inspect ducknet &>/dev/null; then
         must_do -v docker network rm ducknet
     fi
-    must_do -v docker network create ducknet
+    network_create_args=""
+    if [[ "${ipv6}" == "true" ]]; then
+        subnet_cidr_prefix="${DUCKER_SUBNET_CIDR:-"fc00:cf17"}"
+        network_create_args="--ipv6 --subnet ${subnet_cidr_prefix}::/64"
+    fi
+    must_do -v docker network create ${network_create_args} ducknet
     if [[ -n "${custom_ducktape}" ]]; then
         setup_custom_ducktape "${custom_ducktape}" "${image_name}"
     fi
@@ -412,7 +421,11 @@ attempting to start new ones."
     exec 3<> "${ducker_dir}/build/node_hosts"
     for n in $(seq -f %02g 1 ${num_nodes}); do
         local node="ducker${n}"
-        docker exec --user=root "${node}" grep "${node}" /etc/hosts >&3
+        if [[ "${ipv6}" == "true" ]]; then
+            docker exec --user=root "${node}" grep "${node}" /etc/hosts | grep "${subnet_cidr_prefix}" >&3
+        else
+            docker exec --user=root "${node}" grep "${node}" /etc/hosts >&3
+        fi
         [[ $? -ne 0 ]] && die "failed to find the /etc/hosts entry for ${node}"
     done
     exec 3>&-
@@ -421,6 +434,12 @@ attempting to start new ones."
         docker exec --user=root "${node}" \
             bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
         [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
+        # Filter out ipv4 addresses if ipv6
+        if [[ "${ipv6}" == "true" ]]; then
+            docker exec --user=root "${node}" \
+                bash -c "grep -v -E '([0-9]{1,3}\.){3}[0-9]{1,3}' /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
+            [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
+        fi
     done
 
     if [ "$kafka_mode" == "native" ]; then
