@@ -925,27 +925,15 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   /**
-   * Test that the produce request fails with TOPIC_AUTHORIZATION_FAILED if the topic does not exist from version 3 to 12.
+   * Test that the produce request fails with TOPIC_AUTHORIZATION_FAILED if the client doesn't have permission
+   * or the topic doesn't exist from version 3 to 12.
    * The version 13 is covered by testAuthorizationWithTopicNotExisting.
    */
-  @Test
-  def testAuthorizationWithTopicNotExistingForProduceRequestVersionLessThan13(): Unit = {
-    authorizationForProduceRequestVersionLessThan13(false)
-  }
-
-  /**
-   * Test that the produce request fails with TOPIC_AUTHORIZATION_FAILED if the topic exists
-   * but the client doesn't have permission from version 3 to 12.
-   * The version 13 is covered by testAuthorizationWithTopicExisting.
-   */
-  @Test
-  def testAuthorizationWithTopicExistingForProduceRequestVersionLessThan13(): Unit = {
-    authorizationForProduceRequestVersionLessThan13(true)
-  }
-
-  def authorizationForProduceRequestVersionLessThan13(createTopic: Boolean): Unit = {
-    if (createTopic) {
-      sendRequests(mutable.Map(ApiKeys.CREATE_TOPICS -> createTopicsRequest))
+  @ParameterizedTest
+  @CsvSource(value = Array("false", "true"))
+  def testAuthorizationForProduceRequestVersionLessThan13(withTopicExisting: Boolean): Unit = {
+    if (withTopicExisting) {
+      createTopicWithBrokerPrincipal(topic)
     }
 
     for (version <- ApiKeys.PRODUCE.oldestVersion to 12) {
@@ -1027,19 +1015,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
    * even if the topic doesn't exist, request APIs should not leak the topic name
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAuthorizationFetchV12WithTopicNotExisting(quorum: String): Unit = {
-    authorizationFetchV12(false)
-  }
-
-  @Test
-  def testAuthorizationFetchV12WithTopicExisting(): Unit = {
-    authorizationFetchV12(true)
-  }
-
-  def authorizationFetchV12(createTopic: Boolean): Unit = {
-    if (createTopic) {
-      sendRequests(mutable.Map(ApiKeys.CREATE_TOPICS -> createTopicsRequest))
+  @CsvSource(value = Array("false", "true"))
+  def testAuthorizationFetchV12WithTopicNotExisting(withTopicExisting: Boolean): Unit = {
+    if (withTopicExisting) {
+      createTopicWithBrokerPrincipal(topic)
     }
 
     val id = Uuid.ZERO_UUID
@@ -1048,7 +1027,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       ApiKeys.FETCH -> createFetchRequestWithUnknownTopic(id, 12),
     )
 
-    sendRequests(requestKeyToRequest, createTopic, topicNames)
+    sendRequests(requestKeyToRequest, withTopicExisting, topicNames)
   }
 
   @ParameterizedTest
