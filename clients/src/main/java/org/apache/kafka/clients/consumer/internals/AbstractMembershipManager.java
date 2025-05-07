@@ -1440,6 +1440,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         }
 
         public LocalAssignment(long localEpoch, TopicIdPartitionSet topicIdPartitions) {
+            Objects.requireNonNull(topicIdPartitions);
             this.localEpoch = localEpoch;
             if (localEpoch == NONE_EPOCH && !topicIdPartitions.isEmpty()) {
                 throw new IllegalArgumentException("Local epoch must be set if there are partitions");
