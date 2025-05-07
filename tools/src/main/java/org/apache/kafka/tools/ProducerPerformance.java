@@ -195,20 +195,17 @@ public class ProducerPerformance {
                 throw new IllegalArgumentException("File does not exist or empty file provided.");
             }
 
-            List<String> payloadList = new ArrayList<>();
             try (Scanner payLoadScanner = new Scanner(path, StandardCharsets.UTF_8)) {
                 //setting the delimiter while parsing the file, avoids loading entire data in memory before split
                 payLoadScanner.useDelimiter(payloadDelimiter);
                 while (payLoadScanner.hasNext()) {
-                    payloadList.add(payLoadScanner.next());
+                    byte[] payloadBytes = payLoadScanner.next().getBytes(StandardCharsets.UTF_8);
+                    payloadByteList.add(payloadBytes);
                 }
             }
 
-            System.out.println("Number of messages read: " + payloadList.size());
+            System.out.println("Number of messages read: " + payloadByteList.size());
 
-            for (String payload : payloadList) {
-                payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
-            }
         }
         return payloadByteList;
     }
