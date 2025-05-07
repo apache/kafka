@@ -429,16 +429,6 @@ public class CommitRequestManagerTest {
         assertExceptionHandling(commitRequestManager, error, true);
     }
 
-    private static Stream<Arguments> commitSyncExpectedExceptions() {
-        return Stream.of(
-            Arguments.of(Errors.UNKNOWN_MEMBER_ID, CommitFailedException.class),
-            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, Errors.OFFSET_METADATA_TOO_LARGE.exception().getClass()),
-            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, Errors.INVALID_COMMIT_OFFSET_SIZE.exception().getClass()),
-            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, Errors.GROUP_AUTHORIZATION_FAILED.exception().getClass()),
-            Arguments.of(Errors.CORRUPT_MESSAGE, KafkaException.class),
-            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class));
-    }
-
     @Test
     public void testCommitSyncFailsWithCommitFailedExceptionIfUnknownMemberId() {
         CommitRequestManager commitRequestManager = create(false, 100);
