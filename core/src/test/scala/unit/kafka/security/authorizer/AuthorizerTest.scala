@@ -23,6 +23,8 @@ import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.errors.ApiException
+import org.apache.kafka.common.metrics.{Metrics, PluginMetrics}
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
@@ -82,9 +84,9 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val props = properties
     config = KafkaConfig.fromProps(props)
     authorizer1 = createAuthorizer()
-    configureAuthorizer(authorizer1, config.originals)
+    configureAuthorizer(authorizer1, config.originals, new PluginMetricsImpl(new Metrics(), util.Map.of()))
     authorizer2 = createAuthorizer()
-    configureAuthorizer(authorizer2, config.originals)
+    configureAuthorizer(authorizer2, config.originals, new PluginMetricsImpl(new Metrics(), util.Map.of()))
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
   }
 
@@ -297,7 +299,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val cfg = KafkaConfig.fromProps(props)
     val testAuthorizer = createAuthorizer()
     try {
-      configureAuthorizer(testAuthorizer, cfg.originals)
+      configureAuthorizer(testAuthorizer, cfg.originals, new PluginMetricsImpl(new Metrics(), util.Map.of()))
       assertTrue(authorize(testAuthorizer, requestContext, READ, resource),
         "when acls = null or [],  authorizer should allow op with allow.everyone = true.")
     } finally {
@@ -315,7 +317,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val cfg = KafkaConfig.fromProps(props)
     val testAuthorizer = createAuthorizer()
     try {
-      configureAuthorizer(testAuthorizer, cfg.originals)
+      configureAuthorizer(testAuthorizer, cfg.originals, new PluginMetricsImpl(new Metrics(), util.Map.of()))
       assertTrue(authorize(testAuthorizer, requestContext, READ, resource),
         "when acls = null or [],  authorizer should allow op with allow.everyone = true.")
     } finally {
@@ -366,7 +368,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
     //test remove all acls for resource
     removeAcls(authorizer1, Set.empty, resource)
-    TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer1, resource)
+    TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer1, resource, AccessControlEntryFilter.ANY)
 
     acls = changeAclAndVerify(Set.empty, Set(acl1), Set.empty)
     changeAclAndVerify(acls, Set.empty, acls)
@@ -385,7 +387,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     addAcls(authorizer1, Set(acl1), commonResource)
     addAcls(authorizer1, Set(acl2), commonResource)
 
-    TestUtils.waitAndVerifyAcls(Set(acl1, acl2), authorizer1, commonResource)
+    TestUtils.waitAndVerifyAcls(Set(acl1, acl2), authorizer1, commonResource, AccessControlEntryFilter.ANY)
   }
 
   /**
@@ -395,9 +397,9 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   @ValueSource(strings = Array(KRAFT))
   def testAclInheritance(quorum: String): Unit = {
     testImplicationsOfAllow(AclOperation.ALL, Set(READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE,
-      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS))
+      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS, TWO_PHASE_COMMIT))
     testImplicationsOfDeny(AclOperation.ALL, Set(READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE,
-      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS))
+      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS, TWO_PHASE_COMMIT))
     testImplicationsOfAllow(READ, Set(DESCRIBE))
     testImplicationsOfAllow(WRITE, Set(DESCRIBE))
     testImplicationsOfAllow(DELETE, Set(DESCRIBE))
@@ -629,7 +631,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val cfg = KafkaConfig.fromProps(props)
     val authorizer: Authorizer = createAuthorizer()
     try {
-      configureAuthorizer(authorizer, cfg.originals)
+      configureAuthorizer(authorizer, cfg.originals, new PluginMetricsImpl(new Metrics(), util.Map.of()))
       assertTrue(authorizeByResourceType(authorizer, requestContext, READ, resource.resourceType()),
         "If allow.everyone.if.no.acl.found = true, caller should have read access to at least one topic")
       assertTrue(authorizeByResourceType(authorizer, requestContext, WRITE, resource.resourceType()),
@@ -655,7 +657,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
       acls --= removedAcls
     }
 
-    TestUtils.waitAndVerifyAcls(acls, authorizer1, resource)
+    TestUtils.waitAndVerifyAcls(acls, authorizer1, resource, AccessControlEntryFilter.ANY)
 
     acls
   }
@@ -689,13 +691,16 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   }
 
   def configureAuthorizer(authorizer: Authorizer,
-                          configs: util.Map[String, AnyRef]): Unit = {
-    configureStandardAuthorizer(authorizer.asInstanceOf[StandardAuthorizer], configs)
+                          configs: util.Map[String, AnyRef],
+                          pluginMetrics: PluginMetrics): Unit = {
+    configureStandardAuthorizer(authorizer.asInstanceOf[StandardAuthorizer], configs, pluginMetrics)
   }
 
   def configureStandardAuthorizer(standardAuthorizer: StandardAuthorizer,
-                                  configs: util.Map[String, AnyRef]): Unit = {
+                                  configs: util.Map[String, AnyRef],
+                                  pluginMetrics: PluginMetrics): Unit = {
     standardAuthorizer.configure(configs)
+    standardAuthorizer.withPluginMetrics(pluginMetrics)
     initializeStandardAuthorizer(standardAuthorizer, new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)))
   }
 

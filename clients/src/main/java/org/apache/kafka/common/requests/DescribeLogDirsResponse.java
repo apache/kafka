@@ -19,11 +19,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 
@@ -56,7 +55,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         errorCounts.put(Errors.forCode(data.errorCode()), 1);
         data.results().forEach(result ->
             updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()))
@@ -64,8 +63,8 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static DescribeLogDirsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData(new ByteBufferAccessor(buffer), version));
+    public static DescribeLogDirsResponse parse(Readable readable, short version) {
+        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData(readable, version));
     }
 
     @Override

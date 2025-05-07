@@ -27,10 +27,13 @@ import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+
+import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,6 +48,7 @@ import java.util.Optional;
 import java.util.function.BiFunction;
 
 public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseable {
+    private final Logger logger;
     private final Records records;
     private final RecordSerde<T> serde;
     private final BufferSupplier bufferSupplier;
@@ -73,13 +77,15 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
         int batchSize,
-        boolean doCrcValidation
+        boolean doCrcValidation,
+        LogContext logContext
     ) {
         this.records = records;
         this.serde = serde;
         this.bufferSupplier = bufferSupplier;
         this.batchSize = Math.max(batchSize, Records.HEADER_SIZE_UP_TO_MAGIC);
         this.doCrcValidation = doCrcValidation;
+        this.logger = logContext.logger(getClass());
     }
 
     @Override
@@ -143,9 +149,15 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         MemoryRecords memoryRecords = readFileRecords(fileRecords, buffer);
 
         // firstBatchSize() is always non-null because the minimum buffer is HEADER_SIZE_UP_TO_MAGIC.
-        if (memoryRecords.firstBatchSize() <= buffer.remaining()) {
+        int firstBatchSize = memoryRecords.firstBatchSize();
+        if (firstBatchSize <= buffer.remaining()) {
             return memoryRecords;
         } else {
+            logger.info(
+                "Creating a new buffer; previous buffer {} cannot fit at least {} bytes",
+                buffer,
+                firstBatchSize
+            );
             // Not enough bytes read; create a bigger buffer
             ByteBuffer newBuffer = bufferSupplier.get(memoryRecords.firstBatchSize());
             allocatedBuffer = Optional.of(newBuffer);
@@ -360,26 +372,14 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
 
         ControlRecordType type = ControlRecordType.parse(key.get());
 
-        final ApiMessage message;
-        switch (type) {
-            case LEADER_CHANGE:
-                message = ControlRecordUtils.deserializeLeaderChangeMessage(value.get());
-                break;
-            case SNAPSHOT_HEADER:
-                message = ControlRecordUtils.deserializeSnapshotHeaderRecord(value.get());
-                break;
-            case SNAPSHOT_FOOTER:
-                message = ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
-                break;
-            case KRAFT_VERSION:
-                message = ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
-                break;
-            case KRAFT_VOTERS:
-                message = ControlRecordUtils.deserializeVotersRecord(value.get());
-                break;
-            default:
-                throw new IllegalArgumentException(String.format("Unknown control record type %s", type));
-        }
+        final ApiMessage message = switch (type) {
+            case LEADER_CHANGE -> ControlRecordUtils.deserializeLeaderChangeMessage(value.get());
+            case SNAPSHOT_HEADER -> ControlRecordUtils.deserializeSnapshotHeaderRecord(value.get());
+            case SNAPSHOT_FOOTER -> ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
+            case KRAFT_VERSION -> ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
+            case KRAFT_VOTERS -> ControlRecordUtils.deserializeVotersRecord(value.get());
+            default -> throw new IllegalArgumentException(String.format("Unknown control record type %s", type));
+        };
 
         return new ControlRecord(type, message);
     }

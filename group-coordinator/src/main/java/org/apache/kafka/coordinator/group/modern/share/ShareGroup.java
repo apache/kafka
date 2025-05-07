@@ -186,7 +186,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
     ) {
         throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }
@@ -236,6 +236,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         );
 
         records.add(GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataTombstoneRecord(groupId()));
         records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId()));
     }
 
@@ -286,5 +287,10 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
             )
         );
         return describedGroup;
+    }
+
+    @Override
+    public boolean shouldExpire() {
+        return false;
     }
 }

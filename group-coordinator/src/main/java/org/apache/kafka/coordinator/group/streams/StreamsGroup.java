@@ -197,6 +197,14 @@ public class StreamsGroup implements Group {
      */
     private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
+    /**
+     * Keeps a member ID that requested a shutdown for this group.
+     * This has no direct effect inside the group coordinator, but is propagated to old and new members of the group.
+     * It is cleared once the group is empty.
+     * This is not persisted in the log, as the shutdown request is best-effort.
+     */
+    private Optional<String> shutdownRequestMemberId = Optional.empty();
+
     public StreamsGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -330,29 +338,61 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Gets or creates a new member but without adding it to the group. Adding a member is done via the
-     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     * Gets a new member or throws an exception, if the member does not exist.
      *
-     * @param memberId          The member ID.
-     * @param createIfNotExists Booleans indicating whether the member must be created if it does not exist.
+     * @param memberId The member ID.
+     * @throws UnknownMemberIdException If the member is not found.
      * @return A StreamsGroupMember.
      */
-    public StreamsGroupMember getOrMaybeCreateMember(
-        String memberId,
-        boolean createIfNotExists
+    public StreamsGroupMember getMemberOrThrow(
+        String memberId
     ) throws UnknownMemberIdException {
         StreamsGroupMember member = members.get(memberId);
         if (member != null) {
             return member;
         }
 
-        if (!createIfNotExists) {
-            throw new UnknownMemberIdException(
-                String.format("Member %s is not a member of group %s.", memberId, groupId)
-            );
+        throw new UnknownMemberIdException(
+            String.format("Member %s is not a member of group %s.", memberId, groupId)
+        );
+    }
+
+    /**
+     * Gets or creates a new member, but keeping its fields uninitialized. This is used on the replay-path.
+     * The member is not added to the group, adding a member is done via the
+     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     *
+     * @param memberId          The member ID.
+     * @return A StreamsGroupMember.
+     */
+    public StreamsGroupMember getOrCreateUninitializedMember(
+        String memberId
+    ) throws UnknownMemberIdException {
+        StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            return member;
         }
 
         return new StreamsGroupMember.Builder(memberId).build();
+    }
+
+    /**
+     * Gets or creates a new member, setting default values on the fields. This is used on the replay-path.
+     * The member is not added to the group, adding a member is done via the
+     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     *
+     * @param memberId          The member ID.
+     * @return A StreamsGroupMember.
+     */
+    public StreamsGroupMember getOrCreateDefaultMember(
+        String memberId
+    ) throws UnknownMemberIdException {
+        StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            return member;
+        }
+
+        return StreamsGroupMember.Builder.withDefaults(memberId).build();
     }
 
     /**
@@ -363,7 +403,7 @@ public class StreamsGroup implements Group {
      */
     public StreamsGroupMember staticMember(String instanceId) {
         String existingMemberId = staticMemberId(instanceId);
-        return existingMemberId == null ? null : getOrMaybeCreateMember(existingMemberId, false);
+        return existingMemberId == null ? null : getMemberOrThrow(existingMemberId);
     }
 
     /**
@@ -602,6 +642,7 @@ public class StreamsGroup implements Group {
     /**
      * Requests a metadata refresh.
      */
+    @Override
     public void requestMetadataRefresh() {
         this.metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
     }
@@ -642,7 +683,7 @@ public class StreamsGroup implements Group {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
     ) throws UnknownMemberIdException, StaleMemberEpochException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
@@ -655,7 +696,7 @@ public class StreamsGroup implements Group {
             memberId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && groupInstanceId == null)
             return;
 
-        final StreamsGroupMember member = getOrMaybeCreateMember(memberId, false);
+        final StreamsGroupMember member = getMemberOrThrow(memberId);
 
         // If the commit is not transactional and the member uses the new streams protocol (KIP-1071),
         // the member should be using the OffsetCommit API version >= 9.
@@ -791,6 +832,7 @@ public class StreamsGroup implements Group {
         StreamsGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
+            clearShutdownRequestMemberId();
         } else if (topology().isEmpty() || configuredTopology().isEmpty() || !configuredTopology().get().isReady()) {
             newState = NOT_READY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
@@ -1016,4 +1058,21 @@ public class StreamsGroup implements Group {
         return describedGroup;
     }
 
+    public void setShutdownRequestMemberId(final String memberId) {
+        if (shutdownRequestMemberId.isEmpty()) {
+            log.info("[GroupId {}][MemberId {}] Shutdown requested for the streams application.", groupId, memberId);
+            shutdownRequestMemberId = Optional.of(memberId);
+        }
+    }
+
+    public Optional<String> getShutdownRequestMemberId() {
+        return shutdownRequestMemberId;
+    }
+
+    private void clearShutdownRequestMemberId() {
+        if (shutdownRequestMemberId.isPresent()) {
+            log.info("[GroupId {}] Clearing shutdown requested for the streams application.", groupId);
+            shutdownRequestMemberId = Optional.empty();
+        }
+    }
 }

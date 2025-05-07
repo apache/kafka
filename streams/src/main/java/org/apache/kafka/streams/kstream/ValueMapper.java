@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
  * @see KTable#mapValues(ValueMapper)
  * @see KTable#mapValues(ValueMapperWithKey)
  */
+@FunctionalInterface
 public interface ValueMapper<V, VR> {
 
     /**

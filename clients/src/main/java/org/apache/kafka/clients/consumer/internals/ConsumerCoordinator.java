@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -48,6 +49,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -86,6 +88,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
@@ -176,13 +179,51 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean throwOnFetchStableOffsetsUnsupported,
                                String rackId,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+        this(rebalanceConfig,
+            logContext,
+            client,
+            assignors,
+            metadata,
+            subscriptions,
+            metrics,
+            metricGrpPrefix,
+            time,
+            autoCommitEnabled,
+            autoCommitIntervalMs,
+            interceptors,
+            throwOnFetchStableOffsetsUnsupported,
+            rackId,
+            clientTelemetryReporter,
+            Optional.empty());
+    }
+
+    /**
+     * Initialize the coordination manager.
+     */
+    public ConsumerCoordinator(GroupRebalanceConfig rebalanceConfig,
+                               LogContext logContext,
+                               ConsumerNetworkClient client,
+                               List<ConsumerPartitionAssignor> assignors,
+                               ConsumerMetadata metadata,
+                               SubscriptionState subscriptions,
+                               Metrics metrics,
+                               String metricGrpPrefix,
+                               Time time,
+                               boolean autoCommitEnabled,
+                               int autoCommitIntervalMs,
+                               ConsumerInterceptors<?, ?> interceptors,
+                               boolean throwOnFetchStableOffsetsUnsupported,
+                               String rackId,
+                               Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                               Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
         super(rebalanceConfig,
               logContext,
               client,
               metrics,
               metricGrpPrefix,
               time,
-              clientTelemetryReporter);
+              clientTelemetryReporter,
+              heartbeatThreadSupplier);
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
@@ -973,7 +1014,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    public void close(final Timer timer) {
+    public void close(final Timer timer, CloseOptions.GroupMembershipOperation membershipOperation) {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
@@ -984,7 +1025,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 invokeCompletedOffsetCommitCallbacks();
             }
         } finally {
-            super.close(timer);
+            super.close(timer, membershipOperation);
         }
     }
 
@@ -1287,7 +1328,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             groupInstanceId = null;
         }
 
-        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
+        OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(
                 new OffsetCommitRequestData()
                         .setGroupId(this.rebalanceConfig.groupId)
                         .setGenerationIdOrMemberEpoch(generation.generationId)
@@ -1437,9 +1478,27 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return RequestFuture.coordinatorNotAvailable();
 
         log.debug("Fetching committed offsets for partitions: {}", partitions);
+
         // construct the request
-        OffsetFetchRequest.Builder requestBuilder =
-            new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId, true, new ArrayList<>(partitions), throwOnFetchStableOffsetsUnsupported);
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = partitions.stream()
+            .collect(Collectors.groupingBy(TopicPartition::topic))
+            .entrySet()
+            .stream()
+            .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName(entry.getKey())
+                .setPartitionIndexes(entry.getValue().stream()
+                    .map(TopicPartition::partition)
+                    .collect(Collectors.toList())))
+            .collect(Collectors.toList());
+
+        OffsetFetchRequest.Builder requestBuilder = new OffsetFetchRequest.Builder(
+            new OffsetFetchRequestData()
+                .setRequireStable(true)
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId(this.rebalanceConfig.groupId)
+                        .setTopics(topics))),
+            throwOnFetchStableOffsetsUnsupported);
 
         // send the request with a callback
         return client.send(coordinator, requestBuilder)

@@ -18,6 +18,8 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.record.Records;
+import org.apache.kafka.server.record.BrokerCompressionType;
 
 import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFIX;
 
@@ -139,10 +141,12 @@ public class ServerLogConfigs {
 
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG = "create.topic.policy.class.name";
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_DOC = "The create topic policy class that should be used for validation. The class should " +
-            "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface.";
+            "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface. " +
+            "<p>Note: This policy runs on the controller instead of the broker.</p>";
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG = "alter.config.policy.class.name";
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_DOC = "The alter configs policy class that should be used for validation. The class should " +
-            "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface.";
+            "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface. " +
+            "<p>Note: This policy runs on the controller instead of the broker.</p>";
 
     public static final String LOG_INITIAL_TASK_DELAY_MS_CONFIG = LOG_PREFIX + "initial.task.delay.ms";
     public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT = 30 * 1000L;
@@ -153,4 +157,7 @@ public class ServerLogConfigs {
     public static final Long LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT = 30000L;
     public static final String LOG_DIR_FAILURE_TIMEOUT_MS_DOC = "If the broker is unable to successfully communicate to the controller that some log " +
         "directory has failed for longer than this time, the broker will fail and shut down.";
+
+    public static final int MAX_MESSAGE_BYTES_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
+    public static final String COMPRESSION_TYPE_DEFAULT = BrokerCompressionType.PRODUCER.name;
 }

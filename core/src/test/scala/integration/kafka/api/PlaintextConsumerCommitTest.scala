@@ -34,9 +34,9 @@ import scala.jdk.CollectionConverters._
 @Timeout(600)
 class PlaintextConsumerCommitTest extends AbstractConsumerTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAutoCommitOnClose(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAutoCommitOnClose(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
 
@@ -58,9 +58,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAutoCommitOnCloseAfterWakeup(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAutoCommitOnCloseAfterWakeup(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
 
@@ -86,9 +86,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCommitMetadata(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCommitMetadata(groupProtocol: String): Unit = {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
@@ -108,9 +108,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     assertEquals(nullMetadata, consumer.committed(Set(tp).asJava).get(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAsyncCommit(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAsyncCommit(groupProtocol: String): Unit = {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
@@ -128,9 +128,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     assertEquals(new OffsetAndMetadata(count), consumer.committed(Set(tp).asJava).get(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAutoCommitIntercept(groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
 
@@ -187,9 +187,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     MockConsumerInterceptor.resetCounters()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCommitSpecifiedOffsets(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCommitSpecifiedOffsets(groupProtocol: String): Unit = {
     val producer = createProducer()
     sendRecords(producer, numRecords = 5, tp)
     sendRecords(producer, numRecords = 7, tp2)
@@ -215,9 +215,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     assertEquals(7, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAutoCommitOnRebalance(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAutoCommitOnRebalance(groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
 
@@ -255,9 +255,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     assertEquals(500, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSubscribeAndCommitSync(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSubscribeAndCommitSync(groupProtocol: String): Unit = {
     // This test ensure that the member ID is propagated from the group coordinator when the
     // assignment is received into a subsequent offset commit
     val consumer = createConsumer()
@@ -270,9 +270,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     consumer.commitSync()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testPositionAndCommit(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testPositionAndCommit(groupProtocol: String): Unit = {
     val producer = createProducer()
     var startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 5, tp, startingTimestamp = startingTimestamp)
@@ -304,9 +304,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
   }
 
   // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
-  def testCommitAsyncCompletedBeforeConsumerCloses(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testCommitAsyncCompletedBeforeConsumerCloses(groupProtocol: String): Unit = {
     // This is testing the contract that asynchronous offset commit are completed before the consumer
     // is closed, even when no commit sync is performed as part of the close (due to auto-commit
     // disabled, or simply because there are no consumed offsets).
@@ -326,9 +326,9 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
   }
 
   // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
-  def testCommitAsyncCompletedBeforeCommitSyncReturns(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testCommitAsyncCompletedBeforeCommitSyncReturns(groupProtocol: String): Unit = {
     // This is testing the contract that asynchronous offset commits sent previously with the
     // `commitAsync` are guaranteed to have their callbacks invoked prior to completion of
     // `commitSync` (given that it does not time out).

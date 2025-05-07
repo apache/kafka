@@ -19,10 +19,8 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -44,13 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupCoordinatorConfigTest {
-    private static final List<ConfigDef> GROUP_COORDINATOR_CONFIG_DEFS = List.of(
-        GroupCoordinatorConfig.CLASSIC_GROUP_CONFIG_DEF,
-        GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
-        GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
-        GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
-        GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF
-    );
 
     public static class CustomAssignor implements ConsumerGroupPartitionAssignor, Configurable {
         public Map<String, ?> configs;
@@ -281,6 +272,14 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
         assertEquals("group.share.heartbeat.interval.ms must be less than group.share.session.timeout.ms",
                 assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 45000);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 60000);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 50000);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        assertEquals("group.streams.heartbeat.interval.ms must be less than group.streams.session.timeout.ms",
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
     }
 
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
@@ -318,7 +317,10 @@ public class GroupCoordinatorConfigTest {
     }
 
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
-        return new GroupCoordinatorConfig(
-                new AbstractConfig(Utils.mergeConfigs(GROUP_COORDINATOR_CONFIG_DEFS), configs, false));
+        return new GroupCoordinatorConfig(new AbstractConfig(
+            GroupCoordinatorConfig.CONFIG_DEF,
+            configs,
+            false
+        ));
     }
 }

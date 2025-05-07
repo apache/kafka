@@ -128,8 +128,12 @@ def create_tag(tag, **kwargs):
     cmd(f"Creating git tag {tag}", ["git", "tag", "-a", tag, "-m", tag], **kwargs)
 
 
-def push_tag(tag, remote=push_remote_name, **kwargs):
+def push_ref(ref, remote=push_remote_name, **kwargs):
     __defaults(kwargs)
-    cmd("Pushing tag {tag} to {remote}", f"git push {remote} {tag}")
+    cmd(f"Pushing ref {ref} to {remote}", f"git push {remote} {ref}")
 
+
+def merge_ref(ref, **kwargs): 
+    __defaults(kwargs)
+    cmd(f"Merging ref {ref}", f"git merge {ref}")
 

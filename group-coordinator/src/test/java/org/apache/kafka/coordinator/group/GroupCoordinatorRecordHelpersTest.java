@@ -45,6 +45,9 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
@@ -58,6 +61,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -81,6 +85,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -248,13 +253,15 @@ public class GroupCoordinatorRecordHelpersTest {
                 .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
-                    .setEpoch(10),
+                    .setEpoch(10)
+                    .setMetadataHash(10),
                 (short) 0
             )
         );
 
         assertEquals(expectedRecord, newConsumerGroupEpochRecord(
             "group-id",
+            10,
             10
         ));
     }
@@ -281,6 +288,57 @@ public class GroupCoordinatorRecordHelpersTest {
         assertEquals(expectedRecord, newShareGroupEpochTombstoneRecord(
             "group-id"
         ));
+    }
+
+    @Test
+    public void testNewShareGroupPartitionMetadataRecord() {
+        String groupId = "group-id";
+        String topicName1 = "t1";
+        Uuid topicId1 = Uuid.randomUuid();
+        String topicName2 = "t2";
+        Uuid topicId2 = Uuid.randomUuid();
+        Set<Integer> partitions = new LinkedHashSet<>();
+        partitions.add(0);
+        partitions.add(1);
+
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ApiMessageAndVersion(
+                new ShareGroupStatePartitionMetadataValue()
+                    .setInitializedTopics(
+                        List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicId(topicId1)
+                                .setTopicName(topicName1)
+                                .setPartitions(List.of(0, 1))
+                        )
+                    )
+                    .setDeletingTopics(
+                        List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicInfo()
+                                .setTopicId(topicId2)
+                                .setTopicName(topicName2)
+                        )
+                    ),
+                (short) 0
+            )
+        );
+
+        CoordinatorRecord record = GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+            groupId,
+            Map.of(),
+            Map.of(
+                topicId1,
+                Map.entry(topicName1, partitions)
+            ),
+            Map.of(
+                topicId2,
+                topicName2
+            )
+        );
+
+        assertEquals(expectedRecord, record);
     }
 
     @Test
@@ -799,6 +857,26 @@ public class GroupCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testNewShareGroupEpochRecord() {
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareGroupMetadataKey()
+                .setGroupId("group-id"),
+            new ApiMessageAndVersion(
+                new ShareGroupMetadataValue()
+                    .setEpoch(10)
+                    .setMetadataHash(10),
+                (short) 0
+            )
+        );
+
+        assertEquals(expectedRecord, newShareGroupEpochRecord(
+            "group-id",
+            10,
+            10
+        ));
     }
 
     /**

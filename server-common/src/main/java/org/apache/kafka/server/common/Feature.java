@@ -47,6 +47,8 @@ public enum Feature {
     TRANSACTION_VERSION(TransactionVersion.FEATURE_NAME, TransactionVersion.values(), TransactionVersion.LATEST_PRODUCTION),
     GROUP_VERSION(GroupVersion.FEATURE_NAME, GroupVersion.values(), GroupVersion.LATEST_PRODUCTION),
     ELIGIBLE_LEADER_REPLICAS_VERSION(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.values(), EligibleLeaderReplicasVersion.LATEST_PRODUCTION),
+    SHARE_VERSION(ShareVersion.FEATURE_NAME, ShareVersion.values(), ShareVersion.LATEST_PRODUCTION),
+    STREAMS_VERSION(StreamsVersion.FEATURE_NAME, StreamsVersion.values(), StreamsVersion.LATEST_PRODUCTION),
 
     /**
      * Features defined only for unit tests and are not used in production.
@@ -250,7 +252,7 @@ public enum Feature {
      *     - The feature X has default version = XV_10 (dependency = {}), latest production = XV_10 (dependency = {})
      *     - The feature X has default version = XV_10 (dependency = {Y: YV_3}), latest production = XV_11 (dependency = {Y: YV_4})
      *       The feature Y has default version = YV_3 (dependency = {}), latest production = YV_4 (dependency = {})
-     *     - The feature X has default version = XV_10 (dependency = {MetadataVersion: IBP_4_0_IV0}), boostrap MV = IBP_4_0_IV0,
+     *     - The feature X has default version = XV_10 (dependency = {MetadataVersion: IBP_4_0_IV0}), bootstrap MV = IBP_4_0_IV0,
      *                       latest production = XV_11 (dependency = {MetadataVersion: IBP_4_0_IV1}), MV latest production = IBP_4_0_IV1
      *
      * @param feature the feature to validate.

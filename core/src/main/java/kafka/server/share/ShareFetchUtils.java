@@ -29,8 +29,10 @@ import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
@@ -40,7 +42,6 @@ import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -83,10 +84,10 @@ public class ShareFetchUtils {
 
             if (fetchPartitionData.error.code() != Errors.NONE.code()) {
                 partitionData
-                    .setRecords(null)
+                    .setRecords(MemoryRecords.EMPTY)
                     .setErrorCode(fetchPartitionData.error.code())
                     .setErrorMessage(fetchPartitionData.error.message())
-                    .setAcquiredRecords(Collections.emptyList());
+                    .setAcquiredRecords(List.of());
 
                 // In case we get OFFSET_OUT_OF_RANGE error, that's because the Log Start Offset is later than the fetch offset.
                 // So, we would update the start and end offset of the share partition and still return an empty
@@ -114,7 +115,8 @@ public class ShareFetchUtils {
                     shareFetch.batchSize(),
                     shareFetch.maxFetchRecords() - acquiredRecordsCount,
                     shareFetchPartitionData.fetchOffset(),
-                    fetchPartitionData
+                    fetchPartitionData,
+                    shareFetch.fetchParams().isolation
                 );
                 log.trace("Acquired records: {} for topicIdPartition: {}", shareAcquiredRecords, topicIdPartition);
                 // Maybe, in the future, check if no records are acquired, and we want to retry
@@ -122,8 +124,8 @@ public class ShareFetchUtils {
                 // if we want parallel requests for the same share partition or not.
                 if (shareAcquiredRecords.acquiredRecords().isEmpty()) {
                     partitionData
-                        .setRecords(null)
-                        .setAcquiredRecords(Collections.emptyList());
+                        .setRecords(MemoryRecords.EMPTY)
+                        .setAcquiredRecords(List.of());
                 } else {
                     partitionData
                         .setRecords(maybeSliceFetchRecords(fetchPartitionData.records, shareAcquiredRecords))
@@ -257,5 +259,21 @@ public class ShareFetchUtils {
             // can continue with the original records.
             return records;
         }
+    }
+
+    /**
+     * The method is used to get the record lock duration for the group. If the group config is present,
+     * then the record lock duration is returned. Otherwise, the default value is returned.
+     *
+     * @param groupConfigManager The group config manager.
+     * @param groupId The group id for which the record lock duration is to be fetched.
+     * @param defaultValue The default value to be returned if the group config is not present.
+     * @return The record lock duration for the group.
+     */
+    public static int recordLockDurationMsOrDefault(GroupConfigManager groupConfigManager, String groupId, int defaultValue) {
+        if (groupConfigManager.groupConfig(groupId).isPresent()) {
+            return groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
+        }
+        return defaultValue;
     }
 }

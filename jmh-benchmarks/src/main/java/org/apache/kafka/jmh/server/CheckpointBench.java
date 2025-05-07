@@ -20,16 +20,17 @@ import kafka.cluster.Partition;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.KafkaConfig;
-import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.ReplicaManagerBuilder;
+import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.KafkaScheduler;
@@ -115,11 +116,11 @@ public class CheckpointBench {
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         final MetadataCache metadataCache =
-                MetadataCache.kRaftMetadataCache(this.brokerProperties.brokerId(), () -> KRAFT_VERSION_1);
+                new KRaftMetadataCache(this.brokerProperties.brokerId(), () -> KRAFT_VERSION_1);
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
-                        this.time, "");
+                        this.time, "", "");
 
         this.alterPartitionManager = TestUtils.createAlterIsrManager();
         this.replicaManager = new ReplicaManagerBuilder().

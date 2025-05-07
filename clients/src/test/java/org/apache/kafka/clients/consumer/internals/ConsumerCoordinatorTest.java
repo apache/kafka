@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
@@ -76,7 +77,6 @@ import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -163,7 +163,7 @@ public abstract class ConsumerCoordinatorTest {
     private final String consumerId2 = "consumer2";
 
     private MockClient client;
-    private final MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+    private final MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<>() {
         {
             put(topic1, 1);
             put(topic2, 1);
@@ -230,7 +230,7 @@ public abstract class ConsumerCoordinatorTest {
     @AfterEach
     public void teardown() {
         this.metrics.close();
-        this.coordinator.close(time.timer(0));
+        this.coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
     }
 
     @Test
@@ -367,7 +367,7 @@ public abstract class ConsumerCoordinatorTest {
 
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : memberSubscriptions.entrySet()) {
-            ByteBuffer buf = null;
+            ByteBuffer buf;
             if (subscriptionEntry.getKey().equals(consumerId)) {
                 buf = ConsumerProtocol.serializeSubscription(subscriptionConsumer1);
             } else {
@@ -614,9 +614,7 @@ public abstract class ConsumerCoordinatorTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(tp, new OffsetAndMetadata(123));
 
         final AtomicBoolean committed = new AtomicBoolean();
-        coordinator.commitOffsetsAsync(offsets, (committedOffsets, exception) -> {
-            committed.set(true);
-        });
+        coordinator.commitOffsetsAsync(offsets, (committedOffsets, exception) -> committed.set(true));
 
         assertFalse(coordinator.commitOffsetsSync(Collections.emptyMap(), time.timer(100L)), "expected sync commit to fail");
         assertFalse(committed.get());
@@ -682,8 +680,8 @@ public abstract class ConsumerCoordinatorTest {
                         )
                 );
 
-        consumerClient.send(coordinator.checkAndGetCoordinator(), new OffsetCommitRequest.Builder(offsetCommitRequestData))
-                .compose(new RequestFutureAdapter<ClientResponse, Object>() {
+        consumerClient.send(coordinator.checkAndGetCoordinator(), OffsetCommitRequest.Builder.forTopicNames(offsetCommitRequestData))
+                .compose(new RequestFutureAdapter<>() {
                     @Override
                     public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
 
@@ -1010,10 +1008,9 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
     }
 
-
-    @Flaky("KAFKA-15900")
     @Test
     public void testOutdatedCoordinatorAssignment() {
+        createMockHeartbeatThreadCoordinator();
         final String consumerId = "outdated_assignment";
         final List<TopicPartition> owned = Collections.emptyList();
         final List<String> oldSubscription = singletonList(topic2);
@@ -1295,7 +1292,7 @@ public abstract class ConsumerCoordinatorTest {
     public void testForceMetadataDeleteForPatternSubscriptionDuringRebalance() {
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
             subscriptions.subscribe(Pattern.compile("test.*"), Optional.of(rebalanceListener));
-            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<>() {
                 {
                     put(topic1, 1);
                     put(topic2, 1);
@@ -1307,11 +1304,7 @@ public abstract class ConsumerCoordinatorTest {
             client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
             coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
-            MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
-                {
-                    put(topic1, 1);
-                }
-            });
+            MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, Map.of(topic1, 1));
             // Instrument the test so that metadata will contain only one topic after next refresh.
             client.prepareMetadataUpdate(deletedMetadataResponse);
 
@@ -1797,7 +1790,7 @@ public abstract class ConsumerCoordinatorTest {
             return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(
             new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
-        coordinator.close(time.timer(0));
+        coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
         assertTrue(received.get());
     }
 
@@ -1812,7 +1805,7 @@ public abstract class ConsumerCoordinatorTest {
             LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
             return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
-        coordinator.maybeLeaveGroup("test maybe leave group");
+        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "test maybe leave group");
         assertTrue(received.get());
 
         AbstractCoordinator.Generation generation = coordinator.generationIfStable();
@@ -1856,7 +1849,7 @@ public abstract class ConsumerCoordinatorTest {
             return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
 
-        coordinator.maybeLeaveGroup("pending member leaves");
+        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "pending member leaves");
         assertTrue(received.get());
     }
 
@@ -2572,7 +2565,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())));
         subscriptions.unsubscribe();
-        coordinator.maybeLeaveGroup("test commit after leave");
+        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "test commit after leave");
         subscriptions.assignFromUser(singleton(t1p));
 
         // the client should not reuse generation/memberId from auto-subscribed generation
@@ -2698,12 +2691,7 @@ public abstract class ConsumerCoordinatorTest {
         final OffsetAndMetadata firstOffset = new OffsetAndMetadata(0L);
         final OffsetAndMetadata secondOffset = new OffsetAndMetadata(1L);
 
-        coordinator.commitOffsetsAsync(singletonMap(t1p, firstOffset), new OffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                committedOffsets.add(firstOffset);
-            }
-        });
+        coordinator.commitOffsetsAsync(singletonMap(t1p, firstOffset), (offsets, exception) -> committedOffsets.add(firstOffset));
 
         // Do a synchronous commit in the background so that we can send both responses at the same time
         Thread thread = new Thread() {
@@ -3548,7 +3536,7 @@ public abstract class ConsumerCoordinatorTest {
             assertEquals(memberId, coordinator.generation().memberId);
 
             // Imitating heartbeat thread that clears generation data.
-            coordinator.maybeLeaveGroup("Clear generation data.");
+            coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "Clear generation data.");
 
             assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
 
@@ -3785,7 +3773,7 @@ public abstract class ConsumerCoordinatorTest {
             // Run close on a different thread. Coordinator is locked by this thread, so it is
             // not safe to use the coordinator from the main thread until the task completes.
             Future<?> future = executor.submit(
-                () -> coordinator.close(time.timer(Math.min(closeTimeoutMs, requestTimeoutMs))));
+                () -> coordinator.close(time.timer(Math.min(closeTimeoutMs, requestTimeoutMs)), CloseOptions.GroupMembershipOperation.DEFAULT));
             // Wait for close to start. If coordinator is known, wait for close to queue
             // at least one request. Otherwise, sleep for a short time.
             if (!coordinatorUnknown)
@@ -4080,7 +4068,7 @@ public abstract class ConsumerCoordinatorTest {
 
     private void createRackAwareCoordinator(String rackId, MockPartitionAssignor assignor) {
         metrics.close();
-        coordinator.close(time.timer(0));
+        coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
 
         metrics = new Metrics(time);
 
@@ -4144,5 +4132,29 @@ public abstract class ConsumerCoordinatorTest {
             });
             return super.assign(partitionsPerTopic, subscriptions);
         }
+    }
+
+    private void createMockHeartbeatThreadCoordinator() {
+        metrics.close();
+        coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
+
+        metrics = new Metrics(time);
+        coordinator = new ConsumerCoordinator(
+            rebalanceConfig,
+            new LogContext(),
+            consumerClient,
+            assignors,
+            metadata,
+            subscriptions,
+            metrics,
+            consumerId + groupId,
+            time,
+            false,
+            autoCommitIntervalMs,
+            null,
+            false,
+            null,
+            Optional.empty(),
+            Optional.of(() -> Mockito.mock(BaseHeartbeatThread.class)));
     }
 }

@@ -22,6 +22,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclBinding
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult
 import org.apache.kafka.common.message._
@@ -30,10 +31,13 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.security.authorizer.AuthorizerUtils
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.purgatory.DelayedFuturePurgatory
 
 import java.util
 import java.util.concurrent.CompletableFuture
+import java.util.stream.Collectors
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -43,13 +47,13 @@ import scala.jdk.OptionConverters.RichOptional
  * Logic to handle ACL requests.
  */
 class AclApis(authHelper: AuthHelper,
-              authorizer: Option[Authorizer],
+              authorizerPlugin: Option[Plugin[Authorizer]],
               requestHelper: RequestHandlerHelper,
-              name: String,
+              role: ProcessRole,
               config: KafkaConfig) extends Logging {
-  this.logIdent = "[AclApis-%s-%s] ".format(name, config.nodeId)
+  this.logIdent = "[AclApis-%s-%s] ".format(role, config.nodeId)
   private val alterAclsPurgatory =
-      new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.nodeId)
+      new DelayedFuturePurgatory("AlterAcls", config.nodeId)
 
   def isClosed: Boolean = alterAclsPurgatory.isShutdown
 
@@ -58,7 +62,7 @@ class AclApis(authHelper: AuthHelper,
   def handleDescribeAcls(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     val describeAclsRequest = request.body[DescribeAclsRequest]
-    authorizer match {
+    authorizerPlugin match {
       case None =>
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new DescribeAclsResponse(new DescribeAclsResponseData()
@@ -71,7 +75,7 @@ class AclApis(authHelper: AuthHelper,
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new DescribeAclsResponse(new DescribeAclsResponseData()
             .setThrottleTimeMs(requestThrottleMs)
-            .setResources(DescribeAclsResponse.aclsResources(auth.acls(filter))),
+            .setResources(DescribeAclsResponse.aclsResources(auth.get.acls(filter))),
           describeAclsRequest.version))
     }
     CompletableFuture.completedFuture[Unit](())
@@ -81,7 +85,7 @@ class AclApis(authHelper: AuthHelper,
     authHelper.authorizeClusterOperation(request, ALTER)
     val createAclsRequest = request.body[CreateAclsRequest]
 
-    authorizer match {
+    authorizerPlugin match {
       case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         createAclsRequest.getErrorResponse(requestThrottleMs,
           new SecurityDisabledException("No Authorizer is configured.")))
@@ -106,11 +110,11 @@ class AclApis(authHelper: AuthHelper,
         }
 
         val future = new CompletableFuture[util.List[AclCreationResult]]()
-        val createResults = auth.createAcls(request.context, validBindings.asJava).asScala.map(_.toCompletableFuture)
+        val createResults = auth.get.createAcls(request.context, validBindings.asJava).stream().map(_.toCompletableFuture).toList
 
         def sendResponseCallback(): Unit = {
           val aclCreationResults = allBindings.map { acl =>
-            val result = errorResults.getOrElse(acl, createResults(validBindings.indexOf(acl)).get)
+            val result = errorResults.getOrElse(acl, createResults.get(validBindings.indexOf(acl)).get)
             val creationResult = new AclCreationResult()
             result.exception.toScala.foreach { throwable =>
               val apiError = ApiError.fromThrowable(throwable)
@@ -122,7 +126,7 @@ class AclApis(authHelper: AuthHelper,
           }
           future.complete(aclCreationResults.asJava)
         }
-        alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, createResults, sendResponseCallback)
+        alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, createResults, () => sendResponseCallback())
 
         future.thenApply[Unit] { aclCreationResults =>
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -136,7 +140,7 @@ class AclApis(authHelper: AuthHelper,
   def handleDeleteAcls(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, ALTER)
     val deleteAclsRequest = request.body[DeleteAclsRequest]
-    authorizer match {
+    authorizerPlugin match {
       case None =>
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           deleteAclsRequest.getErrorResponse(requestThrottleMs,
@@ -145,15 +149,16 @@ class AclApis(authHelper: AuthHelper,
       case Some(auth) =>
 
         val future = new CompletableFuture[util.List[DeleteAclsFilterResult]]()
-        val deleteResults = auth.deleteAcls(request.context, deleteAclsRequest.filters)
-          .asScala.map(_.toCompletableFuture).toList
+        val deleteResults = auth.get.deleteAcls(request.context, deleteAclsRequest.filters)
+          .stream().map(_.toCompletableFuture).toList
 
         def sendResponseCallback(): Unit = {
-          val filterResults = deleteResults.map(_.get).map(DeleteAclsResponse.filterResult).asJava
+          val filterResults: util.List[DeleteAclsFilterResult] = deleteResults.stream().map(_.get)
+            .map(DeleteAclsResponse.filterResult).collect(Collectors.toList())
           future.complete(filterResults)
         }
 
-        alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, deleteResults, sendResponseCallback)
+        alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, deleteResults, () => sendResponseCallback())
         future.thenApply[Unit] { filterResults =>
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new DeleteAclsResponse(

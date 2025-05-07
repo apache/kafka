@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
@@ -45,6 +46,9 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class SimpleAssignorTest {
 
@@ -391,7 +395,7 @@ public class SimpleAssignorTest {
         List<TopicIdPartition> partitions = List.of(partition1, partition2, partition3);
 
         Map<TopicIdPartition, List<String>> computedAssignment = new HashMap<>();
-        assignor.memberHashAssignment(partitions, members, computedAssignment);
+        assignor.memberHashAssignment(members, partitions, computedAssignment);
 
         Map<TopicIdPartition, List<String>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(partition1, List.of(member3));
@@ -414,7 +418,13 @@ public class SimpleAssignorTest {
         Map<TopicIdPartition, List<String>> assignment = new HashMap<>();
         assignment.put(partition1, List.of(member1));
 
-        assignor.roundRobinAssignment(members, unassignedPartitions, assignment);
+        SubscribedTopicDescriber describer = mock(SubscribedTopicDescriber.class);
+        when(describer.assignablePartitions(eq(TOPIC_1_UUID))).thenReturn(Set.of(0));
+        when(describer.assignablePartitions(eq(TOPIC_2_UUID))).thenReturn(Set.of(0));
+        when(describer.assignablePartitions(eq(TOPIC_3_UUID))).thenReturn(Set.of(0));
+        when(describer.assignablePartitions(eq(TOPIC_4_UUID))).thenReturn(Set.of(0));
+
+        assignor.roundRobinAssignment(members, unassignedPartitions, assignment, describer);
         Map<TopicIdPartition, List<String>> expectedAssignment = Map.of(
             partition1, List.of(member1),
             partition2, List.of(member1),
@@ -423,6 +433,63 @@ public class SimpleAssignorTest {
         );
 
         assertAssignment(expectedAssignment, assignment);
+    }
+
+    @Test
+    public void testRoundRobinAssignmentWithCount() {
+        String member1 = "member1";
+        String member2 = "member2";
+        List<String> members = List.of(member1, member2);
+        TopicIdPartition partition1 = new TopicIdPartition(TOPIC_1_UUID, 0);
+        TopicIdPartition partition2 = new TopicIdPartition(TOPIC_2_UUID, 0);
+        TopicIdPartition partition3 = new TopicIdPartition(TOPIC_3_UUID, 0);
+        TopicIdPartition partition4 = new TopicIdPartition(TOPIC_4_UUID, 0);
+        List<TopicIdPartition> unassignedPartitions = List.of(partition2, partition3, partition4);
+
+        Map<String, Set<TopicIdPartition>> assignment = new HashMap<>();
+        assignment.put(member1, new HashSet<>(Set.of(partition1)));
+        assignment.put(member2, new HashSet<>(Set.of(partition1)));
+
+        SubscribedTopicDescriber describer = mock(SubscribedTopicDescriber.class);
+        when(describer.assignablePartitions(eq(TOPIC_1_UUID))).thenReturn(Set.of(0));
+        when(describer.assignablePartitions(eq(TOPIC_2_UUID))).thenReturn(Set.of(0));
+        when(describer.assignablePartitions(eq(TOPIC_3_UUID))).thenReturn(Set.of(0));
+        when(describer.assignablePartitions(eq(TOPIC_4_UUID))).thenReturn(Set.of(0));
+
+        assignor.roundRobinAssignmentWithCount(members, unassignedPartitions, assignment, 2, describer);
+        Map<String, Set<TopicIdPartition>> expectedAssignment = Map.of(
+            member1, Set.of(partition1, partition2, partition4),
+            member2, Set.of(partition1, partition3)
+        );
+
+        assertFinalAssignment(expectedAssignment, assignment);
+    }
+
+    @Test
+    public void testRoundRobinAssignmentWithCountTooManyPartitions() {
+        String member1 = "member1";
+        String member2 = "member2";
+        List<String> members = List.of(member1, member2);
+        TopicIdPartition partition1 = new TopicIdPartition(TOPIC_1_UUID, 0);
+        TopicIdPartition partition2 = new TopicIdPartition(TOPIC_2_UUID, 0);
+        TopicIdPartition partition3 = new TopicIdPartition(TOPIC_3_UUID, 0);
+        TopicIdPartition partition4 = new TopicIdPartition(TOPIC_4_UUID, 0);
+        TopicIdPartition partition5 = new TopicIdPartition(TOPIC_4_UUID, 1);
+        TopicIdPartition partition6 = new TopicIdPartition(TOPIC_4_UUID, 2);
+        List<TopicIdPartition> unassignedPartitions = List.of(partition2, partition3, partition4, partition5, partition6);
+
+        Map<String, Set<TopicIdPartition>> assignment = new HashMap<>();
+        assignment.put(member1, new HashSet<>(Set.of(partition1)));
+        assignment.put(member2, new HashSet<>(Set.of(partition1)));
+
+        SubscribedTopicDescriber describer = mock(SubscribedTopicDescriber.class);
+        when(describer.assignablePartitions(eq(TOPIC_1_UUID))).thenReturn(Set.of(0));
+        when(describer.assignablePartitions(eq(TOPIC_2_UUID))).thenReturn(Set.of(0));
+        when(describer.assignablePartitions(eq(TOPIC_3_UUID))).thenReturn(Set.of(0));
+        when(describer.assignablePartitions(eq(TOPIC_4_UUID))).thenReturn(Set.of(0, 1, 2));
+
+        assertThrows(PartitionAssignorException.class,
+            () -> assignor.roundRobinAssignmentWithCount(members, unassignedPartitions, assignment, 2, describer));
     }
 
     @Test
@@ -755,6 +822,18 @@ public class SimpleAssignorTest {
             List<String> computedMembers = computedAssignment.getOrDefault(topicIdPartition, List.of());
             assertEquals(members.size(), computedMembers.size());
             members.forEach(member -> assertTrue(computedMembers.contains(member)));
+        });
+    }
+
+    private void assertFinalAssignment(
+        Map<String, Set<TopicIdPartition>> expectedAssignment,
+        Map<String, Set<TopicIdPartition>> computedAssignment
+    ) {
+        assertEquals(expectedAssignment.size(), computedAssignment.size());
+        expectedAssignment.forEach((memberId, partitions) -> {
+            Set<TopicIdPartition> computedPartitions = computedAssignment.getOrDefault(memberId, Set.of());
+            assertEquals(partitions.size(), computedPartitions.size());
+            partitions.forEach(member -> assertTrue(computedPartitions.contains(member)));
         });
     }
 

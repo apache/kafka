@@ -255,7 +255,7 @@ public class WorkerSourceTaskTest {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, offsetStore, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-                retryWithToleranceOperator, statusBackingStore, Runnable::run, Collections::emptyList, TestPlugins.noOpLoaderSwap());
+                retryWithToleranceOperator, statusBackingStore, Runnable::run, Collections::emptyList, null, TestPlugins.noOpLoaderSwap());
     }
 
     @ParameterizedTest

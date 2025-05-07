@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tiered.storage;
 
-import kafka.log.UnifiedLog;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -45,6 +44,7 @@ import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
@@ -54,7 +54,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -107,7 +106,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
         producer = harness.createProducer(ser, ser, producerOverrideProps);
         consumer = harness.createConsumer(de, de, commonOverrideProps,
-                CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+                CollectionConverters.asScala(List.<String>of()).toList());
         admin = harness.createAdminClient(listenerName, commonOverrideProps);
     }
 
@@ -125,7 +124,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
             newTopic = new NewTopic(spec.getTopicName(), replicasAssignments);
         }
         newTopic.configs(spec.getProperties());
-        admin.createTopics(Collections.singletonList(newTopic)).all().get();
+        admin.createTopics(List.of(newTopic)).all().get();
         TestUtils.waitForAllPartitionsMetadata(harness.brokers(), spec.getTopicName(), spec.getPartitionCount());
         synchronized (this) {
             topicSpecs.put(spec.getTopicName(), spec);
@@ -141,10 +140,10 @@ public final class TieredStorageTestContext implements AutoCloseable {
             List<List<Integer>> newAssignments = assignment.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .map(Map.Entry::getValue)
-                    .collect(Collectors.toList());
+                    .toList();
             newPartitions = NewPartitions.increaseTo(spec.getPartitionCount(), newAssignments);
         }
-        Map<String, NewPartitions> partitionsMap = Collections.singletonMap(spec.getTopicName(), newPartitions);
+        Map<String, NewPartitions> partitionsMap = Map.of(spec.getTopicName(), newPartitions);
         admin.createPartitions(partitionsMap).all().get();
         TestUtils.waitForAllPartitionsMetadata(harness.brokers(), spec.getTopicName(), spec.getPartitionCount());
     }
@@ -176,7 +175,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
                 alterEntries.add(new AlterConfigOp(new ConfigEntry(k, v), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000);
         Map<ConfigResource, Collection<AlterConfigOp>> configsMap =
-                Collections.singletonMap(configResource, alterEntries);
+                Map.of(configResource, alterEntries);
         admin.incrementalAlterConfigs(configsMap, alterOptions).all().get(30, TimeUnit.SECONDS);
     }
 
@@ -205,7 +204,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     public List<ConsumerRecord<String, String>> consume(TopicPartition topicPartition,
                                                         Integer expectedTotalCount,
                                                         Long fetchOffset) {
-        consumer.assign(Collections.singletonList(topicPartition));
+        consumer.assign(List.of(topicPartition));
         consumer.seek(topicPartition, fetchOffset);
 
         long timeoutMs = 60_000L;
@@ -225,14 +224,14 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public Long nextOffset(TopicPartition topicPartition) {
-        List<TopicPartition> partitions = Collections.singletonList(topicPartition);
+        List<TopicPartition> partitions = List.of(topicPartition);
         consumer.assign(partitions);
         consumer.seekToEnd(partitions);
         return consumer.position(topicPartition);
     }
 
     public Long beginOffset(TopicPartition topicPartition) {
-        List<TopicPartition> partitions = Collections.singletonList(topicPartition);
+        List<TopicPartition> partitions = List.of(topicPartition);
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions);
         return consumer.position(topicPartition);
@@ -329,7 +328,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
             throws ExecutionException, InterruptedException {
         String topic = topicPartition.topic();
         int partition = topicPartition.partition();
-        TopicDescription description = admin.describeTopics(Collections.singletonList(topicPartition.topic()))
+        TopicDescription description = admin.describeTopics(List.of(topicPartition.topic()))
                 .allTopicNames().get().get(topic);
         TopicPartitionInfo partitionInfo = description.partitions().get(partition);
         return partitionInfo.replicas().stream().anyMatch(node -> node.id() == replicaId);

@@ -304,7 +304,7 @@ public class KafkaConsumerTest {
 
             KafkaMetric existingMetric = (KafkaMetric) consumer.metrics().entrySet().iterator().next().getValue();
             consumer.registerMetricForSubscription(existingMetric);
-            // This test would fail without the check as the exising metric is registered in the consumer on startup
+            // This test would fail without the check as the existing metric is registered in the consumer on startup
             Mockito.verify(clientTelemetryReporter, atMostOnce()).metricChange(existingMetric);
         }
     }
@@ -3746,8 +3746,12 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
-    private static final Map<String, String> TAGS = Collections.singletonMap("k", "v");
+    private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>();
     private static final double VALUE = 123.0;
+
+    static {
+        TAGS.put("t1", "v1");
+    }
 
     public static class MonitorableDeserializer extends MockDeserializer implements Monitorable {
 
