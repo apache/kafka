@@ -444,7 +444,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 serde,
                 BufferSupplier.create(),
                 MAX_BATCH_SIZE_BYTES,
-                true /* Validate batch CRC*/
+                true, /* Validate batch CRC*/
+                logContext
             )
         );
     }
@@ -3898,7 +3899,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     BufferSupplier.create(),
                     MAX_BATCH_SIZE_BYTES,
                     this,
-                    true /* Validate batch CRC*/
+                    true, /* Validate batch CRC*/
+                    logContext
                 )
             );
         }
