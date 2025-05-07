@@ -1187,7 +1187,7 @@ public class MemoryRecordsTest {
         assertEquals(items.subList(2, items.size()), batches(sliced), "Read starting from the third message");
 
         // Further slice the already sliced memory records, from fourth message until the end. Now the
-        // bytes available in the sliced records are lesser than the moved position from original records.
+        // bytes available in the sliced records are less than the moved position from original records.
         position = items.get(2).sizeInBytes();
         Records finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
         assertEquals(sliced.sizeInBytes() - position, finalSliced.sizeInBytes());
