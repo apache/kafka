@@ -291,7 +291,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
         return KafkaYammerMetrics.getMetricName("kafka.controller", type, name);
     }
 
-    public static MetricName getBrokerIdTagMetricName(String type, String name, int brokerId) {
+    private static MetricName getBrokerIdTagMetricName(String type, String name, int brokerId) {
         LinkedHashMap<String, String> brokerIdTag = new LinkedHashMap<>();
         brokerIdTag.put(BROKER_ID_TAG, Integer.toString(brokerId));
         return KafkaYammerMetrics.getMetricName("kafka.controller", type, name, brokerIdTag);
