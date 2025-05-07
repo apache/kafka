@@ -1566,6 +1566,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setProducerEpoch(result.producerEpoch)
           .setThrottleTimeMs(requestThrottleMs)
           .setErrorCode(finalError.code)
+          .setOngoingTxnProducerId(result.ongoingTxnProducerId)
+          .setOngoingTxnProducerEpoch(result.ongoingTxnProducerEpoch)
         val responseBody = new InitProducerIdResponse(responseData)
         trace(s"Completed $transactionalId's InitProducerIdRequest with result $result from client ${request.header.clientId}.")
         responseBody

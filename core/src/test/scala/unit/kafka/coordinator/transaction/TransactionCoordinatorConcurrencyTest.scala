@@ -512,6 +512,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       nextProducerId = RecordBatch.NO_PRODUCER_ID,
       producerEpoch = (Short.MaxValue - 1).toShort,
       lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+      nextProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
       txnTimeoutMs = 60000,
       state = TransactionState.EMPTY,
       topicPartitions = collection.mutable.Set.empty[TopicPartition],
