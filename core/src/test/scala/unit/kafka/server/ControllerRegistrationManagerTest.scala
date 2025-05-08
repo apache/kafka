@@ -76,7 +76,7 @@ class ControllerRegistrationManagerTest {
       "controller-registration-manager-test-",
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
-      ListenerInfo.create(context.config.controllerListeners.map(_.toPublic).asJava),
+      ListenerInfo.create(context.config.controllerListeners.asJava),
       new ExponentialBackoff(1, 2, 100, 0.02))
   }
 

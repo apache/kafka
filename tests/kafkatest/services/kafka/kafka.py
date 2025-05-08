@@ -300,10 +300,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.use_share_groups = use_share_groups
         self.use_streams_groups = use_streams_groups
 
-        # Set offsets_commit_timeout based on context
-        if context.injected_args is not None:
-            self.offsets_commit_timeout = context.injected_args.get('offsets_commit_timeout')
-
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
             arg_name = 'consumer_group_migration_policy'
@@ -757,8 +753,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                       security_config=self.security_config, num_nodes=self.num_nodes,
                                       listener_security_config=self.listener_security_config,
-                                      use_share_groups=self.use_share_groups,
-                                      offsets_commit_timeout=self.offsets_commit_timeout)
+                                      use_share_groups=self.use_share_groups)
 
         configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
                         if not l.startswith("#") and "=" in l )
@@ -784,17 +779,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):
             override_configs[prop[0]] = prop[1]
 
-        enabledProtocols = 'classic,consumer'
-
         if self.use_share_groups is not None and self.use_share_groups is True:
             override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
-            enabledProtocols += ',share'
 
         if self.use_streams_groups is True:
             override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
-            enabledProtocols += ',streams'
-
-        override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = enabledProtocols
+            override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)
 
         #update template configs with test override configs
         configs.update(override_configs)

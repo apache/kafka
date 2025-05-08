@@ -1109,8 +1109,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         close(CloseOptions.timeout(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS)));
     }
 
+    @Deprecated
     @Override
-    @SuppressWarnings("deprecation")
     public void close(Duration timeout) {
         close(CloseOptions.timeout(timeout));
     }

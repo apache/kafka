@@ -41,9 +41,9 @@ import java.util.stream.Collectors;
 public class OffsetFetchRequest extends AbstractRequest {
 
     private static final Logger log = LoggerFactory.getLogger(OffsetFetchRequest.class);
-    private static final short TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION = 2;
-    private static final short REQUIRE_STABLE_OFFSET_MIN_VERSION = 7;
-    private static final short BATCH_MIN_VERSION = 8;
+    public static final short TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION = 2;
+    public static final short REQUIRE_STABLE_OFFSET_MIN_VERSION = 7;
+    public static final short BATCH_MIN_VERSION = 8;
 
     private final OffsetFetchRequestData data;
 

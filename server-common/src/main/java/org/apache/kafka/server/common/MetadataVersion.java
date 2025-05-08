@@ -112,13 +112,12 @@ public enum MetadataVersion {
     //
 
     // Enables ELR by default for new clusters (KIP-966).
+    // Share groups are preview in 4.1 (KIP-932).
+    // Streams groups are early access in 4.1 (KIP-1071).
     IBP_4_1_IV0(26, "4.1", "IV0", false),
 
-    // Enables share groups. Note, share groups are for preview only in 4.1. (KIP-932).
-    IBP_4_1_IV1(27, "4.1", "IV1", false),
-
     // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of
-    // IBP_4_2_IV0 accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
+    // IBP_4_2_IVx accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
     // a placeholder.
 
     // Enables share groups by default for new clusters (KIP-932).
@@ -127,7 +126,15 @@ public enum MetadataVersion {
     // *** SHARE GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A SHARE   ***
     // *** GROUPS FEATURE TO BE DEFINED IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON ***
     // *** DYNAMICALLY TO TRY OUT THE PREVIEW CAPABILITY.                                      ***
-    IBP_4_2_IV0(28, "4.2", "IV0", false);
+    IBP_4_2_IV0(27, "4.2", "IV0", false),
+
+    // Enables "streams" groups by default for new clusters (KIP-1071).
+    //
+    // *** THIS IS A PLACEHOLDER UNSTABLE VERSION WHICH IS USED TO DEFINE THE POINT AT WHICH     ***
+    // *** STREAMS GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A STREAMS ***
+    // *** GROUPS FEATURE TO BE DEFINED IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON   ***
+    // *** DYNAMICALLY TO TRY OUT THE EARLY ACCESS CAPABILITY.                                   ***
+    IBP_4_2_IV1(28, "4.2", "IV1", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
