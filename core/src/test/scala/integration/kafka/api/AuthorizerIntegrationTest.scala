@@ -926,12 +926,14 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   /**
    * Test that the produce request fails with TOPIC_AUTHORIZATION_FAILED if the client doesn't have permission
-   * or the topic doesn't exist from version 3 to 12.
-   * The version 13 is covered by testAuthorizationWithTopicNotExisting.
+   * and topic name is used in the request. Even if the topic doesn't exist, we return TOPIC_AUTHORIZATION_FAILED to
+   * prevent leaking the topic name.
+   * This case covers produce request version from oldest to 12.
+   * The newer version is covered by testAuthorizationWithTopicNotExisting.
    */
   @ParameterizedTest
   @CsvSource(value = Array("false", "true"))
-  def testAuthorizationForProduceRequestVersionLessThan13(withTopicExisting: Boolean): Unit = {
+  def testAuthorizationProduceVersionFromOldestTo12(withTopicExisting: Boolean): Unit = {
     if (withTopicExisting) {
       createTopicWithBrokerPrincipal(topic)
     }
@@ -1011,23 +1013,29 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     }
   }
 
-  /*
-   * even if the topic doesn't exist, request APIs should not leak the topic name
+  /**
+   * Test that the fetch request fails with TOPIC_AUTHORIZATION_FAILED if the client doesn't have permission
+   * and topic name is used in the request. Even if the topic doesn't exist, we return TOPIC_AUTHORIZATION_FAILED to
+   * prevent leaking the topic name.
+   * This case covers fetch request version from oldest to 12.
+   * The newer version is covered by testAuthorizationWithTopicNotExisting.
    */
   @ParameterizedTest
   @CsvSource(value = Array("false", "true"))
-  def testAuthorizationFetchV12WithTopicNotExisting(withTopicExisting: Boolean): Unit = {
+  def testAuthorizationFetchVersionFromOldestTo12(withTopicExisting: Boolean): Unit = {
     if (withTopicExisting) {
       createTopicWithBrokerPrincipal(topic)
     }
 
     val id = Uuid.ZERO_UUID
     val topicNames = Map(id -> topic)
-    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
-      ApiKeys.FETCH -> createFetchRequestWithUnknownTopic(id, 12),
-    )
+    for (version <- ApiKeys.FETCH.oldestVersion to 12) {
+      val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
+        ApiKeys.FETCH -> createFetchRequestWithUnknownTopic(id, version.toShort),
+      )
 
-    sendRequests(requestKeyToRequest, withTopicExisting, topicNames)
+      sendRequests(requestKeyToRequest, withTopicExisting, topicNames)
+    }
   }
 
   @ParameterizedTest
