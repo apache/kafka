@@ -90,7 +90,7 @@ public class ControllerMetricsChangesTest {
         changes.handleBrokerChange(null, brokerRegistration(brokerId, false), metrics);
         assertEquals(0, changes.fencedBrokersChange());
         assertEquals(1, changes.activeBrokersChange());
-        assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.ACTIVE.state(), metrics.brokerRegistrationState(brokerId));
+        assertEquals(BrokerRegistrationState.ACTIVE.state(), metrics.brokerRegistrationState(brokerId));
     }
 
     @Test
@@ -101,7 +101,7 @@ public class ControllerMetricsChangesTest {
         changes.handleBrokerChange(null, brokerRegistration(brokerId, true), metrics);
         assertEquals(1, changes.fencedBrokersChange());
         assertEquals(0, changes.activeBrokersChange());
-        assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.FENCED.state(), metrics.brokerRegistrationState(brokerId));
+        assertEquals(BrokerRegistrationState.FENCED.state(), metrics.brokerRegistrationState(brokerId));
     }
 
     @Test
@@ -112,7 +112,7 @@ public class ControllerMetricsChangesTest {
         changes.handleBrokerChange(brokerRegistration(brokerId, false), brokerRegistration(brokerId, true), metrics);
         assertEquals(1, changes.fencedBrokersChange());
         assertEquals(-1, changes.activeBrokersChange());
-        assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.FENCED.state(), metrics.brokerRegistrationState(brokerId));
+        assertEquals(BrokerRegistrationState.FENCED.state(), metrics.brokerRegistrationState(brokerId));
     }
 
     @Test
@@ -123,7 +123,7 @@ public class ControllerMetricsChangesTest {
         changes.handleBrokerChange(brokerRegistration(brokerId, false, true), brokerRegistration(brokerId, true, true), metrics);
         assertEquals(1, changes.fencedBrokersChange());
         assertEquals(-1, changes.activeBrokersChange());
-        assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.FENCED.state(), metrics.brokerRegistrationState(brokerId));
+        assertEquals(BrokerRegistrationState.FENCED.state(), metrics.brokerRegistrationState(brokerId));
     }
 
     @Test
@@ -134,7 +134,7 @@ public class ControllerMetricsChangesTest {
         changes.handleBrokerChange(brokerRegistration(brokerId, true), brokerRegistration(brokerId, false), metrics);
         assertEquals(-1, changes.fencedBrokersChange());
         assertEquals(1, changes.activeBrokersChange());
-        assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.ACTIVE.state(), metrics.brokerRegistrationState(brokerId));
+        assertEquals(BrokerRegistrationState.ACTIVE.state(), metrics.brokerRegistrationState(brokerId));
     }
 
     @Test
@@ -146,7 +146,7 @@ public class ControllerMetricsChangesTest {
         assertEquals(0, changes.fencedBrokersChange());
         assertEquals(0, changes.activeBrokersChange());
         assertEquals(1, changes.controlledShutdownBrokersChange());
-        assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.CONTROLLED_SHUTDOWN.state(), metrics.brokerRegistrationState(brokerId));
+        assertEquals(BrokerRegistrationState.CONTROLLED_SHUTDOWN.state(), metrics.brokerRegistrationState(brokerId));
     }
 
     @Test
@@ -158,7 +158,7 @@ public class ControllerMetricsChangesTest {
         assertEquals(-1, changes.fencedBrokersChange());
         assertEquals(0, changes.activeBrokersChange());
         assertEquals(-1, changes.controlledShutdownBrokersChange());
-        assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.UNREGISTERED.state(), metrics.brokerRegistrationState(brokerId));
+        assertEquals(BrokerRegistrationState.UNREGISTERED.state(), metrics.brokerRegistrationState(brokerId));
     }
 
     @Test

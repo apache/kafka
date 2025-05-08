@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller.metrics;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
@@ -35,6 +34,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.controller.metrics.BrokerRegistrationState.getBrokerRegistrationState;
+
 /**
  * These are the metrics which are managed by the ControllerServer class. They generally pertain to
  * aspects of the metadata, like how many topics or partitions we have.
@@ -44,24 +45,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * {@link org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
 public final class ControllerMetadataMetrics implements AutoCloseable {
-    @InterfaceStability.Stable
-    public enum BrokerRegistrationState {
-        UNREGISTERED(-1),
-        FENCED(10),
-        CONTROLLED_SHUTDOWN(20),
-        ACTIVE(30);
-
-        private final int state;
-
-        BrokerRegistrationState(int state) {
-            this.state = state;
-        }
-
-        public int state() {
-            return state;
-        }
-    }
-
     private static final MetricName FENCED_BROKER_COUNT = getMetricName(
         "KafkaController", "FencedBrokerCount");
     private static final MetricName ACTIVE_BROKER_COUNT = getMetricName(
@@ -231,21 +214,9 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     public void setBrokerRegistrationState(int brokerId, BrokerRegistration brokerRegistration) {
         BrokerRegistrationState brokerState = getBrokerRegistrationState(brokerRegistration);
         if (brokerRegistrationStates.containsKey(brokerId)) {
-            brokerRegistrationStates.get(brokerId).set(brokerState.state);
+            brokerRegistrationStates.get(brokerId).set(brokerState.state());
         } else {
-            brokerRegistrationStates.put(brokerId, new AtomicInteger(brokerState.state));
-        }
-    }
-
-    private BrokerRegistrationState getBrokerRegistrationState(BrokerRegistration brokerRegistration) {
-        if (brokerRegistration == null) {
-            return BrokerRegistrationState.UNREGISTERED;
-        } else if (brokerRegistration.fenced()) {
-            return BrokerRegistrationState.FENCED;
-        } else if (brokerRegistration.inControlledShutdown()) {
-            return BrokerRegistrationState.CONTROLLED_SHUTDOWN;
-        } else {
-            return BrokerRegistrationState.ACTIVE;
+            brokerRegistrationStates.put(brokerId, new AtomicInteger(brokerState.state()));
         }
     }
 

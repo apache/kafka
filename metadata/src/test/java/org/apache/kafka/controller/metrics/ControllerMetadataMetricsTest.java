@@ -171,16 +171,16 @@ public class ControllerMetadataMetricsTest {
                 .get(metricName("KafkaController", "BrokerRegistrationState", "broker=1"));
 
             metrics.setBrokerRegistrationState(brokerId, brokerRegistration(false, false));
-            assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.ACTIVE.state(), registrationState.value());
+            assertEquals(BrokerRegistrationState.ACTIVE.state(), registrationState.value());
 
             metrics.setBrokerRegistrationState(brokerId, brokerRegistration(true, false));
-            assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.FENCED.state(), registrationState.value());
+            assertEquals(BrokerRegistrationState.FENCED.state(), registrationState.value());
 
             metrics.setBrokerRegistrationState(brokerId, brokerRegistration(false, true));
-            assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.CONTROLLED_SHUTDOWN.state(), registrationState.value());
+            assertEquals(BrokerRegistrationState.CONTROLLED_SHUTDOWN.state(), registrationState.value());
 
             metrics.setBrokerRegistrationState(brokerId, null);
-            assertEquals(ControllerMetadataMetrics.BrokerRegistrationState.UNREGISTERED.state(), registrationState.value());
+            assertEquals(BrokerRegistrationState.UNREGISTERED.state(), registrationState.value());
         } finally {
             registry.shutdown();
         }
