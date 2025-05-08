@@ -168,7 +168,8 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  */
 @SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity", "ParameterNumber", "NPathComplexity", "JavaNCSS" })
 public final class KafkaRaftClient<T> implements RaftClient<T> {
-    private static final int RETRY_BACKOFF_BASE_MS = 50;
+    // visible for testing
+    static final int RETRY_BACKOFF_BASE_MS = 50;
     private static final int MAX_NUMBER_OF_BATCHES = 10;
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
@@ -1030,7 +1031,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 // replica has failed multiple elections in succession.
                 candidate.startBackingOff(
                     currentTimeMs,
-                    binaryExponentialElectionBackoffMs(candidate.retries())
+                    binaryExponentialElectionBackoffMs(
+                        quorumConfig.electionBackoffMaxMs(),
+                        candidate.retries(),
+                        random
+                    )
                 );
             }
         } else if (state instanceof ProspectiveState prospective) {
@@ -1048,15 +1053,16 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private int binaryExponentialElectionBackoffMs(int retries) {
+    // visible for testing
+    static int binaryExponentialElectionBackoffMs(int backoffMaxMs, int retries, Random random) {
         if (retries <= 0) {
             throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
         }
         // take minimum of exponential backoff calculation (maxes out to ~1.7 minutes)
         // and configurable electionBackoffMaxMs + jitter. jitter is added to prevent deadlock of elections
         return Math.min(
-            RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(10, retries - 1)),
-            quorumConfig.electionBackoffMaxMs() + random.nextInt(RETRY_BACKOFF_BASE_MS)
+            RETRY_BACKOFF_BASE_MS * random.nextInt(1, 2 << Math.min(10, retries - 1)),
+            backoffMaxMs + random.nextInt(RETRY_BACKOFF_BASE_MS)
         );
     }
 
