@@ -297,21 +297,21 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     new requests.MetadataRequest.Builder(List(topic).asJava, allowAutoTopicCreation).build()
   }
 
-  private def createProduceRequestWithId(id: Uuid) = {
+  private def createProduceRequest(name: String, id: Uuid, version: Short) = {
     requests.ProduceRequest.builder(new ProduceRequestData()
-      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-        Collections.singletonList(new ProduceRequestData.TopicProduceData()
-          .setTopicId(id).setPartitionData(Collections.singletonList(
-          new ProduceRequestData.PartitionProduceData()
-            .setIndex(tp.partition)
-            .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
-        .iterator))
-      .setAcks(1.toShort)
-      .setTimeoutMs(5000))
-      .build()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          util.List.of(new ProduceRequestData.TopicProduceData()
+              .setName(name)
+              .setTopicId(id)
+              .setPartitionData(util.List.of(
+                new ProduceRequestData.PartitionProduceData()
+                  .setIndex(tp.partition)
+                  .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(5000))
+      .build(version)
   }
-
-  private def createProduceRequest = createProduceRequestWithId(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID))
 
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
@@ -838,11 +838,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   @ValueSource(strings = Array("kip932"))
   def testAuthorizationWithTopicExisting(quorum: String): Unit = {
     //First create the topic so we have a valid topic ID
-    sendRequests(mutable.Map(ApiKeys.CREATE_TOPICS -> createTopicsRequest))
+    createTopicWithBrokerPrincipal(topic)
 
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
-      ApiKeys.PRODUCE -> createProduceRequest,
+      ApiKeys.PRODUCE -> createProduceRequest("", getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), ApiKeys.PRODUCE.latestVersion()),
       ApiKeys.FETCH -> createFetchRequest,
       ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
       ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
@@ -890,7 +890,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
     )
 
-    sendRequests(requestKeyToRequest, true)
+    sendRequests(requestKeyToRequest)
   }
 
   /*
@@ -903,7 +903,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val topicNames = Map(id -> "topic")
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = false),
-      ApiKeys.PRODUCE -> createProduceRequestWithId(id),
+      ApiKeys.PRODUCE -> createProduceRequest("", id, ApiKeys.PRODUCE.latestVersion()),
       ApiKeys.FETCH -> createFetchRequestWithUnknownTopic(id, ApiKeys.FETCH.latestVersion()),
       ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
       ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
@@ -932,30 +932,39 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
    * The newer version is covered by testAuthorizationWithTopicNotExisting.
    */
   @ParameterizedTest
-  @CsvSource(value = Array("false", "true"))
+  @ValueSource(booleans = Array(true, false))
   def testAuthorizationProduceVersionFromOldestTo12(withTopicExisting: Boolean): Unit = {
     if (withTopicExisting) {
       createTopicWithBrokerPrincipal(topic)
     }
 
     for (version <- ApiKeys.PRODUCE.oldestVersion to 12) {
-      val request = requests.ProduceRequest.builder(new ProduceRequestData()
-          .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-            util.List.of(new ProduceRequestData.TopicProduceData()
-                .setName(tp.topic())
-                .setPartitionData(util.List.of(
-                  new ProduceRequestData.PartitionProduceData()
-                    .setIndex(tp.partition)
-                    .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
-              .iterator))
-          .setAcks(1.toShort)
-          .setTimeoutMs(5000))
-        .build(version.toShort)
+      val request = createProduceRequest(topic, Uuid.ZERO_UUID, version.toShort)
       val response = connectAndReceive[AbstractResponse](request, listenerName = listenerName)
       val errorCode = response.asInstanceOf[ProduceResponse]
         .data()
         .responses()
         .find(topic, Uuid.ZERO_UUID)
+        .partitionResponses.asScala.find(_.index == part).get
+        .errorCode
+
+      assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), errorCode, s"unexpected error for produce request version $version")
+    }
+  }
+
+  /**
+   * Test that the produce request fails with TOPIC_AUTHORIZATION_FAILED if both topic name and id are default values.
+   * This case covers produce request version from 13 to latest, because the produce request only supports topic id above version 13.
+   */
+  @Test
+  def testEmptyTopicNameAndIDForProduceVersionFrom13ToNewest(): Unit = {
+    for (version <- 13 to ApiKeys.PRODUCE.latestVersion()) {
+      val request = createProduceRequest("", Uuid.ZERO_UUID, version.toShort)
+      val response = connectAndReceive[AbstractResponse](request, listenerName = listenerName)
+      val errorCode = response.asInstanceOf[ProduceResponse]
+        .data()
+        .responses()
+        .find("", Uuid.ZERO_UUID)
         .partitionResponses.asScala.find(_.index == part).get
         .errorCode
 
@@ -1021,7 +1030,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
    * The newer version is covered by testAuthorizationWithTopicNotExisting.
    */
   @ParameterizedTest
-  @CsvSource(value = Array("false", "true"))
+  @ValueSource(booleans = Array(true, false))
   def testAuthorizationFetchVersionFromOldestTo12(withTopicExisting: Boolean): Unit = {
     if (withTopicExisting) {
       createTopicWithBrokerPrincipal(topic)
