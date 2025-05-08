@@ -829,36 +829,6 @@ public class KafkaAdminClient extends AdminClient {
      * Provides the least loaded broker, or the active kcontroller if we're using
      * bootstrap.controllers.
      */
-    private class ConstantBrokerOrActiveKController implements NodeProvider {
-        private final int nodeId;
-
-        ConstantBrokerOrActiveKController(int nodeId) {
-            this.nodeId = nodeId;
-        }
-
-        @Override
-        public Node provide() {
-            if (metadataManager.isReady()) {
-                if (metadataManager.usingBootstrapControllers()) {
-                    return metadataManager.controller();
-                } else if (metadataManager.nodeById(nodeId) != null) {
-                    return metadataManager.nodeById(nodeId);
-                }
-            }
-            metadataManager.requestUpdate();
-            return null;
-        }
-
-        @Override
-        public boolean supportsUseControllers() {
-            return true;
-        }
-    }
-
-    /**
-     * Provides the least loaded broker, or the active kcontroller if we're using
-     * bootstrap.controllers.
-     */
     private class LeastLoadedBrokerOrActiveKController implements NodeProvider {
         @Override
         public Node provide() {
@@ -3846,7 +3816,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs,
                                                              final ListShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Long>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
         ListShareGroupOffsetsHandler handler = new ListShareGroupOffsetsHandler(groupSpecs, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListShareGroupOffsetsResult(future.all());

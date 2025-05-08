@@ -37,6 +37,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
@@ -322,7 +323,14 @@ public final class RecordsIteratorTest {
         BufferSupplier bufferSupplier,
         boolean validateCrc
     ) {
-        return new RecordsIterator<>(records, STRING_SERDE, bufferSupplier, Records.HEADER_SIZE_UP_TO_MAGIC, validateCrc);
+        return new RecordsIterator<>(
+            records,
+            STRING_SERDE,
+            bufferSupplier,
+            Records.HEADER_SIZE_UP_TO_MAGIC,
+            validateCrc,
+            new LogContext()
+        );
     }
 
     static BufferSupplier mockBufferSupplier(Set<ByteBuffer> buffers) {
