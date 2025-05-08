@@ -151,7 +151,7 @@ public class TransactionManager {
         INITIALIZING,
         READY,
         IN_TRANSACTION,
-        PREPARING_TRANSACTION,
+        PREPARED_TRANSACTION,
         COMMITTING_TRANSACTION,
         ABORTING_TRANSACTION,
         ABORTABLE_ERROR,
@@ -167,15 +167,15 @@ public class TransactionManager {
                     return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
                     return source == READY;
-                case PREPARING_TRANSACTION:
+                case PREPARED_TRANSACTION:
                     return source == IN_TRANSACTION || source == INITIALIZING;
                 case COMMITTING_TRANSACTION:
-                    return source == IN_TRANSACTION || source == PREPARING_TRANSACTION;
+                    return source == IN_TRANSACTION || source == PREPARED_TRANSACTION;
                 case ABORTING_TRANSACTION:
-                    return source == IN_TRANSACTION || source == PREPARING_TRANSACTION || source == ABORTABLE_ERROR;
+                    return source == IN_TRANSACTION || source == PREPARED_TRANSACTION || source == ABORTABLE_ERROR;
                 case ABORTABLE_ERROR:
                     return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTABLE_ERROR
-                            || source == INITIALIZING || source == PREPARING_TRANSACTION;
+                            || source == INITIALIZING;
                 case FATAL_ERROR:
                 default:
                     // We can transition to FATAL_ERROR unconditionally.
@@ -336,13 +336,13 @@ public class TransactionManager {
 
     /**
      * Begin preparing a transaction for a two-phase commit.
-     * This transitions the transaction to the PREPARING_TRANSACTION state.
+     * This transitions the transaction to the PREPARED_TRANSACTION state.
      */
     public synchronized void beginPrepare() {
         ensureTransactional();
         throwIfPendingState("prepareTransaction");
         maybeFailWithError();
-        transitionTo(State.PREPARING_TRANSACTION);
+        transitionTo(State.PREPARED_TRANSACTION);
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
@@ -1080,10 +1080,10 @@ public class TransactionManager {
     /**
      * Check if the transaction is in the preparing state.
      *
-     * @return true if the current state is PREPARING_TRANSACTION
+     * @return true if the current state is PREPARED_TRANSACTION
      */
     public synchronized boolean isInPreparingState() {
-        return currentState == State.PREPARING_TRANSACTION;
+        return currentState == State.PREPARED_TRANSACTION;
     }
 
     void handleCoordinatorReady() {
@@ -1483,9 +1483,9 @@ public class TransactionManager {
                 setProducerIdAndEpoch(producerIdAndEpoch);
 
                 // If this is a 2PC-enabled transaction with keepPreparedTxn=true, transition directly
-                // to PREPARING_TRANSACTION
+                // to PREPARED_TRANSACTION
                 if (enable2PC && builder.data.keepPreparedTxn()) {
-                    transitionTo(State.PREPARING_TRANSACTION);
+                    transitionTo(State.PREPARED_TRANSACTION);
                 } else {
                     transitionTo(State.READY);
                 }

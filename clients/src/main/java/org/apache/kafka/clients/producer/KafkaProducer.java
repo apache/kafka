@@ -667,6 +667,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void initTransactions(boolean keepPreparedTxn) {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        throwIfInPreparedState();
         long now = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.initializeTransactions(keepPreparedTxn);
         sender.wakeup();
@@ -693,6 +694,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void beginTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        throwIfInPreparedState();
         long now = time.nanoseconds();
         transactionManager.beginTransaction();
         producerMetrics.recordBeginTxn(time.nanoseconds() - now);
@@ -752,6 +754,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfInvalidGroupMetadata(groupMetadata);
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        throwIfInPreparedState();
 
         if (!offsets.isEmpty()) {
             long start = time.nanoseconds();
@@ -1012,6 +1015,23 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Throws an exception if the transaction is in a prepared state.
+     * In a two-phase commit (2PC) flow, once a transaction enters the prepared state,
+     * only commit, abort, or complete operations are allowed.
+     *
+     * @throws IllegalStateException if any other operation is attempted in the prepared state.
+     */
+    private void throwIfInPreparedState() {
+        if (transactionManager != null &&
+            transactionManager.isTransactional() &&
+            transactionManager.isInPreparingState()
+        ) {
+            throw new IllegalStateException("Cannot perform operation while the transaction is in a prepared state. " +
+                "Only commitTransaction(), abortTransaction(), or completeTransaction() are permitted.");
+        }
+    }
+
+    /**
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
@@ -1022,14 +1042,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         try {
             throwIfProducerClosed();
-            
-            // Check if we're in a prepared transaction state, in which case send is not allowed
-            if (transactionManager != null && transactionManager.isTransactional() && 
-                transactionManager.isInPreparingState()) {
-                throw new IllegalStateException("Cannot send messages when the transaction is in a prepared state. " +
-                    "You can only call commitTransaction(), abortTransaction(), or completeTransaction().");
-            }
-            
+            throwIfInPreparedState();
+
             // first make sure the metadata for the topic is available
             long nowMs = time.milliseconds();
             ClusterAndWaitTime clusterAndWaitTime;

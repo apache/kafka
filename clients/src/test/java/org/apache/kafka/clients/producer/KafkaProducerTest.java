@@ -1476,11 +1476,11 @@ public class KafkaProducerTest {
 
         when(ctx.sender.isRunning()).thenReturn(true);
         when(ctx.metadata.fetch()).thenReturn(cluster);
-        
+
         // Mock transaction manager to simulate being in a prepared state
         when(ctx.transactionManager.isTransactional()).thenReturn(true);
         when(ctx.transactionManager.isInPreparingState()).thenReturn(true);
-        
+
         // Create record to send
         long timestamp = ctx.time.milliseconds();
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, 0, timestamp, "key", "value");
@@ -1491,13 +1491,13 @@ public class KafkaProducerTest {
                 IllegalStateException.class,
                 () -> producer.send(record)
             );
-            
-            assertTrue(exception.getMessage().contains("Cannot send messages when the transaction is in a prepared state"));
-            
+
+            assertTrue(exception.getMessage().contains("Cannot perform operation while the transaction is in a prepared state"));
+
             // Verify transactionManager methods were called
             verify(ctx.transactionManager).isTransactional();
             verify(ctx.transactionManager).isInPreparingState();
-            
+
             // Verify that no message was actually sent (accumulator was not called)
             verify(ctx.accumulator, never()).append(
                 eq(topic),
@@ -1511,6 +1511,74 @@ public class KafkaProducerTest {
                 anyLong(),
                 any()
             );
+        }
+    }
+
+    @Test
+    public void testSendOffsetsNotAllowedInPreparedTransactionState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        String topic = "foo";
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+
+        when(ctx.sender.isRunning()).thenReturn(true);
+        when(ctx.metadata.fetch()).thenReturn(cluster);
+
+        // Mock transaction manager to simulate being in a prepared state
+        when(ctx.transactionManager.isTransactional()).thenReturn(true);
+        when(ctx.transactionManager.isInPreparingState()).thenReturn(true);
+
+        // Create consumer group metadata
+        String groupId = "test-group";
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(new TopicPartition(topic, 0), new OffsetAndMetadata(100L));
+        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Verify that sending offsets throws IllegalStateException with the correct message
+            IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> producer.sendOffsetsToTransaction(offsets, groupMetadata)
+            );
+
+            assertTrue(exception.getMessage().contains("Cannot perform operation while the transaction is in a prepared state"));
+
+            // Verify transactionManager methods were called
+            verify(ctx.transactionManager).isTransactional();
+            verify(ctx.transactionManager).isInPreparingState();
+
+            // Verify that no offsets were actually sent
+            verify(ctx.transactionManager, never()).sendOffsetsToTransaction(
+                eq(offsets),
+                eq(groupMetadata)
+            );
+        }
+    }
+
+    @Test
+    public void testBeginTransactionNotAllowedInPreparedTransactionState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        when(ctx.sender.isRunning()).thenReturn(true);
+
+        // Mock transaction manager to simulate being in a prepared state
+        when(ctx.transactionManager.isTransactional()).thenReturn(true);
+        when(ctx.transactionManager.isInPreparingState()).thenReturn(true);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Verify that calling beginTransaction throws IllegalStateException with the correct message
+            IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                producer::beginTransaction
+            );
+
+            assertTrue(exception.getMessage().contains("Cannot perform operation while the transaction is in a prepared state"));
+
+            // Verify transactionManager methods were called
+            verify(ctx.transactionManager).isTransactional();
+            verify(ctx.transactionManager).isInPreparingState();
         }
     }
 
