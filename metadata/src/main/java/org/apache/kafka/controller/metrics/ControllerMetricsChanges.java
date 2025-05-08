@@ -48,7 +48,7 @@ class ControllerMetricsChanges {
     private int offlinePartitionsChange = 0;
     private int partitionsWithoutPreferredLeaderChange = 0;
     private int uncleanLeaderElection = 0;
-    private int electionFromElrCounter = 0;
+    private int electionFromElr = 0;
 
     public int fencedBrokersChange() {
         return fencedBrokersChange;
@@ -68,6 +68,14 @@ class ControllerMetricsChanges {
 
     public int offlinePartitionsChange() {
         return offlinePartitionsChange;
+    }
+
+    public int uncleanLeaderElection() {
+        return uncleanLeaderElection;
+    }
+
+    public int electionFromElr() {
+        return electionFromElr;
     }
 
     public int partitionsWithoutPreferredLeaderChange() {
@@ -105,10 +113,13 @@ class ControllerMetricsChanges {
         } else {
             for (Entry<Integer, PartitionRegistration> entry : topicDelta.partitionChanges().entrySet()) {
                 int partitionId = entry.getKey();
+                PartitionRegistration prevPartition = prev.partitions().get(partitionId);
                 PartitionRegistration nextPartition = entry.getValue();
-                handlePartitionChange(prev.partitions().get(partitionId), nextPartition);
+                handlePartitionChange(prevPartition, nextPartition);
             }
         }
+        topicDelta.partitionToUncleanLeaderElectionCount().forEach((partitionId, count) -> uncleanLeaderElection += count);
+        topicDelta.partitionToElrElectionCount().forEach((partitionId, count) -> electionFromElr += count);
     }
 
     void handlePartitionChange(PartitionRegistration prev, PartitionRegistration next) {
@@ -127,15 +138,6 @@ class ControllerMetricsChanges {
             isPresent = true;
             isOffline = !next.hasLeader();
             isWithoutPreferredLeader = !next.hasPreferredLeader();
-            // take current all replicas as ISR if prev is null (new created partition), so we won't treat it as unclean election.
-            int[] prevIsr = prev != null ? prev.isr : next.replicas;
-            int[] prevElr = prev != null ? prev.elr : new int[]{};
-            if (!PartitionRegistration.electionWasClean(next.leader, prevIsr, prevElr)) {
-                uncleanLeaderElection++;
-            }
-            if (PartitionRegistration.electionFromElr(next.leader, prevElr)) {
-                electionFromElrCounter++;
-            }
         }
         globalPartitionsChange += delta(wasPresent, isPresent);
         offlinePartitionsChange += delta(wasOffline, isOffline);
@@ -168,9 +170,9 @@ class ControllerMetricsChanges {
             metrics.updateUncleanLeaderElection(uncleanLeaderElection);
             uncleanLeaderElection = 0;
         }
-        if (electionFromElrCounter > 0) {
-            metrics.updateElectionFromEligibleLeaderReplicasCount(electionFromElrCounter);
-            electionFromElrCounter = 0;
+        if (electionFromElr > 0) {
+            metrics.updateElectionFromEligibleLeaderReplicasCount(electionFromElr);
+            electionFromElr = 0;
         }
     }
 }
