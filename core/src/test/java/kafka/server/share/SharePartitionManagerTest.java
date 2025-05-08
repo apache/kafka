@@ -50,6 +50,7 @@ import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.share.CachedSharePartition;
@@ -2801,6 +2802,42 @@ public class SharePartitionManagerTest {
         // Verify the partitions rotation, rotate by 1 (2147483647 % 7).
         resultShareFetch = captor.getValue();
         validateRotatedListEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 1);
+    }
+
+    @Test
+    public void testOnShareVersionToggle() {
+        String groupId = "grp";
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp3 = mock(SharePartition.class);
+
+        // Mock the share partitions corresponding to the topic partitions.
+        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(
+            new SharePartitionKey(groupId, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0))), sp0
+        );
+        partitionCacheMap.put(
+            new SharePartitionKey(groupId, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 0))), sp1
+        );
+        partitionCacheMap.put(
+            new SharePartitionKey(groupId, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo3", 0))), sp2
+        );
+        partitionCacheMap.put(
+            new SharePartitionKey(groupId, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo4", 0))), sp3
+        );
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap)
+            .build();
+        assertEquals(4, sharePartitionManager.partitionCacheMap().size());
+        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
+        // Because we are toggling to a share version which does not support share groups, the cache inside share partitions must be cleared.
+        assertTrue(sharePartitionManager.partitionCacheMap().isEmpty());
+        //Check if all share partitions have been fenced.
+        Mockito.verify(sp0).markFenced();
+        Mockito.verify(sp1).markFenced();
+        Mockito.verify(sp2).markFenced();
+        Mockito.verify(sp3).markFenced();
     }
 
     private Timer systemTimerReaper() {

@@ -139,6 +139,21 @@ public class ShareSessionCacheTest {
         assertMetricsValues(3, 9, 1, cache);
     }
 
+    @Test
+    public void testRemoveAllSessions() {
+        ShareSessionCache cache = new ShareSessionCache(3);
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+        cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(10), "conn-1");
+        cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(20), "conn-2");
+        cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(30), "conn-3");
+        assertEquals(3, cache.size());
+        assertEquals(60, cache.totalPartitions());
+        cache.removeAllSessions();
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+    }
+
     private ImplicitLinkedHashCollection<CachedSharePartition> mockedSharePartitionMap(int size) {
         ImplicitLinkedHashCollection<CachedSharePartition> cacheMap = new
                 ImplicitLinkedHashCollection<>(size);

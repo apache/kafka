@@ -90,6 +90,14 @@ public class ShareSessionCache {
         return sessions.size();
     }
 
+    /**
+     * Remove all the share sessions from cache.
+     */
+    public synchronized void removeAllSessions() {
+        sessions.clear();
+        numPartitions = 0;
+    }
+
     public synchronized long totalPartitions() {
         return numPartitions;
     }
