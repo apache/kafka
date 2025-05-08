@@ -22,7 +22,7 @@ import java.util
 import java.util.{Arrays, Collections, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.common.Node
+import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.common.config.{ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
@@ -35,7 +35,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.network.EndPoint
 import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -343,7 +342,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(
-      Seq(new EndPoint("lb1.example.com", 9000, ListenerName.normalised("CONTROLLER"), SecurityProtocol.PLAINTEXT)),
+      Seq(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "lb1.example.com", 9000)),
       config.effectiveAdvertisedControllerListeners
     )
   }
@@ -359,7 +358,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(
-      Seq(new EndPoint("localhost", 9093, ListenerName.normalised("CONTROLLER"), SecurityProtocol.PLAINTEXT)),
+      Seq(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
       config.effectiveAdvertisedControllerListeners
     )
   }
@@ -377,8 +376,8 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(
       Seq(
-        new EndPoint("lb1.example.com", 9000, ListenerName.normalised("CONTROLLER"), SecurityProtocol.PLAINTEXT),
-        new EndPoint("localhost", 9094, ListenerName.normalised("CONTROLLER_NEW"), SecurityProtocol.PLAINTEXT)
+        new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "lb1.example.com", 9000),
+        new Endpoint("CONTROLLER_NEW", SecurityProtocol.PLAINTEXT, "localhost", 9094)
       ),
       config.effectiveAdvertisedControllerListeners
     )
@@ -507,9 +506,9 @@ class KafkaConfigTest {
     props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "REPLICATION")
     val config = KafkaConfig.fromProps(props)
     val expectedListeners = Seq(
-      new EndPoint("localhost", 9091, new ListenerName("CLIENT"), SecurityProtocol.SSL),
-      new EndPoint("localhost", 9092, new ListenerName("REPLICATION"), SecurityProtocol.SSL),
-      new EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT))
+      new Endpoint("CLIENT", SecurityProtocol.SSL, "localhost", 9091),
+      new Endpoint("REPLICATION", SecurityProtocol.SSL, "localhost", 9092),
+      new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))
     assertEquals(expectedListeners, config.listeners)
     assertEquals(expectedListeners, config.effectiveAdvertisedBrokerListeners)
     val expectedSecurityProtocolMap = Map(
@@ -536,14 +535,14 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
 
     val expectedListeners = Seq(
-      new EndPoint("localhost", 9091, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
-      new EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
+      new Endpoint("EXTERNAL", SecurityProtocol.SSL, "localhost", 9091),
+      new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093)
     )
     assertEquals(expectedListeners, config.listeners)
 
     val expectedAdvertisedListeners = Seq(
-      new EndPoint("lb1.example.com", 9000, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
-      new EndPoint("host1", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
+      new Endpoint("EXTERNAL", SecurityProtocol.SSL, "lb1.example.com", 9000),
+      new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "host1", 9093)
     )
     assertEquals(expectedAdvertisedListeners, config.effectiveAdvertisedBrokerListeners)
 
@@ -593,8 +592,8 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "plaintext://localhost:9091,SsL://localhost:9092")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL,CONTROLLER:PLAINTEXT")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listenerName.value == "SSL").map(JTestUtils.endpointToString))
-    assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.listenerName.value == "PLAINTEXT").map(JTestUtils.endpointToString))
+    assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listener == "SSL").map(JTestUtils.endpointToString))
+    assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.listener == "PLAINTEXT").map(JTestUtils.endpointToString))
   }
 
   private def listenerListToEndPoints(listenerList: String,
@@ -1743,13 +1742,11 @@ class KafkaConfigTest {
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     var config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
-    assertFalse(config.shareGroupConfig.isShareGroupEnabled)
 
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
     config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config.groupCoordinatorRebalanceProtocols)
-    assertTrue(config.shareGroupConfig.isShareGroupEnabled)
 
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,streams")
     val config2 = KafkaConfig.fromProps(props)

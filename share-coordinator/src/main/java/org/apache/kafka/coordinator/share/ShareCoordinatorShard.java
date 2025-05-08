@@ -453,6 +453,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 topicId,
                 partitionId,
                 PartitionFactory.UNINITIALIZED_START_OFFSET,
+                PartitionFactory.DEFAULT_LEADER_EPOCH,
                 PartitionFactory.DEFAULT_STATE_EPOCH
             );
         } else {
@@ -470,6 +471,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     topicId,
                     partitionId,
                     offsetValue.startOffset(),
+                    offsetValue.leaderEpoch(),
                     offsetValue.stateEpoch()
                 );
             }
