@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -441,6 +442,43 @@ public class TopicsImageTest {
             ))
         );
         assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
+    }
+
+    @Test
+    public void testTopicDeltaElectionStatsWithEmptyImage() {
+        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Collections.EMPTY_MAP);
+        TopicDelta delta = new TopicDelta(image);
+        delta.replay(new PartitionRecord().setPartitionId(0).setLeader(0).setIsr(List.of(0, 1)).setReplicas(List.of(0, 1, 2)));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(2).setIsr(List.of(2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+        assertEquals(1, delta.partitionToUncleanLeaderElectionCount().get(0));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setIsr(List.of(1, 2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()));
+        assertEquals(1, delta.partitionToUncleanLeaderElectionCount().get(0));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(0).setIsr(List.of(0)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+        assertEquals(2, delta.partitionToUncleanLeaderElectionCount().get(0));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(1).setIsr(List.of(1)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+        assertEquals(3, delta.partitionToUncleanLeaderElectionCount().get(0));
+        assertTrue(delta.partitionToElrElectionCount().isEmpty());
+
+        delta.replay(new PartitionRecord().setPartitionId(1).setLeader(0).setIsr(List.of(0, 1)).setReplicas(List.of(0, 1, 2)));
+        delta.replay(new PartitionChangeRecord().setPartitionId(1).setLeader(-1).setIsr(List.of()).setEligibleLeaderReplicas(List.of(0, 1)));
+        assertTrue(delta.partitionToElrElectionCount().isEmpty());
+        delta.replay(new PartitionChangeRecord().setPartitionId(1).setLeader(1).setIsr(List.of(1)).setEligibleLeaderReplicas(List.of(0, 1)));
+        assertEquals(1, delta.partitionToElrElectionCount().get(1));
+    }
+
+    @Test
+    public void testTopicDeltaElectionStatsWithNonEmptyImage() {
+        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Map.of(
+            0, new PartitionRegistration(new PartitionRecord().setPartitionId(0).setLeader(0).setIsr(List.of(0, 1)).setReplicas(List.of(0, 1, 2))),
+            1, new PartitionRegistration(new PartitionRecord().setPartitionId(1).setLeader(-1).setIsr(List.of()).setEligibleLeaderReplicas(List.of(0, 1)).setReplicas(List.of(0, 1, 2)))
+        ));
+        TopicDelta delta = new TopicDelta(image);
+        delta.replay(new PartitionRecord().setPartitionId(0).setLeader(2).setIsr(List.of(2)).setReplicas(List.of(0, 1, 2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+        assertEquals(1, delta.partitionToUncleanLeaderElectionCount().get(0));
+        assertTrue(delta.partitionToElrElectionCount().isEmpty());
+
+        delta.replay(new PartitionChangeRecord().setPartitionId(1).setLeader(1).setIsr(List.of(1)).setEligibleLeaderReplicas(List.of(0, 1)));
+        assertEquals(1, delta.partitionToElrElectionCount().get(1));
     }
 
     @Test
