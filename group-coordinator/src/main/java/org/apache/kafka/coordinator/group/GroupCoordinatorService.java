@@ -691,7 +691,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicData.partitions().forEach(partition -> data.responses().get(data.responses().size() - 1)
                         .partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                             .setPartitionIndex(partition.partition())
-                            .setErrorCode(error.code())));
+                            .setErrorCode(error.code())
+                            .setErrorMessage(error.message())));
                 });
                 // don't uninitialize share group state here, as we regard this alter share group offsets request failed.
                 return data;
