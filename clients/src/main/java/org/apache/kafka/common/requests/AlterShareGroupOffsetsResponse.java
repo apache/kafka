@@ -85,7 +85,8 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
             AlterShareGroupOffsetsResponseTopic topicData = getOrCreateTopic(topic);
             topicData.partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                 .setPartitionIndex(partition)
-                .setErrorCode(error.code()));
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message()));
             return this;
         }
 
@@ -100,7 +101,8 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
                 topic.partitions().forEach(partition -> newTopic.partitions().add(
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
-                        .setErrorCode(partition.errorCode())));
+                        .setErrorCode(partition.errorCode())
+                        .setErrorMessage(partition.errorMessage())));
             });
             return this;
 

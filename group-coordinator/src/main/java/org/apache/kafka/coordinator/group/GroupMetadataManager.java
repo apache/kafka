@@ -8097,8 +8097,7 @@ public class GroupMetadataManager {
                         partitions.add(
                             new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                                 .setPartitionIndex(partition.partitionIndex())
-                                .setErrorCode(Errors.NONE.code())
-                                .setErrorMessage(null));
+                                .setErrorCode(Errors.NONE.code()));
                         offsetByTopicPartitions.computeIfAbsent(topicId, k -> new HashMap<>()).put(partition.partitionIndex(), partition.startOffset());
                     } else {
                         partitions.add(

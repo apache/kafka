@@ -31,7 +31,7 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
 
     private final AlterShareGroupOffsetsRequestData data;
 
-    public AlterShareGroupOffsetsRequest(AlterShareGroupOffsetsRequestData data, short version) {
+    private AlterShareGroupOffsetsRequest(AlterShareGroupOffsetsRequestData data, short version) {
         super(ApiKeys.ALTER_SHARE_GROUP_OFFSETS, version);
         this.data = data;
     }
@@ -86,10 +86,11 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
                 new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                     .setPartitionIndex(-1)
                     .setErrorCode(error.code())
+                    .setErrorMessage(error.message())
             ));
     }
 
-    public static AlterShareGroupOffsetsResponseData getErrorAlterShareGroupResponseData(
+    public static AlterShareGroupOffsetsResponseData from(
         Errors error
     ) {
         AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic responseTopic = getErrorAlterShareGroup(error);

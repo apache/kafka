@@ -3754,9 +3754,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         val topicError = invalidTopicError.orElse {
           if (!authHelper.authorize(request.context, READ, TOPIC, topic.topicName())) {
             Some(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED))
-          } else if (!metadataCache.contains(topic.topicName()))
+          } else if (!metadataCache.contains(topic.topicName())) {
             Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION))
-          else {
+          } else {
             None
           }
         }

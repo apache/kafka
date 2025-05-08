@@ -1191,26 +1191,26 @@ public class GroupCoordinatorService implements GroupCoordinator {
     public CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(AuthorizableRequestContext context, String groupId, AlterShareGroupOffsetsRequestData request) {
         if (!isActive.get() || metadataImage == null) {
             return CompletableFuture.completedFuture(
-                AlterShareGroupOffsetsRequest.getErrorAlterShareGroupResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
+                AlterShareGroupOffsetsRequest.from(Errors.COORDINATOR_NOT_AVAILABLE));
         }
         
         if (groupId == null) {
             return CompletableFuture.completedFuture(
-                AlterShareGroupOffsetsRequest.getErrorAlterShareGroupResponseData(Errors.GROUP_ID_NOT_FOUND));
+                AlterShareGroupOffsetsRequest.from(Errors.GROUP_ID_NOT_FOUND));
         }
 
         return runtime.scheduleWriteOperation(
-            "share-group-alter",
+            "share-group-offsets-alter",
             topicPartitionFor(groupId),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.alterShareGroupOffsets(groupId, request)
         ).thenCompose(result ->
             persisterInitialize(result.getValue(), result.getKey())
         ).exceptionally(exception -> handleOperationException(
-            "share-group-alter",
+            "share-group-offsets-alter",
             request,
             exception,
-            (error, message) -> AlterShareGroupOffsetsRequest.getErrorAlterShareGroupResponseData(error),
+            (error, message) -> AlterShareGroupOffsetsRequest.from(error),
             log
         ));
     }
