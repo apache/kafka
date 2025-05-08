@@ -178,24 +178,30 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private static final String EXTENSION_PREFIX = "extension_";
 
-    protected Map<String, Object> moduleOptions;
+    private Map<String, Object> moduleOptions;
 
-    protected JwtRetriever jwtRetriever;
+    private JwtRetriever jwtRetriever;
 
-    protected JwtValidator jwtValidator;
+    private JwtValidator jwtValidator;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        jwtRetriever = new DefaultJwtRetriever(configs, saslMechanism, moduleOptions);
+        Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+        JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, saslMechanism, moduleOptions);
+        JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism);
+        configure(moduleOptions, jwtRetriever, jwtValidator);
+    }
+
+    void configure(Map<String, Object> moduleOptions, JwtRetriever jwtRetriever, JwtValidator jwtValidator) {
+        this.moduleOptions = moduleOptions;
+        this.jwtRetriever = jwtRetriever;
+        this.jwtValidator = jwtValidator;
 
         try {
             this.jwtRetriever.init();
         } catch (IOException e) {
             throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtRetriever", e);
         }
-
-        jwtValidator = new DefaultJwtValidator(configs, saslMechanism);
 
         try {
             this.jwtValidator.init();

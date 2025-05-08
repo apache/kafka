@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
@@ -25,7 +24,6 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessToke
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileJwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
@@ -38,20 +36,17 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Calendar;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -74,8 +69,8 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         String accessToken = builder.build();
         JwtRetriever jwtRetriever = () -> accessToken;
         JwtValidator jwtValidator = createJwtValidator(configs);
-        OAuthBearerLoginCallbackHandler handler = new TestOAuthBearerLogicCallbackHandler(jwtRetriever, jwtValidator);
-        configureHandler(handler, configs);
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        handler.configure(Map.of(), jwtRetriever, jwtValidator);
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
@@ -103,8 +98,10 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         jaasConfig.put("extension_bar", 2);
         jaasConfig.put("EXTENSION_baz", "3");
 
+        JwtRetriever jwtRetriever = createJwtRetriever(configs, jaasConfig);
+        JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        configureHandler(handler, configs, jaasConfig);
+        handler.configure(jaasConfig, jwtRetriever, jwtValidator);
 
         try {
             SaslExtensionsCallback callback = new SaslExtensionsCallback();
@@ -132,8 +129,10 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         jaasConfig.put(CLIENT_SECRET_CONFIG, "a secret");
         jaasConfig.put(illegalKey, "this key isn't allowed per OAuthBearerClientInitialResponse.validateExtensions");
 
+        JwtRetriever jwtRetriever = createJwtRetriever(configs, jaasConfig);
+        JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        configureHandler(handler, configs, jaasConfig);
+        handler.configure(jaasConfig, jwtRetriever, jwtValidator);
 
         try {
             SaslExtensionsCallback callback = new SaslExtensionsCallback();
@@ -150,8 +149,8 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs();
         JwtRetriever jwtRetriever = () -> "test";
         JwtValidator jwtValidator = createJwtValidator(configs);
-        OAuthBearerLoginCallbackHandler handler = new TestOAuthBearerLogicCallbackHandler(jwtRetriever, jwtValidator);
-        configureHandler(handler, configs);
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        handler.configure(Map.of(), jwtRetriever, jwtValidator);
 
         try {
             Callback unsupportedCallback = new Callback() { };
@@ -176,8 +175,8 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
             throw new IOException("The token endpoint response access_token value must be non-null");
         };
         JwtValidator jwtValidator = createJwtValidator(configs);
-        OAuthBearerLoginCallbackHandler handler = new TestOAuthBearerLogicCallbackHandler(jwtRetriever, jwtValidator);
-        configureHandler(handler, configs);
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        handler.configure(Map.of(), jwtRetriever, jwtValidator);
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
@@ -205,8 +204,8 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs();
         JwtRetriever jwtRetriever = new FileJwtRetriever(accessTokenFile.toPath());
         JwtValidator jwtValidator = createJwtValidator(configs);
-        OAuthBearerLoginCallbackHandler handler = new TestOAuthBearerLogicCallbackHandler(jwtRetriever, jwtValidator);
-        configureHandler(handler, configs);
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        handler.configure(Map.of(), jwtRetriever, jwtValidator);
 
         OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
         try {
@@ -225,45 +224,12 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         assertThrowsWithMessage(IllegalStateException.class, () -> handler.handle(new Callback[] {}), "first call the configure method");
     }
 
-    @Test
-    public void testConfigureWithAccessTokenFile() throws Exception {
-        String expected = "{}";
-
-        File tmpDir = createTempDir("access-token");
-        File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", expected);
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
-
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
-        TestOAuthBearerLogicCallbackHandler handler = new TestOAuthBearerLogicCallbackHandler(configs);
-        configureHandler(handler, configs);
-
-        DefaultJwtRetriever defaultJwtRetriever = assertInstanceOf(DefaultJwtRetriever.class, handler.jwtRetriever);
-        assertInstanceOf(FileJwtRetriever.class, defaultJwtRetriever.delegate());
-    }
-
-    @Test
-    public void testConfigureWithAccessClientCredentials() {
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, "http://www.example.com");
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "http://www.example.com");
-        Map<String, Object> jaasConfigs = new HashMap<>();
-        jaasConfigs.put(CLIENT_ID_CONFIG, "an ID");
-        jaasConfigs.put(CLIENT_SECRET_CONFIG, "a secret");
-
-        DefaultJwtRetriever jwtRetriever = createJwtRetriever(configs, jaasConfigs);
-        JwtValidator jwtValidator = createJwtValidator(configs);
-        TestOAuthBearerLogicCallbackHandler handler = new TestOAuthBearerLogicCallbackHandler(jwtRetriever, jwtValidator);
-        configureHandler(handler, configs, jaasConfigs);
-
-        DefaultJwtRetriever defaultJwtRetriever = assertInstanceOf(DefaultJwtRetriever.class, handler.jwtRetriever);
-        assertInstanceOf(HttpJwtRetriever.class, defaultJwtRetriever.delegate());
-    }
-
     private void testInvalidAccessToken(String accessToken, String expectedMessageSubstring) throws Exception {
         Map<String, ?> configs = getSaslConfigs();
         JwtRetriever jwtRetriever = () -> accessToken;
         JwtValidator jwtValidator = createJwtValidator(configs);
-        OAuthBearerLoginCallbackHandler handler = new TestOAuthBearerLogicCallbackHandler(jwtRetriever, jwtValidator);
-        configureHandler(handler, configs);
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        handler.configure(Map.of(), jwtRetriever, jwtValidator);
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
@@ -290,33 +256,5 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
 
     private static DefaultJwtValidator createJwtValidator(Map<String, ?> configs) {
         return new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM);
-    }
-
-    private static class TestOAuthBearerLogicCallbackHandler extends OAuthBearerLoginCallbackHandler {
-
-        public TestOAuthBearerLogicCallbackHandler(Map<String, ?> configs) {
-            this(createJwtRetriever(configs), createJwtValidator(configs));
-        }
-
-        public TestOAuthBearerLogicCallbackHandler(JwtRetriever jwtRetriever, JwtValidator jwtValidator) {
-            this.moduleOptions = Map.of();
-            this.jwtRetriever = jwtRetriever;
-            this.jwtValidator = jwtValidator;
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-            try {
-                jwtRetriever.init();
-            } catch (Exception e) {
-                throw new KafkaException("The OAuth login callback encountered an error when initializing the VerificationKeyResolver", e);
-            }
-
-            try {
-                jwtValidator.init();
-            } catch (IOException e) {
-                throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtValidator", e);
-            }
-        }
     }
 }

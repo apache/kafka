@@ -39,6 +39,12 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 
+/**
+ * {@code DefaultJwtRetriever} instantiates and delegates {@link JwtRetriever} API calls to an embedded implementation
+ * based on configuration. If {@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL} is configured with a
+ * {@code file}-based URL, a {@link FileJwtRetriever} is created and the JWT is expected be contained in the file
+ * specified. Otherwise, it's assumed to be an HTTP/HTTPS-based URL, so an {@link HttpJwtRetriever} is created.
+ */
 public class DefaultJwtRetriever implements JwtRetriever {
 
     private final Map<String, ?> configs;
@@ -117,7 +123,7 @@ public class DefaultJwtRetriever implements JwtRetriever {
             return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
     }
 
-    public JwtRetriever delegate() {
+    JwtRetriever delegate() {
         return delegate;
     }
 }

@@ -29,6 +29,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -36,7 +37,11 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class DefaultJwtRetrieverTest extends OAuthBearerTest {
 
@@ -99,6 +104,42 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
         try (JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, Collections.emptyMap())) {
             assertThrowsWithMessage(ConfigException.class, jwtRetriever::init, ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
         }
+    }
+
+    @Test
+    public void testConfigureWithAccessTokenFile() throws Exception {
+        String expected = "{}";
+
+        File tmpDir = createTempDir("access-token");
+        File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", expected);
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
+
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
+
+        DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever(
+            configs,
+            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+            Map.of()
+        );
+        assertDoesNotThrow(jwtRetriever::init);
+        assertInstanceOf(FileJwtRetriever.class, jwtRetriever.delegate());
+    }
+
+    @Test
+    public void testConfigureWithAccessClientCredentials() {
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, "http://www.example.com");
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "http://www.example.com");
+        Map<String, Object> jaasConfigs = new HashMap<>();
+        jaasConfigs.put(CLIENT_ID_CONFIG, "an ID");
+        jaasConfigs.put(CLIENT_SECRET_CONFIG, "a secret");
+
+        DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever(
+            configs,
+            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+            jaasConfigs
+        );
+        assertDoesNotThrow(jwtRetriever::init);
+        assertInstanceOf(HttpJwtRetriever.class, jwtRetriever.delegate());
     }
 
     @ParameterizedTest

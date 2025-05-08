@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
-import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -58,8 +57,8 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, allAudiences);
         CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
         JwtValidator jwtValidator = createJwtValidator(configs, verificationKeyResolver);
-        OAuthBearerValidatorCallbackHandler handler = new TestOAuthBearerValidatorCallbackHandler(verificationKeyResolver, jwtValidator);
-        configureHandler(handler, configs);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        handler.configure(verificationKeyResolver, jwtValidator);
 
         try {
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
@@ -89,6 +88,9 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
     @Test
     public void testConfigureThrowsExceptionOnJwtValidatorInit() throws IOException {
+        AccessTokenBuilder builder = new AccessTokenBuilder()
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
+        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
         JwtValidator jwtValidator = new JwtValidator() {
             @Override
             public void init() throws IOException {
@@ -101,21 +103,20 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
             }
         };
 
-        AccessTokenBuilder builder = new AccessTokenBuilder()
-            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
-        Map<String, ?> configs = getSaslConfigs();
-        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
-        OAuthBearerValidatorCallbackHandler handler = new TestOAuthBearerValidatorCallbackHandler(verificationKeyResolver, jwtValidator);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
 
         assertThrowsWithMessage(
             KafkaException.class,
-            () -> configureHandler(handler, configs),
+            () -> handler.configure(verificationKeyResolver, jwtValidator),
             "encountered an error when initializing"
         );
     }
 
     @Test
     public void testConfigureThrowsExceptionOnJwtValidatorClose() throws IOException {
+        AccessTokenBuilder builder = new AccessTokenBuilder()
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
+        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
         JwtValidator jwtValidator = new JwtValidator() {
             @Override
             public void close() throws IOException {
@@ -128,12 +129,8 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
             }
         };
 
-        AccessTokenBuilder builder = new AccessTokenBuilder()
-            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
-        Map<String, ?> configs = getSaslConfigs();
-        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
-        OAuthBearerValidatorCallbackHandler handler = new TestOAuthBearerValidatorCallbackHandler(verificationKeyResolver, jwtValidator);
-        configureHandler(handler, configs);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        handler.configure(verificationKeyResolver, jwtValidator);
 
         assertDoesNotThrow(handler::close);
     }
@@ -144,8 +141,8 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs();
         CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
         JwtValidator jwtValidator = createJwtValidator(configs, verificationKeyResolver);
-        OAuthBearerValidatorCallbackHandler handler = new TestOAuthBearerValidatorCallbackHandler(verificationKeyResolver, jwtValidator);
-        configureHandler(handler, configs);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        handler.configure(verificationKeyResolver, jwtValidator);
 
         try {
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
@@ -166,29 +163,5 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
     private CloseableVerificationKeyResolver createVerificationKeyResolver(AccessTokenBuilder builder) {
         return (jws, nestingContext) -> builder.jwk().getPublicKey();
-    }
-
-    private static class TestOAuthBearerValidatorCallbackHandler extends OAuthBearerValidatorCallbackHandler {
-
-        public TestOAuthBearerValidatorCallbackHandler(CloseableVerificationKeyResolver verificationKeyResolver,
-                                                       JwtValidator jwtValidator) {
-            this.verificationKeyResolver = verificationKeyResolver;
-            this.jwtValidator = jwtValidator;
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-            try {
-                verificationKeyResolver.init();
-            } catch (Exception e) {
-                throw new KafkaException("The OAuth validator callback encountered an error when initializing the VerificationKeyResolver", e);
-            }
-
-            try {
-                jwtValidator.init();
-            } catch (IOException e) {
-                throw new KafkaException("The OAuth validator callback encountered an error when initializing the JwtValidator", e);
-            }
-        }
     }
 }

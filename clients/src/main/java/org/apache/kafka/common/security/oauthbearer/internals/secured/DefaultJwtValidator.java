@@ -100,7 +100,7 @@ public class DefaultJwtValidator implements JwtValidator {
         Utils.closeQuietly(delegate, "delegate");
     }
 
-    public JwtValidator delegate() {
+    JwtValidator delegate() {
         return delegate;
     }
 }

@@ -118,13 +118,14 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> VERIFICATION_KEY_RESOLVER_CACHE = new HashMap<>();
 
-    protected CloseableVerificationKeyResolver verificationKeyResolver;
+    private CloseableVerificationKeyResolver verificationKeyResolver;
 
-    protected JwtValidator jwtValidator;
+    private JwtValidator jwtValidator;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+        CloseableVerificationKeyResolver verificationKeyResolver;
 
         // Here's the logic which keeps our VerificationKeyResolvers down to a single instance.
         synchronized (VERIFICATION_KEY_RESOLVER_CACHE) {
@@ -133,13 +134,19 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
                 new RefCountingVerificationKeyResolver(VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions)));
         }
 
+        JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism, verificationKeyResolver);
+        configure(verificationKeyResolver, jwtValidator);
+    }
+
+    void configure(CloseableVerificationKeyResolver verificationKeyResolver, JwtValidator jwtValidator) {
+        this.verificationKeyResolver = verificationKeyResolver;
+        this.jwtValidator = jwtValidator;
+
         try {
             verificationKeyResolver.init();
         } catch (Exception e) {
             throw new KafkaException("The OAuth validator callback encountered an error when initializing the VerificationKeyResolver", e);
         }
-
-        jwtValidator = new DefaultJwtValidator(configs, saslMechanism, verificationKeyResolver);
 
         try {
             jwtValidator.init();
