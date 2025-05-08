@@ -35,11 +35,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -117,10 +114,7 @@ public class ConsumerNetworkThreadTest {
     @ParameterizedTest
     @ValueSource(longs = {ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS - 1, ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS + 1})
     public void testConsumerNetworkThreadPollTimeComputations(long exampleTime) {
-        List<Optional<? extends RequestManager>> list = new ArrayList<>();
-        list.add(Optional.of(coordinatorRequestManager));
-        list.add(Optional.of(heartbeatRequestManager));
-
+        List<RequestManager> list = List.of(coordinatorRequestManager, heartbeatRequestManager);
         when(requestManagers.entries()).thenReturn(list);
 
         NetworkClientDelegate.PollResult pollResult = new NetworkClientDelegate.PollResult(exampleTime);
@@ -158,16 +152,13 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testRequestsTransferFromManagersToClientOnThreadRun() {
-        List<Optional<? extends RequestManager>> list = new ArrayList<>();
-        list.add(Optional.of(coordinatorRequestManager));
-        list.add(Optional.of(heartbeatRequestManager));
-        list.add(Optional.of(offsetsRequestManager));
+        List<RequestManager> list = List.of(coordinatorRequestManager, heartbeatRequestManager, offsetsRequestManager);
 
         when(requestManagers.entries()).thenReturn(list);
         when(coordinatorRequestManager.poll(anyLong())).thenReturn(mock(NetworkClientDelegate.PollResult.class));
         consumerNetworkThread.runOnce();
-        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).poll(anyLong())));
-        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).maximumTimeToWait(anyLong())));
+        requestManagers.entries().forEach(rm -> verify(rm).poll(anyLong()));
+        requestManagers.entries().forEach(rm -> verify(rm).maximumTimeToWait(anyLong()));
         verify(networkClientDelegate).addAll(any(NetworkClientDelegate.PollResult.class));
         verify(networkClientDelegate).poll(anyLong(), anyLong());
     }
@@ -178,7 +169,7 @@ public class ConsumerNetworkThreadTest {
         // Initial value before runOnce has been called
         assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
 
-        when(requestManagers.entries()).thenReturn(Collections.singletonList(Optional.of(heartbeatRequestManager)));
+        when(requestManagers.entries()).thenReturn(List.of(heartbeatRequestManager));
         when(heartbeatRequestManager.maximumTimeToWait(time.milliseconds())).thenReturn((long) defaultHeartbeatIntervalMs);
 
         consumerNetworkThread.runOnce();

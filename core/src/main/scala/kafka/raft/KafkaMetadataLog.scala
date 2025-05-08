@@ -26,9 +26,11 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, MetadataLogConfig, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
+import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, MetadataLogConfig, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
+import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
@@ -139,14 +141,14 @@ final class KafkaMetadataLog private (
     (log.endOffsetForEpoch(epoch).toScala, earliestSnapshotId().toScala) match {
       case (Some(offsetAndEpoch), Some(snapshotId)) if (
         offsetAndEpoch.offset == snapshotId.offset &&
-        offsetAndEpoch.leaderEpoch == epoch) =>
+        offsetAndEpoch.epoch() == epoch) =>
 
         // The epoch is smaller than the smallest epoch on the log. Override the diverging
         // epoch to the oldest snapshot which should be the snapshot at the log start offset
         new OffsetAndEpoch(snapshotId.offset, snapshotId.epoch)
 
       case (Some(offsetAndEpoch), _) =>
-        new OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.leaderEpoch)
+        new OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.epoch())
 
       case (None, _) =>
         new OffsetAndEpoch(endOffset.offset, lastFetchedEpoch)
@@ -417,7 +419,7 @@ final class KafkaMetadataLog private (
    */
   private def readSnapshotTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
     readSnapshot(snapshotId).toScala.map { reader =>
-      Snapshots.lastContainedLogTimestamp(reader)
+      Snapshots.lastContainedLogTimestamp(reader, new LogContext(logIdent))
     }
   }
 
