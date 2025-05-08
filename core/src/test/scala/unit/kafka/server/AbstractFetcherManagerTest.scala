@@ -304,15 +304,15 @@ class AbstractFetcherManagerTest {
 
     override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
-    override def fetch(fetchRequest: FetchRequest.Builder): java.util.Map[TopicPartition, FetchResponseData.PartitionData] = java.util.Collections.emptyMap()
+    override def fetch(fetchRequest: FetchRequest.Builder): java.util.Map[TopicPartition, FetchResponseData.PartitionData] = java.util.Map.of()
 
     override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
 
     override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
 
-    override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = java.util.Collections.emptyMap()
+    override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = java.util.Map.of()
 
-    override def buildFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[java.util.Optional[ReplicaFetch]] = new ResultWithPartitions(java.util.Optional.empty[ReplicaFetch](), java.util.Collections.emptySet())
+    override def buildFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[java.util.Optional[ReplicaFetch]] = new ResultWithPartitions(java.util.Optional.empty[ReplicaFetch](), java.util.Set.of())
 
     override val isTruncationOnFetchSupported: Boolean = false
 

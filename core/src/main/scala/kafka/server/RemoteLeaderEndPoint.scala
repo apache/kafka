@@ -86,7 +86,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       if (fetchResponse.error == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
         throw Errors.forCode(fetchResponse.error().code()).exception()
       } else {
-        java.util.Collections.emptyMap[TopicPartition, FetchResponseData.PartitionData]()
+        java.util.Map.of[TopicPartition, FetchResponseData.PartitionData]()
       }
     } else {
       fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion())
@@ -132,7 +132,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
     val tmpPartitions = partitions.asScala.toMap
     if (partitions.isEmpty) {
       debug("Skipping leaderEpoch request since all partitions do not have an epoch")
-      return java.util.Collections.emptyMap()
+      return java.util.Map.of()
     }
 
     val topics = new OffsetForLeaderTopicCollection(partitions.size)
