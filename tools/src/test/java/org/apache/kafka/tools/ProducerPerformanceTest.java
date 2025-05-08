@@ -160,9 +160,9 @@ public class ProducerPerformanceTest {
 
     }
 
-    private void compareList(List<byte[]> payloadByteList, String[] payloadByteListFromSplit){
+    private void compareList(List<byte[]> payloadByteList, String[] payloadByteListFromSplit) {
         assertEquals(payloadByteListFromSplit.length, payloadByteList.size());
-        for(int i=0; i<payloadByteListFromSplit.length; i++){
+        for (int i = 0; i < payloadByteListFromSplit.length; i++) {
             assertEquals(payloadByteListFromSplit[i], new String(payloadByteList.get(i)));
         }
     }
