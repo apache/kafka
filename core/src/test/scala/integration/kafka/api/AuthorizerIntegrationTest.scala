@@ -17,7 +17,7 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.{ExecutionException, Semaphore}
 import java.util.regex.Pattern
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Comparator, Optional, Properties}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ListGroupsOptions, NewTopic}
@@ -37,11 +37,10 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteShareGroupOffsetsRequestData, DeleteShareGroupStateRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeShareGroupOffsetsRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, InitializeShareGroupStateRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, ProduceRequestData, ReadShareGroupStateRequestData, ReadShareGroupStateSummaryRequestData, ShareAcknowledgeRequestData, ShareFetchRequestData, ShareGroupDescribeRequestData, ShareGroupHeartbeatRequestData, SyncGroupRequestData, WriteShareGroupStateRequestData, WriteTxnMarkersRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteShareGroupOffsetsRequestData, DeleteShareGroupStateRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeShareGroupOffsetsRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, InitializeShareGroupStateRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, OffsetFetchResponseData, ProduceRequestData, ReadShareGroupStateRequestData, ReadShareGroupStateSummaryRequestData, ShareAcknowledgeRequestData, ShareFetchRequestData, ShareGroupDescribeRequestData, ShareGroupHeartbeatRequestData, SyncGroupRequestData, WriteShareGroupStateRequestData, WriteTxnMarkersRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
-import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
@@ -123,7 +122,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     }),
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => Errors.forCode(
       resp.data.topics().get(0).partitions().get(0).errorCode)),
-    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.groupLevelError(group)),
+    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => Errors.forCode(resp.group(group).errorCode())),
     ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => {
       Errors.forCode(resp.data.coordinators.asScala.find(g => group == g.key).head.errorCode)
     }),
@@ -1609,15 +1608,20 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // without describe permission on the topic, we shouldn't be able to fetch offsets
     val offsetFetchRequest = createOffsetFetchRequestAllPartitions
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
-    assertTrue(offsetFetchResponse.partitionDataMap(group).isEmpty)
+    assertEquals(Errors.NONE, Errors.forCode(offsetFetchResponse.group(group).errorCode()))
+    assertTrue(offsetFetchResponse.group(group).topics.isEmpty)
 
     // now add describe permission on the topic and verify that the offset can be fetched
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResource)
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
-    assertTrue(offsetFetchResponse.partitionDataMap(group).containsKey(tp))
-    assertEquals(offset, offsetFetchResponse.partitionDataMap(group).get(tp).offset)
+    assertEquals(Errors.NONE, Errors.forCode(offsetFetchResponse.group(group).errorCode()))
+    assertEquals(
+      offset,
+      offsetFetchResponse.group(group).topics.asScala
+        .find(_.name == tp.topic)
+        .flatMap(_.partitions.asScala.find(_.partitionIndex == tp.partition).map(_.committedOffset))
+        .getOrElse(-1L)
+    )
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -1652,21 +1656,33 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     createTopicWithBrokerPrincipal(topics(0))
     createTopicWithBrokerPrincipal(topics(1), numPartitions = 2)
     createTopicWithBrokerPrincipal(topics(2), numPartitions = 3)
-    groupResources.foreach(r => {
+    groupResources.foreach { r =>
       addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), r)
-    })
-    topicResources.foreach(t => {
+    }
+    topicResources.foreach { t =>
       addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), t)
-    })
+    }
 
     val offset = 15L
     val leaderEpoch: Optional[Integer] = Optional.of(1)
     val metadata = "metadata"
 
+    def assertResponse(
+      expected: OffsetFetchResponseData.OffsetFetchResponseGroup,
+      actual: OffsetFetchResponseData.OffsetFetchResponseGroup
+    ): Unit = {
+      actual.topics.sort((t1, t2) => t1.name.compareTo(t2.name))
+      actual.topics.asScala.foreach { topic =>
+        topic.partitions.sort(Comparator.comparingInt[OffsetFetchResponseData.OffsetFetchResponsePartitions](_.partitionIndex))
+      }
+
+      assertEquals(expected, actual)
+    }
+
     def commitOffsets(tpList: util.List[TopicPartition]): Unit = {
       val consumer = createConsumer()
       consumer.assign(tpList)
-      val offsets = tpList.asScala.map{
+      val offsets = tpList.asScala.map {
         tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
       }.toMap.asJava
       consumer.commitSync(offsets)
@@ -1682,98 +1698,298 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
     removeAllClientAcls()
 
-    def verifyPartitionData(partitionData: OffsetFetchResponse.PartitionData): Unit = {
-      assertTrue(!partitionData.hasError)
-      assertEquals(offset, partitionData.offset)
-      assertEquals(metadata, partitionData.metadata)
-      assertEquals(leaderEpoch.get(), partitionData.leaderEpoch.get())
-    }
-
-    def verifyResponse(groupLevelResponse: Errors,
-                       partitionData: util.Map[TopicPartition, PartitionData],
-                       topicList: util.List[TopicPartition]): Unit = {
-      assertEquals(Errors.NONE, groupLevelResponse)
-      assertTrue(partitionData.size() == topicList.size())
-      topicList.forEach(t => verifyPartitionData(partitionData.get(t)))
-    }
-
     // test handling partial errors, where one group is fully authorized, some groups don't have
     // the right topic authorizations, and some groups have no authorization
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResources(0))
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResources(1))
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResources(3))
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResources(0))
+
     val offsetFetchRequest = createOffsetFetchRequest(groupToPartitionMap)
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    offsetFetchResponse.data().groups().forEach(g =>
-      g.groupId() match {
+
+    offsetFetchResponse.data.groups.forEach { g =>
+      g.groupId match {
         case "group1" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(0)), offsetFetchResponse
-            .partitionDataMap(groups(0)), topic1List)
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setTopics(List(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(0))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava)
+              ).asJava),
+            offsetFetchResponse.group(g.groupId)
+          )
+
         case "group2" =>
-          assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groups(1)))
-          val group2Response = offsetFetchResponse.partitionDataMap(groups(1))
-          assertTrue(group2Response.size() == 3)
-          assertTrue(group2Response.keySet().containsAll(topic1And2List))
-          verifyPartitionData(group2Response.get(topic1And2List.get(0)))
-          assertTrue(group2Response.get(topic1And2List.get(1)).hasError)
-          assertTrue(group2Response.get(topic1And2List.get(2)).hasError)
-          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group2Response.get(topic1And2List.get(1)))
-          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group2Response.get(topic1And2List.get(2)))
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setTopics(List(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(0))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava),
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(1))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                      .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
+                      .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                      .setMetadata(OffsetFetchResponse.NO_METADATA),
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(1)
+                      .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                      .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
+                      .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                      .setMetadata(OffsetFetchResponse.NO_METADATA)
+                  ).asJava)
+              ).asJava),
+            offsetFetchResponse.group(g.groupId)
+          )
+
         case "group3" =>
-          assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, offsetFetchResponse.groupLevelError(groups(2)))
-          assertTrue(offsetFetchResponse.partitionDataMap(groups(2)).size() == 0)
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code),
+            offsetFetchResponse.group(g.groupId)
+          )
+
         case "group4" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(3)), offsetFetchResponse
-            .partitionDataMap(groups(3)), topic1List)
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setTopics(List(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(0))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava)
+              ).asJava),
+            offsetFetchResponse.group(g.groupId)
+          )
+
         case "group5" =>
-          assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, offsetFetchResponse.groupLevelError(groups(4)))
-          assertTrue(offsetFetchResponse.partitionDataMap(groups(4)).size() == 0)
-      })
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code),
+            offsetFetchResponse.group(g.groupId)
+          )
+      }
+    }
 
     // test that after adding some of the ACLs, we get no group level authorization errors, but
     // still get topic level authorization errors for topics we don't have ACLs for
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResources(2))
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResources(4))
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResources(1))
+
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    offsetFetchResponse.data().groups().forEach(g =>
-      g.groupId() match {
+
+    offsetFetchResponse.data.groups.forEach { g =>
+      g.groupId match {
         case "group1" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(0)), offsetFetchResponse
-            .partitionDataMap(groups(0)), topic1List)
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setTopics(List(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(0))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava)
+              ).asJava),
+            offsetFetchResponse.group(g.groupId)
+          )
+
         case "group2" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(1)), offsetFetchResponse
-            .partitionDataMap(groups(1)), topic1And2List)
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setTopics(List(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(0))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava),
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(1))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata),
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(1)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava)
+              ).asJava),
+            offsetFetchResponse.group(g.groupId)
+          )
+
         case "group3" =>
-          assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groups(2)))
-          val group3Response = offsetFetchResponse.partitionDataMap(groups(2))
-          assertTrue(group3Response.size() == 6)
-          assertTrue(group3Response.keySet().containsAll(allTopicsList))
-          verifyPartitionData(group3Response.get(allTopicsList.get(0)))
-          verifyPartitionData(group3Response.get(allTopicsList.get(1)))
-          verifyPartitionData(group3Response.get(allTopicsList.get(2)))
-          assertTrue(group3Response.get(allTopicsList.get(3)).hasError)
-          assertTrue(group3Response.get(allTopicsList.get(4)).hasError)
-          assertTrue(group3Response.get(allTopicsList.get(5)).hasError)
-          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group3Response.get(allTopicsList.get(3)))
-          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group3Response.get(allTopicsList.get(4)))
-          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group3Response.get(allTopicsList.get(5)))
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setTopics(List(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(0))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava),
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(1))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata),
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(1)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava),
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(2))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                      .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
+                      .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                      .setMetadata(OffsetFetchResponse.NO_METADATA),
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(1)
+                      .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                      .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
+                      .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                      .setMetadata(OffsetFetchResponse.NO_METADATA),
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(2)
+                      .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                      .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
+                      .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                      .setMetadata(OffsetFetchResponse.NO_METADATA)
+                  ).asJava)
+              ).asJava),
+            offsetFetchResponse.group(g.groupId)
+          )
+
         case "group4" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(3)), offsetFetchResponse
-            .partitionDataMap(groups(3)), topic1And2List)
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setTopics(List(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(0))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava),
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(1))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata),
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(1)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava)
+              ).asJava),
+            offsetFetchResponse.group(g.groupId)
+          )
+
         case "group5" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(4)), offsetFetchResponse
-            .partitionDataMap(groups(4)), topic1And2List)
-      })
+          assertResponse(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+              .setGroupId(g.groupId)
+              .setTopics(List(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(0))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava),
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                  .setName(topics(1))
+                  .setPartitions(List(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(0)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata),
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                      .setPartitionIndex(1)
+                      .setCommittedOffset(offset)
+                      .setCommittedLeaderEpoch(leaderEpoch.get)
+                      .setMetadata(metadata)
+                  ).asJava)
+              ).asJava),
+            offsetFetchResponse.group(g.groupId)
+          )
+      }
+    }
 
     // test that after adding all necessary ACLs, we get no partition level or group level errors
     // from the offsetFetch response
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResources(2))
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    offsetFetchResponse.data.groups.asScala.map(_.groupId).foreach( groupId =>
-      verifyResponse(offsetFetchResponse.groupLevelError(groupId), offsetFetchResponse.partitionDataMap(groupId), partitionMap(groupId))
-    )
+    offsetFetchResponse.data.groups.forEach { group =>
+      assertEquals(Errors.NONE.code, group.errorCode)
+      group.topics.forEach { topic =>
+        topic.partitions.forEach { partition =>
+          assertEquals(Errors.NONE.code, partition.errorCode)
+        }
+      }
+    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)

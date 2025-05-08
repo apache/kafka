@@ -368,7 +368,7 @@ public final class AssignmentsManager {
             previousGlobalFailures++;
             log.error("handleResponse: {} assignments failed; global error: {}. Retrying.",
                 sent.size(), globalResponseError.get());
-            sent.entrySet().forEach(e -> ready.putIfAbsent(e.getKey(), e.getValue()));
+            sent.forEach(ready::putIfAbsent);
             return;
         }
         previousGlobalFailures = 0;

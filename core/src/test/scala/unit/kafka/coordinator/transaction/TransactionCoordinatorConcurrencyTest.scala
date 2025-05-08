@@ -28,8 +28,8 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -37,7 +37,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch, 
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.transaction.ProducerIdManager
+import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionState}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.storage.log.FetchIsolation
@@ -468,7 +468,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
     txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TransactionVersion.TV_2))
 
-    txnMetadata.state = PrepareCommit
+    txnMetadata.state = TransactionState.PREPARE_COMMIT
     txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TransactionVersion.TV_2))
 
     prepareTxnLog(partitionId)
@@ -513,7 +513,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       producerEpoch = (Short.MaxValue - 1).toShort,
       lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
       txnTimeoutMs = 60000,
-      state = Empty,
+      state = TransactionState.EMPTY,
       topicPartitions = collection.mutable.Set.empty[TopicPartition],
       txnLastUpdateTimestamp = time.milliseconds(),
       clientTransactionVersion = TransactionVersion.TV_0)
@@ -544,7 +544,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     override def awaitAndVerify(txn: Transaction): Unit = {
       val initPidResult = result.getOrElse(throw new IllegalStateException("InitProducerId has not completed"))
       assertEquals(Errors.NONE, initPidResult.error)
-      verifyTransaction(txn, Empty)
+      verifyTransaction(txn, TransactionState.EMPTY)
     }
   }
 
@@ -564,7 +564,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     override def awaitAndVerify(txn: Transaction): Unit = {
       val error = result.getOrElse(throw new IllegalStateException("AddPartitionsToTransaction has not completed"))
       assertEquals(Errors.NONE, error)
-      verifyTransaction(txn, Ongoing)
+      verifyTransaction(txn, TransactionState.ONGOING)
     }
   }
 
@@ -585,7 +585,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       if (!txn.ended) {
         txn.ended = true
         assertEquals(Errors.NONE, error)
-        val expectedState = if (transactionResult(txn) == TransactionResult.COMMIT) CompleteCommit else CompleteAbort
+        val expectedState = if (transactionResult(txn) == TransactionResult.COMMIT) TransactionState.COMPLETE_COMMIT else TransactionState.COMPLETE_ABORT
         verifyTransaction(txn, expectedState)
       } else
         assertEquals(Errors.INVALID_TXN_STATE, error)
@@ -606,7 +606,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     override def await(): Unit = {
       allTransactions.foreach { txn =>
         if (txnStateManager.partitionFor(txn.transactionalId) == txnTopicPartitionId) {
-          verifyTransaction(txn, CompleteCommit)
+          verifyTransaction(txn, TransactionState.COMPLETE_COMMIT)
         }
       }
     }
