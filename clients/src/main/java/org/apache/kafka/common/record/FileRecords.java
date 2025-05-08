@@ -26,6 +26,7 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
@@ -121,10 +122,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public FileRecords slice(int position, int size) throws IOException {
+    public FileRecords slice(int position, int size) {
         int availableBytes = availableBytes(position, size);
         int startPosition = this.start + position;
-        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
+        try {
+            return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /**
