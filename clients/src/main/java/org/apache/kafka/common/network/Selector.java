@@ -359,6 +359,8 @@ public class Selector implements Selectable, AutoCloseable {
      */
     @Override
     public void wakeup() {
+        if (log.isDebugEnabled())
+            log.debug("Selector wake up");
         this.nioSelector.wakeup();
     }
 

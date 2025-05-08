@@ -150,10 +150,17 @@ public class NetworkClientDelegate implements AutoCloseable {
         if (!unsentRequests.isEmpty()) {
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
-        this.client.poll(pollTimeoutMs, currentTimeMs);
+
+        if (client.hasInFlightRequests())
+            pollTimeoutMs = 0;
+
+        List<ClientResponse> clientResponses = this.client.poll(pollTimeoutMs, currentTimeMs);
         maybePropagateMetadataError();
         checkDisconnects(currentTimeMs);
         asyncConsumerMetrics.recordUnsentRequestsQueueSize(unsentRequests.size(), currentTimeMs);
+
+        if (clientResponses != null && !clientResponses.isEmpty())
+            client.wakeup();
     }
 
     private void maybePropagateMetadataError() {
@@ -283,11 +290,17 @@ public class NetworkClientDelegate implements AutoCloseable {
     public void addAll(final List<UnsentRequest> requests) {
         Objects.requireNonNull(requests);
         if (!requests.isEmpty()) {
-            requests.forEach(this::add);
+            requests.forEach(this::addInternal);
+            client.wakeup();
         }
     }
 
     public void add(final UnsentRequest r) {
+        addInternal(r);
+        client.wakeup();
+    }
+
+    private void addInternal(final UnsentRequest r) {
         Objects.requireNonNull(r);
         r.setTimer(this.time, this.requestTimeoutMs);
         r.setEnqueueTimeMs(time.milliseconds());
