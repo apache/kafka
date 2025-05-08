@@ -53,6 +53,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -4603,22 +4604,23 @@ class KafkaRaftClientTest {
         // test that the return value of the method is capped to QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG + jitter
         int jitterMs = 50;
         // any bound >= (1000 + jitter)/(RETRY_BACKOFF_BASE_MS)=21 will result in returning this cap
-        int firstNextInt = new Random().nextInt(21, firstNextIntMaxBound);
-        Mockito.when(mockedRandom.nextInt(1, firstNextIntMaxBound)).thenReturn(firstNextInt);
-        Mockito.when(mockedRandom.nextInt(RETRY_BACKOFF_BASE_MS)).thenReturn(jitterMs);
+        for (int firstNextInt : Arrays.asList(21, 1000, firstNextIntMaxBound)) {
+            Mockito.when(mockedRandom.nextInt(1, firstNextIntMaxBound)).thenReturn(firstNextInt);
+            Mockito.when(mockedRandom.nextInt(RETRY_BACKOFF_BASE_MS)).thenReturn(jitterMs);
 
-        int returnedBackoffMs = binaryExponentialElectionBackoffMs(electionBackoffMaxMs, 11, mockedRandom);
+            int returnedBackoffMs = binaryExponentialElectionBackoffMs(electionBackoffMaxMs, 11, mockedRandom);
 
-        // verify nextInt was called on both expected bounds
-        ArgumentCaptor<Integer> nextIntCaptor = ArgumentCaptor.forClass(Integer.class);
-        Mockito.verify(mockedRandom).nextInt(Mockito.eq(1), nextIntCaptor.capture());
-        Mockito.verify(mockedRandom).nextInt(nextIntCaptor.capture());
-        List<Integer> allCapturedBounds = nextIntCaptor.getAllValues();
-        assertEquals(firstNextIntMaxBound, allCapturedBounds.get(0));
-        assertEquals(RETRY_BACKOFF_BASE_MS, allCapturedBounds.get(1));
+            // verify nextInt was called on both expected bounds
+            ArgumentCaptor<Integer> nextIntCaptor = ArgumentCaptor.forClass(Integer.class);
+            Mockito.verify(mockedRandom).nextInt(Mockito.eq(1), nextIntCaptor.capture());
+            Mockito.verify(mockedRandom).nextInt(nextIntCaptor.capture());
+            List<Integer> allCapturedBounds = nextIntCaptor.getAllValues();
+            assertEquals(firstNextIntMaxBound, allCapturedBounds.get(0));
+            assertEquals(RETRY_BACKOFF_BASE_MS, allCapturedBounds.get(1));
 
-        // finally verify the backoff returned is capped to electionBackoffMaxMs + jitterMs
-        assertEquals(electionBackoffMaxMs + jitterMs, returnedBackoffMs);
+            // finally verify the backoff returned is capped to electionBackoffMaxMs + jitterMs
+            assertEquals(electionBackoffMaxMs + jitterMs, returnedBackoffMs);
+        }
     }
 
     private static KafkaMetric getMetric(final Metrics metrics, final String name) {
