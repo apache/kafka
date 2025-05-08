@@ -91,7 +91,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     closeSasl()
   }
 
-  @ParameterizedTest(name="{displayName}.quorum=kraft.isIdempotenceEnabled={0}")
+  @ParameterizedTest(name="{displayName}.isIdempotenceEnabled={0}")
   @ValueSource(booleans = Array(true, false))
   def testProducerWithAuthenticationFailure(isIdempotenceEnabled: Boolean): Unit = {
     val prop = new Properties()

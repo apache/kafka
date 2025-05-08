@@ -55,7 +55,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 
   @ParameterizedTest
   @MethodSource(value = Array("parameters"))
-  def shouldReceiveOperationNotAttemptedWhenOtherPartitionHasError(quorum: String, version: Short): Unit = {
+  def shouldReceiveOperationNotAttemptedWhenOtherPartitionHasError(version: Short): Unit = {
     // The basic idea is that we have one unknown topic and one created topic. We should get the 'UNKNOWN_TOPIC_OR_PARTITION'
     // error for the unknown topic and the 'OPERATION_NOT_ATTEMPTED' error for the known and authorized topic.
     val nonExistentTopic = new TopicPartition("unknownTopic", 0)
