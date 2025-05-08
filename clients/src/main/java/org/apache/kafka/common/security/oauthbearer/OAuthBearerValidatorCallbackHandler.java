@@ -118,16 +118,13 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> VERIFICATION_KEY_RESOLVER_CACHE = new HashMap<>();
 
-    private CloseableVerificationKeyResolver verificationKeyResolver;
+    protected CloseableVerificationKeyResolver verificationKeyResolver;
 
-    private JwtValidator jwtValidator;
-
-    private boolean isInitialized = false;
+    protected JwtValidator jwtValidator;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        CloseableVerificationKeyResolver verificationKeyResolver;
 
         // Here's the logic which keeps our VerificationKeyResolvers down to a single instance.
         synchronized (VERIFICATION_KEY_RESOLVER_CACHE) {
@@ -136,27 +133,19 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
                 new RefCountingVerificationKeyResolver(VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions)));
         }
 
-        JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism, verificationKeyResolver);
-        init(verificationKeyResolver, jwtValidator);
-    }
-
-    public void init(CloseableVerificationKeyResolver verificationKeyResolver, JwtValidator jwtValidator) {
-        this.verificationKeyResolver = verificationKeyResolver;
-        this.jwtValidator = jwtValidator;
-
-        try {
-            this.jwtValidator.init();
-        } catch (IOException e) {
-            throw new KafkaException("The OAuth validator callback encountered an error when initializing the JwtValidator", e);
-        }
-
         try {
             verificationKeyResolver.init();
         } catch (Exception e) {
             throw new KafkaException("The OAuth validator callback encountered an error when initializing the VerificationKeyResolver", e);
         }
 
-        isInitialized = true;
+        jwtValidator = new DefaultJwtValidator(configs, saslMechanism, verificationKeyResolver);
+
+        try {
+            jwtValidator.init();
+        } catch (IOException e) {
+            throw new KafkaException("The OAuth validator callback encountered an error when initializing the JwtValidator", e);
+        }
     }
 
     @Override
@@ -167,7 +156,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     @Override
     public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-        checkInitialized();
+        checkConfigured();
 
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerValidatorCallback) {
@@ -181,7 +170,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     private void handleValidatorCallback(OAuthBearerValidatorCallback callback) {
-        checkInitialized();
+        checkConfigured();
 
         OAuthBearerToken token;
 
@@ -195,14 +184,14 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     private void handleExtensionsValidatorCallback(OAuthBearerExtensionsValidatorCallback extensionsValidatorCallback) {
-        checkInitialized();
+        checkConfigured();
 
         extensionsValidatorCallback.inputExtensions().map().forEach((extensionName, v) -> extensionsValidatorCallback.valid(extensionName));
     }
 
-    private void checkInitialized() {
-        if (!isInitialized)
-            throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
+    private void checkConfigured() {
+        if (verificationKeyResolver == null || jwtValidator == null)
+            throw new IllegalStateException(String.format("To use %s, first call the configure method", getClass().getSimpleName()));
     }
 
     /**

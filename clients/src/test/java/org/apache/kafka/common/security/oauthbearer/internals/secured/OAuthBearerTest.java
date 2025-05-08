@@ -80,9 +80,13 @@ public abstract class OAuthBearerTest {
                 expectedSubstring));
     }
 
+    protected void configureHandler(AuthenticateCallbackHandler handler, Map<String, ?> configs) {
+        configureHandler(handler, configs, Map.of());
+    }
+
     protected void configureHandler(AuthenticateCallbackHandler handler,
-        Map<String, ?> configs,
-        Map<String, Object> jaasConfig) {
+                                    Map<String, ?> configs,
+                                    Map<String, Object> jaasConfig) {
         TestJaasConfig config = new TestJaasConfig();
         config.createOrUpdateEntry("KafkaClient", OAuthBearerLoginModule.class.getName(), jaasConfig);
         AppConfigurationEntry kafkaClient = config.getAppConfigurationEntry("KafkaClient")[0];

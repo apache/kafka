@@ -178,47 +178,30 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private static final String EXTENSION_PREFIX = "extension_";
 
-    private Map<String, Object> moduleOptions;
+    protected Map<String, Object> moduleOptions;
 
-    private JwtRetriever jwtRetriever;
+    protected JwtRetriever jwtRetriever;
 
-    private JwtValidator jwtValidator;
-
-    private boolean isInitialized = false;
+    protected JwtValidator jwtValidator;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, saslMechanism, moduleOptions);
-        JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism);
-        init(jwtRetriever, jwtValidator);
-    }
-
-    public void init(JwtRetriever jwtRetriever, JwtValidator jwtValidator) {
-        this.jwtRetriever = jwtRetriever;
-        this.jwtValidator = jwtValidator;
+        jwtRetriever = new DefaultJwtRetriever(configs, saslMechanism, moduleOptions);
 
         try {
             this.jwtRetriever.init();
         } catch (IOException e) {
-            throw new KafkaException("The OAuth login configuration encountered an error when initializing the JwtRetriever", e);
+            throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtRetriever", e);
         }
+
+        jwtValidator = new DefaultJwtValidator(configs, saslMechanism);
 
         try {
             this.jwtValidator.init();
         } catch (IOException e) {
-            throw new KafkaException("The OAuth login configuration encountered an error when initializing the JwtValidator", e);
+            throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtValidator", e);
         }
-
-        isInitialized = true;
-    }
-
-    /*
-     * Package-visible for testing.
-     */
-
-    JwtRetriever jwtRetriever() {
-        return jwtRetriever;
     }
 
     @Override
@@ -229,7 +212,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-        checkInitialized();
+        checkConfigured();
 
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerTokenCallback) {
@@ -243,7 +226,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     }
 
     private void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
-        checkInitialized();
+        checkConfigured();
         String accessToken = jwtRetriever.retrieve();
 
         try {
@@ -256,7 +239,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     }
 
     private void handleExtensionsCallback(SaslExtensionsCallback callback) {
-        checkInitialized();
+        checkConfigured();
 
         Map<String, String> extensions = new HashMap<>();
 
@@ -288,9 +271,9 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         callback.extensions(saslExtensions);
     }
 
-    private void checkInitialized() {
-        if (!isInitialized)
-            throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
+    private void checkConfigured() {
+        if (moduleOptions == null || jwtRetriever == null || jwtValidator == null)
+            throw new IllegalStateException(String.format("To use %s, first call the configure method", getClass().getSimpleName()));
     }
 
 }
