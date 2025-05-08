@@ -104,11 +104,9 @@ class BrokerMetadataPublisher(
   val firstPublishFuture = new CompletableFuture[Void]
 
   /**
-   * The share version being used in the current metadata.
+   * The share version being used in the broker metadata.
    */
   private var finalizedShareVersion: Short = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION).finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
-
-    ShareVersion.LATEST_PRODUCTION.featureLevel()
 
   override def name(): String = "BrokerMetadataPublisher"
 
