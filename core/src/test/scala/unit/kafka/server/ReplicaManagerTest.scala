@@ -6128,7 +6128,7 @@ class ReplicaManagerTest {
       topicPartitions.forEach((topicIdPartition: TopicIdPartition) => delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId, topicIdPartition.partition)))
 
       // You cannot acquire records for sp1, so request will be stored in purgatory waiting for timeout.
-      when(sp1.maybeAcquireFetchLock).thenReturn(false)
+      when(sp1.maybeAcquireFetchLock(any())).thenReturn(false)
 
       rm.addDelayedShareFetchRequest(delayedShareFetch = delayedShareFetch, delayedShareFetchKeys = delayedShareFetchWatchKeys)
       verify(delayedShareFetch, times(0)).forceComplete()
