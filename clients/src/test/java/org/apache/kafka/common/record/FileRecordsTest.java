@@ -198,9 +198,9 @@ public class FileRecordsTest {
      */
     @Test
     public void testRead() throws IOException {
-        Records read = fileRecords.slice(0, fileRecords.sizeInBytes());
+        FileRecords read = fileRecords.slice(0, fileRecords.sizeInBytes());
         assertEquals(fileRecords.sizeInBytes(), read.sizeInBytes());
-        TestUtils.checkEquals(fileRecords.batches(), ((FileRecords) read).batches());
+        TestUtils.checkEquals(fileRecords.batches(), read.batches());
 
         List<RecordBatch> items = batches(read);
         RecordBatch first = items.get(0);

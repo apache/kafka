@@ -35,7 +35,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1075,7 +1074,7 @@ public class MemoryRecordsTest {
 
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
-    public void testSlice(Args args) throws IOException {
+    public void testSlice(Args args) {
         // Create a MemoryRecords instance with multiple batches. Prior RecordBatch.MAGIC_VALUE_V2,
         // every append in a batch is a new batch. After RecordBatch.MAGIC_VALUE_V2, we can have multiple
         // batches in a single MemoryRecords instance. Though with compression, we can have multiple
@@ -1170,7 +1169,7 @@ public class MemoryRecordsTest {
      */
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
-    public void testSliceForAlreadySlicedMemoryRecords(Args args) throws IOException {
+    public void testSliceForAlreadySlicedMemoryRecords(Args args) {
         LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
         recordsPerOffset.put(args.firstOffset, 5);
         recordsPerOffset.put(args.firstOffset + 5L, 10);
