@@ -24,14 +24,12 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwt
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
-import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -168,14 +166,6 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
     private CloseableVerificationKeyResolver createVerificationKeyResolver(AccessTokenBuilder builder) {
         return (jws, nestingContext) -> builder.jwk().getPublicKey();
-    }
-
-    private String createAccessKey(String header, String payload, String signature) {
-        Base64.Encoder enc = Base64.getEncoder();
-        header = enc.encodeToString(Utils.utf8(header));
-        payload = enc.encodeToString(Utils.utf8(payload));
-        signature = enc.encodeToString(Utils.utf8(signature));
-        return String.format("%s.%s.%s", header, payload, signature);
     }
 
     private static class TestOAuthBearerValidatorCallbackHandler extends OAuthBearerValidatorCallbackHandler {

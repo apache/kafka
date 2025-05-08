@@ -29,7 +29,6 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRet
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
-import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.AfterEach;
@@ -37,7 +36,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Base64;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
@@ -280,14 +278,6 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         } finally {
             handler.close();
         }
-    }
-
-    private String createAccessKey(String header, String payload, String signature) {
-        Base64.Encoder enc = Base64.getEncoder();
-        header = enc.encodeToString(Utils.utf8(header));
-        payload = enc.encodeToString(Utils.utf8(payload));
-        signature = enc.encodeToString(Utils.utf8(signature));
-        return String.format("%s.%s.%s", header, payload, signature);
     }
 
     private static DefaultJwtRetriever createJwtRetriever(Map<String, ?> configs) {
