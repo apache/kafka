@@ -105,17 +105,78 @@ public class ProducerPerformanceTest {
     }
 
     @Test
-    public void testReadPayloadFileWithAlternateDelimiter() throws Exception {
-        File payloadFile = createTempFile("Hello~~Kafka");
-        String payloadFilePath = payloadFile.getAbsolutePath();
-        String payloadDelimiter = "~~";
+    public void testReadPayloadFileWithAlternateDelimiters() throws Exception {
+        List<byte[]> payloadByteList;
 
-        List<byte[]> payloadByteList = ProducerPerformance.readPayloadFile(payloadFilePath, payloadDelimiter);
-
+        payloadByteList = generateListFromFileUsingDelimiter("Hello~~Kafka", "~~");
         assertEquals(2, payloadByteList.size());
         assertEquals("Hello", new String(payloadByteList.get(0)));
         assertEquals("Kafka", new String(payloadByteList.get(1)));
-        Utils.delete(payloadFile);
+
+        payloadByteList = generateListFromFileUsingDelimiter("Hello,Kafka,", ",");
+        assertEquals(2, payloadByteList.size());
+        assertEquals("Hello", new String(payloadByteList.get(0)));
+        assertEquals("Kafka", new String(payloadByteList.get(1)));
+
+        payloadByteList = generateListFromFileUsingDelimiter("Hello\t\tKafka", "\t");
+        assertEquals(3, payloadByteList.size());
+        assertEquals("Hello", new String(payloadByteList.get(0)));
+        assertEquals("Kafka", new String(payloadByteList.get(2)));
+
+        payloadByteList = generateListFromFileUsingDelimiter("Hello\n\nKafka\n", "\n");
+        assertEquals(3, payloadByteList.size());
+        assertEquals("Hello", new String(payloadByteList.get(0)));
+        assertEquals("Kafka", new String(payloadByteList.get(2)));
+
+        payloadByteList = generateListFromFileUsingDelimiter("Hello::Kafka::World", "\\s*::\\s*");
+        assertEquals(3, payloadByteList.size());
+        assertEquals("Hello", new String(payloadByteList.get(0)));
+        assertEquals("Kafka", new String(payloadByteList.get(1)));
+
+    }
+
+    @Test
+    public void testCompareStringSplitWithScannerDelimiter() throws Exception {
+
+        String contents = "Hello~~Kafka";
+        String payloadDelimiter = "~~";
+        compareList(generateListFromFileUsingDelimiter(contents, payloadDelimiter), contents.split(payloadDelimiter));
+
+        contents = "Hello,Kafka,";
+        payloadDelimiter = ",";
+        compareList(generateListFromFileUsingDelimiter(contents, payloadDelimiter), contents.split(payloadDelimiter));
+
+        contents = "Hello\t\tKafka";
+        payloadDelimiter = "\t";
+        compareList(generateListFromFileUsingDelimiter(contents, payloadDelimiter), contents.split(payloadDelimiter));
+
+        contents = "Hello\n\nKafka\n";
+        payloadDelimiter = "\n";
+        compareList(generateListFromFileUsingDelimiter(contents, payloadDelimiter), contents.split(payloadDelimiter));
+
+        contents = "Hello::Kafka::World";
+        payloadDelimiter = "\\s*::\\s*";
+        compareList(generateListFromFileUsingDelimiter(contents, payloadDelimiter), contents.split(payloadDelimiter));
+
+    }
+
+    private void compareList(List<byte[]> payloadByteList, String[] payloadByteListFromSplit){
+        assertEquals(payloadByteListFromSplit.length, payloadByteList.size());
+        for(int i=0; i<payloadByteListFromSplit.length; i++){
+            assertEquals(payloadByteListFromSplit[i], new String(payloadByteList.get(i)));
+        }
+    }
+
+    private List<byte[]> generateListFromFileUsingDelimiter(String fileContent, String payloadDelimiter) throws Exception {
+        File payloadFile = null;
+        List<byte[]> payloadByteList;
+        try {
+            payloadFile = createTempFile(fileContent);
+            payloadByteList = ProducerPerformance.readPayloadFile(payloadFile.getAbsolutePath(), payloadDelimiter);
+        } finally {
+            Utils.delete(payloadFile);
+        }
+        return payloadByteList;
     }
 
     @Test
