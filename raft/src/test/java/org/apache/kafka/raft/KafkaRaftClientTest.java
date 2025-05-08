@@ -4577,7 +4577,8 @@ class KafkaRaftClientTest {
     public void testExponentialElectionBackoffMs() {
         Random mockedRandom = Mockito.mock(Random.class);
         int electionBackoffMaxMs = 1000;
-        // retries start at 1
+
+        // test the bound of the first call to random.nextInt
         for (int retries = 1; retries < 11; retries++) {
             binaryExponentialElectionBackoffMs(electionBackoffMaxMs, retries, mockedRandom);
             ArgumentCaptor<Integer> nextIntCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -4587,7 +4588,8 @@ class KafkaRaftClientTest {
             assertEquals(expectedBound, actualBound, "Incorrect bound for retries=" + retries);
             Mockito.clearInvocations(mockedRandom);
         }
-        // after the 10th retry, the bound of the first call to nextInt is capped to (RETRY_BACKOFF_BASE_MS * 2 << 10)=2048 to prevent overflow
+        // after the 10th retry, the bound of the first call to random.nextInt will remain capped to
+        // (RETRY_BACKOFF_BASE_MS * 2 << 10)=2048 to prevent overflow
         int firstNextIntMaxBound = 2048;
         for (int retries = 11; retries < 13; retries++) {
             binaryExponentialElectionBackoffMs(electionBackoffMaxMs, retries, mockedRandom);
@@ -4598,13 +4600,11 @@ class KafkaRaftClientTest {
             Mockito.clearInvocations(mockedRandom);
         }
 
-        // test that the exponential backoff is capped to QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG + jitter
+        // test that the return value of the method is capped to QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG + jitter
         int jitterMs = 50;
-        // any value >= (1000 + jitter)/(RETRY_BACKOFF_BASE_MS)=21 returned by the first call to nextInt will result in the cap
+        // any bound >= (1000 + jitter)/(RETRY_BACKOFF_BASE_MS)=21 will result in returning this cap
         int firstNextInt = new Random().nextInt(21, firstNextIntMaxBound);
-        // with retries=11, first call to nextInt expected on max bound (RETRY_BACKOFF_BASE_MS * 2 << 10)
         Mockito.when(mockedRandom.nextInt(1, firstNextIntMaxBound)).thenReturn(firstNextInt);
-        // second call to nextInt always on (RETRY_BACKOFF_BASE_MS)
         Mockito.when(mockedRandom.nextInt(RETRY_BACKOFF_BASE_MS)).thenReturn(jitterMs);
 
         int returnedBackoffMs = binaryExponentialElectionBackoffMs(electionBackoffMaxMs, 11, mockedRandom);

@@ -1058,8 +1058,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (retries <= 0) {
             throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
         }
-        // take minimum of exponential backoff calculation (maxes out to ~1.7 minutes)
-        // and configurable electionBackoffMaxMs + jitter. jitter is added to prevent deadlock of elections
+        // Takes minimum of the following:
+        // 1. exponential backoff calculation (maxes out at 102.4 seconds)
+        // 2. configurable electionBackoffMaxMs + jitter
+        // The jitter is added to prevent deadlock of elections.
         return Math.min(
             RETRY_BACKOFF_BASE_MS * random.nextInt(1, 2 << Math.min(10, retries - 1)),
             backoffMaxMs + random.nextInt(RETRY_BACKOFF_BASE_MS)
