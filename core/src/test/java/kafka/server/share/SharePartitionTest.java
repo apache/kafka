@@ -1604,12 +1604,14 @@ public class SharePartitionTest {
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
 
+        Uuid fetchId = Uuid.randomUuid();
+
         sharePartition.maybeInitialize();
-        assertTrue(sharePartition.maybeAcquireFetchLock());
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
         // Lock cannot be acquired again, as already acquired.
-        assertFalse(sharePartition.maybeAcquireFetchLock());
+        assertFalse(sharePartition.maybeAcquireFetchLock(fetchId));
         // Release the lock.
-        sharePartition.releaseFetchLock();
+        sharePartition.releaseFetchLock(fetchId);
 
         assertEquals(1, sharePartitionMetrics.fetchLockTimeMs().count());
         assertEquals(10, sharePartitionMetrics.fetchLockTimeMs().sum());
@@ -1618,9 +1620,9 @@ public class SharePartitionTest {
         assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
 
         // Lock can be acquired again.
-        assertTrue(sharePartition.maybeAcquireFetchLock());
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
         // Release lock to update metrics and verify.
-        sharePartition.releaseFetchLock();
+        sharePartition.releaseFetchLock(fetchId);
 
         assertEquals(2, sharePartitionMetrics.fetchLockTimeMs().count());
         assertEquals(40, sharePartitionMetrics.fetchLockTimeMs().sum());
@@ -1648,14 +1650,15 @@ public class SharePartitionTest {
             .thenReturn(80L) // for time when lock is released
             .thenReturn(160L); // to update lock idle duration while acquiring lock again.
 
-        assertTrue(sharePartition.maybeAcquireFetchLock());
-        sharePartition.releaseFetchLock();
+        Uuid fetchId = Uuid.randomUuid();
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
+        sharePartition.releaseFetchLock(fetchId);
         // Acquired time is 70 but last lock acquisition time was still 0, as it's the first request
         // when last acquisition time was recorded. The last acquisition time should be updated to 80.
         assertEquals(2, sharePartitionMetrics.fetchLockRatio().count());
         assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
 
-        assertTrue(sharePartition.maybeAcquireFetchLock());
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
         // Update metric again with 0 as acquire time and 80 as idle duration ms.
         sharePartition.recordFetchLockRatioMetric(0);
         assertEquals(3, sharePartitionMetrics.fetchLockRatio().count());
@@ -7147,6 +7150,26 @@ public class SharePartitionTest {
         assertEquals(15, actual.get(3).baseOffset());
         assertEquals(16, actual.get(3).lastOffset());
         assertEquals(1, actual.get(3).producerId());
+    }
+
+    @Test
+    public void testFetchLockReleasedByDifferentId() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+        Uuid fetchId1 = Uuid.randomUuid();
+        Uuid fetchId2 = Uuid.randomUuid();
+
+        // Initially, fetch lock is not acquired.
+        assertNull(sharePartition.fetchLock());
+        // fetchId1 acquires the fetch lock.
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId1));
+        // If we release fetch lock by fetchId2, it will work. Currently, we have kept the release of fetch lock as non-strict
+        // such that even if the caller's id for releasing fetch lock does not match the id that holds the lock, we will
+        // still release it. This has been done to avoid the scenarios where we hold the fetch lock for a share partition
+        // forever due to faulty code. In the future, we plan to make the locks handling strict, then this test case needs to be updated.
+        sharePartition.releaseFetchLock(fetchId2);
+        assertNull(sharePartition.fetchLock()); // Fetch lock has been released.
     }
 
     /**
