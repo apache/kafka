@@ -65,7 +65,8 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
                 .setPartitions(topicResult.partitions().stream()
                     .map(partitionData -> new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partitionData.partitionIndex())
-                        .setErrorCode(Errors.forException(e).code()))
+                        .setErrorCode(Errors.forException(e).code())
+                        .setErrorMessage(Errors.forException(e).message()))
                     .collect(Collectors.toList()))));
         return new AlterShareGroupOffsetsResponse(new AlterShareGroupOffsetsResponseData()
             .setResponses(results));

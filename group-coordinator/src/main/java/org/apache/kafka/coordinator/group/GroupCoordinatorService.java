@@ -670,7 +670,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ));
     }
 
-    CompletableFuture<AlterShareGroupOffsetsResponseData> persisterInitialize(
+    private CompletableFuture<AlterShareGroupOffsetsResponseData> persisterInitialize(
         InitializeShareGroupStateParameters request,
         AlterShareGroupOffsetsResponseData response
     ) {

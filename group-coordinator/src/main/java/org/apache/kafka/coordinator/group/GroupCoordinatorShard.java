@@ -779,7 +779,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Make the following check to make sure the AlterShareGroupOffsetsRequest request is valid:
+     * Make the following checks to make sure the AlterShareGroupOffsetsRequest request is valid:
      * 1. Checks whether the provided group is empty
      * 2. Checks the requested topics are presented in the metadataImage
      * 3. Checks the corresponding share partitions in AlterShareGroupOffsetsRequest are existing
