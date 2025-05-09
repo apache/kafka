@@ -182,7 +182,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           responseCallback(initTransactionError(error))
 
         case Right((coordinatorEpoch, newMetadata)) =>
-          if (newMetadata.txnState() == TransactionState.PREPARE_EPOCH_FENCE) {
+          if (newMetadata.txnState == TransactionState.PREPARE_EPOCH_FENCE) {
             // abort the ongoing transaction and then return CONCURRENT_TRANSACTIONS to let client wait and retry
             def sendRetriableErrorCallback(error: Errors, newProducerId: Long, newProducerEpoch: Short): Unit = {
               if (error != Errors.NONE) {
@@ -193,8 +193,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             }
 
             endTransaction(transactionalId,
-              newMetadata.producerId(),
-              newMetadata.producerEpoch(),
+              newMetadata.producerId,
+              newMetadata.producerEpoch,
               TransactionResult.ABORT,
               isFromClient = false,
               clientTransactionVersion = txnManager.transactionVersionLevel(), // Since this is not from client, use server TV
@@ -203,8 +203,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
               if (error == Errors.NONE) {
-                info(s"Initialized transactionalId $transactionalId with producerId ${newMetadata.producerId()} and producer " +
-                  s"epoch ${newMetadata.producerEpoch()} on partition " +
+                info(s"Initialized transactionalId $transactionalId with producerId ${newMetadata.producerId} and producer " +
+                  s"epoch ${newMetadata.producerEpoch} on partition " +
                   s"${Topic.TRANSACTION_STATE_TOPIC_NAME}-${txnManager.partitionFor(transactionalId)}")
                 responseCallback(initTransactionMetadata(newMetadata))
               } else {
