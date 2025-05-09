@@ -196,7 +196,10 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
       info(s"Beginning/resuming copy of partition $tp from offset ${fetchState.fetchOffset}. " +
         s"Including this partition, there are ${partitions.size} remaining partitions to copy by this thread.")
     }
-    Optional.of(nextPartitionOpt)
+    nextPartitionOpt match {
+      case Some((tp, fetchState)) => Optional.of((tp, fetchState))
+      case None => Optional.empty()
+    }
   }
 
   private def buildFetchForPartition(topicPartition: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Optional[ReplicaFetch]] = {
