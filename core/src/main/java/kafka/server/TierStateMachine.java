@@ -136,8 +136,8 @@ public class TierStateMachine {
         // Find the end-offset for the epoch earlier to the given epoch from the leader
         Map<TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition> partitionsWithEpochs = new HashMap<>();
         partitionsWithEpochs.put(partition, new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition().setPartition(partition.partition()).setCurrentLeaderEpoch(currentLeaderEpoch).setLeaderEpoch(previousEpoch));
-        Map<TopicPartition, OffsetForLeaderEpochResponseData.EpochEndOffset> endOffsets = leader.fetchEpochEndOffsets(partitionsWithEpochs);
-        OffsetForLeaderEpochResponseData.EpochEndOffset epochEndOffset = endOffsets.get(partition);
+        var endOffsets = leader.fetchEpochEndOffsets(partitionsWithEpochs);
+        var epochEndOffset = endOffsets.get(partition);
 
         if (epochEndOffset == null) {
             throw new KafkaException("No response received for partition: " + partition);
