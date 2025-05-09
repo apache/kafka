@@ -33,6 +33,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.coordinator.transaction.TransactionState
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
@@ -181,7 +182,7 @@ class TransactionStateManagerTest {
     ).thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
     when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
-    txnMetadata1.state = PrepareCommit
+    txnMetadata1.state = TransactionState.PREPARE_COMMIT
     txnMetadata1.addPartitions(Set[TopicPartition](
       new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
@@ -240,7 +241,7 @@ class TransactionStateManagerTest {
     ).thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
     when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
-    txnMetadata1.state = PrepareCommit
+    txnMetadata1.state = TransactionState.PREPARE_COMMIT
     txnMetadata1.addPartitions(Set[TopicPartition](
       new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
@@ -285,7 +286,7 @@ class TransactionStateManagerTest {
     // generate transaction log messages for two pids traces:
 
     // pid1's transaction started with two partitions
-    txnMetadata1.state = Ongoing
+    txnMetadata1.state = TransactionState.ONGOING
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
 
@@ -299,12 +300,12 @@ class TransactionStateManagerTest {
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), TV_2))
 
     // pid1's transaction is preparing to commit
-    txnMetadata1.state = PrepareCommit
+    txnMetadata1.state = TransactionState.PREPARE_COMMIT
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), TV_2))
 
     // pid2's transaction started with three partitions
-    txnMetadata2.state = Ongoing
+    txnMetadata2.state = TransactionState.ONGOING
     txnMetadata2.addPartitions(Set[TopicPartition](new TopicPartition("topic3", 0),
       new TopicPartition("topic3", 1),
       new TopicPartition("topic3", 2)))
@@ -312,17 +313,17 @@ class TransactionStateManagerTest {
     txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), TV_2))
 
     // pid2's transaction is preparing to abort
-    txnMetadata2.state = PrepareAbort
+    txnMetadata2.state = TransactionState.PREPARE_ABORT
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), TV_2))
 
     // pid2's transaction has aborted
-    txnMetadata2.state = CompleteAbort
+    txnMetadata2.state = TransactionState.COMPLETE_ABORT
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), TV_2))
 
     // pid2's epoch has advanced, with no ongoing transaction yet
-    txnMetadata2.state = Empty
+    txnMetadata2.state = TransactionState.EMPTY
     txnMetadata2.topicPartitions.clear()
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), TV_2))
@@ -511,7 +512,7 @@ class TransactionStateManagerTest {
     prepareForTxnMessageAppend(Errors.UNKNOWN_TOPIC_OR_PARTITION)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, _ => true, RequestLocal.withThreadConfinedCaching)
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
-    assertEquals(Some(Ongoing), txnMetadata1.pendingState)
+    assertEquals(Some(TransactionState.ONGOING), txnMetadata1.pendingState)
   }
 
   @Test
@@ -591,25 +592,25 @@ class TransactionStateManagerTest {
       }
     }
 
-    putTransaction(transactionalId = "t0", producerId = 0, state = Ongoing)
-    putTransaction(transactionalId = "t1", producerId = 1, state = Ongoing)
-    putTransaction(transactionalId = "my-special-0", producerId = 0, state = Ongoing)
+    putTransaction(transactionalId = "t0", producerId = 0, state = TransactionState.ONGOING)
+    putTransaction(transactionalId = "t1", producerId = 1, state = TransactionState.ONGOING)
+    putTransaction(transactionalId = "my-special-0", producerId = 0, state = TransactionState.ONGOING)
     // update time to create transactions with various durations
     time.sleep(1000)
-    putTransaction(transactionalId = "t2", producerId = 2, state = PrepareCommit)
-    putTransaction(transactionalId = "t3", producerId = 3, state = PrepareAbort)
-    putTransaction(transactionalId = "your-special-1", producerId = 0, state = PrepareAbort)
+    putTransaction(transactionalId = "t2", producerId = 2, state = TransactionState.PREPARE_COMMIT)
+    putTransaction(transactionalId = "t3", producerId = 3, state = TransactionState.PREPARE_ABORT)
+    putTransaction(transactionalId = "your-special-1", producerId = 0, state = TransactionState.PREPARE_ABORT)
     time.sleep(1000)
-    putTransaction(transactionalId = "t4", producerId = 4, state = CompleteCommit)
-    putTransaction(transactionalId = "t5", producerId = 5, state = CompleteAbort)
-    putTransaction(transactionalId = "t6", producerId = 6, state = CompleteAbort)
-    putTransaction(transactionalId = "t7", producerId = 7, state = PrepareEpochFence)
-    putTransaction(transactionalId = "their-special-2", producerId = 7, state = CompleteAbort)
+    putTransaction(transactionalId = "t4", producerId = 4, state = TransactionState.COMPLETE_COMMIT)
+    putTransaction(transactionalId = "t5", producerId = 5, state = TransactionState.COMPLETE_ABORT)
+    putTransaction(transactionalId = "t6", producerId = 6, state = TransactionState.COMPLETE_ABORT)
+    putTransaction(transactionalId = "t7", producerId = 7, state = TransactionState.PREPARE_EPOCH_FENCE)
+    putTransaction(transactionalId = "their-special-2", producerId = 7, state = TransactionState.COMPLETE_ABORT)
     time.sleep(1000)
-    // Note that `Dead` transactions are never returned. This is a transient state
+    // Note that `TransactionState.DEAD` transactions are never returned. This is a transient state
     // which is used when the transaction state is in the process of being deleted
     // (whether though expiration or coordinator unloading).
-    putTransaction(transactionalId = "t8", producerId = 8, state = Dead)
+    putTransaction(transactionalId = "t8", producerId = 8, state = TransactionState.DEAD)
 
     def assertListTransactions(
       expectedTransactionalIds: Set[String],
@@ -657,12 +658,12 @@ class TransactionStateManagerTest {
       transactionManager.addLoadedTransactionsToCache(partitionId, 0, new ConcurrentHashMap[String, TransactionMetadata]())
     }
 
-    transactionManager.putTransactionStateIfNotExists(transactionMetadata("ongoing", producerId = 0, state = Ongoing))
-    transactionManager.putTransactionStateIfNotExists(transactionMetadata("not-expiring", producerId = 1, state = Ongoing, txnTimeout = 10000))
-    transactionManager.putTransactionStateIfNotExists(transactionMetadata("prepare-commit", producerId = 2, state = PrepareCommit))
-    transactionManager.putTransactionStateIfNotExists(transactionMetadata("prepare-abort", producerId = 3, state = PrepareAbort))
-    transactionManager.putTransactionStateIfNotExists(transactionMetadata("complete-commit", producerId = 4, state = CompleteCommit))
-    transactionManager.putTransactionStateIfNotExists(transactionMetadata("complete-abort", producerId = 5, state = CompleteAbort))
+    transactionManager.putTransactionStateIfNotExists(transactionMetadata("ongoing", producerId = 0, state = TransactionState.ONGOING))
+    transactionManager.putTransactionStateIfNotExists(transactionMetadata("not-expiring", producerId = 1, state = TransactionState.ONGOING, txnTimeout = 10000))
+    transactionManager.putTransactionStateIfNotExists(transactionMetadata("prepare-commit", producerId = 2, state = TransactionState.PREPARE_COMMIT))
+    transactionManager.putTransactionStateIfNotExists(transactionMetadata("prepare-abort", producerId = 3, state = TransactionState.PREPARE_ABORT))
+    transactionManager.putTransactionStateIfNotExists(transactionMetadata("complete-commit", producerId = 4, state = TransactionState.COMPLETE_COMMIT))
+    transactionManager.putTransactionStateIfNotExists(transactionMetadata("complete-abort", producerId = 5, state = TransactionState.COMPLETE_ABORT))
 
     time.sleep(2000)
     val expiring = transactionManager.timedOutTransactions()
@@ -671,59 +672,59 @@ class TransactionStateManagerTest {
 
   @Test
   def shouldWriteTxnMarkersForTransactionInPreparedCommitState(): Unit = {
-    verifyWritesTxnMarkersInPrepareState(PrepareCommit)
+    verifyWritesTxnMarkersInPrepareState(TransactionState.PREPARE_COMMIT)
   }
 
   @Test
   def shouldWriteTxnMarkersForTransactionInPreparedAbortState(): Unit = {
-    verifyWritesTxnMarkersInPrepareState(PrepareAbort)
+    verifyWritesTxnMarkersInPrepareState(TransactionState.PREPARE_ABORT)
   }
 
   @Test
   def shouldRemoveCompleteCommitExpiredTransactionalIds(): Unit = {
-    setupAndRunTransactionalIdExpiration(Errors.NONE, CompleteCommit)
+    setupAndRunTransactionalIdExpiration(Errors.NONE, TransactionState.COMPLETE_COMMIT)
     verifyMetadataDoesntExist(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldRemoveCompleteAbortExpiredTransactionalIds(): Unit = {
-    setupAndRunTransactionalIdExpiration(Errors.NONE, CompleteAbort)
+    setupAndRunTransactionalIdExpiration(Errors.NONE, TransactionState.COMPLETE_ABORT)
     verifyMetadataDoesntExist(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldRemoveEmptyExpiredTransactionalIds(): Unit = {
-    setupAndRunTransactionalIdExpiration(Errors.NONE, Empty)
+    setupAndRunTransactionalIdExpiration(Errors.NONE, TransactionState.EMPTY)
     verifyMetadataDoesntExist(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldNotRemoveExpiredTransactionalIdsIfLogAppendFails(): Unit = {
-    setupAndRunTransactionalIdExpiration(Errors.NOT_ENOUGH_REPLICAS, CompleteAbort)
+    setupAndRunTransactionalIdExpiration(Errors.NOT_ENOUGH_REPLICAS, TransactionState.COMPLETE_ABORT)
     verifyMetadataDoesExistAndIsUsable(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldNotRemoveOngoingTransactionalIds(): Unit = {
-    setupAndRunTransactionalIdExpiration(Errors.NONE, Ongoing)
+    setupAndRunTransactionalIdExpiration(Errors.NONE, TransactionState.ONGOING)
     verifyMetadataDoesExistAndIsUsable(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldNotRemovePrepareAbortTransactionalIds(): Unit = {
-    setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareAbort)
+    setupAndRunTransactionalIdExpiration(Errors.NONE, TransactionState.PREPARE_ABORT)
     verifyMetadataDoesExistAndIsUsable(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldNotRemovePrepareCommitTransactionalIds(): Unit = {
-    setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareCommit)
+    setupAndRunTransactionalIdExpiration(Errors.NONE, TransactionState.PREPARE_COMMIT)
     verifyMetadataDoesExistAndIsUsable(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
@@ -879,7 +880,7 @@ class TransactionStateManagerTest {
     // will be expired and it should succeed.
     val timestamp = time.milliseconds()
     val txnMetadata = new TransactionMetadata(transactionalId, 1, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
-      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp, TV_0)
+      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, TransactionState.EMPTY, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp, TV_0)
     transactionManager.putTransactionStateIfNotExists(txnMetadata)
 
     time.sleep(txnConfig.transactionalIdExpirationMs + 1)
@@ -966,7 +967,7 @@ class TransactionStateManagerTest {
 
   @Test
   def testSuccessfulReimmigration(): Unit = {
-    txnMetadata1.state = PrepareCommit
+    txnMetadata1.state = TransactionState.PREPARE_COMMIT
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
 
@@ -1033,9 +1034,9 @@ class TransactionStateManagerTest {
   @Test
   def testLoadTransactionMetadataContainingSegmentEndingWithEmptyBatch(): Unit = {
     // Simulate a case where a log contains two segments and the first segment ending with an empty batch.
-    txnMetadata1.state = PrepareCommit
+    txnMetadata1.state = TransactionState.PREPARE_COMMIT
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0)))
-    txnMetadata2.state = Ongoing
+    txnMetadata2.state = TransactionState.ONGOING
     txnMetadata2.addPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)))
 
     // Create the first segment which contains two batches.
@@ -1176,7 +1177,7 @@ class TransactionStateManagerTest {
     transactionManager.removeExpiredTransactionalIds()
 
     val stateAllowsExpiration = txnState match {
-      case Empty | CompleteCommit | CompleteAbort => true
+      case TransactionState.EMPTY | TransactionState.COMPLETE_COMMIT | TransactionState.COMPLETE_ABORT => true
       case _ => false
     }
 
@@ -1223,7 +1224,7 @@ class TransactionStateManagerTest {
 
   private def transactionMetadata(transactionalId: String,
                                   producerId: Long,
-                                  state: TransactionState = Empty,
+                                  state: TransactionState = TransactionState.EMPTY,
                                   txnTimeout: Int = transactionTimeoutMs): TransactionMetadata = {
     val timestamp = time.milliseconds()
     new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, 0.toShort,
@@ -1300,7 +1301,7 @@ class TransactionStateManagerTest {
     assertEquals(Double.NaN, partitionLoadTime("partition-load-time-avg"), 0)
     assertTrue(reporter.containsMbean(mBeanName))
 
-    txnMetadata1.state = Ongoing
+    txnMetadata1.state = TransactionState.ONGOING
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 1),
       new TopicPartition("topic1", 1)))
 
@@ -1319,7 +1320,7 @@ class TransactionStateManagerTest {
 
   @Test
   def testIgnoreUnknownRecordType(): Unit = {
-    txnMetadata1.state = PrepareCommit
+    txnMetadata1.state = TransactionState.PREPARE_COMMIT
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
 

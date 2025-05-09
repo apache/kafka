@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition}
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionState, TransactionStateManagerConfig}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
@@ -134,7 +134,7 @@ class TransactionStateManager(brokerId: Int,
             false
           } else {
             txnMetadata.state match {
-              case Ongoing =>
+              case TransactionState.ONGOING =>
                 // Do not apply timeout to distributed two phase commit transactions.
                 (!txnMetadata.isDistributedTwoPhaseCommitTxn) &&
                 (txnMetadata.txnStartTimestamp + txnMetadata.txnTimeoutMs < now)
@@ -265,7 +265,7 @@ class TransactionStateManager(brokerId: Int,
               val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
               txnMetadata.inLock {
                 if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
-                  && txnMetadata.pendingState.contains(Dead)
+                  && txnMetadata.pendingState.contains(TransactionState.DEAD)
                   && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
                   && response.error == Errors.NONE) {
                   txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
@@ -328,15 +328,15 @@ class TransactionStateManager(brokerId: Int,
       } else {
         val filterStates = mutable.Set.empty[TransactionState]
         filterStateNames.foreach { stateName =>
-          TransactionState.fromName(stateName) match {
-            case Some(state) => filterStates += state
-            case None => response.unknownStateFilters.add(stateName)
-          }
+          TransactionState.fromName(stateName).ifPresentOrElse(
+            state => filterStates += state,
+            () => response.unknownStateFilters.add(stateName)
+          )
         }
 
         val now : Long = time.milliseconds()
         def shouldInclude(txnMetadata: TransactionMetadata, pattern: Pattern): Boolean = {
-          if (txnMetadata.state == Dead) {
+          if (txnMetadata.state == TransactionState.DEAD) {
             // We filter the `Dead` state since it is a transient state which
             // indicates that the transactionalId and its metadata are in the
             // process of expiration and removal.
@@ -371,7 +371,7 @@ class TransactionStateManager(brokerId: Int,
                 states.add(new ListTransactionsResponseData.TransactionState()
                   .setTransactionalId(txnMetadata.transactionalId)
                   .setProducerId(txnMetadata.producerId)
-                  .setTransactionState(txnMetadata.state.name)
+                  .setTransactionState(txnMetadata.state.stateName)
                 )
               }
             }
@@ -568,10 +568,10 @@ class TransactionStateManager(brokerId: Int,
             txnMetadata.inLock {
               // if state is PrepareCommit or PrepareAbort we need to complete the transaction
               txnMetadata.state match {
-                case PrepareAbort =>
+                case TransactionState.PREPARE_ABORT =>
                   transactionsPendingForCompletion +=
                     TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.ABORT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
-                case PrepareCommit =>
+                case TransactionState.PREPARE_COMMIT =>
                   transactionsPendingForCompletion +=
                     TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                 case _ =>

@@ -1035,7 +1035,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, _) =>
       val groupResponses = new ArrayBuffer[OffsetFetchResponseData.OffsetFetchResponseGroup](futures.size)
       futures.foreach(future => groupResponses += future.get())
-      requestHelper.sendMaybeThrottle(request, new OffsetFetchResponse(groupResponses.asJava, request.context.apiVersion))
+      requestHelper.sendMaybeThrottle(request, new OffsetFetchResponse.Builder(groupResponses.asJava).build(request.context.apiVersion))
     }
   }
 
