@@ -62,7 +62,7 @@ object TransactionLog {
     */
   private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
                                         transactionVersionLevel: TransactionVersion): Array[Byte] = {
-    if (txnMetadata.txnState() == TransactionState.EMPTY && !txnMetadata.topicPartitions().isEmpty())
+    if (txnMetadata.txnState() == TransactionState.EMPTY && !txnMetadata.topicPartitions().isEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState()}: $txnMetadata")
 
       val transactionPartitions = if (txnMetadata.txnState() == TransactionState.EMPTY) null
