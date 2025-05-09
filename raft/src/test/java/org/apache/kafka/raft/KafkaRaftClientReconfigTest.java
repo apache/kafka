@@ -2730,9 +2730,22 @@ public class KafkaRaftClientReconfigTest {
 
         // don't send a response but increase the time
         context.time.sleep(context.requestTimeoutMs() - 1);
+        // this poll will result in sending an update voter request because there is not one
+        // in flight and its timer has expired
         context.client.poll();
+        context.assertSentUpdateVoterRequest(
+            local,
+            epoch,
+            Feature.KRAFT_VERSION.supportedVersionRange(),
+            localListeners
+        );
 
-        // expect an update voter request after the FETCH rpc completes
+        // polling again should not send any request because there are pending fetch and
+        // update voter requests
+        context.client.poll();
+        assertFalse(context.channel.hasSentRequests());
+
+        // deliver the fetch response
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
@@ -2744,13 +2757,11 @@ public class KafkaRaftClientReconfigTest {
                 Errors.NONE
             )
         );
+
+        // The next request should be a fetch
         context.pollUntilRequest();
-        context.assertSentUpdateVoterRequest(
-            local,
-            epoch,
-            Feature.KRAFT_VERSION.supportedVersionRange(),
-            localListeners
-        );
+        fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
 
     @Test
