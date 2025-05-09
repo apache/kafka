@@ -3269,7 +3269,7 @@ class ReplicaManagerTest {
     val mockLog = setupMockLog(path1)
     if (setupLogDirMetaProperties) {
       // add meta.properties file in each dir
-      config.logDirs.asScala.foreach(dir => {
+      config.logDirs.stream().forEach(dir => {
         val metaProps = new MetaProperties.Builder().
           setVersion(MetaPropertiesVersion.V0).
           setClusterId("clusterId").
