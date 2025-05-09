@@ -2175,12 +2175,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         (replicaManager.describeLogDirs(partitions), Errors.NONE)
       } else {
-        (List.empty[DescribeLogDirsResponseData.DescribeLogDirsResult], Errors.CLUSTER_AUTHORIZATION_FAILED)
+        (java.util.Collections.emptyList[DescribeLogDirsResponseData.DescribeLogDirsResult], Errors.CLUSTER_AUTHORIZATION_FAILED)
       }
     }
     requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => new DescribeLogDirsResponse(new DescribeLogDirsResponseData()
       .setThrottleTimeMs(throttleTimeMs)
-      .setResults(logDirInfos.asJava)
+      .setResults(logDirInfos)
       .setErrorCode(error.code)))
   }
 

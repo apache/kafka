@@ -202,8 +202,8 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       rm.checkpointHighWatermarks()
-      config.logDirs.asScala.map(s => Paths.get(s, ReplicaManager.HighWatermarkFilename))
-        .foreach(checkpointFile => assertTrue(Files.exists(checkpointFile),
+      config.logDirs.stream().map(s => Paths.get(s, ReplicaManager.HighWatermarkFilename))
+        .forEach(checkpointFile => assertTrue(Files.exists(checkpointFile),
           s"checkpoint file does not exist at $checkpointFile"))
     } finally {
       rm.shutdown(checkpointHW = false)
@@ -231,8 +231,8 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       rm.checkpointHighWatermarks()
-      config.logDirs.asScala.map(s => Paths.get(s, ReplicaManager.HighWatermarkFilename))
-        .foreach(checkpointFile => assertTrue(Files.exists(checkpointFile),
+      config.logDirs.stream().map(s => Paths.get(s, ReplicaManager.HighWatermarkFilename))
+        .forEach(checkpointFile => assertTrue(Files.exists(checkpointFile),
           s"checkpoint file does not exist at $checkpointFile"))
     } finally {
       rm.shutdown(checkpointHW = false)
@@ -2782,7 +2782,7 @@ class ReplicaManagerTest {
     props.asScala ++= extraProps.asScala
     val config = KafkaConfig.fromProps(props)
     val logConfig = new LogConfig(new Properties)
-    val logDir = new File(new File(config.logDirs.asScala.head), s"$topic-$topicPartition")
+    val logDir = new File(new File(config.logDirs.get(0)), s"$topic-$topicPartition")
     Files.createDirectories(logDir.toPath)
     val mockScheduler = new MockScheduler(time)
     val mockBrokerTopicStats = new BrokerTopicStats
@@ -3217,13 +3217,8 @@ class ReplicaManagerTest {
                                                                      transactionalTopicPartitions: List[TopicPartition],
                                                                      config: KafkaConfig = config,
                                                                      scheduler: Scheduler = new MockScheduler(time)): ReplicaManager = {
-<<<<<<< HEAD
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)))
-    val metadataCache = mock(classOf[MetadataCache])
 
-=======
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
->>>>>>> trunk
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -5811,7 +5806,7 @@ class ReplicaManagerTest {
     try {
       val responses = replicaManager.describeLogDirs(Set(new TopicPartition(topic, topicPartition)))
       assertEquals(mockLogMgr.liveLogDirs.size, responses.size)
-      responses.foreach { response =>
+      responses.forEach { response =>
         assertEquals(Errors.NONE.code, response.errorCode)
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
@@ -5843,7 +5838,7 @@ class ReplicaManagerTest {
     try {
       val responses = replicaManager.describeLogDirs(Set(new TopicPartition(noneTopic, topicPartition)))
       assertEquals(mockLogMgr.liveLogDirs.size, responses.size)
-      responses.foreach { response =>
+      responses.forEach { response =>
         assertEquals(Errors.NONE.code, response.errorCode)
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)

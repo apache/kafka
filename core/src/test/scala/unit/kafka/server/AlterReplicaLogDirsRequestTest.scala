@@ -91,7 +91,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testAlterReplicaLogDirsRequestErrorCode(quorum: String): Unit = {
-    val offlineDir = new File(brokers.head.config.logDirs.asScala.tail.head).getAbsolutePath
+    val offlineDir = new File(brokers.head.config.logDirs.get(1)).getAbsolutePath
     val validDir1 = new File(brokers.head.config.logDirs.get(1)).getAbsolutePath
     val validDir2 = new File(brokers.head.config.logDirs.get(2)).getAbsolutePath
     val validDir3 = new File(brokers.head.config.logDirs.get(3)).getAbsolutePath

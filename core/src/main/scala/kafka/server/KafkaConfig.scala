@@ -248,7 +248,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def metadataLogDir: String = {
     Option(getString(MetadataLogConfig.METADATA_LOG_DIR_CONFIG)) match {
       case Some(dir) => dir
-      case None => logDirs.asScala.head
+      case None => logDirs.get(0)
     }
   }
 

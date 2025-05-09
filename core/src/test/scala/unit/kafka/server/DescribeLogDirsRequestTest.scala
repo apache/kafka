@@ -42,8 +42,8 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testDescribeLogDirsRequest(quorum: String): Unit = {
-    val onlineDir = new File(brokers.head.config.logDirs.asScala.head).getAbsolutePath
-    val offlineDir = new File(brokers.head.config.logDirs.asScala.tail.head).getAbsolutePath
+    val onlineDir = new File(brokers.head.config.logDirs.get(0)).getAbsolutePath
+    val offlineDir = new File(brokers.head.config.logDirs.get(1)).getAbsolutePath
     brokers.head.replicaManager.handleLogDirFailure(offlineDir)
     createTopic(topic, partitionNum, 1)
     TestUtils.generateAndProduceMessages(brokers, topic, 10)
