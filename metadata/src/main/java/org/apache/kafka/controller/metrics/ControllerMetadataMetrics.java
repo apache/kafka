@@ -155,7 +155,11 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
     public void addBrokerRegistrationStateMetric(int brokerId) {
         registry.ifPresent(r -> r.newGauge(
-            getBrokerIdTagMetricName("KafkaController", BROKER_REGISTRATION_STATE_METRIC_NAME, brokerId),
+            getBrokerIdTagMetricName(
+                "KafkaController",
+                BROKER_REGISTRATION_STATE_METRIC_NAME,
+                brokerId
+            ),
             new Gauge<Integer>() {
                 @Override
                 public Integer value() {
@@ -167,7 +171,11 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
     public void removeBrokerRegistrationStateMetric(int brokerId) {
         registry.ifPresent(r -> r.removeMetric(
-            getBrokerIdTagMetricName("KafkaController", BROKER_REGISTRATION_STATE_METRIC_NAME, brokerId)
+            getBrokerIdTagMetricName(
+                "KafkaController",
+                BROKER_REGISTRATION_STATE_METRIC_NAME,
+                brokerId
+            )
         ));
     }
 
