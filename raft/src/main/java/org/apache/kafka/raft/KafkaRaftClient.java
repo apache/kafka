@@ -1031,8 +1031,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 // replica has failed multiple elections in succession.
                 candidate.startBackingOff(
                     currentTimeMs,
-                    binaryExponentialElectionBackoffMs(
+                    RaftUtil.binaryExponentialElectionBackoffMs(
                         quorumConfig.electionBackoffMaxMs(),
+                        RETRY_BACKOFF_BASE_MS,
                         candidate.retries(),
                         random
                     )
@@ -1051,21 +1052,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 "Expected to be a NomineeState (Prospective or Candidate), but current state is " + state
             );
         }
-    }
-
-    // visible for testing
-    static int binaryExponentialElectionBackoffMs(int backoffMaxMs, int retries, Random random) {
-        if (retries <= 0) {
-            throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
-        }
-        // Takes minimum of the following:
-        // 1. exponential backoff calculation (maxes out at 102.4 seconds)
-        // 2. configurable electionBackoffMaxMs + jitter
-        // The jitter is added to prevent deadlock of elections.
-        return Math.min(
-            RETRY_BACKOFF_BASE_MS * random.nextInt(1, 2 << Math.min(10, retries - 1)),
-            backoffMaxMs + random.nextInt(RETRY_BACKOFF_BASE_MS)
-        );
     }
 
     private int strictExponentialElectionBackoffMs(int positionInSuccessors, int totalNumSuccessors) {
