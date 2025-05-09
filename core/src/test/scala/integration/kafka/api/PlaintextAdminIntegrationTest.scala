@@ -3573,7 +3573,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFutureThrows(classOf[InvalidTopicException], results.get(invalidTopicName))
     assertFutureThrows(classOf[InvalidTopicException],
       client.alterReplicaLogDirs(
-        Map(new TopicPartitionReplica(longTopicName, 0, 0) -> brokers(0).config.logDirs.get(0)).asJava).all())
+        util.Map.of(new TopicPartitionReplica(longTopicName, 0, 0), brokers(0).config.logDirs.get(0))).all())
     client.close()
   }
 
