@@ -19,10 +19,12 @@ package org.apache.kafka.server.share.session;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.share.CachedSharePartition;
+import org.apache.kafka.server.share.ShareGroupListener;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.Iterator;
 import java.util.List;
@@ -112,6 +114,8 @@ public class ShareSessionCacheTest {
     @Test
     public void testRemoveConnection() throws InterruptedException {
         ShareSessionCache cache = new ShareSessionCache(3);
+        cache.registerShareGroupListener(Mockito.mock(ShareGroupListener.class));
+        
         assertEquals(0, cache.size());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(1), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(2), "conn-2");
