@@ -45,7 +45,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     public static final short TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION = 2;
     public static final short REQUIRE_STABLE_OFFSET_MIN_VERSION = 7;
     public static final short BATCH_MIN_VERSION = 8;
-    public static final short TOPIC_ID_MIN_VERSION = 9;
+    public static final short TOPIC_ID_MIN_VERSION = 10;
 
     private final OffsetFetchRequestData data;
 
@@ -54,13 +54,37 @@ public class OffsetFetchRequest extends AbstractRequest {
         private final OffsetFetchRequestData data;
         private final boolean throwOnFetchStableOffsetsUnsupported;
 
-        public Builder(OffsetFetchRequestData data, boolean throwOnFetchStableOffsetsUnsupported) {
-            super(ApiKeys.OFFSET_FETCH);
+        public static Builder forTopicIdsOrNames(OffsetFetchRequestData data, boolean throwOnFetchStableOffsetsUnsupported, boolean enableUnstableLastVersion) {
+            return new Builder(
+                data,
+                throwOnFetchStableOffsetsUnsupported,
+                ApiKeys.OFFSET_FETCH.oldestVersion(),
+                ApiKeys.OFFSET_FETCH.latestVersion(enableUnstableLastVersion)
+            );
+        }
+
+        public static Builder forTopicNames(OffsetFetchRequestData data, boolean throwOnFetchStableOffsetsUnsupported) {
+            return new Builder(
+                data,
+                throwOnFetchStableOffsetsUnsupported,
+                ApiKeys.OFFSET_FETCH.oldestVersion(),
+                (short) (TOPIC_ID_MIN_VERSION - 1)
+            );
+        }
+
+        private Builder(
+            OffsetFetchRequestData data,
+            boolean throwOnFetchStableOffsetsUnsupported,
+            short oldestAllowedVersion,
+            short latestAllowedVersion
+        ) {
+            super(ApiKeys.OFFSET_FETCH, oldestAllowedVersion, latestAllowedVersion);
             this.data = data;
             this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
 
         @Override
+        @SuppressWarnings("checkstyle:cyclomaticComplexity")
         public OffsetFetchRequest build(short version) {
             if (data.groups().size() > 1 && version < BATCH_MIN_VERSION) {
                 throw new NoBatchedOffsetFetchRequestException("Broker does not support"

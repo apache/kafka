@@ -8236,7 +8236,7 @@ class KafkaApisTest extends Logging {
 
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(
-        new OffsetFetchRequest.Builder(
+        OffsetFetchRequest.Builder.forTopicIdsOrNames(
           new OffsetFetchRequestData()
             .setGroups(List(
               new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -8257,7 +8257,8 @@ class KafkaApisTest extends Logging {
                 .setGroupId("group-4")
                 .setTopics(null),
             ).asJava),
-          false
+          false,
+          true
         ).build(version)
       )
     }
@@ -8400,7 +8401,7 @@ class KafkaApisTest extends Logging {
 
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(
-        new OffsetFetchRequest.Builder(
+        OffsetFetchRequest.Builder.forTopicIdsOrNames(
           new OffsetFetchRequestData()
             .setGroups(List(
               new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -8420,7 +8421,8 @@ class KafkaApisTest extends Logging {
                 .setGroupId("group-2")
                 .setTopics(null)
             ).asJava),
-          false
+          false,
+          true
         ).build(version)
       )
     }
@@ -8536,7 +8538,7 @@ class KafkaApisTest extends Logging {
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, toVersion = 9)
   def testHandleOffsetFetchWithSingleGroup(version: Short): Unit = {
     def makeRequest(version: Short): RequestChannel.Request = {
-      buildRequest(new OffsetFetchRequest.Builder(
+      buildRequest(OffsetFetchRequest.Builder.forTopicNames(
         new OffsetFetchRequestData()
           .setRequireStable(false)
           .setGroups(List(
@@ -8620,7 +8622,7 @@ class KafkaApisTest extends Logging {
     addTopicToMetadataCache(foo, topicId = fooId, numPartitions = 2)
 
     def makeRequest(version: Short): RequestChannel.Request = {
-      buildRequest(new OffsetFetchRequest.Builder(
+      buildRequest(OffsetFetchRequest.Builder.forTopicIdsOrNames(
         new OffsetFetchRequestData()
           .setRequireStable(false)
           .setGroups(List(
@@ -8628,7 +8630,8 @@ class KafkaApisTest extends Logging {
               .setGroupId("group-1")
               .setTopics(null) // all offsets.
           ).asJava),
-        false
+        false,
+        true
       ).build(version))
     }
 
@@ -8720,7 +8723,7 @@ class KafkaApisTest extends Logging {
 
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(
-        new OffsetFetchRequest.Builder(
+        OffsetFetchRequest.Builder.forTopicIdsOrNames(
           new OffsetFetchRequestData()
             .setGroups(List(
               new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -8754,7 +8757,8 @@ class KafkaApisTest extends Logging {
                 .setGroupId("group-4")
                 .setTopics(null),
             ).asJava),
-          false
+          false,
+          true
         ).build(version)
       )
     }
@@ -8914,7 +8918,7 @@ class KafkaApisTest extends Logging {
 
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(
-        new OffsetFetchRequest.Builder(
+        OffsetFetchRequest.Builder.forTopicIdsOrNames(
           new OffsetFetchRequestData()
             .setGroups(List(
               new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -8942,7 +8946,8 @@ class KafkaApisTest extends Logging {
                     .setPartitionIndexes(List[Integer](0).asJava)
                 ).asJava)
             ).asJava),
-          false
+          false,
+          true
         ).build(version)
       )
     }

@@ -2404,7 +2404,7 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(short version, boolean requireStable) {
-        return new OffsetFetchRequest.Builder(
+        return OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setRequireStable(requireStable)
                 .setGroups(List.of(
@@ -2419,12 +2419,13 @@ public class RequestResponseTest {
                                 .setPartitionIndexes(List.of(1))
                         ))
                 )),
-            false
+            false,
+            true
         ).build(version);
     }
 
     private OffsetFetchRequest createOffsetFetchRequestWithMultipleGroups(short version, boolean requireStable) {
-        return new OffsetFetchRequest.Builder(
+        return OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setRequireStable(requireStable)
                 .setGroups(List.of(
@@ -2465,12 +2466,13 @@ public class RequestResponseTest {
                         .setGroupId("group5")
                         .setTopics(null)
                 )),
-            false
+            false,
+            true
         ).build(version);
     }
 
     private OffsetFetchRequest createOffsetFetchRequestForAllPartition(short version, boolean requireStable) {
-        return new OffsetFetchRequest.Builder(
+        return OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setRequireStable(requireStable)
                 .setGroups(List.of(
@@ -2480,7 +2482,8 @@ public class RequestResponseTest {
                         .setMemberEpoch(version >= 9 ? 10 : -1)
                         .setTopics(null)
                 )),
-            false
+            false,
+            true
         ).build(version);
     }
 

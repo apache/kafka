@@ -55,7 +55,7 @@ public class OffsetFetchRequestTest {
                             .setPartitionIndexes(List.of(0, 1, 2))
                     ))
             ));
-        var builder = new OffsetFetchRequest.Builder(data, false);
+        var builder = OffsetFetchRequest.Builder.forTopicNames(data, false);
 
         if (version < 8) {
             assertThrows(OffsetFetchRequest.NoBatchedOffsetFetchRequestException.class, () -> builder.build(version));
@@ -67,7 +67,7 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
     public void testThrowOnFetchStableOffsetsUnsupported(short version) {
-        var builder = new OffsetFetchRequest.Builder(
+        var builder = OffsetFetchRequest.Builder.forTopicNames(
             new OffsetFetchRequestData()
                 .setRequireStable(true)
                 .setGroups(List.of(
@@ -104,7 +104,7 @@ public class OffsetFetchRequestTest {
                             .setPartitionIndexes(List.of(0, 1, 2))
                     ))
             ));
-        var builder = new OffsetFetchRequest.Builder(data, false);
+        var builder = OffsetFetchRequest.Builder.forTopicNames(data, false);
 
         if (version < 8) {
             var expectedRequest = new OffsetFetchRequestData()
@@ -129,7 +129,7 @@ public class OffsetFetchRequestTest {
                     .setGroupId("grp1")
                     .setTopics(null)
             ));
-        var builder = new OffsetFetchRequest.Builder(data, false);
+        var builder = OffsetFetchRequest.Builder.forTopicNames(data, false);
 
         if (version < 2) {
             assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
@@ -146,7 +146,7 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
     public void testGetErrorResponse(short version) {
-        var request = new OffsetFetchRequest.Builder(
+        var request = OffsetFetchRequest.Builder.forTopicNames(
             new OffsetFetchRequestData()
                 .setGroups(List.of(
                     new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -154,6 +154,7 @@ public class OffsetFetchRequestTest {
                         .setTopics(List.of(
                             new OffsetFetchRequestData.OffsetFetchRequestTopics()
                                 .setName("foo")
+                                .setTopicId(Uuid.randomUuid())
                                 .setPartitionIndexes(List.of(0, 1))
                         ))
                 )),
@@ -202,7 +203,7 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
     public void testGroups(short version) {
-        var request = new OffsetFetchRequest.Builder(
+        var request = OffsetFetchRequest.Builder.forTopicNames(
             new OffsetFetchRequestData()
                 .setGroups(List.of(
                     new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -236,7 +237,7 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 2)
     public void testGroupsWithAllTopics(short version) {
-        var request = new OffsetFetchRequest.Builder(
+        var request = OffsetFetchRequest.Builder.forTopicNames(
             new OffsetFetchRequestData()
                 .setGroups(List.of(
                     new OffsetFetchRequestData.OffsetFetchRequestGroup()

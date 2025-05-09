@@ -345,11 +345,12 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       fail(s"OffsetFetch API version $version cannot fetch multiple groups.")
     }
 
-    val request = new OffsetFetchRequest.Builder(
+    val request = OffsetFetchRequest.Builder.forTopicIdsOrNames(
       new OffsetFetchRequestData()
         .setRequireStable(requireStable)
         .setGroups(groups.asJava),
-      false
+      false,
+      true
     ).build(version)
 
     val response = connectAndReceive[OffsetFetchResponse](request)
@@ -365,11 +366,12 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     requireStable: Boolean,
     version: Short
   ): OffsetFetchResponseData.OffsetFetchResponseGroup = {
-    val request = new OffsetFetchRequest.Builder(
+    val request = OffsetFetchRequest.Builder.forTopicIdsOrNames(
       new OffsetFetchRequestData()
         .setRequireStable(requireStable)
         .setGroups(List(group).asJava),
-      false
+      false,
+      true
     ).build(version)
 
     val response = connectAndReceive[OffsetFetchResponse](request)
