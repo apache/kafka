@@ -53,7 +53,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
 import java.util.Collections.singletonList
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
@@ -838,10 +838,12 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   def testAuthorizationWithTopicExisting(quorum: String): Unit = {
     //First create the topic so we have a valid topic ID
     createTopicWithBrokerPrincipal(topic)
+    val topicId = getTopicIds()(topic)
+    assertNotNull(topicId)
 
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
-      ApiKeys.PRODUCE -> createProduceRequest("", getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), ApiKeys.PRODUCE.latestVersion()),
+      ApiKeys.PRODUCE -> createProduceRequest("", topicId, ApiKeys.PRODUCE.latestVersion()),
       ApiKeys.FETCH -> createFetchRequest,
       ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
       ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
@@ -928,7 +930,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
    * and topic name is used in the request. Even if the topic doesn't exist, we return TOPIC_AUTHORIZATION_FAILED to
    * prevent leaking the topic name.
    * This case covers produce request version from oldest to 12.
-   * The newer version is covered by testAuthorizationWithTopicNotExisting.
+   * The newer version is covered by testAuthorizationWithTopicNotExisting and testAuthorizationWithTopicExisting.
    */
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
@@ -952,8 +954,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   /**
-   * Test that the produce request fails with TOPIC_AUTHORIZATION_FAILED if both topic name and id are default values.
-   * This case covers produce request version from 13 to latest, because the produce request only supports topic id above version 13.
+   * Test that the produce request fails with UNKNOWN_TOPIC_ID if both topic name and id are default values when request version >= 13.
+   * The produce request only supports topic id above version 13.
    */
   @Test
   def testEmptyTopicNameAndIDForProduceVersionFrom13ToNewest(): Unit = {
@@ -967,12 +969,12 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .partitionResponses.asScala.find(_.index == part).get
         .errorCode
 
-      assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), errorCode, s"unexpected error for produce request version $version")
+      assertEquals(Errors.UNKNOWN_TOPIC_ID.code(), errorCode, s"unexpected error for produce request version $version")
     }
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array("false", "true"))
+  @ValueSource(booleans = Array(true, false))
   def testTopicIdAuthorization(withTopicExisting: Boolean): Unit = {
     val topicId = if (withTopicExisting) {
       createTopicWithBrokerPrincipal(topic)
@@ -1026,7 +1028,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
    * and topic name is used in the request. Even if the topic doesn't exist, we return TOPIC_AUTHORIZATION_FAILED to
    * prevent leaking the topic name.
    * This case covers fetch request version from oldest to 12.
-   * The newer version is covered by testAuthorizationWithTopicNotExisting.
+   * The newer version is covered by testAuthorizationWithTopicNotExisting and testAuthorizationWithTopicExisting.
    */
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))

@@ -411,8 +411,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         val topicPartition = new TopicPartition(topicName, partition.index())
-        // To compatible with the old version, only return UNKNOWN_TOPIC_ID if topicId is not default value
-        if (topicName.isEmpty && !topic.topicId().equals(Uuid.ZERO_UUID))
+        // To be compatible with the old version, only return UNKNOWN_TOPIC_ID if topic name is not set and request version is bigger than 12
+        if (topicName.isEmpty && request.header.apiVersion > 12)
           nonExistingTopicResponses += new TopicIdPartition(topicId, topicPartition) -> new PartitionResponse(Errors.UNKNOWN_TOPIC_ID)
         else
           topicIdToPartitionData += new TopicIdPartition(topicId, topicPartition) -> partition
