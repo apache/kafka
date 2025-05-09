@@ -192,6 +192,8 @@ public class NetworkClientDelegate implements AutoCloseable {
      */
     private void trySend(final long currentTimeMs) {
         Iterator<UnsentRequest> iterator = unsentRequests.iterator();
+        boolean shouldWakeup = false;
+
         while (iterator.hasNext()) {
             UnsentRequest unsent = iterator.next();
             unsent.timer.update(currentTimeMs);
@@ -209,7 +211,11 @@ public class NetworkClientDelegate implements AutoCloseable {
             }
             iterator.remove();
             asyncConsumerMetrics.recordUnsentRequestsQueueTime(time.milliseconds() - unsent.enqueueTimeMs());
+            shouldWakeup = true;
         }
+
+        if (shouldWakeup)
+            client.wakeup();
     }
 
     boolean doSend(final UnsentRequest r, final long currentTimeMs) {
@@ -293,17 +299,11 @@ public class NetworkClientDelegate implements AutoCloseable {
     public void addAll(final List<UnsentRequest> requests) {
         Objects.requireNonNull(requests);
         if (!requests.isEmpty()) {
-            requests.forEach(this::addInternal);
-            client.wakeup();
+            requests.forEach(this::add);
         }
     }
 
     public void add(final UnsentRequest r) {
-        addInternal(r);
-        client.wakeup();
-    }
-
-    private void addInternal(final UnsentRequest r) {
         Objects.requireNonNull(r);
         r.setTimer(this.time, this.requestTimeoutMs);
         r.setEnqueueTimeMs(time.milliseconds());

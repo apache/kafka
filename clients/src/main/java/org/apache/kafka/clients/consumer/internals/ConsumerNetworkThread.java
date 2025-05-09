@@ -41,7 +41,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -73,8 +72,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
     private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
     private long lastPollTimeMs = 0L;
-
-    private final AtomicBoolean canInvokeWakeup = new AtomicBoolean();
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
@@ -162,14 +159,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(rm -> rm.poll(currentTimeMs))
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
-
-        long before = time.milliseconds();
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
-        canInvokeWakeup.set(true);
-        long after = time.milliseconds();
-
-        if (after - before > 1000)
-            log.info("Why did we wait {} ms?", after - before);
 
         cachedMaximumTimeToWait = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
@@ -256,12 +246,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
     public boolean isRunning() {
         return running;
-    }
-
-    public void wakeup() {
-        // The network client can be null if the initializeResources method has not yet been called.
-        if (networkClientDelegate != null && canInvokeWakeup.compareAndSet(true, false))
-            networkClientDelegate.wakeup();
     }
 
     /**
