@@ -76,7 +76,7 @@ object TransactionCoordinator {
   }
 
   private def initTransactionMetadata(txnMetadata: TxnTransitMetadata): InitProducerIdResult = {
-    InitProducerIdResult(txnMetadata.producerId(), txnMetadata.producerEpoch(), Errors.NONE)
+    InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE)
   }
 }
 

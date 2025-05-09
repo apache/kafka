@@ -276,7 +276,7 @@ class TransactionMarkerChannelManager(
     val coordinatorEpoch = pendingCompleteTxn.coordinatorEpoch
 
     trace(s"Completed sending transaction markers for $transactionalId; begin transition " +
-      s"to ${newMetadata.txnState()}")
+      s"to ${newMetadata.txnState}")
 
     txnStateManager.getTransactionState(transactionalId) match {
       case Left(Errors.NOT_COORDINATOR) =>
