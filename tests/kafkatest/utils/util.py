@@ -134,7 +134,7 @@ def annotate_data_lost(data_lost, msg, number_validated):
             "This suggests they were lost on their way to the consumer." % number_validated
     return msg
 
-def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_data=None, may_truncate_acked_records=False, verify_duplicate_data=True):
+def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_data=None, may_truncate_acked_records=False):
     """Check that each acked message was consumed."""
     success = True
     msg = ""
@@ -168,7 +168,7 @@ def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_dat
             success = False
 
     # Are there duplicates?
-    if verify_duplicate_data and len(set(consumed)) != len(consumed):
+    if len(set(consumed)) != len(consumed):
         num_duplicates = abs(len(set(consumed)) - len(consumed))
 
         if idempotence_enabled:

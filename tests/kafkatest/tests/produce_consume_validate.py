@@ -122,7 +122,7 @@ class ProduceConsumeValidateTest(Test):
 
         succeeded, error_msg = validate_delivery(self.producer.acked, messages_consumed,
                                                  self.enable_idempotence, check_lost_data,
-                                                 self.may_truncate_acked_records, self.verify_duplicate_data)
+                                                 self.may_truncate_acked_records)
 
         # Collect all logs if validation fails
         if not succeeded:
