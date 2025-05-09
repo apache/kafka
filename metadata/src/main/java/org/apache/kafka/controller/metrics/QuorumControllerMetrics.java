@@ -177,7 +177,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
     }
 
     public void removeTimeSinceLastHeartbeatMetric(int brokerId) {
-        brokerContactTimesMs.remove(brokerId);
         registry.ifPresent(r -> r.removeMetric(
             getBrokerIdTagMetricName(
                 "KafkaController",
@@ -185,6 +184,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 brokerId
             )
         ));
+        brokerContactTimesMs.remove(brokerId);
     }
 
     public void removeTimeSinceLastHeartbeatMetrics() {

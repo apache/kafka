@@ -102,7 +102,6 @@ class ControllerMetricsChanges {
             brokerId = next.id();
         } else {
             brokerId = prev.id();
-            metrics.removeBrokerRegistrationStateMetric(brokerId);
         }
         metrics.setBrokerRegistrationState(brokerId, next);
         fencedBrokersChange += delta(wasFenced, isFenced);
