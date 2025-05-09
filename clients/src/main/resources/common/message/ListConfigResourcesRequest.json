@@ -23,7 +23,7 @@
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ResourceTypes", "type": "[]int8", "versions": "1+", "ignorable": true,
+    { "name": "ResourceTypes", "type": "[]int8", "versions": "1+",
       "about": "The list of resource type." }
   ]
 }

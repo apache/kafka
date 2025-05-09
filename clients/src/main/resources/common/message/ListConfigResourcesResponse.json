@@ -30,7 +30,7 @@
         "about": "Each config resource in the response.", "fields": [
         { "name": "ResourceName", "type": "string", "versions": "0+",
           "about": "The resource name." },
-        { "name": "ResourceType", "type": "int8", "versions": "1+", "ignorable": true,
+        { "name": "ResourceType", "type": "int8", "versions": "1+", "ignorable": true, "default": 16,
           "about": "The resource type." }
     ]}
   ]

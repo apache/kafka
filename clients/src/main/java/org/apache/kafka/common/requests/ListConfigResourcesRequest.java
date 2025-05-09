@@ -72,4 +72,7 @@ public class ListConfigResourcesRequest extends AbstractRequest {
         return data.toString();
     }
 
+    public boolean onlySupportClientMetrics() {
+        return version() == 0;
+    }
 }

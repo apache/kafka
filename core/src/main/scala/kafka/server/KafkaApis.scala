@@ -2882,7 +2882,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val data = new ListConfigResourcesResponseData()
 
-      if (request.header.apiVersion() == 0) {
+      if (listConfigResourcesRequest.onlySupportClientMetrics) {
         // Version 0 only supports client metrics.
         data.setConfigResources(clientMetricsManager.listClientMetricsResources.stream.map(name =>
             new ListConfigResourcesResponseData.ConfigResource().setResourceName(name).setResourceType(ConfigResource.Type.CLIENT_METRICS.id)
@@ -2891,13 +2891,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // From version 1, supports all ConfigResource.Type.
         var resourceTypes = listConfigResourcesRequest.data().resourceTypes()
         if (resourceTypes.isEmpty) {
-          resourceTypes = util.List.of(
-            ConfigResource.Type.GROUP.id(),
-            ConfigResource.Type.CLIENT_METRICS.id(),
-            ConfigResource.Type.BROKER_LOGGER.id(),
-            ConfigResource.Type.BROKER.id(),
-            ConfigResource.Type.TOPIC.id(),
-          )
+          resourceTypes = ConfigResource.Type.values().map(c => java.lang.Byte.valueOf(c.id)).toList.asJava
         }
 
         val result = new util.ArrayList[ListConfigResourcesResponseData.ConfigResource]()
