@@ -18,9 +18,9 @@ package org.apache.kafka.server.purgatory;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ProduceResponseData.PartitionProduceResponse;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
 import com.yammer.metrics.core.Meter;
@@ -50,16 +50,16 @@ public class DelayedProduce extends DelayedOperation {
 
     public static final class ProducePartitionStatus {
         private final long requiredOffset;
-        private final PartitionResponse responseStatus;
+        private final PartitionProduceResponse responseStatus;
 
         private volatile boolean acksPending;
 
-        public ProducePartitionStatus(long requiredOffset, PartitionResponse responseStatus) {
+        public ProducePartitionStatus(long requiredOffset, PartitionProduceResponse responseStatus) {
             this.requiredOffset = requiredOffset;
             this.responseStatus = responseStatus;
         }
 
-        public PartitionResponse responseStatus() {
+        public PartitionProduceResponse responseStatus() {
             return responseStatus;
         }
 
@@ -72,8 +72,8 @@ public class DelayedProduce extends DelayedOperation {
             return String.format(
                     "[acksPending: %s, error: %s, startOffset: %s, requiredOffset: %d]",
                     acksPending,
-                    responseStatus.error.code(),
-                    responseStatus.baseOffset,
+                    responseStatus.errorCode(),
+                    responseStatus.baseOffset(),
                     requiredOffset
             );
         }
@@ -95,12 +95,12 @@ public class DelayedProduce extends DelayedOperation {
 
     private final Map<TopicIdPartition, ProducePartitionStatus> produceStatus;
     private final PartitionStatusValidator statusValidator;
-    private final Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback;
+    private final Consumer<Map<TopicIdPartition, PartitionProduceResponse>> responseCallback;
 
     public DelayedProduce(long delayMs,
                           Map<TopicIdPartition, ProducePartitionStatus> produceStatus,
                           PartitionStatusValidator statusValidator,
-                          Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback) {
+                          Consumer<Map<TopicIdPartition, PartitionProduceResponse>> responseCallback) {
         super(delayMs);
 
         this.produceStatus = produceStatus;
@@ -109,10 +109,10 @@ public class DelayedProduce extends DelayedOperation {
 
         // first update the acks pending variable according to the error code
         produceStatus.forEach((topicPartition, status) -> {
-            if (status.responseStatus.error == Errors.NONE) {
+            if (status.responseStatus.errorCode() == Errors.NONE.code()) {
                 // Timeout error state will be cleared when required acks are received
                 status.acksPending = true;
-                status.responseStatus.error = Errors.REQUEST_TIMED_OUT;
+                status.responseStatus.setErrorCode(Errors.REQUEST_TIMED_OUT.code());
             } else {
                 status.acksPending = false;
             }
@@ -151,7 +151,7 @@ public class DelayedProduce extends DelayedOperation {
                 Errors errors = result.error;
                 if (errors != Errors.NONE || result.hasEnough()) {
                     status.setAcksPending(false);
-                    status.responseStatus.error = errors;
+                    status.responseStatus.setErrorCode(errors.code());
                 }
             }
         });
@@ -186,7 +186,7 @@ public class DelayedProduce extends DelayedOperation {
      */
     @Override
     public void onComplete() {
-        Map<TopicIdPartition, PartitionResponse> responseStatus = new HashMap<>();
+        Map<TopicIdPartition, PartitionProduceResponse> responseStatus = new HashMap<>();
 
         for (Map.Entry<TopicIdPartition, ProducePartitionStatus> entry : produceStatus.entrySet()) {
             responseStatus.put(entry.getKey(), entry.getValue().responseStatus());
