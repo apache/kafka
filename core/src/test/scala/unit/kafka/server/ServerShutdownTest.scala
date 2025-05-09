@@ -148,7 +148,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
     createTopic(topic)
     shutdownBroker()
-    config.logDirs.asScala.foreach { dirName =>
+    config.logDirs.forEach { dirName =>
       val partitionDir = new File(dirName, s"$topic-0")
       partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
@@ -179,7 +179,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   def testShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
     shutdownKRaftController()
     killBroker(0, Duration.ofSeconds(1))
-    CoreUtils.delete(broker.config.logDirs.asScala)
+    CoreUtils.delete(broker.config.logDirs)
     verifyNonDaemonThreadsStatus()
   }
 

@@ -3218,7 +3218,6 @@ class ReplicaManagerTest {
                                                                      config: KafkaConfig = config,
                                                                      scheduler: Scheduler = new MockScheduler(time)): ReplicaManager = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)))
-
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,

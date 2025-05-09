@@ -87,7 +87,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     brokers.foreach(broker => shutdownBroker(broker))
-    brokers.foreach(broker => CoreUtils.delete(broker.config.logDirs.asScala))
+    brokers.foreach(broker => CoreUtils.delete(broker.config.logDirs))
 
     // restore log levels
     Configurator.setLevel(kafkaApisLogger.getName, Level.ERROR)
