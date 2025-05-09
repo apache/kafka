@@ -58,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(600)
 @Tag("integration")
-public class IQv2EndpointToPartitionsIntegrationTest {
+public class IQEndpointToPartitionsIntegrationTest {
     private String appId;
     private String inputTopicTwoPartitions;
     private String outputTopicTwoPartitions;
@@ -174,10 +174,15 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                                metadata.get(1).standbyTopicPartitions().size() == expectedStandbyCount;
                     }, TestUtils.DEFAULT_MAX_WAIT_MS,
                             "Kafka Streams clients 1 and 2 never got metadata about standby tasks");
-
+                    
                     waitForCondition(() -> streamsOne.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 2,
-                            IntegrationTestUtils.DEFAULT_TIMEOUT,
+                            TestUtils.DEFAULT_MAX_WAIT_MS,
                             () -> "Kafka Streams one didn't give up active tasks");
+
+                    waitForCondition(() -> {
+                        final List<StreamsMetadata> metadata = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
+                        return metadata.get(1).topicPartitions().size() == 2;
+                    }, TestUtils.DEFAULT_MAX_WAIT_MS, "Streams metadata for streamTwo never showed 2 active partitions");
 
                     final List<StreamsMetadata> allClientMetadataUpdated = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
 

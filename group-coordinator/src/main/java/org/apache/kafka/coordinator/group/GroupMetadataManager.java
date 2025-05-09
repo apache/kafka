@@ -1841,7 +1841,8 @@ public class GroupMetadataManager {
         String processId,
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
-        boolean shutdownApplication
+        boolean shutdownApplication,
+        int endpointInformationEpoch
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -1956,6 +1957,7 @@ public class GroupMetadataManager {
             targetAssignmentEpoch = group.assignmentEpoch();
             targetAssignment = group.targetAssignment(updatedMember.memberId());
         }
+        group.setEndpointInformationEpoch(targetAssignmentEpoch);
 
         // 5. Reconcile the member's assignment with the target assignment if the member is not
         // fully reconciled yet.
@@ -1982,8 +1984,13 @@ public class GroupMetadataManager {
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
-            .setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
+
+        if (group.endpointInformationEpoch() > endpointInformationEpoch) {
+            response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
+            response.setEndpointInformationEpoch(group.endpointInformationEpoch());
+        }
+
 
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
@@ -4640,7 +4647,8 @@ public class GroupMetadataManager {
                 request.processId(),
                 request.userEndpoint(),
                 request.clientTags(),
-                request.shutdownApplication()
+                request.shutdownApplication(),
+                request.endpointInformationEpoch()
             );
         }
     }

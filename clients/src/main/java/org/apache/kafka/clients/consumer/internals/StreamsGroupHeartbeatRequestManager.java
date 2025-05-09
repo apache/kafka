@@ -106,6 +106,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             data.setGroupId(membershipManager.groupId());
             data.setMemberId(membershipManager.memberId());
             data.setMemberEpoch(membershipManager.memberEpoch());
+            data.setEndpointInformationEpoch(streamsRebalanceData.endpointInformationEpoch());
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
             boolean joining = membershipManager.state() == MemberState.JOINING;
@@ -515,7 +516,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         final StreamsGroupHeartbeatResponseData data = response.data();
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-
+        streamsRebalanceData.setEndpointInformationEpoch(data.endpointInformationEpoch());
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));
         }

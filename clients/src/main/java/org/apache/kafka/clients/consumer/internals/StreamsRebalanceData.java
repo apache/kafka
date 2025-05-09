@@ -329,6 +329,8 @@ public class StreamsRebalanceData {
 
     private final AtomicReference<List<StreamsGroupHeartbeatResponseData.Status>> statuses = new AtomicReference<>(List.of());
 
+    private int endpointInformationEpoch = 0;
+
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
                                 final Map<String, Subtopology> subtopologies,
@@ -355,6 +357,9 @@ public class StreamsRebalanceData {
         return subtopologies;
     }
 
+    public int endpointInformationEpoch() {
+        return endpointInformationEpoch;
+    }
     public int topologyEpoch() {
         return 0;
     }
@@ -369,6 +374,10 @@ public class StreamsRebalanceData {
 
     public void setPartitionsByHost(final Map<HostInfo, EndpointPartitions> partitionsByHost) {
         this.partitionsByHost.set(partitionsByHost);
+    }
+
+    public void setEndpointInformationEpoch(final int endpointInformationEpoch) {
+        this.endpointInformationEpoch = endpointInformationEpoch;
     }
 
     public Map<HostInfo, EndpointPartitions> partitionsByHost() {
