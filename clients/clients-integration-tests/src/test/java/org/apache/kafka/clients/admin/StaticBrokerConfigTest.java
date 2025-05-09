@@ -151,15 +151,15 @@ public class StaticBrokerConfigTest {
 
             // test for case ConfigResource.Type == TOPIC
             Config topicConfig = configResourceMap.get(topicResource);
-            assertNotContainsInternalConfig(topicConfig, LogConfig.configKeys());
+            assertNotContainsAnyInternalConfig(topicConfig, LogConfig.configKeys());
 
             // test for case ConfigResource.Type == GROUP
             Config groupConfig = configResourceMap.get(groupResource);
-            assertNotContainsInternalConfig(groupConfig, GroupConfig.configDef().configKeys());
+            assertNotContainsAnyInternalConfig(groupConfig, GroupConfig.configDef().configKeys());
 
             // test for case ConfigResource.Type == CLIENT_METRICS
             Config clientMetricsConfig = configResourceMap.get(clientMetricsResource);
-            assertNotContainsInternalConfig(clientMetricsConfig, ClientMetricsConfigs.configDef().configKeys());
+            assertNotContainsAnyInternalConfig(clientMetricsConfig, ClientMetricsConfigs.configDef().configKeys());
 
             // test for controller node, and ConfigResource.Type == BROKER
             ConfigResource controllerResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
@@ -174,11 +174,11 @@ public class StaticBrokerConfigTest {
         try (Admin admin = cluster.admin()) {
             // test for createTopics API
             Config config = admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1))).config(TOPIC).get();
-            assertNotContainsInternalConfig(config, LogConfig.configKeys());
+            assertNotContainsAnyInternalConfig(config, LogConfig.configKeys());
         }
     }
 
-    private void assertNotContainsInternalConfig(Config config, Map<String, ConfigDef.ConfigKey> configKeyMap) {
+    private void assertNotContainsAnyInternalConfig(Config config, Map<String, ConfigDef.ConfigKey> configKeyMap) {
         assertNotContainsInternalConfig(config, configKeyMap, Set.of());
     }
 
