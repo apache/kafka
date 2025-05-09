@@ -21,7 +21,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.coordinator.transaction.TransactionState
+import org.apache.kafka.coordinator.transaction.{TransactionState, TxnTransitMetadata}
 import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordType, TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
@@ -62,11 +62,11 @@ object TransactionLog {
     */
   private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
                                         transactionVersionLevel: TransactionVersion): Array[Byte] = {
-    if (txnMetadata.txnState == TransactionState.EMPTY && txnMetadata.topicPartitions.nonEmpty)
-        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
+    if (txnMetadata.txnState() == TransactionState.EMPTY && !txnMetadata.topicPartitions().isEmpty())
+        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState()}: $txnMetadata")
 
-      val transactionPartitions = if (txnMetadata.txnState == TransactionState.EMPTY) null
-      else txnMetadata.topicPartitions
+      val transactionPartitions = if (txnMetadata.txnState() == TransactionState.EMPTY) null
+      else txnMetadata.topicPartitions().asScala
         .groupBy(_.topic)
         .map { case (topic, partitions) =>
           new TransactionLogValue.PartitionsSchema()
@@ -78,14 +78,14 @@ object TransactionLog {
     // which enables flexible fields in records.
     MessageUtil.toVersionPrefixedBytes(transactionVersionLevel.transactionLogValueVersion(),
       new TransactionLogValue()
-        .setProducerId(txnMetadata.producerId)
-        .setProducerEpoch(txnMetadata.producerEpoch)
-        .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs)
-        .setTransactionStatus(txnMetadata.txnState.id)
-        .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp)
-        .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp)
+        .setProducerId(txnMetadata.producerId())
+        .setProducerEpoch(txnMetadata.producerEpoch())
+        .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs())
+        .setTransactionStatus(txnMetadata.txnState().id)
+        .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp())
+        .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp())
         .setTransactionPartitions(transactionPartitions)
-        .setClientTransactionVersion(txnMetadata.clientTransactionVersion.featureLevel()))
+        .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel()))
   }
 
   /**

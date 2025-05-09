@@ -27,7 +27,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
-import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionLogConfig, TransactionState, TransactionStateManagerConfig}
+import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionLogConfig, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.util.Scheduler
@@ -76,7 +76,7 @@ object TransactionCoordinator {
   }
 
   private def initTransactionMetadata(txnMetadata: TxnTransitMetadata): InitProducerIdResult = {
-    InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE)
+    InitProducerIdResult(txnMetadata.producerId(), txnMetadata.producerEpoch(), Errors.NONE)
   }
 }
 
@@ -182,7 +182,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           responseCallback(initTransactionError(error))
 
         case Right((coordinatorEpoch, newMetadata)) =>
-          if (newMetadata.txnState == TransactionState.PREPARE_EPOCH_FENCE) {
+          if (newMetadata.txnState() == TransactionState.PREPARE_EPOCH_FENCE) {
             // abort the ongoing transaction and then return CONCURRENT_TRANSACTIONS to let client wait and retry
             def sendRetriableErrorCallback(error: Errors, newProducerId: Long, newProducerEpoch: Short): Unit = {
               if (error != Errors.NONE) {
@@ -193,8 +193,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             }
 
             endTransaction(transactionalId,
-              newMetadata.producerId,
-              newMetadata.producerEpoch,
+              newMetadata.producerId(),
+              newMetadata.producerEpoch(),
               TransactionResult.ABORT,
               isFromClient = false,
               clientTransactionVersion = txnManager.transactionVersionLevel(), // Since this is not from client, use server TV
@@ -203,8 +203,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
               if (error == Errors.NONE) {
-                info(s"Initialized transactionalId $transactionalId with producerId ${newMetadata.producerId} and producer " +
-                  s"epoch ${newMetadata.producerEpoch} on partition " +
+                info(s"Initialized transactionalId $transactionalId with producerId ${newMetadata.producerId()} and producer " +
+                  s"epoch ${newMetadata.producerEpoch()} on partition " +
                   s"${Topic.TRANSACTION_STATE_TOPIC_NAME}-${txnManager.partitionFor(transactionalId)}")
                 responseCallback(initTransactionMetadata(newMetadata))
               } else {
