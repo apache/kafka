@@ -63,6 +63,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -1512,64 +1513,71 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         @Override
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
-            Errors responseError = response.groupLevelError(rebalanceConfig.groupId);
-            if (responseError != Errors.NONE) {
-                log.debug("Offset fetch failed: {}", responseError.message());
+            var group = response.group(rebalanceConfig.groupId);
+            var groupError = Errors.forCode(group.errorCode());
 
-                if (responseError == Errors.COORDINATOR_NOT_AVAILABLE ||
-                    responseError == Errors.NOT_COORDINATOR) {
+            if (groupError != Errors.NONE) {
+                log.debug("Offset fetch failed: {}", groupError.message());
+
+                if (groupError == Errors.COORDINATOR_NOT_AVAILABLE ||
+                    groupError == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
-                    markCoordinatorUnknown(responseError);
-                    future.raise(responseError);
-                } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    markCoordinatorUnknown(groupError);
+                    future.raise(groupError);
+                } else if (groupError == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
-                } else if (responseError.exception() instanceof RetriableException) {
+                } else if (groupError.exception() instanceof RetriableException) {
                     // retry
-                    future.raise(responseError);
+                    future.raise(groupError);
                 } else {
-                    future.raise(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
+                    future.raise(new KafkaException("Unexpected error in fetch offset response: " + groupError.message()));
                 }
                 return;
             }
 
-            Set<String> unauthorizedTopics = null;
-            Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
-                response.partitionDataMap(rebalanceConfig.groupId);
-            Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
-            Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
-            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
-                TopicPartition tp = entry.getKey();
-                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
-                if (partitionData.hasError()) {
-                    Errors error = partitionData.error;
-                    log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+            var offsets = new HashMap<TopicPartition, OffsetAndMetadata>();
+            var unstableTxnOffsetTopicPartitions = new HashSet<TopicPartition>();
+            var unauthorizedTopics = new HashSet<String>();
 
-                    if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                        future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
-                        return;
-                    } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                        if (unauthorizedTopics == null) {
-                            unauthorizedTopics = new HashSet<>();
+            for (var topic : group.topics()) {
+                for (var partition : topic.partitions()) {
+                    var tp = new TopicPartition(
+                        topic.name(),
+                        partition.partitionIndex()
+                    );
+                    var error = Errors.forCode(partition.errorCode());
+
+                    if (error != Errors.NONE) {
+                        log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+
+                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                            future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
+                            return;
+                        } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                            unauthorizedTopics.add(tp.topic());
+                        } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
+                            unstableTxnOffsetTopicPartitions.add(tp);
+                        } else {
+                            future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
+                                tp + ": " + error.message()));
+                            return;
                         }
-                        unauthorizedTopics.add(tp.topic());
-                    } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
-                        unstableTxnOffsetTopicPartitions.add(tp);
+                    } else if (partition.committedOffset() >= 0) {
+                        // record the position with the offset (-1 indicates no committed offset to fetch);
+                        // if there's no committed offset, record as null
+                        offsets.put(tp, new OffsetAndMetadata(
+                            partition.committedOffset(),
+                            RequestUtils.getLeaderEpoch(partition.committedLeaderEpoch()),
+                            partition.metadata()
+                        ));
                     } else {
-                        future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
-                            tp + ": " + error.message()));
-                        return;
+                        log.info("Found no committed offset for partition {}", tp);
+                        offsets.put(tp, null);
                     }
-                } else if (partitionData.offset >= 0) {
-                    // record the position with the offset (-1 indicates no committed offset to fetch);
-                    // if there's no committed offset, record as null
-                    offsets.put(tp, new OffsetAndMetadata(partitionData.offset, partitionData.leaderEpoch, partitionData.metadata));
-                } else {
-                    log.info("Found no committed offset for partition {}", tp);
-                    offsets.put(tp, null);
                 }
             }
 
-            if (unauthorizedTopics != null) {
+            if (!unauthorizedTopics.isEmpty()) {
                 future.raise(new TopicAuthorizationException(unauthorizedTopics));
             } else if (!unstableTxnOffsetTopicPartitions.isEmpty()) {
                 // just retry

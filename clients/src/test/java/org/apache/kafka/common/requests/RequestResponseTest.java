@@ -200,6 +200,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
@@ -2483,17 +2484,23 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchResponse createOffsetFetchResponse(short version) {
-        Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(
-            100L, Optional.empty(), "", Errors.NONE));
-        responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(
-            100L, Optional.of(10), null, Errors.NONE));
-        if (version < 8) {
-            return new OffsetFetchResponse(Errors.NONE, responseData);
-        }
-        int throttleMs = 10;
-        return new OffsetFetchResponse(throttleMs, Collections.singletonMap("group1", Errors.NONE),
-            Collections.singletonMap("group1", responseData));
+        var group = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("group1")
+            .setTopics(List.of(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setName("test")
+                    .setPartitions(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(0)
+                            .setCommittedOffset(100),
+                        new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(1)
+                            .setCommittedOffset(100)
+                            .setCommittedLeaderEpoch(10)
+                            .setMetadata(null)
+                    ))
+            ));
+        return new OffsetFetchResponse.Builder(group).build(version);
     }
 
     private ProduceRequest createProduceRequest(short version) {
