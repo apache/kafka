@@ -67,6 +67,7 @@ import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;

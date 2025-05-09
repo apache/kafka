@@ -30,7 +30,7 @@ import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.test.api.Flaky
-import org.apache.kafka.common.{KafkaException, requests}
+import org.apache.kafka.common.{KafkaException, Uuid, requests}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
@@ -56,7 +56,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   val plaintextListenerDefaultQuota = 30
   var executor: ExecutorService = _
   var admin: Admin = _
-
+  var topicId: Uuid = _
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, "2")
     properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
@@ -67,6 +67,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     super.setUp(testInfo)
     admin = createAdminClient(listener)
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers)
+    topicId = TestUtils.describeTopic(admin, topic).topicId()
   }
 
   @AfterEach
@@ -308,7 +309,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     requests.ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
         Collections.singletonList(new ProduceRequestData.TopicProduceData()
-          .setName(topic)
+          .setTopicId(topicId)
           .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
             .setIndex(0)
             .setRecords(MemoryRecords.withRecords(Compression.NONE,

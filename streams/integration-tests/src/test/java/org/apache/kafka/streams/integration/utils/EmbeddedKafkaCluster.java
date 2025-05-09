@@ -143,16 +143,6 @@ public class EmbeddedKafkaCluster {
         this.time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
     }
 
-    public static EmbeddedKafkaCluster withStreamsRebalanceProtocol(final int numBrokers) {
-        return withStreamsRebalanceProtocol(numBrokers, new Properties());
-    }
-
-    public static EmbeddedKafkaCluster withStreamsRebalanceProtocol(final int numBrokers, final Properties props) {
-        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
-        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
-        return new EmbeddedKafkaCluster(numBrokers, props);
-    }
-
     public void start() {
         try {
             cluster.format();

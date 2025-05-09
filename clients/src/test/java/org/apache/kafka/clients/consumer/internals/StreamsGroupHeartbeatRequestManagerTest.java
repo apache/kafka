@@ -153,7 +153,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         List.of(
             new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
                 .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(8080))
-                .setPartitions(List.of(
+                .setActivePartitions(List.of(
                     new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("topic").setPartitions(List.of(0)))
                 )
         );
@@ -591,9 +591,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 .get(new StreamsRebalanceData.HostInfo(
                     ENDPOINT_TO_PARTITIONS.get(0).userEndpoint().host(),
                     ENDPOINT_TO_PARTITIONS.get(0).userEndpoint().port())
-                );
-            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).partitions().get(0).topic(), topicPartitions.get(0).topic());
-            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).partitions().get(0).partitions().get(0), topicPartitions.get(0).partition());
+                ).activePartitions();
+            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).topic(), topicPartitions.get(0).topic());
+            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).partitions().get(0), topicPartitions.get(0).partition());
             assertEquals(
                 1.0,
                 metrics.metric(metrics.metricName("heartbeat-total", "consumer-coordinator-metrics")).metricValue()
@@ -1517,6 +1517,36 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             assertEquals(5, maximumTimeToWait);
             verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @Test
+    public void testResetPollTimer() {
+        try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = pollTimerMockedConstruction.constructed().get(1);
+
+            heartbeatRequestManager.resetPollTimer(time.milliseconds());
+            verify(pollTimer).update(time.milliseconds());
+            verify(pollTimer).isExpired();
+            verify(pollTimer).reset(DEFAULT_MAX_POLL_INTERVAL_MS);
+        }
+    }
+
+    @Test
+    public void testResetPollTimerWhenExpired() {
+        try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = pollTimerMockedConstruction.constructed().get(1);
+
+            when(pollTimer.isExpired()).thenReturn(true);
+            heartbeatRequestManager.resetPollTimer(time.milliseconds());
+            verify(pollTimer).update(time.milliseconds());
+            verify(pollTimer).isExpired();
+            verify(pollTimer).isExpiredBy();
+            verify(membershipManager).memberId();
+            verify(membershipManager).maybeRejoinStaleMember();
+            verify(pollTimer).reset(DEFAULT_MAX_POLL_INTERVAL_MS);
         }
     }
 

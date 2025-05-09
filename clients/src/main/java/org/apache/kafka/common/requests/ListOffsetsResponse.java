@@ -21,11 +21,10 @@ import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.RecordBatch;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
@@ -89,8 +88,8 @@ public class ListOffsetsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static ListOffsetsResponse parse(ByteBuffer buffer, short version) {
-        return new ListOffsetsResponse(new ListOffsetsResponseData(new ByteBufferAccessor(buffer), version));
+    public static ListOffsetsResponse parse(Readable readable, short version) {
+        return new ListOffsetsResponse(new ListOffsetsResponseData(readable, version));
     }
 
     @Override

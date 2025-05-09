@@ -184,7 +184,7 @@ public class StateManagerUtilTest {
         doThrow(new ProcessorStateException("Close failed")).when(stateManager).close();
         when(stateManager.baseDir()).thenReturn(randomFile);
 
-        try (MockedStatic<Utils> utils = mockStatic(Utils.class)) {
+        try (MockedStatic<Utils> ignored = mockStatic(Utils.class)) {
             assertThrows(ProcessorStateException.class, () ->
                     StateManagerUtil.closeStateManager(logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
         }

@@ -81,7 +81,7 @@ import static org.mockito.Mockito.mockingDetails;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
-    private final List<String> walRelatedMethods = new LinkedList<String>() {
+    private final List<String> walRelatedMethods = new LinkedList<>() {
         {
             add("setManualWalFlush");
             add("setMaxTotalWalSize");
@@ -94,7 +94,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         }
     };
 
-    private final List<String> ignoreMethods = new LinkedList<String>() {
+    private final List<String> ignoreMethods = new LinkedList<>() {
         {
             add("isOwningHandle");
             add("getNativeHandle");

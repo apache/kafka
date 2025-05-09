@@ -41,6 +41,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
@@ -127,7 +128,8 @@ public class KafkaRaftClientReconfigTest {
                 context.serde,
                 BufferSupplier.NO_CACHING,
                 KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-                false
+                false,
+                new LogContext()
             )
         ) {
             SnapshotWriterReaderTest.assertControlSnapshot(expectedBootstrapRecords, reader);

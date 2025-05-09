@@ -27,6 +27,7 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.record.RecordBatch;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,107 +37,22 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 public class OffsetFetchRequest extends AbstractRequest {
 
     private static final Logger log = LoggerFactory.getLogger(OffsetFetchRequest.class);
-    private static final List<OffsetFetchRequestTopic> ALL_TOPIC_PARTITIONS = null;
-    private static final List<OffsetFetchRequestTopics> ALL_TOPIC_PARTITIONS_BATCH = null;
-    private static final short LAST_TOPIC_NAME_SUPPORT_VERSION = 9;
+    public static final short TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION = 2;
+    public static final short REQUIRE_STABLE_OFFSET_MIN_VERSION = 7;
+    public static final short BATCH_MIN_VERSION = 8;
+    public static final short TOPIC_ID_MIN_VERSION = 9;
 
     private final OffsetFetchRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
 
-        public final OffsetFetchRequestData data;
+        private final OffsetFetchRequestData data;
         private final boolean throwOnFetchStableOffsetsUnsupported;
-
-        public Builder(String groupId,
-                       boolean requireStable,
-                       List<TopicPartition> partitions,
-                       boolean throwOnFetchStableOffsetsUnsupported) {
-            this(
-                groupId,
-                null,
-                -1,
-                requireStable,
-                partitions,
-                throwOnFetchStableOffsetsUnsupported
-            );
-        }
-
-        public Builder(String groupId,
-                       String memberId,
-                       int memberEpoch,
-                       boolean requireStable,
-                       List<TopicPartition> partitions,
-                       boolean throwOnFetchStableOffsetsUnsupported) {
-            // It can only be used with topic names.
-            super(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.oldestVersion(), LAST_TOPIC_NAME_SUPPORT_VERSION);
-
-            OffsetFetchRequestData.OffsetFetchRequestGroup group =
-                new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                    .setGroupId(groupId)
-                    .setMemberId(memberId)
-                    .setMemberEpoch(memberEpoch);
-
-            if (partitions != null) {
-                Map<String, OffsetFetchRequestTopics> offsetFetchRequestTopicMap = new HashMap<>();
-                for (TopicPartition topicPartition : partitions) {
-                    String topicName = topicPartition.topic();
-                    OffsetFetchRequestTopics topic = offsetFetchRequestTopicMap.getOrDefault(
-                        topicName, new OffsetFetchRequestTopics().setName(topicName));
-                    topic.partitionIndexes().add(topicPartition.partition());
-                    offsetFetchRequestTopicMap.put(topicName, topic);
-                }
-                group.setTopics(new ArrayList<>(offsetFetchRequestTopicMap.values()));
-            } else {
-                // If passed in partition list is null, it is requesting offsets for all topic partitions.
-                group.setTopics(ALL_TOPIC_PARTITIONS_BATCH);
-            }
-
-            this.data = new OffsetFetchRequestData()
-                .setRequireStable(requireStable)
-                .setGroups(Collections.singletonList(group));
-            this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
-        }
-
-        public Builder(Map<String, List<TopicPartition>> groupIdToTopicPartitionMap,
-                       boolean requireStable,
-                       boolean throwOnFetchStableOffsetsUnsupported) {
-            // It can only be used with topic names.
-            super(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.oldestVersion(), LAST_TOPIC_NAME_SUPPORT_VERSION);
-
-            List<OffsetFetchRequestGroup> groups = new ArrayList<>();
-            for (Entry<String, List<TopicPartition>> entry : groupIdToTopicPartitionMap.entrySet()) {
-                String groupName = entry.getKey();
-                List<TopicPartition> tpList = entry.getValue();
-                final List<OffsetFetchRequestTopics> topics;
-                if (tpList != null) {
-                    Map<String, OffsetFetchRequestTopics> offsetFetchRequestTopicMap =
-                        new HashMap<>();
-                    for (TopicPartition topicPartition : tpList) {
-                        String topicName = topicPartition.topic();
-                        OffsetFetchRequestTopics topic = offsetFetchRequestTopicMap.getOrDefault(
-                            topicName, new OffsetFetchRequestTopics().setName(topicName));
-                        topic.partitionIndexes().add(topicPartition.partition());
-                        offsetFetchRequestTopicMap.put(topicName, topic);
-                    }
-                    topics = new ArrayList<>(offsetFetchRequestTopicMap.values());
-                } else {
-                    topics = ALL_TOPIC_PARTITIONS_BATCH;
-                }
-                groups.add(new OffsetFetchRequestGroup()
-                    .setGroupId(groupName)
-                    .setTopics(topics));
-            }
-            this.data = new OffsetFetchRequestData()
-                .setGroups(groups)
-                .setRequireStable(requireStable);
-            this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
-        }
 
         public Builder(OffsetFetchRequestData data, boolean throwOnFetchStableOffsetsUnsupported) {
             super(ApiKeys.OFFSET_FETCH);
@@ -144,14 +60,13 @@ public class OffsetFetchRequest extends AbstractRequest {
             this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
 
-        @SuppressWarnings("CyclomaticComplexity")
         @Override
         public OffsetFetchRequest build(short version) {
-            if (data.groups().size() > 1 && version < 8) {
+            if (data.groups().size() > 1 && version < BATCH_MIN_VERSION) {
                 throw new NoBatchedOffsetFetchRequestException("Broker does not support"
                     + " batching groups for fetch offset request on version " + version);
             }
-            if (data.requireStable() && version < 7) {
+            if (data.requireStable() && version < REQUIRE_STABLE_OFFSET_MIN_VERSION) {
                 if (throwOnFetchStableOffsetsUnsupported) {
                     throw new UnsupportedVersionException("Broker unexpectedly " +
                         "doesn't support requireStable flag on version " + version);
@@ -162,18 +77,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                     data.setRequireStable(false);
                 }
             }
-            if (version > LAST_TOPIC_NAME_SUPPORT_VERSION) {
-                data.groups().forEach(group -> {
-                    if (group.topics() != null) {
-                        group.topics().forEach(topic -> {
-                            if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
-                                throw new UnsupportedVersionException("The broker offset fetch api version " +
-                                    version + " does require usage of topic ids.");
-                            }
-                        });
-                    }
-                });
-            } else {
+            if (version < TOPIC_ID_MIN_VERSION) {
                 data.groups().forEach(group -> {
                     if (group.topics() != null) {
                         group.topics().forEach(topic -> {
@@ -184,9 +88,20 @@ public class OffsetFetchRequest extends AbstractRequest {
                         });
                     }
                 });
+            } else {
+                data.groups().forEach(group -> {
+                    if (group.topics() != null) {
+                        group.topics().forEach(topic -> {
+                            if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
+                                throw new UnsupportedVersionException("The broker offset fetch api version " +
+                                    version + " does require usage of topic ids.");
+                            }
+                        });
+                    }
+                });
             }
             // convert data to use the appropriate version since version 8 uses different format
-            if (version < 8) {
+            if (version < BATCH_MIN_VERSION) {
                 OffsetFetchRequestData normalizedData;
                 if (!data.groups().isEmpty()) {
                     OffsetFetchRequestGroup group = data.groups().get(0);
@@ -209,7 +124,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 } else {
                     normalizedData = data;
                 }
-                if (normalizedData.topics() == null && version < 2) {
+                if (normalizedData.topics() == null && version < TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION) {
                     throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
                         "v" + version + ", but we need v2 or newer to request all topic partitions.");
                 }
@@ -236,19 +151,6 @@ public class OffsetFetchRequest extends AbstractRequest {
         }
     }
 
-    public List<TopicPartition> partitions() {
-        if (isAllPartitions()) {
-            return null;
-        }
-        List<TopicPartition> partitions = new ArrayList<>();
-        for (OffsetFetchRequestTopic topic : data.topics()) {
-            for (Integer partitionIndex : topic.partitionIndexes()) {
-                partitions.add(new TopicPartition(topic.name(), partitionIndex));
-            }
-        }
-        return partitions;
-    }
-
     public String groupId() {
         return data.groupId();
     }
@@ -258,7 +160,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public List<OffsetFetchRequestData.OffsetFetchRequestGroup> groups() {
-        if (version() >= 8) {
+        if (version() >= BATCH_MIN_VERSION) {
             return data.groups();
         } else {
             OffsetFetchRequestData.OffsetFetchRequestGroup group =
@@ -287,7 +189,7 @@ public class OffsetFetchRequest extends AbstractRequest {
         Map<String, List<TopicPartition>> groupIdsToPartitions = new HashMap<>();
         for (OffsetFetchRequestGroup group : data.groups()) {
             List<TopicPartition> tpList = null;
-            if (group.topics() != ALL_TOPIC_PARTITIONS_BATCH) {
+            if (group.topics() != null) {
                 tpList = new ArrayList<>();
                 for (OffsetFetchRequestTopics topic : group.topics()) {
                     for (Integer partitionIndex : topic.partitionIndexes()) {
@@ -319,12 +221,11 @@ public class OffsetFetchRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public OffsetFetchResponse getErrorResponse(Errors error) {
-        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, error);
-    }
+    @Override
+    public OffsetFetchResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        Errors error = Errors.forException(e);
 
-    public OffsetFetchResponse getErrorResponse(int throttleTimeMs, Errors error) {
-        if (version() < 2) {
+        if (version() < TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION) {
             // The response does not support top level error so we return each
             // partition with the error.
             return new OffsetFetchResponse(
@@ -339,12 +240,12 @@ public class OffsetFetchRequest extends AbstractRequest {
                                     .setErrorCode(error.code())
                                     .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
                                     .setMetadata(OffsetFetchResponse.NO_METADATA)
-                                    .setCommittedLeaderEpoch(-1)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
                             ).collect(Collectors.toList()))
                     ).collect(Collectors.toList())),
                 version()
             );
-        } else if (version() < 8) {
+        } else if (version() < BATCH_MIN_VERSION) {
             // The response does not support multiple groups but it does support
             // top level error.
             return new OffsetFetchResponse(
@@ -369,35 +270,16 @@ public class OffsetFetchRequest extends AbstractRequest {
         }
     }
 
-    @Override
-    public OffsetFetchResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return getErrorResponse(throttleTimeMs, Errors.forException(e));
-    }
-
     public static OffsetFetchRequest parse(Readable readable, short version) {
         return new OffsetFetchRequest(new OffsetFetchRequestData(readable, version), version);
     }
 
-    public boolean isAllPartitions() {
-        return data.topics() == ALL_TOPIC_PARTITIONS;
-    }
-
-    public boolean isAllPartitionsForGroup(String groupId) {
-        OffsetFetchRequestGroup group = data
-            .groups()
-            .stream()
-            .filter(g -> g.groupId().equals(groupId))
-            .collect(Collectors.toList())
-            .get(0);
-        return group.topics() == ALL_TOPIC_PARTITIONS_BATCH;
+    public static boolean useTopicIds(short version) {
+        return version >= TOPIC_ID_MIN_VERSION;
     }
 
     @Override
     public OffsetFetchRequestData data() {
         return data;
-    }
-
-    public static boolean useTopicIds(short version) {
-        return version > LAST_TOPIC_NAME_SUPPORT_VERSION;
     }
 }

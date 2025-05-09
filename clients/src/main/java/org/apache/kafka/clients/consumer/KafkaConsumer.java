@@ -1563,8 +1563,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timestampsToSearch the mapping from partition to the timestamp to look up.
      *
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
-     *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
-     *         such message.
+     *         than or equal to the target timestamp. If the timestamp and offset for a specific partition cannot be found within 
+     *         the default timeout, and no corresponding message exists, the entry in the returned map will be {@code null}
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative
@@ -1590,8 +1590,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timeout The maximum amount of time to await retrieval of the offsets
      *
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
-     *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
-     *         such message.
+     *         than or equal to the target timestamp. If the timestamp and offset for a specific partition cannot be found within 
+     *         timeout, and no corresponding message exists, the entry in the returned map will be {@code null}
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative
@@ -1634,7 +1634,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the earliest offsets
      * @param timeout The maximum amount of time to await retrieval of the beginning offsets
      *
-     * @return The earliest available offsets for the given partitions
+     * @return The earliest available offsets for the given partitions, and it will return empty map if zero timeout is provided
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
@@ -1684,7 +1684,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the end offsets.
      * @param timeout The maximum amount of time to await retrieval of the end offsets
      *
-     * @return The end offsets for the given partitions.
+     * @return The end offsets for the given partitions, and it will return empty map if zero timeout is provided
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
@@ -1761,9 +1761,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
+     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default leave group behavior},
+     * waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
-     * timeout. See {@link #close(Duration)} for details. Note that {@link #wakeup()}
+     * timeout. See {@link #close(CloseOptions)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
      *
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
@@ -1776,10 +1777,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Tries to close the consumer cleanly within the specified timeout. This method waits up to
-     * {@code timeout} for the consumer to complete pending commits and leave the group.
+     * This method has been deprecated since Kafka 4.1 and should use {@link KafkaConsumer#close(CloseOptions)} instead.
+     * <p>
+     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default leave group behavior}
+     * cleanly within the specified timeout. This method waits up to
+     * {@code timeout} for the consumer to complete pending commits and maybe leave the group (if the member is dynamic).
      * If auto-commit is enabled, this will commit the current offsets if possible within the
-     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group
+     * timeout. If the consumer is unable to complete offset commits and to gracefully leave the group (if applicable)
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
      * used to interrupt close.
      * <p>
@@ -1797,10 +1801,38 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws InterruptException If the thread is interrupted before or while this function is called
      * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
+    @Deprecated(since = "4.1")
     @Override
-    @SuppressWarnings("deprecation")
     public void close(Duration timeout) {
         delegate.close(timeout);
+    }
+
+    /**
+     * Close the consumer cleanly. {@link CloseOptions} allows to specify a timeout and a
+     * {@link CloseOptions.GroupMembershipOperation leave group behavior}.
+     * If no timeout is specified, the default timeout of 30 seconds is used.
+     * If no leave group behavior is specified, the {@link CloseOptions.GroupMembershipOperation#DEFAULT default
+     * leave group behavior} is used.
+     * <p>
+     * This method waits up to the timeout for the consumer to complete pending commits and maybe leave the group,
+     * depending on the specified leave group behavior.
+     * If auto-commit is enabled, this will commit the current offsets if possible within the
+     * timeout. If the consumer is unable to complete offset commits and to gracefully leave the group (if applicable)
+     * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
+     * used to interrupt close.
+     * <p>
+     * The actual maximum wait time is bounded by the {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} setting, which
+     * only applies to operations performed with the broker (coordinator-related requests and
+     * fetch sessions). Even if a larger timeout is specified, the consumer will not wait longer than
+     * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
+     * Note that the execution time of callbacks (such as {@link OffsetCommitCallback} and
+     * {@link ConsumerRebalanceListener}) does not consume time from the close timeout.
+     *
+     * @param option see {@link CloseOptions}; cannot be {@code null}
+     */
+    @Override
+    public void close(CloseOptions option) {
+        delegate.close(option);
     }
 
     /**
@@ -1811,17 +1843,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
         delegate.wakeup();
-    }
-
-    /**
-     * This method allows the caller to specify shutdown behavior using the {@link CloseOptions} class.
-     * If {@code null} is provided, the default behavior will be applied, equivalent to providing a new {@link CloseOptions} instance.
-     *
-     * @param option see {@link CloseOptions}
-     */
-    @Override
-    public void close(CloseOptions option) {
-        delegate.close(option);
     }
 
     // Functions below are for testing only

@@ -45,9 +45,15 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ArgumentsProvider;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,12 +62,12 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createFileRecords;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShareAcquiredRecords;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -329,7 +335,7 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
         assertEquals(0, resultData.get(tp0).partitionIndex());
-        assertNull(resultData.get(tp0).records());
+        assertEquals(MemoryRecords.EMPTY, resultData.get(tp0).records());
         assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 
@@ -344,7 +350,7 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
         assertEquals(0, resultData.get(tp0).partitionIndex());
-        assertNull(resultData.get(tp0).records());
+        assertEquals(MemoryRecords.EMPTY, resultData.get(tp0).records());
         assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 
@@ -463,11 +469,9 @@ public class ShareFetchUtilsTest {
         Mockito.verify(sp0, times(0)).updateCacheAndOffsets(any(Long.class));
     }
 
-    @Test
-    public void testMaybeSliceFetchRecordsSingleBatch() throws IOException {
-        // Create 1 batch of records with 10 records.
-        FileRecords records = createFileRecords(Map.of(5L, 10));
-
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(RecordsArgumentsProvider.class)
+    public void testMaybeSliceFetchRecordsSingleBatch(String name, Records records) {
         // Acquire all offsets, should return same records.
         List<AcquiredRecords> acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(5).setLastOffset(14).setDeliveryCount((short) 1));
         Records slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 10));
@@ -499,15 +503,9 @@ public class ShareFetchUtilsTest {
         assertEquals(records, slicedRecords);
     }
 
-    @Test
-    public void testMaybeSliceFetchRecordsMultipleBatches() throws IOException {
-        // Create 3 batches of records with 3, 2 and 4 records respectively.
-        LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
-        recordsPerOffset.put(0L, 3);
-        recordsPerOffset.put(3L, 2);
-        recordsPerOffset.put(7L, 4); // Gap of 2 offsets between batches.
-        FileRecords records = createFileRecords(recordsPerOffset);
-
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(MultipleBatchesRecordsArgumentsProvider.class)
+    public void testMaybeSliceFetchRecordsMultipleBatches(String name, Records records) {
         // Acquire all offsets, should return same records.
         List<AcquiredRecords> acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(0).setLastOffset(10).setDeliveryCount((short) 1));
         Records slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 11));
@@ -618,10 +616,9 @@ public class ShareFetchUtilsTest {
         assertEquals(records.sizeInBytes(), slicedRecords.sizeInBytes());
     }
 
-    @Test
-    public void testMaybeSliceFetchRecordsException() throws IOException {
-        // Create 1 batch of records with 3 records.
-        FileRecords records = createFileRecords(Map.of(0L, 3));
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(MultipleBatchesRecordsArgumentsProvider.class)
+    public void testMaybeSliceFetchRecordsException(String name, Records records) {
         // Send empty acquired records which should trigger an exception and same file records should
         // be returned. The method doesn't expect empty acquired records.
         Records slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(
@@ -629,14 +626,41 @@ public class ShareFetchUtilsTest {
         assertEquals(records, slicedRecords);
     }
 
-    @Test
-    public void testMaybeSliceFetchRecordsNonFileRecords() {
-        // Send memory records which should be returned as is.
-        try (MemoryRecordsBuilder records = memoryRecordsBuilder(2, 0)) {
-            List<AcquiredRecords> acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(0).setLastOffset(1).setDeliveryCount((short) 1));
-            Records slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(
-                records.build(), new ShareAcquiredRecords(acquiredRecords, 2));
-            assertEquals(records.build(), slicedRecords);
+    private static class RecordsArgumentsProvider implements ArgumentsProvider {
+        @Override
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) throws Exception {
+            return Stream.of(
+                Arguments.of("FileRecords", createFileRecords(Map.of(5L, 10))),
+                Arguments.of("MemoryRecords", createMemoryRecords(5L, 10))
+            );
+        }
+
+        private MemoryRecords createMemoryRecords(long baseOffset, int numRecords) {
+            try (MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(numRecords, baseOffset)) {
+                return recordsBuilder.build();
+            }
+        }
+    }
+
+    private static class MultipleBatchesRecordsArgumentsProvider implements ArgumentsProvider {
+        @Override
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) throws Exception {
+            LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
+            recordsPerOffset.put(0L, 3);
+            recordsPerOffset.put(3L, 2);
+            recordsPerOffset.put(7L, 4); // Gap of 2 offsets between batches.
+            return Stream.of(
+                Arguments.of("FileRecords", createFileRecords(recordsPerOffset)),
+                Arguments.of("MemoryRecords", createMemoryRecords(recordsPerOffset))
+            );
+        }
+
+        private MemoryRecords createMemoryRecords(Map<Long, Integer> recordsPerOffset) {
+            ByteBuffer buffer = ByteBuffer.allocate(1024);
+            recordsPerOffset.forEach((offset, numOfRecords) -> memoryRecordsBuilder(buffer, numOfRecords, offset).close());
+            buffer.flip();
+
+            return MemoryRecords.readableRecords(buffer);
         }
     }
 }

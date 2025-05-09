@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -44,9 +43,7 @@ public class DeleteShareGroupOffsetsResponse extends AbstractResponse {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(
-            topicResult -> topicResult.partitions().forEach(
-                partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
-            )
+            topicResult -> updateErrorCounts(counts, Errors.forCode(topicResult.errorCode()))
         );
         return counts;
     }
@@ -61,9 +58,9 @@ public class DeleteShareGroupOffsetsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static DeleteShareGroupOffsetsResponse parse(ByteBuffer buffer, short version) {
+    public static DeleteShareGroupOffsetsResponse parse(Readable readable, short version) {
         return new DeleteShareGroupOffsetsResponse(
-            new DeleteShareGroupOffsetsResponseData(new ByteBufferAccessor(buffer), version)
+            new DeleteShareGroupOffsetsResponseData(readable, version)
         );
     }
 }
