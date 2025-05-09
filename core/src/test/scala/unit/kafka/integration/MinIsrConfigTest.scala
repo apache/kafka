@@ -19,6 +19,7 @@ package kafka.integration
 
 import java.util.Properties
 import scala.collection.Seq
+
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.server.config.ServerLogConfigs
