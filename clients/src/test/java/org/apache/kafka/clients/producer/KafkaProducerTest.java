@@ -1451,7 +1451,7 @@ public class KafkaProducerTest {
         when(ctx.transactionManager.is2PCEnabled()).thenReturn(true);
         when(ctx.sender.isRunning()).thenReturn(true);
 
-        doNothing().when(ctx.transactionManager).beginPrepare();
+        doNothing().when(ctx.transactionManager).prepareTransaction();
 
         PreparedTxnState expectedState = mock(PreparedTxnState.class);
         when(ctx.transactionManager.getPreparedTransactionState()).thenReturn(expectedState);
@@ -1460,7 +1460,7 @@ public class KafkaProducerTest {
             PreparedTxnState returned = producer.prepareTransaction();
             assertSame(expectedState, returned);
 
-            verify(ctx.transactionManager).beginPrepare();
+            verify(ctx.transactionManager).prepareTransaction();
             verify(ctx.accumulator).beginFlush();
             verify(ctx.accumulator).awaitFlushCompletion();
         }
@@ -1479,7 +1479,7 @@ public class KafkaProducerTest {
 
         // Mock transaction manager to simulate being in a prepared state
         when(ctx.transactionManager.isTransactional()).thenReturn(true);
-        when(ctx.transactionManager.isInPreparingState()).thenReturn(true);
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
 
         // Create record to send
         long timestamp = ctx.time.milliseconds();
@@ -1496,7 +1496,7 @@ public class KafkaProducerTest {
 
             // Verify transactionManager methods were called
             verify(ctx.transactionManager).isTransactional();
-            verify(ctx.transactionManager).isInPreparingState();
+            verify(ctx.transactionManager).isPrepared();
 
             // Verify that no message was actually sent (accumulator was not called)
             verify(ctx.accumulator, never()).append(
@@ -1527,7 +1527,7 @@ public class KafkaProducerTest {
 
         // Mock transaction manager to simulate being in a prepared state
         when(ctx.transactionManager.isTransactional()).thenReturn(true);
-        when(ctx.transactionManager.isInPreparingState()).thenReturn(true);
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
 
         // Create consumer group metadata
         String groupId = "test-group";
@@ -1546,7 +1546,7 @@ public class KafkaProducerTest {
 
             // Verify transactionManager methods were called
             verify(ctx.transactionManager).isTransactional();
-            verify(ctx.transactionManager).isInPreparingState();
+            verify(ctx.transactionManager).isPrepared();
 
             // Verify that no offsets were actually sent
             verify(ctx.transactionManager, never()).sendOffsetsToTransaction(
@@ -1565,7 +1565,7 @@ public class KafkaProducerTest {
 
         // Mock transaction manager to simulate being in a prepared state
         when(ctx.transactionManager.isTransactional()).thenReturn(true);
-        when(ctx.transactionManager.isInPreparingState()).thenReturn(true);
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
 
         try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
             // Verify that calling beginTransaction throws IllegalStateException with the correct message
@@ -1578,7 +1578,7 @@ public class KafkaProducerTest {
 
             // Verify transactionManager methods were called
             verify(ctx.transactionManager).isTransactional();
-            verify(ctx.transactionManager).isInPreparingState();
+            verify(ctx.transactionManager).isPrepared();
         }
     }
 

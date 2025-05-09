@@ -335,10 +335,10 @@ public class TransactionManager {
     }
 
     /**
-     * Begin preparing a transaction for a two-phase commit.
+     * Prepare a transaction for a two-phase commit.
      * This transitions the transaction to the PREPARED_TRANSACTION state.
      */
-    public synchronized void beginPrepare() {
+    public synchronized void prepareTransaction() {
         ensureTransactional();
         throwIfPendingState("prepareTransaction");
         maybeFailWithError();
@@ -1078,11 +1078,11 @@ public class TransactionManager {
     }
 
     /**
-     * Check if the transaction is in the preparing state.
+     * Check if the transaction is in the prepared state.
      *
      * @return true if the current state is PREPARED_TRANSACTION
      */
-    public synchronized boolean isInPreparingState() {
+    public synchronized boolean isPrepared() {
         return currentState == State.PREPARED_TRANSACTION;
     }
 
@@ -1483,9 +1483,13 @@ public class TransactionManager {
                 setProducerIdAndEpoch(producerIdAndEpoch);
 
                 // If this is a 2PC-enabled transaction with keepPreparedTxn=true, transition directly
-                // to PREPARED_TRANSACTION
+                // to PREPARED_TRANSACTION state IFF there is an ongoing transaction.
                 if (enable2PC && builder.data.keepPreparedTxn()) {
-                    transitionTo(State.PREPARED_TRANSACTION);
+                    if (initProducerIdResponse.data().ongoingTxnProducerId() != -1) {
+                        transitionTo(State.PREPARED_TRANSACTION);
+                    } else {
+                        throw new IllegalStateException("There is no ongoing transaction, but keepPreparedTxn is set to true");
+                    }
                 } else {
                     transitionTo(State.READY);
                 }

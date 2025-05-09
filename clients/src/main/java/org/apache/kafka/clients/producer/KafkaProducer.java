@@ -796,13 +796,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public PreparedTxnState prepareTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        throwIfInPreparedState();
         if (!transactionManager.is2PCEnabled()) {
             throw new InvalidTxnStateException("Cannot prepare a transaction when 2PC is not enabled");
         }
         long now = time.nanoseconds();
         flush();
-        transactionManager.beginPrepare();
-        sender.wakeup();
+        transactionManager.prepareTransaction();
         producerMetrics.recordPrepareTxn(time.nanoseconds() - now);
         return transactionManager.getPreparedTransactionState();
     }
@@ -1024,7 +1024,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private void throwIfInPreparedState() {
         if (transactionManager != null &&
             transactionManager.isTransactional() &&
-            transactionManager.isInPreparingState()
+            transactionManager.isPrepared()
         ) {
             throw new IllegalStateException("Cannot perform operation while the transaction is in a prepared state. " +
                 "Only commitTransaction(), abortTransaction(), or completeTransaction() are permitted.");

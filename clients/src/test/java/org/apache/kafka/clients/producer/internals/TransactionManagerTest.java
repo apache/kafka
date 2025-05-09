@@ -4053,7 +4053,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testBeginPrepare() {
+    public void testPrepareTransaction() {
         doInitTransactionsWith2PCEnabled(false);
         runUntil(transactionManager::hasProducerId);
 
@@ -4080,8 +4080,8 @@ public class TransactionManagerTest {
             fail("Unexpected interruption: " + e);
         }
 
-        transactionManager.beginPrepare();
-        assertTrue(transactionManager.isInPreparingState());
+        transactionManager.prepareTransaction();
+        assertTrue(transactionManager.isPrepared());
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
