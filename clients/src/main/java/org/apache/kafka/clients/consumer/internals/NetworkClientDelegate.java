@@ -151,9 +151,6 @@ public class NetworkClientDelegate implements AutoCloseable {
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
 
-        if (client.hasInFlightRequests())
-            pollTimeoutMs = 0;
-
         List<ClientResponse> clientResponses;
 
         if (client.hasInFlightRequests() || !unsentRequests.isEmpty())

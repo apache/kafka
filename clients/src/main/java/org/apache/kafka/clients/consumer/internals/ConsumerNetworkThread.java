@@ -55,7 +55,7 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
 public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
     // visible for testing
-    static final long MAX_POLL_TIMEOUT_MS = 250;
+    static final long MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
     private final Logger log;
@@ -260,7 +260,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
     public void wakeup() {
         // The network client can be null if the initializeResources method has not yet been called.
-        if (networkClientDelegate != null && canInvokeWakeup.compareAndExchange(true, false))
+        if (networkClientDelegate != null && canInvokeWakeup.compareAndSet(true, false))
             networkClientDelegate.wakeup();
     }
 
