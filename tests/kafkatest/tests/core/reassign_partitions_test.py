@@ -63,9 +63,6 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.num_producers = 1
         self.num_consumers = 1
 
-        # TODO Remove this once KAFKA-18905 is fixed.
-        self.verify_duplicate_data = False
-
     def min_cluster_size(self):
         # Override this since we're adding services outside of the constructor
         return super(ReassignPartitionsTest, self).min_cluster_size() + self.num_producers + self.num_consumers
@@ -166,15 +163,8 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.producer = VerifiableProducer(self.test_context, self.num_producers,
                                            self.kafka, self.topic,
                                            throughput=self.producer_throughput,
-                                           enable_idempotence=True,
-                                           # Some batches are written by a controller but the producer does not
-                                           # receive a response indicating success. We rather fail the batch
-                                           # with fewer retries so that it makes a new batch sooner and can continue
-                                           # producing. See:
-                                           # - https://issues.apache.org/jira/browse/KAFKA-9199
-                                           # - https://issues.apache.org/jira/browse/KAFKA-14359
-                                           # - https://issues.apache.org/jira/browse/KAFKA-18905
-                                           retries=5,
+                                           # TODO Set this to True once KAFKA-18905 is fixed.
+                                           enable_idempotence=False,
                                            # This test aims to verify the reassignment without failure, assuming that all partitions have data.
                                            # To avoid the reassignment behavior being affected by the `BuiltInPartitioner` (due to the key not being set),
                                            # we set a key for the message to ensure both even data distribution across all partitions.
@@ -185,5 +175,6 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
                                         message_validator=is_int,
                                         consumer_properties=consumer_group.maybe_set_group_protocol(group_protocol))
 
-        self.enable_idempotence=True
+        # TODO Set this to True once KAFKA-18905 is fixed.
+        self.enable_idempotence = False
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))

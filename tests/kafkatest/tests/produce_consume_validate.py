@@ -48,9 +48,6 @@ class ProduceConsumeValidateTest(Test):
         # Allow tests to tolerate some data loss by overriding this for tests using older message formats
         self.may_truncate_acked_records = False
 
-        # Tests verify whether or not duplicate data is written.
-        self.verify_duplicate_data = True
-
     def start_producer_and_consumer(self):
         # Start background producer and consumer
         self.consumer.start()
