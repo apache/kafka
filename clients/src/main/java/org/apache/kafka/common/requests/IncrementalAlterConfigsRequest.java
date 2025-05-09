@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.requests;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
@@ -29,9 +27,11 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.Alter
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Readable;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import java.util.Collection;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class IncrementalAlterConfigsRequest extends AbstractRequest {
 
