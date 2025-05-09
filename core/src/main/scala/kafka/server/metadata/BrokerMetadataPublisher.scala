@@ -242,16 +242,20 @@ class BrokerMetadataPublisher(
       }
 
       if (delta.featuresDelta != null) {
-        val newFinalizedFeatures = new FinalizedFeatures(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
-        // Share version feature has been toggled.
-        if (!(newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort) == finalizedShareVersion)) {
-          finalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
-          val shareVersion: ShareVersion = ShareVersion.fromFeatureLevel(finalizedShareVersion)
-          info(s"Share version has been toggled to $shareVersion")
-          sharePartitionManager.onShareVersionToggle(shareVersion)
+        try {
+          val newFinalizedFeatures = new FinalizedFeatures(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
+          // Share version feature has been toggled.
+          if (!(newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort) == finalizedShareVersion)) {
+            finalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
+            val shareVersion: ShareVersion = ShareVersion.fromFeatureLevel(finalizedShareVersion)
+            info(s"Share version has been toggled to $shareVersion")
+            sharePartitionManager.onShareVersionToggle(shareVersion)
+          }
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share partition manager " +
+            s" with share version feature change in $delta", t)
         }
       }
-
 
     } catch {
       case t: Throwable => metadataPublishingFaultHandler.handleFault("Uncaught exception while " +
