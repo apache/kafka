@@ -63,20 +63,21 @@ public final class DefaultRequestSender  implements RequestSender {
         Supplier<ApiMessage> requestSupplier,
         long currentTimeMs
     ) {
-        if (requestManager.isBackingOff(destination, currentTimeMs)) {
-            long remainingBackoffMs = requestManager.remainingBackoffMs(destination, currentTimeMs);
+        final var request = requestSupplier.get();
+        final var api = ApiKeys.forId(request.apiKey());
+        if (requestManager.isBackingOff(destination, currentTimeMs, api)) {
+            long remainingBackoffMs = requestManager.remainingBackoffMs(destination, currentTimeMs, api);
             logger.debug("Connection for {} is backing off for {} ms", destination, remainingBackoffMs);
             return OptionalLong.empty();
         }
 
-        if (!requestManager.isReady(destination, currentTimeMs)) {
-            long remainingMs = requestManager.remainingRequestTimeMs(destination, currentTimeMs);
+        if (!requestManager.isReady(destination, currentTimeMs, api)) {
+            long remainingMs = requestManager.remainingRequestTimeMs(destination, currentTimeMs, api);
             logger.debug("Connection for {} has a pending request for {} ms", destination, remainingMs);
             return OptionalLong.empty();
         }
 
         int correlationId = channel.newCorrelationId();
-        ApiMessage request = requestSupplier.get();
 
         RaftRequest.Outbound requestMessage = new RaftRequest.Outbound(
             correlationId,
@@ -87,7 +88,6 @@ public final class DefaultRequestSender  implements RequestSender {
 
         requestMessage.completion.whenComplete((response, exception) -> {
             if (exception != null) {
-                ApiKeys api = ApiKeys.forId(request.apiKey());
                 Errors error = Errors.forException(exception);
                 ApiMessage errorResponse = RaftUtil.errorResponse(api, error);
 
@@ -101,10 +101,10 @@ public final class DefaultRequestSender  implements RequestSender {
             messageQueue.add(response);
         });
 
-        requestManager.onRequestSent(destination, correlationId, currentTimeMs);
+        requestManager.onRequestSent(destination, correlationId, currentTimeMs, api);
         channel.send(requestMessage);
         logger.trace("Sent outbound request: {}", requestMessage);
 
-        return OptionalLong.of(requestManager.remainingRequestTimeMs(destination, currentTimeMs));
+        return OptionalLong.of(requestManager.remainingRequestTimeMs(destination, currentTimeMs, api));
     }
 }

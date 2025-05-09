@@ -2250,13 +2250,16 @@ public class KafkaRaftClientReconfigTest {
                 new LeaderAndEpoch(OptionalInt.of(voter1.id()), epoch)
             )
         );
+        // polling sends a fetch because no fetches are in flight, only the update voter
         context.client.poll();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
         // after sending an update voter the next requests should be fetch and no update voter
         for (int i = 0; i < 10; i++) {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
-            RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+            fetchRequest = context.assertSentFetchRequest();
             context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
             context.deliverResponse(
@@ -2728,7 +2731,6 @@ public class KafkaRaftClientReconfigTest {
         // don't send a response but increase the time
         context.time.sleep(context.requestTimeoutMs() - 1);
         context.client.poll();
-        assertFalse(context.channel.hasSentRequests());
 
         // expect an update voter request after the FETCH rpc completes
         context.deliverResponse(
@@ -2817,9 +2819,16 @@ public class KafkaRaftClientReconfigTest {
             )
         );
 
-        // check that there is a fetch to the new leader
+        // the first poll can still send a fetch request to the old leader, because there is not one in flight
+        // but will handle the update voter response afterwards to update state
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        assertEquals(voter1.id(), fetchRequest.destination().id());
+
+        // the next poll should send a fetch request to the new leader
+        context.pollUntilRequest();
+        fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
         assertEquals(voter2.id(), fetchRequest.destination().id());
     }

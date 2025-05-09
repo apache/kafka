@@ -17,11 +17,11 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.protocol.ApiKeys;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -42,7 +42,12 @@ import java.util.Random;
  * {@code retryBackoffMs}.
  */
 public class RequestManager {
-    private final Map<String, ConnectionState> connections = new HashMap<>();
+    private record NodeAndRequestKey(String nodeId, ApiKeys requestKey) {
+        private static NodeAndRequestKey of(Node node, ApiKeys requestKey) {
+            return new NodeAndRequestKey(node.idString(), requestKey);
+        }
+    }
+    private final Map<NodeAndRequestKey, ConnectionState> connections = new HashMap<>();
     private final ArrayList<Node> bootstrapServers;
 
     private final int retryBackoffMs;
@@ -62,21 +67,28 @@ public class RequestManager {
     }
 
     /**
-     * Returns true if there are any connections with pending requests.
+     * Returns true if there are any connections with pending requests for a request type.
      *
-     * This is useful for satisfying the invariant that there is only one pending Fetch request.
+     * This is useful for satisfying the invariant that there is only one pending Fetch
+     * and FetchSnapshot request.
      * If there are more than one pending fetch request, it is possible for the follower to write
      * the same offset twice.
      *
      * @param currentTimeMs the current time
+     * @param requestKey the api key for the request
      * @return true if the request manager is tracking at least one request
      */
-    public boolean hasAnyInflightRequest(long currentTimeMs) {
+    public boolean hasAnyInflightRequest(long currentTimeMs, ApiKeys requestKey) {
         boolean result = false;
 
-        Iterator<ConnectionState> iterator = connections.values().iterator();
+        final var iterator = connections.entrySet().iterator();
         while (iterator.hasNext()) {
-            ConnectionState connection = iterator.next();
+            final var entry = iterator.next();
+            final var nodeAndRequestKey = entry.getKey();
+            final var connection = entry.getValue();
+            if (!nodeAndRequestKey.requestKey.equals(requestKey)) {
+                continue;
+            }
             if (connection.hasRequestTimedOut(currentTimeMs)) {
                 // Mark the node as ready after request timeout
                 iterator.remove();
@@ -99,15 +111,18 @@ public class RequestManager {
      *
      * This method doesn't return a node if there is at least one request pending. In general this
      * method is used to send Fetch requests. Fetch requests have the invariant that there can
-     * only be one pending Fetch request for the LEO.
+     * only be one pending Fetch or FetchSnapshot request for the LEO.
      *
      * @param currentTimeMs the current time
      * @return a random ready bootstrap node
      */
     public Optional<Node> findReadyBootstrapServer(long currentTimeMs) {
-        // Check that there are no inflight requests across any of the known nodes not just
-        // the bootstrap servers
-        if (hasAnyInflightRequest(currentTimeMs)) {
+        // Check that there are no inflight fetch or fetch snapshot requests
+        // across any of the known nodes not just the bootstrap servers
+        System.out.println(connections);
+        System.out.println("requestTImeoutMs: " + requestTimeoutMs);
+        if (hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH) ||
+            hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
             return Optional.empty();
         }
 
@@ -117,7 +132,8 @@ public class RequestManager {
             int index = (startIndex + i) % bootstrapServers.size();
             Node node = bootstrapServers.get(index);
 
-            if (isReady(node, currentTimeMs)) {
+            if (isReady(node, currentTimeMs, ApiKeys.FETCH) &&
+                isReady(node, currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
                 result = Optional.of(node);
                 break;
             }
@@ -145,9 +161,15 @@ public class RequestManager {
     public long backoffBeforeAvailableBootstrapServer(long currentTimeMs) {
         long minBackoffMs = retryBackoffMs;
 
-        Iterator<ConnectionState> iterator = connections.values().iterator();
+        final var iterator = connections.entrySet().iterator();
         while (iterator.hasNext()) {
-            ConnectionState connection = iterator.next();
+            final var entry = iterator.next();
+            final var nodeAndRequestKey = entry.getKey();
+            final var connection = entry.getValue();
+            if (!(nodeAndRequestKey.requestKey.equals(ApiKeys.FETCH) ||
+                nodeAndRequestKey.requestKey.equals(ApiKeys.FETCH_SNAPSHOT))) {
+                continue;
+            }
             if (connection.hasRequestTimedOut(currentTimeMs)) {
                 // Mark the node as ready after request timeout
                 iterator.remove();
@@ -155,7 +177,7 @@ public class RequestManager {
                 // Mark the node as ready after completed backoff
                 iterator.remove();
             } else if (connection.hasInflightRequest(currentTimeMs)) {
-                // There can be at most one inflight fetch request
+                // There can be at most one inflight fetch or fetch snapshot request
                 return connection.remainingRequestTimeMs(currentTimeMs);
             } else if (connection.isBackingOff(currentTimeMs)) {
                 minBackoffMs = Math.min(minBackoffMs, connection.remainingBackoffMs(currentTimeMs));
@@ -164,7 +186,8 @@ public class RequestManager {
 
         // There are no inflight fetch requests so check if there is a ready bootstrap server
         for (Node node : bootstrapServers) {
-            if (isReady(node, currentTimeMs)) {
+            if (isReady(node, currentTimeMs, ApiKeys.FETCH) &&
+                isReady(node, currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
                 return 0L;
             }
         }
@@ -173,8 +196,8 @@ public class RequestManager {
         return minBackoffMs;
     }
 
-    public boolean hasRequestTimedOut(Node node, long timeMs) {
-        ConnectionState state = connections.get(node.idString());
+    public boolean hasRequestTimedOut(Node node, long timeMs, ApiKeys requestKey) {
+        ConnectionState state = connections.get(NodeAndRequestKey.of(node, requestKey));
         if (state == null) {
             return false;
         }
@@ -182,22 +205,22 @@ public class RequestManager {
         return state.hasRequestTimedOut(timeMs);
     }
 
-    public boolean isReady(Node node, long timeMs) {
-        ConnectionState state = connections.get(node.idString());
+    public boolean isReady(Node node, long timeMs, ApiKeys requestKey) {
+        ConnectionState state = connections.get(NodeAndRequestKey.of(node, requestKey));
         if (state == null) {
             return true;
         }
 
         boolean ready = state.isReady(timeMs);
         if (ready) {
-            reset(node);
+            reset(node, requestKey);
         }
 
         return ready;
     }
 
-    public boolean isBackingOff(Node node, long timeMs) {
-        ConnectionState state = connections.get(node.idString());
+    public boolean isBackingOff(Node node, long timeMs, ApiKeys requestKey) {
+        ConnectionState state = connections.get(NodeAndRequestKey.of(node, requestKey));
         if (state == null) {
             return false;
         }
@@ -205,8 +228,8 @@ public class RequestManager {
         return state.isBackingOff(timeMs);
     }
 
-    public long remainingRequestTimeMs(Node node, long timeMs) {
-        ConnectionState state = connections.get(node.idString());
+    public long remainingRequestTimeMs(Node node, long timeMs, ApiKeys requestKey) {
+        ConnectionState state = connections.get(NodeAndRequestKey.of(node, requestKey));
         if (state == null) {
             return 0;
         }
@@ -214,8 +237,8 @@ public class RequestManager {
         return state.remainingRequestTimeMs(timeMs);
     }
 
-    public long remainingBackoffMs(Node node, long timeMs) {
-        ConnectionState state = connections.get(node.idString());
+    public long remainingBackoffMs(Node node, long timeMs, ApiKeys requestKey) {
+        ConnectionState state = connections.get(NodeAndRequestKey.of(node, requestKey));
         if (state == null) {
             return 0;
         }
@@ -223,8 +246,8 @@ public class RequestManager {
         return state.remainingBackoffMs(timeMs);
     }
 
-    public boolean isResponseExpected(Node node, long correlationId) {
-        ConnectionState state = connections.get(node.idString());
+    public boolean isResponseExpected(Node node, long correlationId, ApiKeys requestKey) {
+        ConnectionState state = connections.get(NodeAndRequestKey.of(node, requestKey));
         if (state == null) {
             return false;
         }
@@ -239,15 +262,23 @@ public class RequestManager {
      * @param correlationId the correlation id of the response
      * @param success true if the request was successful, false otherwise
      * @param timeMs the current time
+     * @param requestKey the api key for the request
      */
-    public void onResponseResult(Node node, long correlationId, boolean success, long timeMs) {
-        if (isResponseExpected(node, correlationId)) {
+    public void onResponseResult(
+        Node node,
+        long correlationId,
+        boolean success,
+        long timeMs,
+        ApiKeys requestKey
+    ) {
+        if (isResponseExpected(node, correlationId, requestKey)) {
             if (success) {
                 // Mark the connection as ready by resetting it
-                reset(node);
+                reset(node, requestKey);
             } else {
                 // Backoff the connection
-                connections.get(node.idString()).onResponseError(correlationId, timeMs);
+                connections.get(NodeAndRequestKey.of(node, requestKey))
+                    .onResponseError(correlationId, timeMs);
             }
         }
     }
@@ -258,18 +289,19 @@ public class RequestManager {
      * @param node the destination of the request
      * @param correlationId the correlation id of the request
      * @param timeMs the current time
+     * @param requestKey the api key for the request
      */
-    public void onRequestSent(Node node, long correlationId, long timeMs) {
+    public void onRequestSent(Node node, long correlationId, long timeMs, ApiKeys requestKey) {
         ConnectionState state = connections.computeIfAbsent(
-            node.idString(),
+            NodeAndRequestKey.of(node, requestKey),
             key -> new ConnectionState(node, retryBackoffMs, requestTimeoutMs)
         );
 
         state.onRequestSent(correlationId, timeMs);
     }
 
-    public void reset(Node node) {
-        connections.remove(node.idString());
+    public void reset(Node node, ApiKeys requestKey) {
+        connections.remove(NodeAndRequestKey.of(node, requestKey));
     }
 
     public void resetAll() {

@@ -2626,7 +2626,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             response.source(),
             response.correlationId(),
             handledSuccessfully,
-            currentTimeMs
+            currentTimeMs,
+            apiKey
         );
     }
 
@@ -2744,7 +2745,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (message instanceof RaftRequest.Inbound request) {
             handleRequest(request, currentTimeMs);
         } else if (message instanceof RaftResponse.Inbound response) {
-            if (requestManager.isResponseExpected(response.source(), response.correlationId())) {
+            if (requestManager.isResponseExpected(
+                response.source(),
+                response.correlationId(),
+                ApiKeys.forId(message.data().apiKey()))
+            ) {
                 handleResponse(response, currentTimeMs);
             } else {
                 logger.debug("Ignoring response {} since it is no longer needed", response);
@@ -2771,16 +2776,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Supplier<ApiMessage> requestSupplier
     )  {
         var requestSent = false;
+        final var request = requestSupplier.get();
+        final var api = ApiKeys.forId(request.apiKey());
 
-        if (requestManager.isBackingOff(destination, currentTimeMs)) {
-            long remainingBackoffMs = requestManager.remainingBackoffMs(destination, currentTimeMs);
+        if (requestManager.isBackingOff(destination, currentTimeMs, api)) {
+            long remainingBackoffMs = requestManager.remainingBackoffMs(destination, currentTimeMs, api);
             logger.debug("Connection for {} is backing off for {} ms", destination, remainingBackoffMs);
             return RequestSendResult.of(requestSent, remainingBackoffMs);
         }
 
-        if (requestManager.isReady(destination, currentTimeMs)) {
+        if (requestManager.isReady(destination, currentTimeMs, api)) {
             int correlationId = channel.newCorrelationId();
-            ApiMessage request = requestSupplier.get();
 
             RaftRequest.Outbound requestMessage = new RaftRequest.Outbound(
                 correlationId,
@@ -2791,7 +2797,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             requestMessage.completion.whenComplete((response, exception) -> {
                 if (exception != null) {
-                    ApiKeys api = ApiKeys.forId(request.apiKey());
                     Errors error = Errors.forException(exception);
                     ApiMessage errorResponse = RaftUtil.errorResponse(api, error);
 
@@ -2805,7 +2810,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 messageQueue.add(response);
             });
 
-            requestManager.onRequestSent(destination, correlationId, currentTimeMs);
+            requestManager.onRequestSent(destination, correlationId, currentTimeMs, api);
             channel.send(requestMessage);
             requestSent = true;
             logger.trace("Sent outbound request: {}", requestMessage);
@@ -2813,7 +2818,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         return RequestSendResult.of(
             requestSent,
-            requestManager.remainingRequestTimeMs(destination, currentTimeMs)
+            requestManager.remainingRequestTimeMs(destination, currentTimeMs, api)
         );
     }
 
@@ -3285,13 +3290,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // voter in order to discover if there has been a leader change.
         final long backoffMs;
         Node leaderNode = state.leaderNode(channel.listenerName());
-        if (requestManager.hasRequestTimedOut(leaderNode, currentTimeMs)) {
+        if (requestManager.hasRequestTimedOut(leaderNode, currentTimeMs, ApiKeys.FETCH) ||
+            requestManager.hasRequestTimedOut(leaderNode, currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
             // Once the request has timed out backoff the connection
-            requestManager.reset(leaderNode);
+            requestManager.reset(leaderNode, ApiKeys.FETCH);
+            requestManager.reset(leaderNode, ApiKeys.FETCH_SNAPSHOT);
             backoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
-        } else if (requestManager.isBackingOff(leaderNode, currentTimeMs)) {
+        } else if (requestManager.isBackingOff(leaderNode, currentTimeMs, ApiKeys.FETCH) ||
+            requestManager.isBackingOff(leaderNode, currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
             backoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
-        } else if (!requestManager.hasAnyInflightRequest(currentTimeMs)) {
+        } else if (!(requestManager.hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH) ||
+            requestManager.hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH_SNAPSHOT))) {
             backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
         } else {
             backoffMs = requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs);
