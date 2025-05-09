@@ -57,12 +57,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
     FileRecords(
         File file,
         FileChannel channel,
-        int start,
         int end
     ) throws IOException {
         this.file = file;
         this.channel = channel;
-        this.start = start;
+        this.start = 0;
         this.end = end;
         this.isSlice = false;
         this.size = new AtomicInteger();
@@ -93,13 +92,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
         File file,
         FileChannel channel,
         int start,
-        int end,
-        boolean isSlice
+        int end
     ) {
-        if (!isSlice) {
-            throw new IllegalArgumentException("Slice constructor must be called with isSlice set to true");
-        }
-
         this.file = file;
         this.channel = channel;
         this.start = start;
@@ -153,7 +147,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         int availableBytes = availableBytes(position, size);
         int startPosition = this.start + position;
 
-        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes);
     }
 
     /**
@@ -453,7 +447,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                    boolean preallocate) throws IOException {
         FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
-        return new FileRecords(file, channel, 0, end, false);
+        return new FileRecords(file, channel, end);
     }
 
     public static FileRecords open(File file,

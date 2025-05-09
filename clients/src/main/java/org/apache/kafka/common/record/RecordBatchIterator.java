@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.AbstractIterator;
 
 import java.io.EOFException;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 
 class RecordBatchIterator<T extends RecordBatch> extends AbstractIterator<T> {
 
@@ -41,7 +41,7 @@ class RecordBatchIterator<T extends RecordBatch> extends AbstractIterator<T> {
         } catch (EOFException e) {
             throw new CorruptRecordException("Unexpected EOF while attempting to read the next batch", e);
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new KafkaException(e);
         }
     }
 }

@@ -89,7 +89,7 @@ public class FileRecordsTest {
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn((long) Integer.MAX_VALUE);
 
-        FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE);
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, Integer.MAX_VALUE);
         assertThrows(IllegalArgumentException.class, () -> append(records, values));
     }
 
@@ -99,7 +99,7 @@ public class FileRecordsTest {
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn(Integer.MAX_VALUE + 5L);
 
-        assertThrows(KafkaException.class, () -> new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE));
+        assertThrows(KafkaException.class, () -> new FileRecords(fileMock, fileChannelMock, Integer.MAX_VALUE));
     }
 
     @Test
@@ -313,7 +313,7 @@ public class FileRecordsTest {
         when(channelMock.size()).thenReturn(42L);
         when(channelMock.position(42L)).thenReturn(null);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE);
+        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, Integer.MAX_VALUE);
         fileRecords.truncateTo(42);
 
         verify(channelMock, atLeastOnce()).size();
@@ -330,7 +330,7 @@ public class FileRecordsTest {
 
         when(channelMock.size()).thenReturn(42L);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE);
+        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, Integer.MAX_VALUE);
 
         try {
             fileRecords.truncateTo(43);
@@ -352,7 +352,7 @@ public class FileRecordsTest {
         when(channelMock.size()).thenReturn(42L);
         when(channelMock.truncate(anyLong())).thenReturn(channelMock);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE);
+        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, Integer.MAX_VALUE);
         fileRecords.truncateTo(23);
 
         verify(channelMock, atLeastOnce()).size();
@@ -537,7 +537,7 @@ public class FileRecordsTest {
         FileLogInputStream.FileChannelRecordBatch batch = mock(FileLogInputStream.FileChannelRecordBatch.class);
         when(batch.baseOffset()).thenReturn(baseOffset);
 
-        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100));
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
         mockFileRecordBatches(fileRecords, batch);
 
         FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(5L, 0);
@@ -557,7 +557,7 @@ public class FileRecordsTest {
         when(batch.baseOffset()).thenReturn(3L);
         when(batch.lastOffset()).thenReturn(5L);
 
-        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100));
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
         mockFileRecordBatches(fileRecords, batch);
 
         FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(5L, 0);
@@ -581,7 +581,7 @@ public class FileRecordsTest {
         when(currentBatch.baseOffset()).thenReturn(15L);
         when(currentBatch.lastOffset()).thenReturn(20L);
 
-        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100));
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
         mockFileRecordBatches(fileRecords, prevBatch, currentBatch);
 
         FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(20L, 0);
@@ -605,7 +605,7 @@ public class FileRecordsTest {
         FileLogInputStream.FileChannelRecordBatch currentBatch = mock(FileLogInputStream.FileChannelRecordBatch.class);
         when(currentBatch.baseOffset()).thenReturn(15L); // >= targetOffset
 
-        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100));
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
         mockFileRecordBatches(fileRecords, prevBatch, currentBatch);
 
         FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(10L, 0);
@@ -629,7 +629,7 @@ public class FileRecordsTest {
         when(batch2.baseOffset()).thenReturn(8L);  // < targetOffset
         when(batch2.lastOffset()).thenReturn(9L);  // < targetOffset
 
-        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100));
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
         mockFileRecordBatches(fileRecords, batch1, batch2);
 
         FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(10L, 0);
@@ -657,7 +657,7 @@ public class FileRecordsTest {
         when(batch2.baseOffset()).thenReturn(baseOffset);  // < targetOffset or == targetOffset
         when(batch2.lastOffset()).thenReturn(12L); // >= targetOffset
 
-        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100));
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
         mockFileRecordBatches(fileRecords, batch1, batch2);
 
         long targetOffset = 10L;
@@ -691,7 +691,7 @@ public class FileRecordsTest {
         when(batch2.baseOffset()).thenReturn(15L);
         when(batch2.lastOffset()).thenReturn(20L);
 
-        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100));
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
         mockFileRecordBatches(fileRecords, batch1, batch2);
 
         FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(13L, 0);
