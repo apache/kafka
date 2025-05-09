@@ -122,13 +122,18 @@ public class StaticBrokerConfigTest {
 
     @ClusterTest(types = {Type.KRAFT})
     public void testInternalConfigsDoNotReturnForDescribeConfigs(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
+        try (
+                Admin admin = cluster.admin();
+                Admin controllerAdmin = cluster.admin(Map.of(), true)
+        ) {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, TOPIC);
             ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, "testGroup");
             ConfigResource clientMetricsResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "testClient");
 
             admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1))).config(TOPIC).get();
+            // make sure the topic metadata exist
+            cluster.waitForTopic(TOPIC, 1);
             Map<ConfigResource, Config> configResourceMap = admin.describeConfigs(
                     List.of(brokerResource, topicResource, groupResource, clientMetricsResource)).all().get();
 
@@ -137,11 +142,12 @@ public class StaticBrokerConfigTest {
             // broker (see org.apache.kafka.common.test.KafkaClusterTestKit.Builder.createNodeConfig()),
             // so the API `describeConfigs` will also return these three configurations. However, other internal
             // configurations will not be returned
-            Config brokerConfig = configResourceMap.get(brokerResource);
-            assertNotContainsInternalConfig(brokerConfig, KafkaConfig.configDef().configKeys(), Set.of(
+            Set<String> ignoreConfigNames = Set.of(
                     ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG,
                     ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG,
-                    KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG));
+                    KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG);
+            Config brokerConfig = configResourceMap.get(brokerResource);
+            assertNotContainsInternalConfig(brokerConfig, KafkaConfig.configDef().configKeys(), ignoreConfigNames);
 
             // test for case ConfigResource.Type == TOPIC
             Config topicConfig = configResourceMap.get(topicResource);
@@ -154,6 +160,12 @@ public class StaticBrokerConfigTest {
             // test for case ConfigResource.Type == CLIENT_METRICS
             Config clientMetricsConfig = configResourceMap.get(clientMetricsResource);
             assertNotContainsInternalConfig(clientMetricsConfig, ClientMetricsConfigs.configDef().configKeys());
+
+            // test for controller node, and ConfigResource.Type == BROKER
+            ConfigResource controllerResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
+            Map<ConfigResource, Config> controllerConfigMap = controllerAdmin.describeConfigs(List.of(controllerResource)).all().get();
+            Config controllerConfig = controllerConfigMap.get(controllerResource);
+            assertNotContainsInternalConfig(controllerConfig, KafkaConfig.configDef().configKeys(), ignoreConfigNames);
         }
     }
 
@@ -177,9 +189,9 @@ public class StaticBrokerConfigTest {
             String configName = topicConfigEntry.name();
             ConfigDef.ConfigKey configKey = configKeyMap.get(configName);
 
-            assertNotNull(configKey);
+            assertNotNull(configKey, "The ConfigKey of the config named '" + configName + "' should not be null");
             if (!ignoreConfigNames.contains(configName)) {
-                assertFalse(configKey.internalConfig);
+                assertFalse(configKey.internalConfig, "The config named '" + configName + "' is an internal config and should not be returned");
             }
         }
     }
