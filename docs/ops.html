@@ -4032,8 +4032,7 @@ foo
 
 <p><code>RemoteStorageManager</code> is an interface to provide the lifecycle of remote log segments and indexes. Kafka server
   doesn't provide out-of-the-box implementation of RemoteStorageManager. Users must configure <code>remote.log.storage.manager.class.name</code>
-  and <code>remote.log.storage.manager.class.path</code> to specify the implementation of RemoteStorageManager. One Apache 2.0 licensed implementation supporting all
-  three major hyperscalers' object stores (AWS, GCP, Azure) is <a href="https://github.com/Aiven-Open/tiered-storage-for-apache-kafka">available here</a>.
+  and <code>remote.log.storage.manager.class.path</code> to specify the implementation of RemoteStorageManager.
 </p>
 
 <p><code>RemoteLogMetadataManager</code> is an interface to provide the lifecycle of metadata about remote log segments with strongly consistent semantics.
