@@ -9781,7 +9781,8 @@ class KafkaApisTest extends Logging {
       "IncrementalAlterConfigsRequestData(resources=[" +
         "AlterConfigsResource(resourceType=" + BROKER_LOGGER.id() + ", " +
         "resourceName='"+ brokerId + "', " +
-        "configs=[AlterableConfig(name='" + LoggingController.ROOT_LOGGER + "', configOperation=0)])], validateOnly=true)",
+        "configs=[AlterableConfig(name='" + LoggingController.ROOT_LOGGER + "', configOperation=0, value='REDACTED')])], " +
+        "validateOnly=true)",
       alterConfigsRequest.toString
     )
     val request = buildRequest(alterConfigsRequest)

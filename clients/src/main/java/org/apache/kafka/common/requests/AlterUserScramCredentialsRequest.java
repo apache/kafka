@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.common.requests;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.AlterUserScramCredentialsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Readable;
@@ -85,19 +88,12 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
     // Do not print salt or saltedPassword
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("AlterUserScramCredentialsRequestData(deletions=");
-        sb.append(data.deletions());
-        sb.append(", upsertions=[");
-        sb.append(data.upsertions().stream()
-            .map(upsertion -> String.format(
-                "ScramCredentialUpsertion(name='%s', mechanism=%d, iterations=%d)",
-                upsertion.name(),
-                upsertion.mechanism(),
-                upsertion.iterations()))
-            .collect(Collectors.joining(", ")));
-        sb.append("])");
+        JsonNode json = AlterUserScramCredentialsRequestDataJsonConverter.write(data, version()).deepCopy();
 
-        return sb.toString();
+        for (JsonNode upsertion : json.get("upsertions")) {
+            ((ObjectNode) upsertion).put("salt", "");
+            ((ObjectNode) upsertion).put("saltedPassword", "");
+        }
+        return AlterUserScramCredentialsRequestDataJsonConverter.read(json, version()).toString();
     }
 }

@@ -257,11 +257,12 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals("AlterUserScramCredentialsRequestData(" +
       "deletions=[ScramCredentialDeletion(name='" + user2 + "', mechanism=" + ScramMechanism.SCRAM_SHA_256.`type` + ")], " +
       "upsertions=[ScramCredentialUpsertion(name='" + user1 + "', mechanism=" + ScramMechanism.SCRAM_SHA_256.`type` +
-      ", iterations=4096)])", request1_0.toString)
+      ", iterations=4096, salt=[], saltedPassword=[])])", request1_0.toString)
     val results1_0 = sendAlterUserScramCredentialsRequest(request1_0).data.results
     assertEquals(2, results1_0.size)
-    checkNoErrorsAlteringCredentials(results1_0)
+    assertEquals(1, results1_0.asScala.count(_.errorCode == Errors.RESOURCE_NOT_FOUND.code()))
     checkUserAppearsInAlterResults(results1_0, user1)
+    checkUserAppearsInAlterResults(results1_0, user2)
 
     // When creating credentials, do not update the same user more than once per request
     val request1_1 = new AlterUserScramCredentialsRequest.Builder(
