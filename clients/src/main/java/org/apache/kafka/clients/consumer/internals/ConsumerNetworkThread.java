@@ -248,6 +248,12 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         return running;
     }
 
+    public void wakeup() {
+        // The network client can be null if the initializeResources method has not yet been called.
+        if (networkClientDelegate != null)
+            networkClientDelegate.wakeup();
+    }
+
     /**
      * Returns the delay for which the application thread can safely wait before it should be responsive
      * to results from the request managers. For example, the subscription state can change when heartbeats
