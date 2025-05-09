@@ -136,8 +136,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
   }
 
   override def fetchEpochEndOffsets(partitions: util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): util.Map[TopicPartition, EpochEndOffset] = {
-    val tmpPartitions = partitions.asScala.toMap
-    tmpPartitions.map { case (tp, epochData) =>
+    partitions.asScala.map { case (tp, epochData) =>
       try {
         val endOffset = if (epochData.leaderEpoch == UNDEFINED_EPOCH) {
           new EpochEndOffset()
@@ -193,12 +192,11 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     val nextPartitionOpt = nextReadyPartition(partitions.asScala.toMap)
     nextPartitionOpt.foreach { case (tp, fetchState) =>
-      inProgressPartition = Option(tp)
+      inProgressPartition = Some(tp)
       info(s"Beginning/resuming copy of partition $tp from offset ${fetchState.fetchOffset}. " +
         s"Including this partition, there are ${partitions.size} remaining partitions to copy by this thread.")
-      return Optional.of((tp, fetchState))
     }
-    Optional.empty()
+    Optional.of(nextPartitionOpt)
   }
 
   private def buildFetchForPartition(topicPartition: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Optional[ReplicaFetch]] = {
