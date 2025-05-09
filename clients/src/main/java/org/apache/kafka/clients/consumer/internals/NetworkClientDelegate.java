@@ -154,7 +154,13 @@ public class NetworkClientDelegate implements AutoCloseable {
         if (client.hasInFlightRequests())
             pollTimeoutMs = 0;
 
-        List<ClientResponse> clientResponses = this.client.poll(pollTimeoutMs, currentTimeMs);
+        List<ClientResponse> clientResponses;
+
+        if (client.hasInFlightRequests() || !unsentRequests.isEmpty())
+            clientResponses = this.client.poll(pollTimeoutMs, currentTimeMs);
+        else
+            clientResponses = Collections.emptyList();
+
         maybePropagateMetadataError();
         checkDisconnects(currentTimeMs);
         asyncConsumerMetrics.recordUnsentRequestsQueueSize(unsentRequests.size(), currentTimeMs);

@@ -55,7 +55,7 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
 public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
     // visible for testing
-    static final long MAX_POLL_TIMEOUT_MS = 5000;
+    static final long MAX_POLL_TIMEOUT_MS = 250;
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
     private final Logger log;
@@ -317,7 +317,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Signaling the consumer network thread to close in {}ms", timeoutMs);
         running = false;
         closeTimeout = timeout;
-        wakeup();
+
+        if (networkClientDelegate != null)
+            networkClientDelegate.wakeup();
 
         try {
             join();

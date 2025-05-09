@@ -92,7 +92,7 @@ public class ApplicationEventHandler implements Closeable {
      * Wakeup the {@link ConsumerNetworkThread network I/O thread} to pull the next event(s) from the queue.
      */
     public void wakeupNetworkThread() {
-        networkThread.wakeup();
+        //networkThread.wakeup();
     }
 
     /**
