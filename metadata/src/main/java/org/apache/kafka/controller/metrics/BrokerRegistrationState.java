@@ -38,9 +38,7 @@ public enum BrokerRegistrationState {
     }
 
     public static BrokerRegistrationState getBrokerRegistrationState(BrokerRegistration brokerRegistration) {
-        if (brokerRegistration == null) {
-            return BrokerRegistrationState.UNREGISTERED;
-        } else if (brokerRegistration.fenced()) {
+        if (brokerRegistration.fenced()) {
             return BrokerRegistrationState.FENCED;
         } else if (brokerRegistration.inControlledShutdown()) {
             return BrokerRegistrationState.CONTROLLED_SHUTDOWN;

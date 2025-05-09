@@ -34,6 +34,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ControllerMetadataMetricsTest {
     @Test
@@ -166,9 +167,10 @@ public class ControllerMetadataMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             int brokerId = 1;
+            MetricName name = metricName("KafkaController", "BrokerRegistrationState", "broker=1");
+
             metrics.addBrokerRegistrationStateMetric(brokerId);
-            Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics()
-                .get(metricName("KafkaController", "BrokerRegistrationState", "broker=1"));
+            Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics().get(name);
 
             metrics.setBrokerRegistrationState(brokerId, brokerRegistration(false, false));
             assertEquals(BrokerRegistrationState.ACTIVE.state(), registrationState.value());
@@ -181,6 +183,7 @@ public class ControllerMetadataMetricsTest {
 
             metrics.setBrokerRegistrationState(brokerId, null);
             assertEquals(BrokerRegistrationState.UNREGISTERED.state(), registrationState.value());
+            assertNull(registry.allMetrics().get(name));
         } finally {
             registry.shutdown();
         }

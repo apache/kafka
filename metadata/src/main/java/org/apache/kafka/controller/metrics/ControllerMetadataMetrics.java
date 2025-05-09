@@ -220,6 +220,12 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     }
 
     public void setBrokerRegistrationState(int brokerId, BrokerRegistration brokerRegistration) {
+        // if the broker is unregistered, remove the metric and state
+        if (brokerRegistration == null) {
+            removeBrokerRegistrationStateMetric(brokerId);
+            brokerRegistrationStates.remove(brokerId);
+            return;
+        }
         BrokerRegistrationState brokerState = getBrokerRegistrationState(brokerRegistration);
         if (brokerRegistrationStates.containsKey(brokerId)) {
             brokerRegistrationStates.get(brokerId).set(brokerState.state());
