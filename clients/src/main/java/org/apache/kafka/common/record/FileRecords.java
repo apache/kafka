@@ -26,7 +26,6 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
@@ -55,33 +54,61 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
      * The constructor is visible for tests.
      */
-    FileRecords(File file,
-                FileChannel channel,
-                int start,
-                int end,
-                boolean isSlice) throws IOException {
+    FileRecords(
+        File file,
+        FileChannel channel,
+        int start,
+        int end
+    ) throws IOException {
         this.file = file;
         this.channel = channel;
         this.start = start;
         this.end = end;
-        this.isSlice = isSlice;
+        this.isSlice = false;
         this.size = new AtomicInteger();
 
-        if (isSlice) {
-            // don't check the file size if this is just a slice view
-            size.set(end - start);
-        } else {
-            if (channel.size() > Integer.MAX_VALUE)
-                throw new KafkaException("The size of segment " + file + " (" + channel.size() +
-                        ") is larger than the maximum allowed segment size of " + Integer.MAX_VALUE);
-
-            int limit = Math.min((int) channel.size(), end);
-            size.set(limit - start);
-
-            // if this is not a slice, update the file pointer to the end of the file
-            // set the file position to the last byte in the file
-            channel.position(limit);
+        if (channel.size() > Integer.MAX_VALUE) {
+            throw new KafkaException(
+                "The size of segment " + file + " (" + channel.size() +
+                ") is larger than the maximum allowed segment size of " + Integer.MAX_VALUE
+            );
         }
+
+        int limit = Math.min((int) channel.size(), end);
+        size.set(limit - start);
+
+        // if this is not a slice, update the file pointer to the end of the file
+        // set the file position to the last byte in the file
+        channel.position(limit);
+
+        batches = batchesFrom(start);
+    }
+
+    /**
+     * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
+     *
+     * isSlice must be true. This overloaded constructor avoids having the declared a checked IO exception.
+     */
+    private FileRecords(
+        File file,
+        FileChannel channel,
+        int start,
+        int end,
+        boolean isSlice
+    ) {
+        if (!isSlice) {
+            throw new IllegalArgumentException("Slice constructor must be called with isSlice set to true");
+        }
+
+        this.file = file;
+        this.channel = channel;
+        this.start = start;
+        this.end = end;
+        this.isSlice = true;
+        this.size = new AtomicInteger();
+
+        // don't check the file size if this is just a slice view
+        size.set(end - start);
 
         batches = batchesFrom(start);
     }
@@ -125,11 +152,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public FileRecords slice(int position, int size) {
         int availableBytes = availableBytes(position, size);
         int startPosition = this.start + position;
-        try {
-            return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
     }
 
     /**
