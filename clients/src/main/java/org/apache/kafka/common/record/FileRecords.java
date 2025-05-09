@@ -87,7 +87,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     /**
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
      *
-     * isSlice must be true. This overloaded constructor avoids having the declared a checked IO exception.
+     * isSlice must be true. This overloaded constructor avoids having to declare a checked IO exception.
      */
     private FileRecords(
         File file,
