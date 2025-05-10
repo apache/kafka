@@ -1,0 +1,210 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.server;
+
+import org.apache.kafka.common.utils.Utils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.LoggerConfig;
+
+import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Locale;
+import java.util.HashMap;
+
+/**
+ * An MBean that allows the user to dynamically alter log4j levels at runtime.
+ * The companion object contains the singleton instance of this class and
+ * registers the MBean. The [[kafka.utils.Logging]] trait forces initialization
+ * of the companion object.
+ */
+public class LoggingController implements LoggingControllerMBean {
+
+    private static final Logger LOGGER = LogManager.getLogger(LoggingController.class);
+
+    /**
+     * Note: In Log4j 1, the root logger's name was "root" and Kafka also followed that name for dynamic logging control feature.
+     * The root logger's name is changed in log4j2 to empty string (see: [[LogManager.ROOT_LOGGER_NAME]]) but for backward-
+     * compatibility. Kafka keeps its original root logger name. It is why here is a dedicated definition for the root logger name.
+     */
+    public static final String ROOT_LOGGER = "root";
+
+    private static final LoggingControllerDelegate DELEGATE;
+
+    static {
+        LoggingControllerDelegate tempDelegate;
+        try {
+            tempDelegate = new Log4jCoreController();
+        } catch (ClassCastException | LinkageError e) {
+            LOGGER.info("No supported logging implementation found. Logging configuration endpoint will be disabled.");
+            tempDelegate = new NoOpController();
+        } catch (Exception e) {
+            LOGGER.warn("A problem occurred, while initializing the logging controller. Logging configuration endpoint will be disabled.", e);
+            tempDelegate = new NoOpController();
+        }
+        DELEGATE = tempDelegate;
+    }
+
+    /**
+     * Returns a map of the log4j loggers and their assigned log level.
+     * If a logger does not have a log level assigned, we return the log level of the first ancestor with a level configured.
+     */
+    public static Map<String, String> loggers() {
+        return DELEGATE.loggers();
+    }
+
+    /**
+     * Sets the log level of a particular logger. If the given logLevel is not an available level
+     * (i.e., one of OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL) it falls back to DEBUG.
+     *
+     * @see Level#toLevel
+     */
+    public static boolean logLevel(String loggerName, String logLevel) {
+        return DELEGATE.logLevel(loggerName, logLevel);
+    }
+
+    public static boolean unsetLogLevel(String loggerName) {
+        return DELEGATE.unsetLogLevel(loggerName);
+    }
+
+    public static boolean loggerExists(String loggerName) {
+        return DELEGATE.loggerExists(loggerName);
+    }
+
+    @Override
+    public List<String> getLoggers() {
+        List<String> result = new ArrayList<>();
+        for (Map.Entry<String, String> entry : LoggingController.loggers().entrySet()) {
+            result.add(entry.getKey() + "=" + entry.getValue());
+        }
+        return result;
+    }
+
+    @Override
+    public String getLogLevel(String loggerName) {
+        return LoggingController.loggers().getOrDefault(loggerName, "No such logger.");
+    }
+
+    @Override
+    public boolean setLogLevel(String loggerName, String level) {
+        return LoggingController.logLevel(loggerName, level);
+    }
+}
+
+interface LoggingControllerMBean {
+    List<String> getLoggers();
+    String getLogLevel(String logger);
+    boolean setLogLevel(String logger, String level);
+}
+
+abstract class LoggingControllerDelegate {
+    public abstract Map<String, String> loggers();
+    public abstract boolean logLevel(String loggerName, String logLevel);
+    public abstract boolean unsetLogLevel(String loggerName);
+    public boolean loggerExists(String loggerName) {
+        return loggers().containsKey(loggerName);
+    }
+}
+
+class NoOpController extends LoggingControllerDelegate {
+
+    @Override
+    public Map<String, String> loggers() {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public boolean logLevel(String loggerName, String logLevel) {
+        return false;
+    }
+
+    @Override
+    public boolean unsetLogLevel(String loggerName) {
+        return false;
+    }
+}
+
+class Log4jCoreController extends LoggingControllerDelegate {
+    private final LoggerContext logContext;
+
+    public Log4jCoreController() {
+        this.logContext = (LoggerContext) LogManager.getContext(false);
+    }
+
+    @Override
+    public Map<String, String> loggers() {
+        String rootLoggerLevel = logContext.getRootLogger().getLevel().toString();
+
+        Map<String, String> result = new HashMap<>();
+        // Loggers defined in the configuration
+        for (LoggerConfig logger : logContext.getConfiguration().getLoggers().values()) {
+            if (!logger.getName().equals(LogManager.ROOT_LOGGER_NAME)) {
+                result.put(logger.getName(), logger.getLevel().toString());
+            }
+        }
+        // Loggers actually running
+        for (Logger logger : logContext.getLoggers()) {
+            if (!logger.getName().equals(LogManager.ROOT_LOGGER_NAME)) {
+                result.put(logger.getName(), logger.getLevel().toString());
+            }
+        }
+        // Add root logger
+        result.put(LoggingController.ROOT_LOGGER, rootLoggerLevel);
+        return result;
+    }
+
+    @Override
+    public boolean logLevel(String loggerName, String logLevel) {
+        if (Utils.isBlank(loggerName) || Utils.isBlank(logLevel))
+            return false;
+
+        Level level = Level.toLevel(logLevel.toUpperCase(Locale.ROOT));
+
+        if (loggerName.equals(LoggingController.ROOT_LOGGER)) {
+            Configurator.setLevel(LogManager.ROOT_LOGGER_NAME, level);
+            return true;
+        } else {
+            if (loggerExists(loggerName) && level != null) {
+                Configurator.setLevel(loggerName, level);
+                return true;
+            } else {
+                return false;
+            }
+        }
+    }
+
+    @Override
+    public boolean unsetLogLevel(String loggerName) {
+        Level nullLevel = null;
+        if (loggerName.equals(LoggingController.ROOT_LOGGER)) {
+            Configurator.setLevel(LogManager.ROOT_LOGGER_NAME, nullLevel);
+            return true;
+        } else {
+            if (loggerExists(loggerName)) {
+                Configurator.setLevel(loggerName, nullLevel);
+                return true;
+            } else {
+                return false;
+            }
+        }
+    }
+}

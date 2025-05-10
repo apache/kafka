@@ -890,6 +890,9 @@ project(':server') {
   }
 
   dependencies {
+    compileOnly libs.bndlib
+    compileOnly libs.spotbugs
+
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':server-common')
@@ -902,6 +905,7 @@ project(':server') {
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.slf4jApi
+    implementation log4j2Libs
 
     testImplementation project(':clients').sourceSets.test.output
 
