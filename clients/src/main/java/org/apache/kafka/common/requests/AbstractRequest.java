@@ -129,7 +129,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     }
 
     @Override
-    public final String toString() {
+    public String toString() {
         return toString(true);
     }
 

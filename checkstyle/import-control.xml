@@ -188,6 +188,8 @@
       <allow pkg="org.apache.kafka.clients.admin" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
+      <!-- for IncrementalAlterConfigsRequest and AlterUserScramCredentialsRequest -->
+      <allow pkg="com.fasterxml.jackson.databind" />
     </subpackage>
 
     <subpackage name="serialization">
