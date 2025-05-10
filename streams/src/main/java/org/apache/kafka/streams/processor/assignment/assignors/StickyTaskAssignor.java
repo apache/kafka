@@ -104,19 +104,19 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         final RackAwareOptimizationParams statefulTaskParams = RackAwareOptimizationParams.of(applicationState)
             .withTrafficCostOverride(
-                    applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
+                applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
             )
             .withNonOverlapCostOverride(
-                    applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
+                applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
             )
             .forStatefulTasks();
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(statefulTaskParams, currentAssignments);
 
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(
             RackAwareOptimizationParams.of(applicationState)
-                    .forStatelessTasks()
-                    .withTrafficCostOverride(RackAwareTaskAssignor.STATELESS_TRAFFIC_COST)
-                    .withNonOverlapCostOverride(RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST),
+                .forStatelessTasks()
+                .withTrafficCostOverride(RackAwareTaskAssignor.STATELESS_TRAFFIC_COST)
+                .withNonOverlapCostOverride(RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST),
             currentAssignments
         );
         assignmentState.processOptimizedAssignments(currentAssignments);
@@ -135,10 +135,10 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         final RackAwareOptimizationParams optimizationParams = RackAwareOptimizationParams.of(applicationState)
             .withTrafficCostOverride(
-                    applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
+                applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
             )
             .withNonOverlapCostOverride(
-                    applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
+                applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
             );
         TaskAssignmentUtils.optimizeRackAwareStandbyTasks(optimizationParams, assignments);
         assignmentState.processOptimizedAssignments(assignments);
@@ -210,9 +210,9 @@ public class StickyTaskAssignor implements TaskAssignor {
                 final Set<ProcessId> candidateClients = assignmentState.findClientsWithoutAssignedTask(task.id());
                 if (candidateClients.isEmpty()) {
                     LOG.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                                "There is not enough available capacity. You should " +
-                                "increase the number of threads and/or application instances " +
-                                "to maintain the requested number of standby replicas.",
+                            "There is not enough available capacity. You should " +
+                            "increase the number of threads and/or application instances " +
+                            "to maintain the requested number of standby replicas.",
                         numStandbyReplicas - i,
                         numStandbyReplicas, task.id());
                     break;
