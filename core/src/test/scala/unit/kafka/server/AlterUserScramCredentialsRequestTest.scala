@@ -233,6 +233,15 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
             .setSalt(saltBytes)
             .setSaltedPassword(saltedPasswordBytes),
         ))).build()
+    assertEquals("AlterUserScramCredentialsRequestData(" +
+      "deletions=[], upsertions=[" +
+      "ScramCredentialUpsertion(name='" + user1 + "', mechanism=" + ScramMechanism.SCRAM_SHA_256.`type` + ", iterations=4096, salt=[], saltedPassword=[]), " +
+      "ScramCredentialUpsertion(name='" + user1 + "', mechanism=" + ScramMechanism.SCRAM_SHA_512.`type` + ", iterations=8192, salt=[], saltedPassword=[]), " +
+      "ScramCredentialUpsertion(name='" + user2 + "', mechanism=" + ScramMechanism.SCRAM_SHA_512.`type` + ", iterations=8192, salt=[], saltedPassword=[]), " +
+      "ScramCredentialUpsertion(name='" + user3 + "', mechanism=" + ScramMechanism.SCRAM_SHA_512.`type` + ", iterations=8192, salt=[], saltedPassword=[])" +
+      "])", request1.toString)
+    assertFalse(request1.toString.contains(saltBytes))
+    assertFalse(request1.toString.contains(saltedPasswordBytes))
     val results1 = sendAlterUserScramCredentialsRequest(request1).data.results
     assertEquals(3, results1.size)
     checkNoErrorsAlteringCredentials(results1)
