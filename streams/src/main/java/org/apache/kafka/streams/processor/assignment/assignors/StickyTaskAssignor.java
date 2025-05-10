@@ -73,7 +73,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         final Map<TaskId, ProcessId> previousActiveAssignment = mapPreviousActiveTasks(clients);
         final Map<TaskId, Set<ProcessId>> previousStandbyAssignment = mapPreviousStandbyTasks(clients);
         final AssignmentState assignmentState = new AssignmentState(applicationState, clients,
-                previousActiveAssignment, previousStandbyAssignment);
+            previousActiveAssignment, previousStandbyAssignment);
 
         assignActive(applicationState, clients.values(), assignmentState, this.mustPreserveActiveTaskAssignment);
         optimizeActive(applicationState, assignmentState);
@@ -103,21 +103,21 @@ public class StickyTaskAssignor implements TaskAssignor {
         final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.newAssignments;
 
         final RackAwareOptimizationParams statefulTaskParams = RackAwareOptimizationParams.of(applicationState)
-                .withTrafficCostOverride(
-                        applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
-                )
-                .withNonOverlapCostOverride(
-                        applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
-                )
-                .forStatefulTasks();
+            .withTrafficCostOverride(
+                    applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
+            )
+            .withNonOverlapCostOverride(
+                    applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
+            )
+            .forStatefulTasks();
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(statefulTaskParams, currentAssignments);
 
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-                RackAwareOptimizationParams.of(applicationState)
-                        .forStatelessTasks()
-                        .withTrafficCostOverride(RackAwareTaskAssignor.STATELESS_TRAFFIC_COST)
-                        .withNonOverlapCostOverride(RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST),
-                currentAssignments
+            RackAwareOptimizationParams.of(applicationState)
+                    .forStatelessTasks()
+                    .withTrafficCostOverride(RackAwareTaskAssignor.STATELESS_TRAFFIC_COST)
+                    .withNonOverlapCostOverride(RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST),
+            currentAssignments
         );
         assignmentState.processOptimizedAssignments(currentAssignments);
     }
@@ -134,12 +134,12 @@ public class StickyTaskAssignor implements TaskAssignor {
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assignmentState.newAssignments;
 
         final RackAwareOptimizationParams optimizationParams = RackAwareOptimizationParams.of(applicationState)
-                .withTrafficCostOverride(
-                        applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
-                )
-                .withNonOverlapCostOverride(
-                        applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
-                );
+            .withTrafficCostOverride(
+                    applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
+            )
+            .withNonOverlapCostOverride(
+                    applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
+            );
         TaskAssignmentUtils.optimizeRackAwareStandbyTasks(optimizationParams, assignments);
         assignmentState.processOptimizedAssignments(assignments);
     }
@@ -180,8 +180,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
         }
 
-        // changed order the unassigned tasks are sorted
-        // might change the ordering
+//        would prefer to assign remaining tasks from highest to lowest partition count
 //        final List<TaskId> sortedTasks = assignmentState.taskInputPartitionCount.entrySet()
 //                .stream().filter(entry -> unassigned.contains(entry.getKey()))
 //                .sorted(Map.Entry.<TaskId, Integer>comparingByValue().reversed())
@@ -203,19 +202,19 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static void assignStandby(final ApplicationState applicationState,
                                       final AssignmentState assignmentState) {
         final Set<TaskInfo> statefulTasks = applicationState.allTasks().values().stream()
-                .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
-                .collect(Collectors.toSet());
+            .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
+            .collect(Collectors.toSet());
         final int numStandbyReplicas = applicationState.assignmentConfigs().numStandbyReplicas();
         for (final TaskInfo task : statefulTasks) {
             for (int i = 0; i < numStandbyReplicas; i++) {
                 final Set<ProcessId> candidateClients = assignmentState.findClientsWithoutAssignedTask(task.id());
                 if (candidateClients.isEmpty()) {
                     LOG.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                                    "There is not enough available capacity. You should " +
-                                    "increase the number of threads and/or application instances " +
-                                    "to maintain the requested number of standby replicas.",
-                            numStandbyReplicas - i,
-                            numStandbyReplicas, task.id());
+                                "There is not enough available capacity. You should " +
+                                "increase the number of threads and/or application instances " +
+                                "to maintain the requested number of standby replicas.",
+                        numStandbyReplicas - i,
+                        numStandbyReplicas, task.id());
                     break;
                 }
                 // use task count, not partitions for standby assignments
@@ -284,10 +283,10 @@ public class StickyTaskAssignor implements TaskAssignor {
             this.taskPairs = new TaskPairs(maxPairs);
 
             this.newTaskLocations = previousActiveAssignment.keySet().stream()
-                    .collect(Collectors.toMap(Function.identity(), taskId -> new HashSet<>()));
+                .collect(Collectors.toMap(Function.identity(), taskId -> new HashSet<>()));
             this.newAssignments = clients.values().stream().collect(Collectors.toMap(
-                    KafkaStreamsState::processId,
-                    state -> KafkaStreamsAssignment.of(state.processId(), new HashSet<>())
+                KafkaStreamsState::processId,
+                state -> KafkaStreamsAssignment.of(state.processId(), new HashSet<>())
             ));
         }
 
@@ -330,7 +329,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
 
             final ProcessId previousClient = findLeastLoadedClientWithPreviousActiveOrStandbyTask(
-                    taskId, clientsWithin, calculateLoad);
+                taskId, clientsWithin, calculateLoad);
             if (previousClient == null) {
                 return findLeastLoadedClient(taskId, clientsWithin, calculateLoad);
             }
@@ -348,9 +347,9 @@ public class StickyTaskAssignor implements TaskAssignor {
         private Set<ProcessId> findClientsWithoutAssignedTask(final TaskId taskId) {
             final Set<ProcessId> unavailableClients = newTaskLocations.get(taskId);
             return clients.values().stream()
-                    .map(KafkaStreamsState::processId)
-                    .filter(o -> !unavailableClients.contains(o))
-                    .collect(Collectors.toSet());
+                .map(KafkaStreamsState::processId)
+                .filter(o -> !unavailableClients.contains(o))
+                .collect(Collectors.toSet());
         }
 
         private double clientLoad(final ProcessId processId) {
@@ -399,7 +398,7 @@ public class StickyTaskAssignor implements TaskAssignor {
 
                 if (leastLoaded == null || thisClientLoad < minLoad) {
                     final Set<TaskId> assignedTasks = newAssignments.get(processId).tasks().values()
-                            .stream().map(AssignedTask::id).collect(Collectors.toSet());
+                        .stream().map(AssignedTask::id).collect(Collectors.toSet());
                     if (taskPairs.hasNewPair(taskId, assignedTasks)) {
                         leastLoaded = processId;
                         minLoad = thisClientLoad;
