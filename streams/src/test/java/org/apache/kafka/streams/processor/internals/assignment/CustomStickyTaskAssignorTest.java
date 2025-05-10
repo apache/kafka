@@ -98,9 +98,9 @@ public class CustomStickyTaskAssignorTest {
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
     @ParameterizedTest
     @ValueSource(strings = {
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void partitionTest(final String rackAwareStrategy) {
         final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
