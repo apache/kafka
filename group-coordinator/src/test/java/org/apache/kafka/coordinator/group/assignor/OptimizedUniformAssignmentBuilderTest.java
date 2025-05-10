@@ -603,6 +603,75 @@ public class OptimizedUniformAssignmentBuilderTest {
         checkValidityAndBalance(members, computedAssignment);
     }
 
+    @Test
+    public void testReassignmentStickinessWhenAlreadyBalanced() {
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            5
+        ));
+
+        // A TreeMap ensures that memberA is first in the iteration order.
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        // Two members must have extra partitions. In the previous assignment, they were members B
+        // and C.
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 1, 3)
+            ))
+        ));
+
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2, 4)
+            ))
+        ));
+
+        // Members B and C should keep their partitions.
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1, 3)
+        ));
+        expectedAssignment.put(memberC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2, 4)
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        assertAssignment(expectedAssignment, computedAssignment);
+        checkValidityAndBalance(members, computedAssignment);
+    }
+
     /**
      * Verifies that the given assignment is valid with respect to the given subscriptions.
      * Validity requirements:
