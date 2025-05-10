@@ -35,11 +35,11 @@ Configuration:
         level: WARN
 
       - name: org.apache.kafka.clients.consumer
-        level: DEBUG
+        level: WARN
 
       - name: org.apache.kafka.clients.NetworkClient
-        level: INFO
+        level: WARN
 
       - name: org.apache.kafka.common.network.Selector
-        level: DEBUG
+        level: WARN
 

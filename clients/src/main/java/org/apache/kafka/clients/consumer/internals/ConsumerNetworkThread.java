@@ -38,9 +38,14 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -72,6 +77,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
     private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
     private long lastPollTimeMs = 0L;
+
+    private final AtomicBoolean canWakeup = new AtomicBoolean(true);
+    private int ignoredWakeups = 0;
+    private final Map<String, AtomicInteger> wakeupCauseCounts = new TreeMap<>();
+    private final FeatureFlags featureFlags = new FeatureFlags();
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
@@ -145,7 +155,14 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
-        processApplicationEvents();
+        ApplicationEvent event = null;
+
+        if (featureFlags.useQueueForWakeup && !networkClientDelegate.hasAnyPendingRequests()) {
+            // If we don't have any outstanding network requests, we can park here until the next event comes.
+            event = applicationEventQueue.poll();
+        }
+
+        processApplicationEvents(event);
 
         final long currentTimeMs = time.milliseconds();
         if (lastPollTimeMs != 0L) {
@@ -153,13 +170,16 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
         lastPollTimeMs = currentTimeMs;
 
-        final long pollWaitTimeMs = requestManagers.entries().stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(rm -> rm.poll(currentTimeMs))
-                .map(networkClientDelegate::addAll)
-                .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
-        networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+        for (Optional<? extends RequestManager> rm : requestManagers.entries()) {
+            if (rm.isEmpty())
+                continue;
+
+            NetworkClientDelegate.PollResult pollResult = rm.get().poll(currentTimeMs);
+            networkClientDelegate.addAll(pollResult);
+        }
+
+        networkClientDelegate.poll(MAX_POLL_TIMEOUT_MS, currentTimeMs);
+        canWakeup.set(true);
 
         cachedMaximumTimeToWait = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
@@ -175,9 +195,14 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     /**
      * Process the events—if any—that were produced by the application thread.
      */
-    private void processApplicationEvents() {
+    private void processApplicationEvents(ApplicationEvent head) {
         LinkedList<ApplicationEvent> events = new LinkedList<>();
+
+        if (head != null)
+            events.add(head);
+
         applicationEventQueue.drainTo(events);
+
         if (events.isEmpty())
             return;
 
@@ -248,10 +273,50 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         return running;
     }
 
-    public void wakeup() {
+    public void wakeupForEvent(ApplicationEvent cause) {
+        String name = cause.type().name();
+
+        if (featureFlags.ignoreEventWakeups) {
+            log.debug("wakeupForEvent - ignoring {}", name);
+        } else {
+            if (wakeup(name))
+                log.debug("wakeupForEvent - waking up for {}", name);
+            else
+                log.debug("wakeupForEvent - tried to wake up for {}, but was duplicate", name);
+        }
+    }
+
+    public void wakeupForPrefetch() {
+        if (featureFlags.ignorePrefetchWakeups) {
+            log.debug("wakeupForPrefetch - ignoring");
+        } else {
+            if (wakeup("Prefetch"))
+                log.debug("wakeupForPrefetch - waking up");
+            else
+                log.debug("wakeupForPrefetch - tried to wake up, but was duplicate");
+        }
+    }
+
+    private boolean wakeup(String cause) {
         // The network client can be null if the initializeResources method has not yet been called.
-        if (networkClientDelegate != null)
-            networkClientDelegate.wakeup();
+        if (networkClientDelegate != null) {
+            if (featureFlags.dedupeEventWakeups) {
+                if (canWakeup.compareAndSet(true, false)) {
+                    networkClientDelegate.wakeup();
+                } else {
+                    log.debug("wakeup - ignoring duplicate for {}", cause);
+                    ignoredWakeups++;
+                    return false;
+                }
+            } else {
+                networkClientDelegate.wakeup();
+            }
+
+            wakeupCauseCounts.computeIfAbsent(cause, __ -> new AtomicInteger()).incrementAndGet();
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -307,6 +372,12 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Signaling the consumer network thread to close in {}ms", timeoutMs);
         running = false;
         closeTimeout = timeout;
+
+        log.debug("Ignored wakeups: {}", ignoredWakeups);
+
+        wakeupCauseCounts.forEach((k, v) -> {
+            log.debug("Wakeup cause {}: {}", k, v);
+        });
 
         if (networkClientDelegate != null)
             networkClientDelegate.wakeup();

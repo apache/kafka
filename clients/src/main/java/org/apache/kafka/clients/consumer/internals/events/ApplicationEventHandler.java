@@ -85,14 +85,14 @@ public class ApplicationEventHandler implements Closeable {
         // to avoid race conditions (the background thread is continuously removing from this queue)
         asyncConsumerMetrics.recordApplicationEventQueueSize(applicationEventQueue.size() + 1);
         applicationEventQueue.add(event);
-        wakeupNetworkThread();
+        networkThread.wakeupForEvent(event);
     }
 
     /**
      * Wakeup the {@link ConsumerNetworkThread network I/O thread} to pull the next event(s) from the queue.
      */
     public void wakeupNetworkThread() {
-        networkThread.wakeup();
+        networkThread.wakeupForPrefetch();
     }
 
     /**
