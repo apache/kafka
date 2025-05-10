@@ -32,6 +32,8 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
@@ -77,6 +79,11 @@ public class TestUtils {
         for (int i = 0; i < len; i++)
             b.append(LETTERS_AND_DIGITS.charAt(SEEDED_RANDOM.nextInt(LETTERS_AND_DIGITS.length())));
         return b.toString();
+    }
+
+    public static <T> T randomSelect(final Collection<T> elements) {
+        List<T> elementsCopy = new ArrayList<>(elements);
+        return elementsCopy.get(SEEDED_RANDOM.nextInt(elementsCopy.size()));
     }
 
     /**
