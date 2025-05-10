@@ -191,6 +191,8 @@
       <allow pkg="io.opentelemetry.proto"/>
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.telemetry" />
+      <!-- for IncrementalAlterConfigsRequest and AlterUserScramCredentialsRequest -->
+      <allow pkg="com.fasterxml.jackson.databind" />
     </subpackage>
 
     <subpackage name="serialization">

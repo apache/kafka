@@ -263,6 +263,9 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     // create a bunch of credentials
     val request1_0 = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
+        .setDeletions(util.Arrays.asList(
+          new AlterUserScramCredentialsRequestData.ScramCredentialDeletion()
+            .setName(user2).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
         .setUpsertions(util.Arrays.asList(
           new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion()
             .setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -270,10 +273,15 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
             .setSalt(saltBytes)
             .setSaltedPassword(saltedPasswordBytes),
         ))).build()
+    assertEquals("AlterUserScramCredentialsRequestData(" +
+      "deletions=[ScramCredentialDeletion(name='" + user2 + "', mechanism=" + ScramMechanism.SCRAM_SHA_256.`type` + ")], " +
+      "upsertions=[ScramCredentialUpsertion(name='" + user1 + "', mechanism=" + ScramMechanism.SCRAM_SHA_256.`type` +
+      ", iterations=4096, salt=[], saltedPassword=[])])", request1_0.toString)
     val results1_0 = sendAlterUserScramCredentialsRequest(request1_0).data.results
-    assertEquals(1, results1_0.size)
-    checkNoErrorsAlteringCredentials(results1_0)
+    assertEquals(2, results1_0.size)
+    assertEquals(1, results1_0.asScala.count(_.errorCode == Errors.RESOURCE_NOT_FOUND.code()))
     checkUserAppearsInAlterResults(results1_0, user1)
+    checkUserAppearsInAlterResults(results1_0, user2)
 
     // When creating credentials, do not update the same user more than once per request
     val request1_1 = new AlterUserScramCredentialsRequest.Builder(
@@ -295,6 +303,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
             .setSalt(saltBytes)
             .setSaltedPassword(saltedPasswordBytes),
         ))).build()
+    assertFalse(request1_1.toString.contains(saltBytes))
+    assertFalse(request1_1.toString.contains(saltedPasswordBytes))
     val results1_1 = sendAlterUserScramCredentialsRequest(request1_1).data.results
     assertEquals(3, results1_1.size)
     checkNoErrorsAlteringCredentials(results1_1)
