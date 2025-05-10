@@ -317,10 +317,11 @@ public class StickyTaskAssignor implements TaskAssignor {
         private boolean hasRoomForActiveTask(final ProcessId processId, final TaskId taskId) {
 
             final int capacity = clients.get(processId).numProcessingThreads();
-            final int currentClientPartitionSize = this.currentActiveClientWeight.getOrDefault(processId, 0);
+            final int currentClientPartitionWeight = this.currentActiveClientWeight.getOrDefault(processId, 0);
             final int addedTaskWeight = taskInputPartitionCount.getOrDefault(taskId, 1);
 
-            return currentClientPartitionSize + addedTaskWeight < fairPartitionsPerClientThread * capacity + averageTaskWeight;
+            // compare absolute weight of current client with best case distribution plus buffer
+            return currentClientPartitionWeight + addedTaskWeight < fairPartitionsPerClientThread * capacity + averageTaskWeight;
         }
 
         private ProcessId findBestClientForTask(final TaskId taskId, final Set<ProcessId> clientsWithin, final ToDoubleFunction<ProcessId> calculateLoad, final BiPredicate<ProcessId, TaskId> shouldBalance) {
@@ -441,7 +442,8 @@ public class StickyTaskAssignor implements TaskAssignor {
             final double thisClientLoadPartition = clientLoadPartitions(client);
             final int clientCapacity = clients.get(client).numProcessingThreads();
             final int newTaskWeight = this.taskInputPartitionCount.get(taskId);
-            if (thisClientLoadPartition + newTaskWeight < fairPartitionsPerClientThread * clientCapacity + averageTaskWeight) {
+            // using absolute weights, so I can add the new task weight and buffer correctly
+            if (thisClientLoadPartition * clientCapacity + newTaskWeight < fairPartitionsPerClientThread * clientCapacity + averageTaskWeight) {
                 return false;
             }
             for (final ProcessId otherClient : clients.keySet()) {
