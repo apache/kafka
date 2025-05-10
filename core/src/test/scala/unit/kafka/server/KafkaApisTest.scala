@@ -4161,7 +4161,12 @@ class KafkaApisTest {
 
   @Test
   def testEmptyIncrementalAlterConfigsRequestWithKRaft(): Unit = {
-    val request = buildRequest(new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(), 1.toShort))
+    val alterConfigsRequest = new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(), 1.toShort)
+    assertEquals(
+      "IncrementalAlterConfigsRequestData(resources=[], validateOnly=false)",
+      alterConfigsRequest.toString
+    )
+    val request = buildRequest(alterConfigsRequest)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
@@ -4173,7 +4178,7 @@ class KafkaApisTest {
 
   @Test
   def testLog4jIncrementalAlterConfigsRequestWithKRaft(): Unit = {
-    val request = buildRequest(new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData().
+    val alterConfigsRequest = new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData().
       setValidateOnly(true).
       setResources(new IAlterConfigsResourceCollection(asList(new IAlterConfigsResource().
         setResourceName(brokerId.toString).
@@ -4181,7 +4186,16 @@ class KafkaApisTest {
         setConfigs(new IAlterableConfigCollection(asList(new IAlterableConfig().
           setName(Log4jController.ROOT_LOGGER).
           setValue("TRACE")).iterator()))).iterator())),
-        1.toShort))
+      1.toShort)
+    assertEquals(
+      "IncrementalAlterConfigsRequestData(resources=[" +
+        "AlterConfigsResource(resourceType=" + BROKER_LOGGER.id() + ", " +
+        "resourceName='"+ brokerId + "', " +
+        "configs=[AlterableConfig(name='" + Log4jController.ROOT_LOGGER + "', configOperation=0, value='REDACTED')])], " +
+        "validateOnly=true)",
+      alterConfigsRequest.toString
+    )
+    val request = buildRequest(alterConfigsRequest)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
