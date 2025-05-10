@@ -18,7 +18,7 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.UnalignedRecords;
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 /**
  * Interface for reading snapshots as a sequence of records.

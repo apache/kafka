@@ -1177,9 +1177,9 @@ public class UnifiedLog implements AutoCloseable {
                             });
 
                             // check messages size does not exceed config.segmentSize
-                            if (validRecords.sizeInBytes() > config().segmentSize()) {
+                            if (validRecords.sizeInBytes() > config().segmentSize) {
                                 throw new RecordBatchTooLargeException("Message batch size is " + validRecords.sizeInBytes() + " bytes in append " +
-                                        "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize() + ".");
+                                        "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize + ".");
                             }
 
                             // maybe roll the log if this segment is full
@@ -2034,12 +2034,12 @@ public class UnifiedLog implements AutoCloseable {
             long maxTimestampInMessages = appendInfo.maxTimestamp();
             long maxOffsetInMessages = appendInfo.lastOffset();
 
-            if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize(), appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
+            if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize, appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
                 logger.debug("Rolling new log segment (log_size = {}/{}}, " +
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",
-                        segment.size(), config().segmentSize(),
+                        segment.size(), config().segmentSize,
                         segment.offsetIndex().entries(), segment.offsetIndex().maxEntries(),
                         segment.timeIndex().entries(), segment.timeIndex().maxEntries(),
                         segment.timeWaitedForRoll(now, maxTimestampInMessages), config().segmentMs - segment.rollJitterMs());
@@ -2416,15 +2416,13 @@ public class UnifiedLog implements AutoCloseable {
                                             Time time,
                                             boolean reloadFromCleanShutdown,
                                             String logPrefix) throws IOException {
-        List<Optional<Long>> offsetsToSnapshot = new ArrayList<>();
-        if (segments.nonEmpty()) {
-            long lastSegmentBaseOffset = segments.lastSegment().get().baseOffset();
-            Optional<LogSegment> lowerSegment = segments.lowerSegment(lastSegmentBaseOffset);
-            Optional<Long> nextLatestSegmentBaseOffset = lowerSegment.map(LogSegment::baseOffset);
-            offsetsToSnapshot.add(nextLatestSegmentBaseOffset);
-            offsetsToSnapshot.add(Optional.of(lastSegmentBaseOffset));
-        }
-        offsetsToSnapshot.add(Optional.of(lastOffset));
+        List<Long> offsetsToSnapshot = new ArrayList<>();
+        segments.lastSegment().ifPresent(lastSegment -> {
+            long lastSegmentBaseOffset = lastSegment.baseOffset();
+            segments.lowerSegment(lastSegmentBaseOffset).ifPresent(s -> offsetsToSnapshot.add(s.baseOffset()));
+            offsetsToSnapshot.add(lastSegmentBaseOffset);
+        });
+        offsetsToSnapshot.add(lastOffset);
 
         LOG.info("{}Loading producer state till offset {}", logPrefix, lastOffset);
 
@@ -2443,11 +2441,9 @@ public class UnifiedLog implements AutoCloseable {
             // To avoid an expensive scan through all the segments, we take empty snapshots from the start of the
             // last two segments and the last offset. This should avoid the full scan in the case that the log needs
             // truncation.
-            for (Optional<Long> offset : offsetsToSnapshot) {
-                if (offset.isPresent()) {
-                    producerStateManager.updateMapEndOffset(offset.get());
-                    producerStateManager.takeSnapshot();
-                }
+            for (long offset : offsetsToSnapshot) {
+                producerStateManager.updateMapEndOffset(offset);
+                producerStateManager.takeSnapshot();
             }
         } else {
             LOG.info("{}Reloading from producer snapshot and rebuilding producer state from offset {}", logPrefix, lastOffset);
@@ -2469,7 +2465,7 @@ public class UnifiedLog implements AutoCloseable {
                     long startOffset = Utils.max(segment.baseOffset(), producerStateManager.mapEndOffset(), logStartOffset);
                     producerStateManager.updateMapEndOffset(startOffset);
 
-                    if (offsetsToSnapshot.contains(Optional.of(segment.baseOffset()))) {
+                    if (offsetsToSnapshot.contains(segment.baseOffset())) {
                         producerStateManager.takeSnapshot();
                     }
                     int maxPosition = segment.size();

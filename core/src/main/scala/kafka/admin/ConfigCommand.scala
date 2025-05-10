@@ -21,7 +21,7 @@ import joptsimple._
 import kafka.server.DynamicConfig
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListGroupsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
@@ -352,7 +352,7 @@ object ConfigCommand extends Logging {
         case ClientMetricsType =>
           adminClient.listClientMetricsResources().all().get().asScala.map(_.name).toSeq
         case GroupType =>
-          adminClient.listGroups(ListGroupsOptions.forConsumerGroups()).all.get.asScala.map(_.groupId).toSeq
+          adminClient.listGroups().all.get.asScala.map(_.groupId).toSeq
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 

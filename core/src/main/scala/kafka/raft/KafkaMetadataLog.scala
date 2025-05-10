@@ -26,9 +26,11 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, MetadataLogConfig, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
+import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, MetadataLogConfig, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
+import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
@@ -139,14 +141,14 @@ final class KafkaMetadataLog private (
     (log.endOffsetForEpoch(epoch).toScala, earliestSnapshotId().toScala) match {
       case (Some(offsetAndEpoch), Some(snapshotId)) if (
         offsetAndEpoch.offset == snapshotId.offset &&
-        offsetAndEpoch.leaderEpoch == epoch) =>
+        offsetAndEpoch.epoch() == epoch) =>
 
         // The epoch is smaller than the smallest epoch on the log. Override the diverging
         // epoch to the oldest snapshot which should be the snapshot at the log start offset
         new OffsetAndEpoch(snapshotId.offset, snapshotId.epoch)
 
       case (Some(offsetAndEpoch), _) =>
-        new OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.leaderEpoch)
+        new OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.epoch())
 
       case (None, _) =>
         new OffsetAndEpoch(endOffset.offset, lastFetchedEpoch)
@@ -417,7 +419,7 @@ final class KafkaMetadataLog private (
    */
   private def readSnapshotTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
     readSnapshot(snapshotId).toScala.map { reader =>
-      Snapshots.lastContainedLogTimestamp(reader)
+      Snapshots.lastContainedLogTimestamp(reader, new LogContext(logIdent))
     }
   }
 
@@ -588,10 +590,7 @@ object KafkaMetadataLog extends Logging {
     val props = new Properties()
     props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
     props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
-    if (config.internalLogSegmentBytes != null)
-      props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
-    else
-      props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
+    props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, config.logSegmentMillis.toString)
     props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT.toString)
 
     // Disable time and byte retention when deleting segments
@@ -600,7 +599,11 @@ object KafkaMetadataLog extends Logging {
     LogConfig.validate(props)
     val defaultLogConfig = new LogConfig(props)
 
-    if (defaultLogConfig.retentionMs >= 0) {
+    if (config.logSegmentBytes < config.logSegmentMinBytes) {
+      throw new InvalidConfigurationException(
+        s"Cannot set ${MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG} below ${config.logSegmentMinBytes}: ${config.logSegmentBytes}"
+      )
+    } else if (defaultLogConfig.retentionMs >= 0) {
       throw new InvalidConfigurationException(
         s"Cannot set ${TopicConfig.RETENTION_MS_CONFIG} above -1: ${defaultLogConfig.retentionMs}."
       )
@@ -635,6 +638,12 @@ object KafkaMetadataLog extends Logging {
       config,
       nodeId
     )
+
+    // Print a warning if users have overridden the internal config
+    if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
+      metadataLog.error(s"Overriding ${MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
+        s"this value too low may lead to an inability to write batches of metadata records.")
+    }
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
     // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.

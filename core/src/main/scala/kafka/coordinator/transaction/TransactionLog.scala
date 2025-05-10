@@ -21,6 +21,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.coordinator.transaction.TransactionState
 import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordType, TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
@@ -61,10 +62,10 @@ object TransactionLog {
     */
   private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
                                         transactionVersionLevel: TransactionVersion): Array[Byte] = {
-    if (txnMetadata.txnState == Empty && txnMetadata.topicPartitions.nonEmpty)
+    if (txnMetadata.txnState == TransactionState.EMPTY && txnMetadata.topicPartitions.nonEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
-      val transactionPartitions = if (txnMetadata.txnState == Empty) null
+      val transactionPartitions = if (txnMetadata.txnState == TransactionState.EMPTY) null
       else txnMetadata.topicPartitions
         .groupBy(_.topic)
         .map { case (topic, partitions) =>
@@ -127,7 +128,7 @@ object TransactionLog {
           txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs,
           clientTransactionVersion = TransactionVersion.fromFeatureLevel(value.clientTransactionVersion))
 
-        if (!transactionMetadata.state.equals(Empty))
+        if (!transactionMetadata.state.equals(TransactionState.EMPTY))
           value.transactionPartitions.forEach(partitionsSchema =>
             transactionMetadata.addPartitions(partitionsSchema.partitionIds
               .asScala

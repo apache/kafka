@@ -43,7 +43,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
-import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -78,6 +77,7 @@ import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CON
 import static org.apache.kafka.clients.CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.DELETE_RETENTION_MS_CONFIG;
+import static org.apache.kafka.common.config.TopicConfig.SEGMENT_MS_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_STOP;
 import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -1136,7 +1136,7 @@ public class ConnectWorkerIntegrationTest {
         final String configTopic = "kafka-16838-configs";
         final int offsetCommitIntervalMs = 100;
         workerProps.put(CONFIG_TOPIC_CONFIG, configTopic);
-        workerProps.put(CONFIG_STORAGE_PREFIX + LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "100");
+        workerProps.put(CONFIG_STORAGE_PREFIX + SEGMENT_MS_CONFIG, "100");
         workerProps.put(CONFIG_STORAGE_PREFIX + DELETE_RETENTION_MS_CONFIG, "1");
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Integer.toString(offsetCommitIntervalMs));
 

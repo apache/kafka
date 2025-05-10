@@ -109,7 +109,6 @@ import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
-import org.apache.kafka.storage.internals.log.LogConfig;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -901,7 +900,7 @@ public class GroupCoordinatorServiceTest {
         Properties expectedProperties = new Properties();
         expectedProperties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
         expectedProperties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
-        expectedProperties.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1000");
+        expectedProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000");
 
         assertEquals(expectedProperties, service.groupMetadataTopicConfigs());
     }
