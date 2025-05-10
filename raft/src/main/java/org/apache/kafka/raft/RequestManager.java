@@ -119,8 +119,6 @@ public class RequestManager {
     public Optional<Node> findReadyBootstrapServer(long currentTimeMs) {
         // Check that there are no inflight fetch or fetch snapshot requests
         // across any of the known nodes not just the bootstrap servers
-        System.out.println(connections);
-        System.out.println("requestTImeoutMs: " + requestTimeoutMs);
         if (hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH) ||
             hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
             return Optional.empty();

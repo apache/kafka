@@ -177,20 +177,11 @@ public class RequestManagerTest {
         );
 
         // Find a ready node with the starting state
-        Node bootstrapNode1 = cache.findReadyBootstrapServer(time.milliseconds()).get();
-        assertTrue(
-            bootstrapList.contains(bootstrapNode1),
-            String.format("%s is not in %s", bootstrapNode1, bootstrapList)
-        );
-        assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+        Node bootstrapNode1 = assertReadyBootstrapServer(cache, bootstrapList);
 
         // Send a request and check the cache state
         cache.onRequestSent(bootstrapNode1, 1, time.milliseconds(), fetch);
-        assertEquals(
-            Optional.empty(),
-            cache.findReadyBootstrapServer(time.milliseconds())
-        );
-        assertEquals(requestTimeoutMs, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+        assertNotReadyBootstrapServer(cache);
 
         // Fail the request
         time.sleep(100);
@@ -201,12 +192,7 @@ public class RequestManagerTest {
 
         // Send a request to the second node and check the state
         cache.onRequestSent(bootstrapNode2, 2, time.milliseconds(), fetch);
-        assertEquals(
-            Optional.empty(),
-            cache.findReadyBootstrapServer(time.milliseconds())
-        );
-        assertEquals(requestTimeoutMs, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
-
+        assertNotReadyBootstrapServer(cache);
 
         // Fail the second request before the request timeout
         time.sleep(retryBackoffMs - 1);
@@ -224,20 +210,11 @@ public class RequestManagerTest {
         assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
 
         // Pending fetch snapshot requests should also result in a returned backoff
-        Node bootstrapNode4 = cache.findReadyBootstrapServer(time.milliseconds()).get();
-        assertTrue(
-            bootstrapList.contains(bootstrapNode4),
-            String.format("%s is not in %s", bootstrapNode4, bootstrapList)
-        );
-        assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+        Node bootstrapNode4 = assertReadyBootstrapServer(cache, bootstrapList);
 
         // Send a request and check the cache state
         cache.onRequestSent(bootstrapNode4, 1, time.milliseconds(), fetchSnapshot);
-        assertEquals(
-            Optional.empty(),
-            cache.findReadyBootstrapServer(time.milliseconds())
-        );
-        assertEquals(requestTimeoutMs, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+        assertNotReadyBootstrapServer(cache);
 
         // Other pending requests should not affect readiness of bootstrap servers
         cache.onRequestSent(bootstrapNode4, 1, time.milliseconds(), updateVoter);
@@ -247,6 +224,24 @@ public class RequestManagerTest {
         cache.onResponseResult(bootstrapNode4, 1, true, time.milliseconds(), fetchSnapshot);
         assertTrue(cache.findReadyBootstrapServer(time.milliseconds()).isPresent());
         assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+    }
+
+    private Node assertReadyBootstrapServer(RequestManager cache, List<Node> bootstrapList) {
+        Node bootstrapNode = cache.findReadyBootstrapServer(time.milliseconds()).get();
+        assertTrue(
+            bootstrapList.contains(bootstrapNode),
+            String.format("%s is not in %s", bootstrapNode, bootstrapList)
+        );
+        assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+        return bootstrapNode;
+    }
+
+    private void assertNotReadyBootstrapServer(RequestManager cache) {
+        assertEquals(
+            Optional.empty(),
+            cache.findReadyBootstrapServer(time.milliseconds())
+        );
+        assertEquals(requestTimeoutMs, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
     }
 
     @Test
