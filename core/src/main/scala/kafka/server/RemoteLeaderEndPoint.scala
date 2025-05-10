@@ -86,7 +86,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       if (fetchResponse.error == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
         throw Errors.forCode(fetchResponse.error().code()).exception()
       } else {
-        java.util.Map.of[TopicPartition, FetchResponseData.PartitionData]()
+        Map.empty()
       }
     } else {
       fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion())
@@ -202,8 +202,8 @@ class RemoteLeaderEndPoint(logPrefix: String,
     }
 
     val fetchData = builder.build()
-    val fetchRequestOpt: Optional[ReplicaFetch] = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
-      Optional.empty[ReplicaFetch]()
+    val fetchRequestOpt = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
+      Optional.empty[ReplicaFetch]
     } else {
       val metadataVersion = metadataVersionSupplier()
       val version: Short = if (!fetchData.canUseTopicIds) {
@@ -220,7 +220,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       Optional.of(new ReplicaFetch(fetchData.sessionPartitions(), requestBuilder))
     }
 
-    new ResultWithPartitions[java.util.Optional[ReplicaFetch]](fetchRequestOpt, partitionsWithError.asJava)
+    new ResultWithPartitions(fetchRequestOpt, partitionsWithError.asJava)
   }
 
   /**
