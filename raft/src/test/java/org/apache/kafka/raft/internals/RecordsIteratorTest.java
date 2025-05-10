@@ -278,7 +278,7 @@ public final class RecordsIteratorTest {
         try (RecordsIterator<String> iterator = createIterator(records, BufferSupplier.NO_CACHING, true)) {
             assertTrue(iterator.hasNext());
             assertEquals(
-                List.of(new ControlRecord(type, expectedMessage)),
+                List.of(ControlRecord.of(expectedMessage)),
                 iterator.next().controlRecords()
             );
             assertFalse(iterator.hasNext());
