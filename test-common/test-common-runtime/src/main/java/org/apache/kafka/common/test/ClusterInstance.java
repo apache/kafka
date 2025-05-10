@@ -290,6 +290,19 @@ public interface ClusterInstance {
         }
     }
 
+    /**
+     * Deletes a topic and waits for the deletion to complete.
+     *
+     * @param topicName The name of the topic to delete
+     * @throws InterruptedException If the operation is interrupted
+     */
+    default void deleteTopic(String topicName) throws InterruptedException {
+        try (Admin admin = admin()) {
+            admin.deleteTopics(List.of(topicName));
+            waitTopicDeletion(topicName);
+        }
+    }
+
     void waitForReadyBrokers() throws InterruptedException;
 
     default void waitForTopic(String topic, int partitions) throws InterruptedException {

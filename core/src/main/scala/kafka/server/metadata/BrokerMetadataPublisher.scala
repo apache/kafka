@@ -71,7 +71,7 @@ class BrokerMetadataPublisher(
   replicaManager: ReplicaManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
-  shareCoordinator: Option[ShareCoordinator],
+  shareCoordinator: ShareCoordinator,
   var dynamicConfigPublisher: DynamicConfigPublisher,
   dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
   dynamicTopicClusterQuotaPublisher: DynamicTopicClusterQuotaPublisher,
@@ -166,18 +166,16 @@ class BrokerMetadataPublisher(
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating txn " +
             s"coordinator with local changes in $deltaName", t)
         }
-        if (shareCoordinator.isDefined) {
-          try {
-            updateCoordinator(newImage,
-              delta,
-              Topic.SHARE_GROUP_STATE_TOPIC_NAME,
-              shareCoordinator.get.onElection,
-              (partitionIndex, leaderEpochOpt) => shareCoordinator.get.onResignation(partitionIndex, toOptionalInt(leaderEpochOpt))
-            )
-          } catch {
-            case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
-              s"coordinator with local changes in $deltaName", t)
-          }
+        try {
+          updateCoordinator(newImage,
+            delta,
+            Topic.SHARE_GROUP_STATE_TOPIC_NAME,
+            shareCoordinator.onElection,
+            (partitionIndex, leaderEpochOpt) => shareCoordinator.onResignation(partitionIndex, toOptionalInt(leaderEpochOpt))
+          )
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
+            s"coordinator with local changes in $deltaName", t)
         }
         try {
           // Notify the group coordinator about deleted topics.
@@ -225,7 +223,7 @@ class BrokerMetadataPublisher(
 
       try {
         // Propagate the new image to the share coordinator.
-        shareCoordinator.foreach(coordinator => coordinator.onNewMetadataImage(newImage, delta))
+        shareCoordinator.onNewMetadataImage(newImage, delta)
       } catch {
         case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
           s"coordinator with local changes in $deltaName", t)
@@ -340,14 +338,12 @@ class BrokerMetadataPublisher(
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
     }
-    if (config.shareGroupConfig.isShareGroupEnabled && shareCoordinator.isDefined) {
-      try {
-        // Start the share coordinator.
-        shareCoordinator.get.startup(() => metadataCache.numPartitions(
-          Topic.SHARE_GROUP_STATE_TOPIC_NAME).orElse(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
-      } catch {
-        case t: Throwable => fatalFaultHandler.handleFault("Error starting Share coordinator", t)
-      }
+    try {
+      // Start the share coordinator.
+      shareCoordinator.startup(() => metadataCache.numPartitions(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
+        .orElse(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
+    } catch {
+      case t: Throwable => fatalFaultHandler.handleFault("Error starting Share coordinator", t)
     }
   }
 

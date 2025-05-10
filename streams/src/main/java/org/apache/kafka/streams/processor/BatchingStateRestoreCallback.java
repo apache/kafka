@@ -28,11 +28,10 @@ import java.util.Collection;
  * It is expected that implementations of this class will not call the {@link StateRestoreCallback#restore(byte[],
  * byte[])} method.
  */
-@FunctionalInterface
 public interface BatchingStateRestoreCallback extends StateRestoreCallback {
 
     /**
-     * Called to restore a number of records.  This method is called repeatedly until the {@link StateStore} is fulled
+     * Called to restore a number of records. This method is called repeatedly until the {@link StateStore} is fully
      * restored.
      *
      * @param records the records to restore.

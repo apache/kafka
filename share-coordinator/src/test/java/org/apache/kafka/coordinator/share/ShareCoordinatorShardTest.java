@@ -605,6 +605,7 @@ class ShareCoordinatorShardTest {
             TOPIC_ID,
             PARTITION,
             0,
+            0,
             0
         ), result.response());
 

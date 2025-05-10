@@ -927,6 +927,7 @@ public class RaftEventSimulationTest {
     }
 
     private static class RaftNode {
+        final LogContext logContext;
         final int nodeId;
         final KafkaRaftClient<Integer> client;
         final MockLog log;
@@ -948,6 +949,7 @@ public class RaftEventSimulationTest {
             Random random,
             RecordSerde<Integer> intSerde
         ) {
+            this.logContext = logContext;
             this.nodeId = nodeId;
             this.client = client;
             this.log = log;
@@ -996,6 +998,10 @@ public class RaftEventSimulationTest {
                 highWatermark(),
                 logEndOffset()
             );
+        }
+
+        LogContext logContext() {
+            return logContext;
         }
     }
 
@@ -1335,7 +1341,8 @@ public class RaftEventSimulationTest {
                         node.intSerde,
                         BufferSupplier.create(),
                         Integer.MAX_VALUE,
-                        true
+                        true,
+                        node.logContext()
                     )
                 ) {
                     // Since the state machine is only on e value we only expect one data record in the snapshot

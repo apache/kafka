@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,26 +15,14 @@
  * limitations under the License.
  */
 
-package kafka.utils
+package org.apache.kafka.tools;
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+public class AdminOperationException extends RuntimeException {
+    public AdminOperationException(String message) {
+        super(message);
+    }
 
-
-class PoolTest {
-  @Test
-  def testRemoveAll(): Unit = {
-    val pool = new Pool[Int, String]
-    pool.put(1, "1")
-    pool.put(2, "2")
-    pool.put(3, "3")
-
-    assertEquals(3, pool.size)
-
-    pool.removeAll(Seq(1, 2))
-    assertEquals(1, pool.size)
-    assertEquals("3", pool.get(3))
-    pool.removeAll(Seq(3))
-    assertEquals(0, pool.size)
-  }
+    public AdminOperationException(Throwable cause) {
+        super(cause.getMessage(), cause);
+    }
 }

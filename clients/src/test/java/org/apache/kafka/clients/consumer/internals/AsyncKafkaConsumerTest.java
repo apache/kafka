@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
@@ -68,7 +67,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
-import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -223,10 +221,10 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
-            a -> backgroundEventReaper,
-            (a, b, c, d, e, f, g) -> fetchCollector,
-            (a, b, c, d) -> metadata,
+            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            logContext -> backgroundEventReaper,
+            (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
+            (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
             backgroundEventQueue,
             Optional.ofNullable(streamsRebalanceData)
         );
@@ -238,10 +236,10 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
-            a -> backgroundEventReaper,
-            (a, b, c, d, e, f, g) -> fetchCollector,
-            (a, b, c, d) -> metadata,
+            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            logContext -> backgroundEventReaper,
+            (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
+            (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
             backgroundEventQueue,
             Optional.empty()
         );
@@ -637,9 +635,7 @@ public class AsyncKafkaConsumerTest {
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         markReconcileAndAutoCommitCompleteForPollEvent();
-        assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO),
-            callback,
-            null);
+        assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO), callback);
     }
 
     @Test
@@ -649,9 +645,7 @@ public class AsyncKafkaConsumerTest {
         MockCommitCallback callback = new MockCommitCallback();
         completeCommitAsyncApplicationEventSuccessfully();
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
-        assertMockCommitCallbackInvoked(() -> consumer.close(),
-            callback,
-            null);
+        assertMockCommitCallbackInvoked(() -> consumer.close(), callback);
     }
 
     @Test
@@ -782,15 +776,10 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, never()).add(any(SyncCommitEvent.class));
     }
 
-    private void assertMockCommitCallbackInvoked(final Executable task,
-                                                 final MockCommitCallback callback,
-                                                 final Errors errors) {
+    private void assertMockCommitCallbackInvoked(final Executable task, final MockCommitCallback callback) {
         assertDoesNotThrow(task);
         assertEquals(1, callback.invoked);
-        if (errors == null)
-            assertNull(callback.exception);
-        else if (errors.exception() instanceof RetriableException)
-            assertInstanceOf(RetriableCommitFailedException.class, callback.exception);
+        assertNull(callback.exception);
     }
 
     private static class MockCommitCallback implements OffsetCommitCallback {
@@ -993,9 +982,8 @@ public class AsyncKafkaConsumerTest {
         TopicPartition tp = new TopicPartition("topic1", 0);
         Map<TopicPartition, Long> result =
                 assertDoesNotThrow(() -> consumer.beginningOffsets(Collections.singletonList(tp), Duration.ZERO));
-        // The result should be {tp=null}
-        assertTrue(result.containsKey(tp));
-        assertNull(result.get(tp));
+        assertNotNull(result);
+        assertEquals(0, result.size());
         verify(applicationEventHandler).add(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
@@ -1186,14 +1174,14 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
         consumer = newConsumer();
-        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(true);
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout();
     }
 
     @Test
     public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
         // Create consumer without group id so committed offsets are not used for updating positions
         consumer = newConsumerWithoutGroupId();
-        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(false);
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout();
     }
 
     @Test
@@ -1648,7 +1636,7 @@ public class AsyncKafkaConsumerTest {
         return props;
     }
 
-    private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(boolean committedOffsetsEnabled) {
+    private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout() {
         completeFetchedCommittedOffsetApplicationEventExceptionally(new TimeoutException());
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);

@@ -567,7 +567,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             // Handle any completed acknowledgements for which we already have the responses
-            handleCompletedAcknowledgements();
+            handleCompletedAcknowledgements(false);
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
             acknowledgeBatchIfImplicitAcknowledgement();
@@ -708,7 +708,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             // Handle any completed acknowledgements for which we already have the responses
-            handleCompletedAcknowledgements();
+            handleCompletedAcknowledgements(false);
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
             acknowledgeBatchIfImplicitAcknowledgement();
@@ -752,7 +752,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             // Handle any completed acknowledgements for which we already have the responses
-            handleCompletedAcknowledgements();
+            handleCompletedAcknowledgements(false);
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
             acknowledgeBatchIfImplicitAcknowledgement();
@@ -883,7 +883,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         swallow(log, Level.ERROR, "Failed to stop finding coordinator",
                 this::stopFindCoordinatorOnClose, firstException);
         swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
-                this::handleCompletedAcknowledgements, firstException);
+                () -> handleCompletedAcknowledgements(true), firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
@@ -1017,8 +1017,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * <p>
      * If the acknowledgement commit callback throws an exception, this method will throw an exception.
      */
-    private void handleCompletedAcknowledgements() {
-        processBackgroundEvents();
+    private void handleCompletedAcknowledgements(boolean onClose) {
+        // If the user gets any fatal errors, they will get these exceptions in the background queue.
+        // While closing, we ignore these exceptions so that the consumers close successfully.
+        processBackgroundEvents(onClose ? e -> (e instanceof GroupAuthorizationException
+                || e instanceof TopicAuthorizationException
+                || e instanceof InvalidTopicException) : e -> false);
 
         if (!completedAcknowledgements.isEmpty()) {
             try {
@@ -1063,6 +1067,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private static ShareAcknowledgementMode initializeAcknowledgementMode(ConsumerConfig config, Logger log) {
         String s = config.getString(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
         return ShareAcknowledgementMode.fromString(s);
+    }
+
+    private void processBackgroundEvents(final Predicate<Exception> ignoreErrorEventException) {
+        try {
+            processBackgroundEvents();
+        } catch (Exception e) {
+            if (!ignoreErrorEventException.test(e))
+                throw e;
+        }
     }
 
     /**

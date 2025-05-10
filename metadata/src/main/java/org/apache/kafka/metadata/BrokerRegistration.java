@@ -85,7 +85,7 @@ public class BrokerRegistration {
         public Builder setListeners(List<Endpoint> listeners) {
             Map<String, Endpoint> listenersMap = new HashMap<>();
             for (Endpoint endpoint : listeners) {
-                listenersMap.put(endpoint.listenerName().get(), endpoint);
+                listenersMap.put(endpoint.listener(), endpoint);
             }
             this.listeners = listenersMap;
             return this;
@@ -170,7 +170,7 @@ public class BrokerRegistration {
         this.incarnationId = incarnationId;
         Map<String, Endpoint> newListeners = new HashMap<>(listeners.size());
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
-            if (entry.getValue().listenerName().isEmpty()) {
+            if (entry.getValue().listener().isEmpty()) {
                 throw new IllegalArgumentException("Broker listeners must be named.");
             }
             newListeners.put(entry.getKey(), entry.getValue());

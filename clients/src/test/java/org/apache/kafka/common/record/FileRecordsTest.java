@@ -142,7 +142,7 @@ public class FileRecordsTest {
             Future<Object> readerCompletion = executor.submit(() -> {
                 while (log.sizeInBytes() < maxSizeInBytes) {
                     int currentSize = log.sizeInBytes();
-                    FileRecords slice = log.slice(0, currentSize);
+                    Records slice = log.slice(0, currentSize);
                     assertEquals(currentSize, slice.sizeInBytes());
                 }
                 return null;
@@ -198,9 +198,9 @@ public class FileRecordsTest {
      */
     @Test
     public void testRead() throws IOException {
-        FileRecords read = fileRecords.slice(0, fileRecords.sizeInBytes());
+        Records read = fileRecords.slice(0, fileRecords.sizeInBytes());
         assertEquals(fileRecords.sizeInBytes(), read.sizeInBytes());
-        TestUtils.checkEquals(fileRecords.batches(), read.batches());
+        TestUtils.checkEquals(fileRecords.batches(), ((FileRecords) read).batches());
 
         List<RecordBatch> items = batches(read);
         RecordBatch first = items.get(0);
@@ -283,9 +283,9 @@ public class FileRecordsTest {
         RecordBatch batch = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetFromPosition(1, 0).position;
         int size = batch.sizeInBytes();
-        FileRecords slice = fileRecords.slice(start, size);
+        Records slice = fileRecords.slice(start, size);
         assertEquals(Collections.singletonList(batch), batches(slice));
-        FileRecords slice2 = fileRecords.slice(start, size - 1);
+        Records slice2 = fileRecords.slice(start, size - 1);
         assertEquals(Collections.emptyList(), batches(slice2));
     }
 
@@ -429,24 +429,22 @@ public class FileRecordsTest {
             "abcd".getBytes(),
             "efgh".getBytes(),
             "ijkl".getBytes(),
-            "mnop".getBytes(),
-            "qrst".getBytes()
+            "mnopqr".getBytes(),
+            "stuv".getBytes()
         };
         try (FileRecords fileRecords = createFileRecords(values)) {
             List<RecordBatch> items = batches(fileRecords.slice(0, fileRecords.sizeInBytes()));
 
             // Slice from fourth message until the end.
             int position = IntStream.range(0, 3).map(i -> items.get(i).sizeInBytes()).sum();
-            FileRecords sliced  = fileRecords.slice(position, fileRecords.sizeInBytes() - position);
+            Records sliced  = fileRecords.slice(position, fileRecords.sizeInBytes() - position);
             assertEquals(fileRecords.sizeInBytes() - position, sliced.sizeInBytes());
             assertEquals(items.subList(3, items.size()), batches(sliced), "Read starting from the fourth message");
 
             // Further slice the already sliced file records, from fifth message until the end. Now the
-            // bytes available in the sliced file records are less than the start position. However, the
-            // position to slice is relative hence reset position to second message in the sliced file
-            // records i.e. reset with the size of the fourth message from the original file records.
-            position = items.get(4).sizeInBytes();
-            FileRecords finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
+            // bytes available in the sliced records are less than the moved position from original records.
+            position = items.get(3).sizeInBytes();
+            Records finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
             assertEquals(sliced.sizeInBytes() - position, finalSliced.sizeInBytes());
             assertEquals(items.subList(4, items.size()), batches(finalSliced), "Read starting from the fifth message");
         }
