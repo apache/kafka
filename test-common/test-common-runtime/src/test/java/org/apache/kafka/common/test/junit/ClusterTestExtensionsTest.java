@@ -55,7 +55,9 @@ import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.ReplicationConfigs;
 
 import org.junit.jupiter.api.Assertions;
 
@@ -72,6 +74,7 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -540,5 +543,106 @@ public class ClusterTestExtensionsTest {
             );
             assertInstanceOf(SaslAuthenticationException.class, exception.getCause());
         }
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    public void testRestartWithoutOverride(ClusterInstance clusterInstance) throws Exception {
+        // Ignore listeners config because testkit sets port as 0 to find an available port when starting.
+        // To avoid the broker or controller to bind another port when restarting, the testkit sets listeners with previous bound ports.
+        Map<Integer, Map<String, Object>> brokerConfigs = clusterInstance.brokers().values().stream()
+            .collect(Collectors.toMap(
+                broker -> broker.config().nodeId(),
+                broker -> {
+                    Map<String, Object> config = new HashMap<>(broker.config().values());
+                    config.remove(SocketServerConfigs.LISTENERS_CONFIG);
+                    return config;
+                }
+            ));
+        Map<Integer, Map<String, Object>> controllerConfigs = clusterInstance.controllers().values().stream()
+            .collect(Collectors.toMap(
+                controller -> controller.config().nodeId(),
+                controller -> {
+                    Map<String, Object> config = new HashMap<>(controller.config().values());
+                    config.remove(SocketServerConfigs.LISTENERS_CONFIG);
+                    return config;
+                }
+            ));
+
+        clusterInstance.restart();
+        clusterInstance.waitForReadyBrokers();
+
+        Map<Integer, Map<String, Object>> newBrokerConfigs = clusterInstance.brokers().values().stream()
+            .collect(Collectors.toMap(
+                broker -> broker.config().nodeId(),
+                broker -> {
+                    Map<String, Object> config = new HashMap<>(broker.config().values());
+                    config.remove(SocketServerConfigs.LISTENERS_CONFIG);
+                    return config;
+                }
+            ));
+        Map<Integer, Map<String, Object>> newControllerConfigs = clusterInstance.controllers().values().stream()
+            .collect(Collectors.toMap(
+                controller -> controller.config().nodeId(),
+                controller -> {
+                    Map<String, Object> config = new HashMap<>(controller.config().values());
+                    config.remove(SocketServerConfigs.LISTENERS_CONFIG);
+                    return config;
+                }
+            ));
+
+        assertEquals(brokerConfigs, newBrokerConfigs);
+        assertEquals(controllerConfigs, newControllerConfigs);
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 3, controllers = 3)
+    public void testRestartWithOverrideAllNodes(ClusterInstance clusterInstance) throws Exception {
+        // Before restart, default value of default.replication.factor is 1.
+        clusterInstance.brokers().values().forEach(broker -> {
+            assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+        });
+        clusterInstance.controllers().values().forEach(controller -> {
+            assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+        });
+
+        // Restart and set default.replication.factor to 2. The -1 in the map means all brokers/controllers.
+        clusterInstance.restart(Map.of(-1, Map.of(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, 2)));
+        clusterInstance.waitForReadyBrokers();
+
+        clusterInstance.brokers().values().forEach(broker -> {
+            assertEquals(2, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+        });
+        clusterInstance.controllers().values().forEach(controller -> {
+            assertEquals(2, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+        });
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 3, controllers = 3)
+    public void testRestartWithOverrideSomeNodes(ClusterInstance clusterInstance) throws Exception {
+        // Before restart, default value of default.replication.factor is 1.
+        clusterInstance.brokers().values().forEach(broker -> {
+            assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+        });
+        clusterInstance.controllers().values().forEach(controller -> {
+            assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+        });
+
+        // Restart and set default.replication.factor to 2. Only override broker id 1.
+        clusterInstance.restart(Map.of(1, Map.of(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, 2)));
+        clusterInstance.waitForReadyBrokers();
+
+        clusterInstance.brokers().values().forEach(broker -> {
+            if (broker.config().nodeId() == 1) {
+                assertEquals(2, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+            } else {
+                assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+            }
+        });
+        clusterInstance.controllers().values().forEach(controller -> {
+            if (controller.config().nodeId() == 1) {
+                assertEquals(2, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+            } else {
+                assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
+            }
+        });
     }
 }

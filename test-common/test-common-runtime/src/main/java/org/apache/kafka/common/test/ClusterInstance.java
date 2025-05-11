@@ -161,6 +161,12 @@ public interface ClusterInstance {
                 .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
     }
 
+    default void restart() throws Exception {
+        restart(Map.of());
+    }
+
+    void restart(Map<Integer, Map<String, Object>> perServerConfigOverrides) throws Exception;
+
     String clusterId();
 
     //---------------------------[producer/consumer/admin]---------------------------//
