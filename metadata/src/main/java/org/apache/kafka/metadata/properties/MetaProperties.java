@@ -173,10 +173,10 @@ public final class MetaProperties {
 
         public MetaProperties build() {
             if (!version.equals(MetaPropertiesVersion.V0)) {
-                if (!clusterId.isPresent()) {
+                if (clusterId.isEmpty()) {
                     throw new RuntimeException("cluster.id was not found.");
                 }
-                if (!nodeId.isPresent()) {
+                if (nodeId.isEmpty()) {
                     throw new RuntimeException("node.id was not found.");
                 }
             }

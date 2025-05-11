@@ -35,7 +35,6 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetComm
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -47,8 +46,8 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -56,14 +55,11 @@ import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -167,11 +163,6 @@ public class OffsetMetadataManager {
      * The system time.
      */
     private final Time time;
-
-    /**
-     * The metadata image.
-     */
-    private MetadataImage metadataImage;
 
     /**
      * The group metadata manager.
@@ -284,7 +275,6 @@ public class OffsetMetadataManager {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(OffsetMetadataManager.class);
         this.time = time;
-        this.metadataImage = metadataImage;
         this.groupMetadataManager = groupMetadataManager;
         this.config = config;
         this.metrics = metrics;
@@ -300,7 +290,7 @@ public class OffsetMetadataManager {
      * @param request The actual request.
      */
     private Group validateOffsetCommit(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
         Group group;
@@ -315,7 +305,7 @@ public class OffsetMetadataManager {
                 log.info("[GroupId {}] Creating a simple consumer group via manual offset commit.", request.groupId());
                 group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
             } else {
-                if (context.header.apiVersion() >= 9) {
+                if (context.requestVersion() >= 9) {
                     // Starting from version 9 of the OffsetCommit API, we return GROUP_ID_NOT_FOUND
                     // if the group does not exist. This error works for both the old and the new
                     // protocol for clients using this version of the API.
@@ -333,7 +323,7 @@ public class OffsetMetadataManager {
             request.groupInstanceId(),
             request.generationIdOrMemberEpoch(),
             false,
-            context.apiVersion()
+            context.requestVersion()
         );
 
         return group;
@@ -346,7 +336,7 @@ public class OffsetMetadataManager {
      * @param request The actual request.
      */
     private Group validateTransactionalOffsetCommit(
-        RequestContext context,
+        AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         Group group;
@@ -370,7 +360,7 @@ public class OffsetMetadataManager {
                 request.groupInstanceId(),
                 request.generationId(),
                 true,
-                context.apiVersion()
+                context.requestVersion()
             );
         } catch (StaleMemberEpochException ex) {
             throw Errors.ILLEGAL_GENERATION.exception();
@@ -448,7 +438,7 @@ public class OffsetMetadataManager {
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> commitOffset(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
         Group group = validateOffsetCommit(context, request);
@@ -471,7 +461,9 @@ public class OffsetMetadataManager {
         final OptionalLong expireTimestampMs = expireTimestampMs(request.retentionTimeMs(), currentTimeMs);
 
         request.topics().forEach(topic -> {
-            final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic().setName(topic.name());
+            final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
+                .setTopicId(topic.topicId())
+                .setName(topic.name());
             response.topics().add(topicResponse);
 
             topic.partitions().forEach(partition -> {
@@ -480,8 +472,8 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
-                    log.debug("[GroupId {}] Committing offsets {} for partition {}-{} from member {} with leader epoch {}.",
-                        request.groupId(), partition.committedOffset(), topic.name(), partition.partitionIndex(),
+                    log.debug("[GroupId {}] Committing offsets {} for partition {}-{}-{} from member {} with leader epoch {}.",
+                        request.groupId(), partition.committedOffset(), topic.topicId(), topic.name(), partition.partitionIndex(),
                         request.memberId(), partition.committedLeaderEpoch());
 
                     topicResponse.partitions().add(new OffsetCommitResponsePartition()
@@ -498,8 +490,7 @@ public class OffsetMetadataManager {
                         request.groupId(),
                         topic.name(),
                         partition.partitionIndex(),
-                        offsetAndMetadata,
-                        metadataImage.features().metadataVersion()
+                        offsetAndMetadata
                     ));
                 }
             });
@@ -522,7 +513,7 @@ public class OffsetMetadataManager {
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> commitTransactionalOffset(
-        RequestContext context,
+        AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         validateTransactionalOffsetCommit(context, request);
@@ -558,8 +549,7 @@ public class OffsetMetadataManager {
                         request.groupId(),
                         topic.name(),
                         partition.partitionIndex(),
-                        offsetAndMetadata,
-                        metadataImage.features().metadataVersion()
+                        offsetAndMetadata
                     ));
                 }
             });
@@ -635,7 +625,7 @@ public class OffsetMetadataManager {
     /**
      * Deletes offsets as part of a DeleteGroups request.
      * Populates the record list passed in with records to update the state machine.
-     * Validations are done in {@link GroupCoordinatorShard#deleteGroups(RequestContext, List)}
+     * Validations are done in {@link GroupCoordinatorShard#deleteGroups(AuthorizableRequestContext, List)}
      *
      * @param groupId The id of the given group.
      * @param records The record list to populate.
@@ -808,7 +798,7 @@ public class OffsetMetadataManager {
         } catch (GroupIdNotFoundException ex) {
             return new OffsetFetchResponseData.OffsetFetchResponseGroup()
                 .setGroupId(request.groupId())
-                .setTopics(Collections.emptyList());
+                .setTopics(List.of());
         }
 
         final List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicResponses = new ArrayList<>();
@@ -868,11 +858,10 @@ public class OffsetMetadataManager {
 
         // We expect the group to exist.
         Group group = groupMetadataManager.group(groupId);
-        Set<String> expiredPartitions = new HashSet<>();
         long currentTimestampMs = time.milliseconds();
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
 
-        if (!offsetExpirationCondition.isPresent()) {
+        if (offsetExpirationCondition.isEmpty()) {
             return false;
         }
 
@@ -885,7 +874,7 @@ public class OffsetMetadataManager {
                     // We don't expire the offset yet if there is a pending transactional offset for the partition.
                     if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs()) &&
                         !hasPendingTransactionalOffsets(groupId, topic, partition)) {
-                        expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records).toString());
+                        appendOffsetCommitTombstone(groupId, topic, partition, records);
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {
                         allOffsetsExpired.set(false);
@@ -895,7 +884,7 @@ public class OffsetMetadataManager {
                 allOffsetsExpired.set(false);
             }
         });
-        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, expiredPartitions.size());
+        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, records.size());
 
         // We don't want to remove the group if there are ongoing transactions.
         return allOffsetsExpired.get() && !openTransactionsByGroup.containsKey(groupId);
@@ -947,19 +936,15 @@ public class OffsetMetadataManager {
      * @param topic     The topic name.
      * @param partition The partition.
      * @param records   The list of records to append the tombstone.
-     *
-     * @return The topic partition of the corresponding tombstone.
      */
-    private TopicPartition appendOffsetCommitTombstone(
+    private void appendOffsetCommitTombstone(
         String groupId,
         String topic,
         int partition, 
         List<CoordinatorRecord> records
     ) {
         records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
-        TopicPartition tp = new TopicPartition(topic, partition);
-        log.trace("[GroupId {}] Removing expired offset and metadata for {}", groupId, tp);
-        return tp;
+        log.trace("[GroupId {}] Removing expired offset and metadata for {}-{}", groupId, topic, partition);
     }
 
     /**
@@ -1109,16 +1094,6 @@ public class OffsetMetadataManager {
         } else {
             log.debug("Aborted transactional offset commits for producer id {}.", producerId);
         }
-    }
-
-    /**
-     * A new metadata image is available.
-     *
-     * @param newImage  The new metadata image.
-     * @param delta     The delta image.
-     */
-    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
-        metadataImage = newImage;
     }
 
     /**

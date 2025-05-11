@@ -35,7 +35,8 @@ public class AdminClientConfigTest {
     public void testDefaultMetadataRecoveryStrategy() {
         Map<String, Object> configs = new HashMap<>();
         final AdminClientConfig adminClientConfig = new AdminClientConfig(configs);
-        assertEquals(MetadataRecoveryStrategy.NONE.name, adminClientConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+        assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, adminClientConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+
     }
 
     @Test

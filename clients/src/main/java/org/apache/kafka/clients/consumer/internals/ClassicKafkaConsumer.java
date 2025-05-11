@@ -22,6 +22,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
@@ -34,7 +35,7 @@ import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -179,13 +180,13 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
 
             List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
-            this.interceptors = new ConsumerInterceptors<>(interceptorList);
-            this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
+            this.interceptors = new ConsumerInterceptors<>(interceptorList, metrics);
+            this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
             this.subscriptions = createSubscriptionState(config, logContext);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
                     metrics.reporters(),
                     interceptorList,
-                    Arrays.asList(this.deserializers.keyDeserializer, this.deserializers.valueDeserializer));
+                    Arrays.asList(this.deserializers.keyDeserializer(), this.deserializers.valueDeserializer()));
             this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             this.metadata.bootstrap(addresses);
@@ -211,7 +212,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             );
 
             // no coordinator will be constructed for the default (null) group id
-            if (!groupId.isPresent()) {
+            if (groupId.isEmpty()) {
                 config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
                 config.ignore(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
                 this.coordinator = null;
@@ -265,7 +266,10 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
             // we do not need to call `close` at all when `log` is null, which means no internal objects were initialized.
             if (this.log != null) {
-                close(Duration.ZERO, true);
+                // If a consumer fails during initialization, it means it hasn't joined the group yet.
+                // Since it's not a group member, we use REMAIN_IN_GROUP option when closing
+                // to prevent sending an unnecessary leave request to the coordinator.
+                close(Duration.ZERO, CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP, true);
             }
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
@@ -289,12 +293,12 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.metrics = new Metrics(time);
         this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
         this.groupId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_ID_CONFIG));
-        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.isolationLevel = ConsumerUtils.configuredIsolationLevel(config);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
-        this.interceptors = new ConsumerInterceptors<>(Collections.emptyList());
+        this.interceptors = new ConsumerInterceptors<>(Collections.emptyList(), metrics);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -413,7 +417,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public Set<String> subscription() {
         acquireAndEnsureOpen();
         try {
-            return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.subscription()));
+            return Set.copyOf(this.subscriptions.subscription());
         } finally {
             release();
         }
@@ -430,12 +434,20 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
+        if (!metrics().containsKey(metric.metricName())) {
+            clientTelemetryReporter.ifPresent(reporter -> reporter.metricChange(metric));
+        } else {
+            log.debug("Skipping registration for metric {}. Existing consumer metrics cannot be overwritten.", metric.metricName());
+        }
     }
 
     @Override
     public void unregisterMetricFromSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
+        if (!metrics().containsKey(metric.metricName())) {
+            clientTelemetryReporter.ifPresent(reporter -> reporter.metricRemoval(metric));
+        }  else {
+            log.debug("Skipping unregistration for metric {}. Existing consumer metrics cannot be removed.", metric.metricName());
+        }
     }
 
     @Override
@@ -512,6 +524,18 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         subscribeInternal(pattern, Optional.empty());
     }
 
+    @Override
+    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
+        throw new UnsupportedOperationException(String.format("Subscribe to RE2/J pattern is not supported when using" +
+            "the %s protocol defined in config %s", GroupProtocol.CLASSIC, ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+    }
+
+    @Override
+    public void subscribe(SubscriptionPattern pattern) {
+        throw new UnsupportedOperationException(String.format("Subscribe to RE2/J pattern is not supported when using" +
+            "the %s protocol defined in config %s", GroupProtocol.CLASSIC, ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+    }
+
     /**
      * Internal helper method for {@link #subscribe(Pattern)} and
      * {@link #subscribe(Pattern, ConsumerRebalanceListener)}
@@ -558,7 +582,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
             if (this.coordinator != null) {
                 this.coordinator.onLeavePrepare();
-                this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
+                this.coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "the consumer unsubscribed from all topics");
             }
             this.subscriptions.unsubscribe();
             log.info("Unsubscribed all topics or patterns and assigned partitions");
@@ -637,7 +661,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                                 + "since the consumer's position has advanced for at least one topic partition");
                     }
 
-                    return this.interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                    return this.interceptors.onConsume(new ConsumerRecords<>(fetch.records(), fetch.nextOffsets()));
                 }
             } while (timer.notExpired());
 
@@ -807,7 +831,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             Collection<TopicPartition> parts = partitions.isEmpty() ? this.subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.EARLIEST);
+            subscriptions.requestOffsetReset(parts, AutoOffsetResetStrategy.EARLIEST);
         } finally {
             release();
         }
@@ -821,7 +845,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             Collection<TopicPartition> parts = partitions.isEmpty() ? this.subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.LATEST);
+            subscriptions.requestOffsetReset(parts, AutoOffsetResetStrategy.LATEST);
         } finally {
             release();
         }
@@ -885,7 +909,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        if (!clientTelemetryReporter.isPresent()) {
+        if (clientTelemetryReporter.isEmpty()) {
             throw new IllegalStateException("Telemetry is not enabled. Set config `" + ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
 
         }
@@ -1082,11 +1106,23 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void close() {
-        close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
+        close(CloseOptions.timeout(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS)));
+    }
+
+    @Deprecated
+    @Override
+    public void close(Duration timeout) {
+        close(CloseOptions.timeout(timeout));
     }
 
     @Override
-    public void close(Duration timeout) {
+    public void wakeup() {
+        this.client.wakeup();
+    }
+
+    @Override
+    public void close(CloseOptions option) {
+        Duration timeout = option.timeout().orElseGet(() -> Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
         if (timeout.toMillis() < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
         acquire();
@@ -1094,17 +1130,12 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (!closed) {
                 // need to close before setting the flag since the close function
                 // itself may trigger rebalance callback that needs the consumer to be open still
-                close(timeout, false);
+                close(timeout, option.groupMembershipOperation(), false);
             }
         } finally {
             closed = true;
             release();
         }
-    }
-
-    @Override
-    public void wakeup() {
-        this.client.wakeup();
     }
 
     private Timer createTimerForRequest(final Duration timeout) {
@@ -1113,7 +1144,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         return localTime.timer(Math.min(timeout.toMillis(), requestTimeoutMs));
     }
 
-    private void close(Duration timeout, boolean swallowException) {
+    private void close(Duration timeout, CloseOptions.GroupMembershipOperation membershipOperation, boolean swallowException) {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
@@ -1125,7 +1156,13 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // consumer.
         if (coordinator != null) {
             // This is a blocking call bound by the time remaining in closeTimer
-            swallow(log, Level.ERROR, "Failed to close coordinator with a timeout(ms)=" + closeTimer.timeoutMs(), () -> coordinator.close(closeTimer), firstException);
+            swallow(
+                log,
+                Level.ERROR,
+                "Failed to close coordinator with a timeout(ms)=" + closeTimer.timeoutMs(),
+                () -> coordinator.close(closeTimer, membershipOperation),
+                firstException
+            );
         }
 
         if (fetcher != null) {
@@ -1237,7 +1274,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeThrowInvalidGroupIdException() {
-        if (!groupId.isPresent())
+        if (groupId.isEmpty())
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
                     "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
     }

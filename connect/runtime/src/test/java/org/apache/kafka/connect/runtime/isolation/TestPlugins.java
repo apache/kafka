@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -85,7 +86,8 @@ public class TestPlugins {
         SAMPLING_CONVERTER("sampling-converter"),
         SAMPLING_HEADER_CONVERTER("sampling-header-converter"),
         SERVICE_LOADER("service-loader"),
-        SUBCLASS_OF_CLASSPATH("subclass-of-classpath");
+        SUBCLASS_OF_CLASSPATH("subclass-of-classpath"),
+        CLASSPATH_CONVERTER("classpath-converter");
 
         private final String resourceDir;
         private final Predicate<String> removeRuntimeClasses;
@@ -251,7 +253,11 @@ public class TestPlugins {
         /**
          * A ServiceLoader discovered plugin which subclasses another plugin which is present on the classpath
          */
-        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY(TestPackage.SUBCLASS_OF_CLASSPATH, "test.plugins.SubclassOfClasspathOverridePolicy");
+        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY(TestPackage.SUBCLASS_OF_CLASSPATH, "test.plugins.SubclassOfClasspathOverridePolicy"),
+        /**
+         * A plugin which is part of the classpath by default. This packages it as a separate jar which is used to test plugin isolation from the classpath plugin.
+         */
+        CLASSPATH_CONVERTER(TestPackage.CLASSPATH_CONVERTER, "org.apache.kafka.connect.converters.ByteArrayConverter", false);
 
         private final TestPackage testPackage;
         private final String className;
@@ -290,7 +296,7 @@ public class TestPlugins {
         try {
             for (TestPackage testPackage : TestPackage.values()) {
                 if (pluginJars.containsKey(testPackage)) {
-                    log.debug("Skipping recompilation of " + testPackage.resourceDir());
+                    log.debug("Skipping recompilation of {}", testPackage.resourceDir());
                 }
                 pluginJars.put(testPackage, createPluginJar(testPackage.resourceDir(), testPackage.removeRuntimeClasses()));
             }
@@ -369,6 +375,10 @@ public class TestPlugins {
                 .collect(Collectors.toList());
     }
 
+    public static Function<ClassLoader, LoaderSwap> noOpLoaderSwap() {
+        return classLoader -> new LoaderSwap(Thread.currentThread().getContextClassLoader());
+    }
+
     private static TestPlugin[] defaultPlugins() {
         return Arrays.stream(TestPlugin.values())
                 .filter(TestPlugin::includeByDefault)
@@ -418,7 +428,7 @@ public class TestPlugins {
             classFiles = stream
                     .sorted(Comparator.reverseOrder())
                     .map(Path::toFile)
-                    .collect(Collectors.toList());
+                    .toList();
         }
         for (File classFile : classFiles) {
             if (!classFile.delete()) {
@@ -475,7 +485,7 @@ public class TestPlugins {
                     .filter(Files::isRegularFile)
                     .filter(path -> !path.toFile().getName().endsWith(".java"))
                     .filter(path -> !removeRuntimeClasses.test(path.toFile().getName()))
-                    .collect(Collectors.toList());
+                    .toList();
         }
         for (Path path : paths) {
             try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {

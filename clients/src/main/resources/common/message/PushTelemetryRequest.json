@@ -38,7 +38,7 @@
       "about": "Compression codec used to compress the metrics."
     },
     {
-      "name": "Metrics", "type": "bytes", "versions": "0+",
+      "name": "Metrics", "type": "bytes", "versions": "0+", "zeroCopy": true,
       "about": "Metrics encoded in OpenTelemetry MetricsData v1 protobuf format."
     }
   ]

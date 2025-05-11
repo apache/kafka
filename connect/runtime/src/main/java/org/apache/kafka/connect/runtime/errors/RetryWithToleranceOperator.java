@@ -214,8 +214,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
                     errorHandlingMetrics.recordRetry();
                 } else {
                     log.trace("Can't retry. start={}, attempt={}, deadline={}", startTime, attempt, deadline);
-                    context.error(e);
-                    return null;
+                    throw e;
                 }
                 if (stopping) {
                     log.trace("Shutdown has been scheduled. Marking operation as failed.");
@@ -312,7 +311,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
         try {
             stopRequestedLatch.await(delay, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
-            return;
+            // ignore
         }
     }
 

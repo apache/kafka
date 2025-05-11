@@ -19,12 +19,11 @@ import org.apache.kafka.common.errors.UnsupportedAssignorException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
-import java.util.stream.Stream
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -35,9 +34,9 @@ import scala.jdk.CollectionConverters._
 class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
 
   // Only the classic group protocol supports client-side assignors
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
-  def testRoundRobinAssignment(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testRoundRobinAssignment(groupProtocol: String): Unit = {
     // 1 consumer using round-robin assignment
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
@@ -73,9 +72,9 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   }
 
   // Only the classic group protocol supports client-side assignors
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
-  def testMultiConsumerRoundRobinAssignor(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testMultiConsumerRoundRobinAssignor(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
 
@@ -112,9 +111,9 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
    *    will move to consumer #10, leading to a total of (#par mod 9) partition movement
    */
   // Only the classic group protocol supports client-side assignors
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
-  def testMultiConsumerStickyAssignor(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testMultiConsumerStickyAssignor(groupProtocol: String): Unit = {
 
     def reverse(m: Map[Long, Set[TopicPartition]]) =
       m.values.toSet.flatten.map(v => (v, m.keys.filter(m(_).contains(v)).head)).toMap
@@ -161,9 +160,9 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
    * It tests the assignment results is expected using default assignor (i.e. Range assignor)
    */
   // Only the classic group protocol supports client-side assignors
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
-  def testMultiConsumerDefaultAssignorAndVerifyAssignment(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testMultiConsumerDefaultAssignorAndVerifyAssignment(groupProtocol: String): Unit = {
     // create two new topics, each having 3 partitions
     val topic1 = "topic1"
     val topic2 = "topic2"
@@ -199,9 +198,9 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
    * As a result, it is testing the default assignment strategy set by BaseConsumerTest
    */
   // Only the classic group protocol supports client-side assignors
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
-  def testMultiConsumerDefaultAssignor(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testMultiConsumerDefaultAssignor(groupProtocol: String): Unit = {
     // use consumers and topics defined in this class + one more topic
     val producer = createProducer()
     sendRecords(producer, numRecords = 100, tp)
@@ -236,11 +235,9 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   }
 
   // Remote assignors only supported with consumer group protocol
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @CsvSource(Array(
-    "kraft, consumer"
-  ))
-  def testRemoteAssignorInvalid(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testRemoteAssignorInvalid(groupProtocol: String): Unit = {
     // 1 consumer using invalid remote assignor
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "invalid-assignor-group")
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "invalid")
@@ -266,11 +263,9 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   }
 
   // Remote assignors only supported with consumer group protocol
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @CsvSource(Array(
-    "kraft, consumer"
-  ))
-  def testRemoteAssignorRange(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testRemoteAssignorRange(groupProtocol: String): Unit = {
     // 1 consumer using range assignment
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "range-group")
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "range")
@@ -307,16 +302,14 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   }
 
   // Only the classic group protocol supports client-side assignors
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.groupProtocol={0}.assignmentStrategy={1}")
   @CsvSource(Array(
-    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   zk",
-    "org.apache.kafka.clients.consumer.RangeAssignor,               zk",
-    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   kraft",
-    "org.apache.kafka.clients.consumer.RangeAssignor,               kraft"
+    "classic, org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
+    "classic, org.apache.kafka.clients.consumer.RangeAssignor"
   ))
-  def testRebalanceAndRejoin(assignmentStrategy: String, quorum: String): Unit = {
+  def testRebalanceAndRejoin(groupProtocol: String, assignmentStrategy: String): Unit = {
     // create 2 consumers
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic")
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "rebalance-and-rejoin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy)
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
@@ -395,9 +388,4 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     consumerPoller2.shutdown()
   }
 
-}
-
-object PlaintextConsumerAssignorsTest {
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly()
 }

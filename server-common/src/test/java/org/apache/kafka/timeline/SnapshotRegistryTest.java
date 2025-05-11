@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -42,7 +41,7 @@ public class SnapshotRegistryTest {
 
     private static void assertIteratorContains(Iterator<Snapshot> iter,
                                                Snapshot... snapshots) {
-        List<Snapshot> expected = Arrays.asList(snapshots);
+        List<Snapshot> expected = List.of(snapshots);
         List<Snapshot> actual = new ArrayList<>();
         while (iter.hasNext()) {
             Snapshot snapshot = iter.next();
@@ -93,5 +92,29 @@ public class SnapshotRegistryTest {
         Snapshot duplicate = registry.getOrCreateSnapshot(12);
 
         assertEquals(latest, duplicate);
+    }
+
+    @Test
+    public void testScrub() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext(), 2);
+        new TimelineInteger(registry).set(123);
+        new TimelineInteger(registry).set(123);
+        assertEquals(0, registry.numScrubs());
+        new TimelineInteger(registry).set(123);
+        assertEquals(1, registry.numScrubs());
+        new TimelineInteger(registry).set(123);
+        new TimelineInteger(registry).set(123);
+        new TimelineInteger(registry).set(123);
+        assertEquals(2, registry.numScrubs());
+    }
+
+    @Test
+    public void testReset() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext(), 2);
+        TimelineInteger integer = new TimelineInteger(registry);
+        integer.set(123);
+        registry.reset();
+        assertEquals(0, integer.get());
+        assertEquals(1, registry.numScrubs());
     }
 }

@@ -21,10 +21,10 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.FakeSnapshotWriter;
 import org.apache.kafka.image.MetadataImageTest;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import org.junit.jupiter.api.Test;
@@ -127,6 +127,11 @@ public class SnapshotEmitterTest {
         }
 
         @Override
+        public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
+            // nothing to do
+        }
+
+        @Override
         public void close() throws Exception {
             // nothing to do
         }
@@ -148,7 +153,7 @@ public class SnapshotEmitterTest {
         assertEquals(0L, emitter.metrics().latestSnapshotGeneratedBytes());
         emitter.maybeEmit(MetadataImageTest.IMAGE1);
         assertEquals(0L, emitter.metrics().latestSnapshotGeneratedAgeMs());
-        assertEquals(1600L, emitter.metrics().latestSnapshotGeneratedBytes());
+        assertEquals(1500L, emitter.metrics().latestSnapshotGeneratedBytes());
         FakeSnapshotWriter writer = mockRaftClient.writers.get(
                 MetadataImageTest.IMAGE1.provenance().snapshotId());
         assertNotNull(writer);

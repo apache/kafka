@@ -40,7 +40,7 @@ class EnvVarConfigProviderTest {
 
     @BeforeEach
     public void setup() {
-        Map<String, String> testEnvVars = new HashMap<String, String>() {
+        Map<String, String> testEnvVars = new HashMap<>() {
             {
                 put("test_var1", "value1");
                 put("secret_var2", "value2");

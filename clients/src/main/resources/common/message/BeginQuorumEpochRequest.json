@@ -23,32 +23,33 @@
   "flexibleVersions": "1+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+",
-      "nullableVersions": "0+", "default": "null"},
+      "nullableVersions": "0+", "default": "null",
+      "about": "The cluster id." },
     { "name": "VoterId", "type": "int32", "versions": "1+", "ignorable": true, "default": "-1", "entityType": "brokerId",
-      "about": "The replica id of the voter receiving the request" },
-    { "name": "Topics", "type": "[]TopicData",
-      "versions": "0+", "fields": [
+      "about": "The replica id of the voter receiving the request." },
+    { "name": "Topics", "type": "[]TopicData", "versions": "0+",
+      "about": "The topics.", "fields": [
         { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
-          "about": "The topic name" },
-        { "name": "Partitions", "type": "[]PartitionData",
-          "versions": "0+", "fields": [
+          "about": "The topic name." },
+        { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
+          "about": "The partitions.", "fields": [
             { "name": "PartitionIndex", "type": "int32", "versions": "0+",
-              "about": "The partition index" },
+              "about": "The partition index." },
             { "name": "VoterDirectoryId", "type": "uuid", "versions": "1+", "ignorable": true,
-              "about": "The directory id of the receiving replica" },
+              "about": "The directory id of the receiving replica." },
             { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-              "about": "The ID of the newly elected leader"},
+              "about": "The ID of the newly elected leader." },
             { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
-              "about": "The epoch of the newly elected leader"}
+              "about": "The epoch of the newly elected leader." }
           ]
         }
       ]
     },
     { "name": "LeaderEndpoints", "type": "[]LeaderEndpoint", "versions": "1+", "ignorable": true,
-      "about": "Endpoints for the leader", "fields": [
-        { "name": "Name", "type": "string", "versions": "1+", "mapKey": true, "about": "The name of the endpoint" },
-        { "name": "Host", "type": "string", "versions": "1+", "about": "The node's hostname" },
-        { "name": "Port", "type": "uint16", "versions": "1+", "about": "The node's port" }
+      "about": "Endpoints for the leader.", "fields": [
+        { "name": "Name", "type": "string", "versions": "1+", "mapKey": true, "about": "The name of the endpoint." },
+        { "name": "Host", "type": "string", "versions": "1+", "about": "The node's hostname." },
+        { "name": "Port", "type": "uint16", "versions": "1+", "about": "The node's port." }
       ]
     }
   ]

@@ -26,6 +26,8 @@ import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.io.PrintStream;
 
+import static org.apache.kafka.message.checker.CheckerUtils.readFileFromGitRef;
+
 public class MetadataSchemaCheckerTool {
     public static void main(String[] args) throws Exception {
         try {
@@ -49,13 +51,22 @@ public class MetadataSchemaCheckerTool {
             required(true).
             help("The path to a schema JSON file.");
         Subparser evolutionVerifierParser = subparsers.addParser("verify-evolution").
-            help("Verify that an evolution of a JSON file is valid.");
-        evolutionVerifierParser.addArgument("--path1", "-1").
+            help("Verify that a schema JSON file is a valid evolution of a parent schema.");
+        evolutionVerifierParser.addArgument("--path", "-1").
             required(true).
-            help("The initial schema JSON path.");
-        evolutionVerifierParser.addArgument("--path2", "-2").
+            help("The path to a schema JSON file.");
+        evolutionVerifierParser.addArgument("--parent_path", "-2").
             required(true).
-            help("The final schema JSON path.");
+            help("The path to the parent schema JSON file.");
+        Subparser evolutionGitVerifierParser = subparsers.addParser("verify-evolution-git").
+            help("Verify that a schema JSON file is a valid evolution of your local git master branch.");
+        evolutionGitVerifierParser.addArgument("--path", "-3").
+            required(true).
+            help("The path to your edited JSON file");
+        evolutionGitVerifierParser.addArgument("--ref", "-4")
+            .required(false)
+            .setDefault("refs/heads/trunk")
+            .help("Optional Git reference to be used for testing. Defaults to 'refs/heads/trunk' if not specified.");
         Namespace namespace;
         if (args.length == 0) {
             namespace = argumentParser.parseArgs(new String[] {"--help"});
@@ -71,14 +82,24 @@ public class MetadataSchemaCheckerTool {
                 break;
             }
             case "verify-evolution": {
-                String path1 = namespace.getString("path1");
-                String path2 = namespace.getString("path2");
+                String child = namespace.getString("path");
+                String parent = namespace.getString("parent_path");
                 EvolutionVerifier verifier = new EvolutionVerifier(
-                    CheckerUtils.readMessageSpecFromFile(path1),
-                    CheckerUtils.readMessageSpecFromFile(path2));
+                    CheckerUtils.readMessageSpecFromFile(parent),
+                    CheckerUtils.readMessageSpecFromFile(child));
                 verifier.verify();
-                writer.println("Successfully verified evolution of path1: " + path1 +
-                        ", and path2: " + path2);
+                writer.println("Successfully verified evolution of path: " + child +
+                        " from parent: " + parent);
+                break;
+            }
+            case "verify-evolution-git": {
+                String path = namespace.getString("path");
+                String gitContent = readFileFromGitRef(path, namespace.getString("ref"));
+                EvolutionVerifier verifier = new EvolutionVerifier(
+                    CheckerUtils.readMessageSpecFromFile(path),
+                    CheckerUtils.readMessageSpecFromString(gitContent));
+                verifier.verify();
+                writer.println("Successfully verified evolution of file: " + namespace.getString("path"));
                 break;
             }
             default:

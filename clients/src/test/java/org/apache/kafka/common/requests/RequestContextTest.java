@@ -84,7 +84,7 @@ public class RequestContextTest {
         assertEquals(correlationId, responseHeader.correlationId());
 
         ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
-            responseBuffer, (short) 0);
+            new ByteBufferAccessor(responseBuffer), (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
         assertTrue(response.data().apiKeys().isEmpty());
     }
@@ -117,7 +117,7 @@ public class RequestContextTest {
 
     @Test
     public void testInvalidRequestForImplicitHashCollection() throws UnknownHostException {
-        short version = (short) 5; // choose a version with fixed length encoding, for simplicity
+        short version = (short) 7; // choose a version with fixed length encoding, for simplicity
         ByteBuffer corruptBuffer = produceRequest(version);
         // corrupt the length of the topics array
         corruptBuffer.putInt(8, (Integer.MAX_VALUE - 1) / 2);
@@ -134,7 +134,7 @@ public class RequestContextTest {
 
     @Test
     public void testInvalidRequestForArrayList() throws UnknownHostException {
-        short version = (short) 5; // choose a version with fixed length encoding, for simplicity
+        short version = (short) 7; // choose a version with fixed length encoding, for simplicity
         ByteBuffer corruptBuffer = produceRequest(version);
         // corrupt the length of the partitions array
         corruptBuffer.putInt(17, Integer.MAX_VALUE);
@@ -156,7 +156,7 @@ public class RequestContextTest {
                 .setTimeoutMs(1);
         data.topicData().add(
                 new ProduceRequestData.TopicProduceData()
-                        .setName("foo")
+                        .setName("foo") // versions in this test < 13, topicId can't be used
                         .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                                 .setIndex(42))));
 

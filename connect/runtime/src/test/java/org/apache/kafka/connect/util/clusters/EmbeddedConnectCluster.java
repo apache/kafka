@@ -182,7 +182,7 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
     /**
      * Get the provisioned workers.
      *
-     * @return the list of handles of the provisioned workers
+     * @return the set of handles of the provisioned workers
      */
     public Set<WorkerHandle> workers() {
         return new LinkedHashSet<>(connectCluster);
@@ -200,14 +200,6 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
         public Builder numWorkers(int numWorkers) {
             this.numWorkers = numWorkers;
             return this;
-        }
-
-        /**
-         * @deprecated Use {@link #clientProps(Map)} instead.
-         */
-        @Deprecated
-        public Builder clientConfigs(Map<String, String> clientProps) {
-            return clientProps(clientProps);
         }
 
         @Override

@@ -36,7 +36,6 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.concurrent.TimeUnit;
@@ -196,7 +195,7 @@ public class ByteUtilsBenchmark {
 
     @Benchmark
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-    public void testUnsignedReadVarlongUnrolled(IterationStateForLong state, Blackhole bk) throws IOException {
+    public void testUnsignedReadVarlongUnrolled(IterationStateForLong state, Blackhole bk) {
         for (long randomValue : state.getRandomValues()) {
             ByteUtils.writeUnsignedVarlong(randomValue, state.getTestBuffer());
             // prepare for reading

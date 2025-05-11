@@ -75,6 +75,9 @@ public class ListTransactionsHandler extends AdminApiHandler.Batched<AllBrokersS
             .map(TransactionState::toString)
             .collect(Collectors.toList()));
         request.setDurationFilter(options.filteredDuration());
+        if (options.filteredTransactionalIdPattern() != null && !options.filteredTransactionalIdPattern().isEmpty()) {
+            request.setTransactionalIdPattern(options.filteredTransactionalIdPattern());
+        }
         return new ListTransactionsRequest.Builder(request);
     }
 
@@ -124,7 +127,7 @@ public class ListTransactionsHandler extends AdminApiHandler.Batched<AllBrokersS
         }
 
         AllBrokersStrategy.BrokerKey key = keys.iterator().next();
-        if (!key.brokerId.isPresent() || key.brokerId.getAsInt() != brokerId) {
+        if (key.brokerId.isEmpty() || key.brokerId.getAsInt() != brokerId) {
             throw new IllegalArgumentException("Unexpected broker key: " + key);
         }
 

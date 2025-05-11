@@ -46,8 +46,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -174,11 +172,6 @@ public abstract class TopicCommand {
         configsToBeAdded.stream()
             .forEach(pair -> props.setProperty(pair.get(0).trim(), pair.get(1).trim()));
         LogConfig.validate(props);
-        if (props.containsKey(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)) {
-            System.out.println("WARNING: The configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG}=${props.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)} is specified. " +
-                "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
-                "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.");
-        }
         return props;
     }
 
@@ -215,7 +208,7 @@ public abstract class TopicCommand {
         // If no topic name was mentioned, do not need to throw exception.
         if (requestedTopic.isPresent() && !requestedTopic.get().isEmpty() && requireTopicExists && foundTopics.isEmpty()) {
             // If given topic doesn't exist then throw exception
-            throw new IllegalArgumentException(String.format("Topic '%s' does not exist as expected", requestedTopic));
+            throw new IllegalArgumentException(String.format("Topic '%s' does not exist as expected", requestedTopic.get()));
         }
     }
 
@@ -714,7 +707,7 @@ public abstract class TopicCommand {
         private final ArgumentAcceptingOptionSpec<String> configOpt;
 
         /**
-         * @deprecated since 4.0 and should not be used any longer.
+         * @deprecated Since 4.0 and should not be used any longer.
          */
         @Deprecated
         private final ArgumentAcceptingOptionSpec<String> deleteConfigOpt;

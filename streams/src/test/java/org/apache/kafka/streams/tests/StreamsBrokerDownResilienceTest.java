@@ -80,11 +80,11 @@ public class StreamsBrokerDownResilienceTest {
         }
 
         if (!confirmCorrectConfigs(streamsProperties)) {
-            System.err.println(String.format("ERROR: Did not have all required configs expected  to contain %s %s %s %s",
+            System.err.printf("ERROR: Did not have all required configs expected  to contain %s %s %s %s%n",
                                              StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
                                              StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG),
                                              StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                                             StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG)));
+                                             StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG));
 
             Exit.exit(1);
         }
@@ -93,7 +93,7 @@ public class StreamsBrokerDownResilienceTest {
         final Serde<String> stringSerde = Serdes.String();
 
         builder.stream(Collections.singletonList(SOURCE_TOPIC_1), Consumed.with(stringSerde, stringSerde))
-            .peek(new ForeachAction<String, String>() {
+            .peek(new ForeachAction<>() {
                 int messagesProcessed = 0;
                 @Override
                 public void apply(final String key, final String value) {

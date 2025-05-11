@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -33,12 +34,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
-import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
-import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -48,6 +46,9 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
@@ -126,8 +127,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private final Optional<String> serverAssignor;
 
     /**
-     * Manager to perform commit requests needed before revoking partitions (if auto-commit is
-     * enabled)
+     * Manager to perform commit requests needed before rebalance (if auto-commit is enabled)
      */
     private final CommitRequestManager commitRequestManager;
 
@@ -146,10 +146,10 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      CommitRequestManager commitRequestManager,
                                      ConsumerMetadata metadata,
                                      LogContext logContext,
-                                     Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                      BackgroundEventHandler backgroundEventHandler,
                                      Time time,
-                                     Metrics metrics) {
+                                     Metrics metrics,
+                                     boolean autoCommitEnabled) {
         this(groupId,
             groupInstanceId,
             rebalanceTimeoutMs,
@@ -158,10 +158,10 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             commitRequestManager,
             metadata,
             logContext,
-            clientTelemetryReporter,
             backgroundEventHandler,
             time,
-            new ConsumerRebalanceMetricsManager(metrics));
+            new ConsumerRebalanceMetricsManager(metrics),
+            autoCommitEnabled);
     }
 
     // Visible for testing
@@ -173,17 +173,17 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                               CommitRequestManager commitRequestManager,
                               ConsumerMetadata metadata,
                               LogContext logContext,
-                              Optional<ClientTelemetryReporter> clientTelemetryReporter,
                               BackgroundEventHandler backgroundEventHandler,
                               Time time,
-                              RebalanceMetricsManager metricsManager) {
+                              RebalanceMetricsManager metricsManager,
+                              boolean autoCommitEnabled) {
         super(groupId,
             subscriptions,
             metadata,
             logContext.logger(ConsumerMembershipManager.class),
-            clientTelemetryReporter,
             time,
-            metricsManager);
+            metricsManager,
+            autoCommitEnabled);
         this.groupInstanceId = groupInstanceId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.serverAssignor = serverAssignor;
@@ -229,16 +229,6 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             return;
         }
 
-        // Update the group member id label in the client telemetry reporter if the member id has
-        // changed. Initially the member id is empty, and it is updated when the member joins the
-        // group. This is done here to avoid updating the label on every heartbeat response. Also
-        // check if the member id is null, as the schema defines it as nullable.
-        if (responseData.memberId() != null && !responseData.memberId().equals(memberId)) {
-            clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
-                    Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, responseData.memberId())));
-        }
-
-        this.memberId = responseData.memberId();
         updateMemberEpoch(responseData.memberEpoch());
 
         ConsumerGroupHeartbeatResponseData.Assignment assignment = responseData.assignment();
@@ -269,7 +259,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        return commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getDeadlineMsForTimeout(rebalanceTimeoutMs));
+        return commitRequestManager.maybeAutoCommitSyncBeforeRebalance(getDeadlineMsForTimeout(rebalanceTimeoutMs));
     }
 
     /**
@@ -412,6 +402,26 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         }
     }
 
+    @Override
+    public boolean isLeavingGroup() {
+        CloseOptions.GroupMembershipOperation leaveGroupOperation = leaveGroupOperation();
+        if (REMAIN_IN_GROUP == leaveGroupOperation) {
+            return false;
+        }
+
+        MemberState state = state();
+        boolean isLeavingState = state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
+
+        // Default operation: both static and dynamic consumers will send a leave heartbeat
+        boolean hasLeaveOperation = DEFAULT == leaveGroupOperation ||
+            // Leave operation: both static and dynamic consumers will send a leave heartbeat
+            LEAVE_GROUP == leaveGroupOperation ||
+            // Remain in group: only static consumers will send a leave heartbeat, while dynamic members will not
+            groupInstanceId().isPresent();
+
+        return isLeavingState && hasLeaveOperation;
+    }
+
     /**
      * Enqueue a {@link ConsumerRebalanceListenerCallbackNeededEvent} to trigger the execution of the
      * appropriate {@link ConsumerRebalanceListener} {@link ConsumerRebalanceListenerMethodName method} on the
@@ -483,8 +493,16 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     @Override
     public int leaveGroupEpoch() {
-        return groupInstanceId.isPresent() ?
-                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
-                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        boolean isStaticMember = groupInstanceId.isPresent();
+        // Currently, the server doesn't have a mechanism for static members to permanently leave the group.
+        // Therefore, we use LEAVE_GROUP_MEMBER_EPOCH to force the GroupMetadataManager to fence
+        // this member, effectively removing it from the group.
+        if (LEAVE_GROUP == leaveGroupOperation) {
+            return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        }
+
+        return isStaticMember ?
+            ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
+            ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
     }
 }

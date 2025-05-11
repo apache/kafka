@@ -63,8 +63,7 @@ public class FinalizedControllerFeatures {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof FinalizedControllerFeatures)) return false;
-        FinalizedControllerFeatures other = (FinalizedControllerFeatures) o;
+        if (!(o instanceof FinalizedControllerFeatures other)) return false;
         return featureMap.equals(other.featureMap) && epoch == other.epoch;
     }
 

@@ -55,7 +55,7 @@ public class StreamsNamedRepartitionTest {
 
         final String inputTopic = (String) (Objects.requireNonNull(streamsProperties.remove("input.topic")));
         final String aggregationTopic = (String) (Objects.requireNonNull(streamsProperties.remove("aggregation.topic")));
-        final boolean addOperators = Boolean.valueOf(Objects.requireNonNull((String) streamsProperties.remove("add.operations")));
+        final boolean addOperators = Boolean.parseBoolean(Objects.requireNonNull((String) streamsProperties.remove("add.operations")));
 
 
         final Initializer<Integer> initializer = () -> 0;
@@ -66,7 +66,7 @@ public class StreamsNamedRepartitionTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> sourceStream = builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
-        sourceStream.peek((k, v) -> System.out.println(String.format("input data key=%s, value=%s", k, v)));
+        sourceStream.peek((k, v) -> System.out.printf("input data key=%s, value=%s%n", k, v));
 
         final KStream<String, String> mappedStream = sourceStream.selectKey((k, v) -> keyFunction.apply(v));
 
@@ -81,7 +81,7 @@ public class StreamsNamedRepartitionTest {
         maybeUpdatedStream.groupByKey(Grouped.with("grouped-stream", Serdes.String(), Serdes.String()))
             .aggregate(initializer, aggregator, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("count-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.Integer()))
             .toStream()
-            .peek((k, v) -> System.out.println(String.format("AGGREGATED key=%s value=%s", k, v)))
+            .peek((k, v) -> System.out.printf("AGGREGATED key=%s value=%s%n", k, v))
             .to(aggregationTopic, Produced.with(Serdes.String(), Serdes.Integer()));
 
         final Properties config = new Properties();

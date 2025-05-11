@@ -192,7 +192,7 @@ import static org.apache.kafka.connect.util.ConnectUtils.className;
  * rebalance must be deferred.
  * </p>
  */
-public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore implements ConfigBackingStore {
+public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore implements ConfigBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaConfigBackingStore.class);
 
     public static final String TARGET_STATE_PREFIX = "target-state-";
@@ -339,7 +339,6 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         this(converter, config, configTransformer, adminSupplier, clientIdBase, Time.SYSTEM);
     }
 
-    @SuppressWarnings("this-escape")
     KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier, String clientIdBase, Time time) {
         this.lock = new Object();
         this.started = false;
@@ -855,14 +854,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         }
     }
 
-    private static class ProducerKeyValue {
-        final String key;
-        final byte[] value;
-
-        ProducerKeyValue(String key, byte[] value) {
-            this.key = key;
-            this.value = value;
-        }
+    private record ProducerKeyValue(String key, byte[] value) {
     }
 
     private void relinquishWritePrivileges() {
@@ -1259,7 +1251,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         } else {
             // TRACE level since there may be many of these records in the config topic
             log.trace(
-                    "Ignoring old logging level {} for namespace {} that was writen to the config topic before this worker completed startup",
+                    "Ignoring old logging level {} for namespace {} that was written to the config topic before this worker completed startup",
                     level,
                     namespace
             );

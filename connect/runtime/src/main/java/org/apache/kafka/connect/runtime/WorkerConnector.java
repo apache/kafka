@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -77,6 +78,7 @@ public class WorkerConnector implements Runnable {
     private volatile Throwable externalFailure;
     private volatile boolean stopping;  // indicates whether the Worker has asked the connector to stop
     private volatile boolean cancelled; // indicates whether the Worker has cancelled the connector (e.g. because of slow shutdown)
+    private final String version;
 
     private State state;
     private final CloseableOffsetStorageReader offsetStorageReader;
@@ -86,7 +88,7 @@ public class WorkerConnector implements Runnable {
                            Connector connector,
                            ConnectorConfig connectorConfig,
                            CloseableConnectorContext ctx,
-                           ConnectMetrics metrics,
+                           ConnectMetrics connectMetrics,
                            ConnectorStatus.Listener statusListener,
                            CloseableOffsetStorageReader offsetStorageReader,
                            ConnectorOffsetBackingStore offsetStore,
@@ -96,8 +98,9 @@ public class WorkerConnector implements Runnable {
         this.loader = loader;
         this.ctx = ctx;
         this.connector = connector;
+        this.version = connector.version();
         this.state = State.INIT;
-        this.metrics = new ConnectorMetricsGroup(metrics, AbstractStatus.State.UNASSIGNED, statusListener);
+        this.metrics = new ConnectorMetricsGroup(connectMetrics, AbstractStatus.State.UNASSIGNED, this.version, statusListener);
         this.statusListener = this.metrics;
         this.offsetStorageReader = offsetStorageReader;
         this.offsetStore = offsetStore;
@@ -417,6 +420,10 @@ public class WorkerConnector implements Runnable {
         return ConnectUtils.isSourceConnector(connector);
     }
 
+    public String connectorVersion() {
+        return version;
+    }
+
     protected final String connectorType() {
         if (isSinkConnector())
             return "sink";
@@ -449,7 +456,12 @@ public class WorkerConnector implements Runnable {
         private final MetricGroup metricGroup;
         private final ConnectorStatus.Listener delegate;
 
-        public ConnectorMetricsGroup(ConnectMetrics connectMetrics, AbstractStatus.State initialState, ConnectorStatus.Listener delegate) {
+        public ConnectorMetricsGroup(
+            ConnectMetrics connectMetrics,
+            AbstractStatus.State initialState,
+            String connectorVersion,
+            ConnectorStatus.Listener delegate
+        ) {
             Objects.requireNonNull(connectMetrics);
             Objects.requireNonNull(connector);
             Objects.requireNonNull(initialState);
@@ -464,7 +476,7 @@ public class WorkerConnector implements Runnable {
 
             metricGroup.addImmutableValueMetric(registry.connectorType, connectorType());
             metricGroup.addImmutableValueMetric(registry.connectorClass, connector.getClass().getName());
-            metricGroup.addImmutableValueMetric(registry.connectorVersion, connector.version());
+            metricGroup.addImmutableValueMetric(registry.connectorVersion, connectorVersion);
             metricGroup.addValueMetric(registry.connectorStatus, now -> state.toString().toLowerCase(Locale.getDefault()));
         }
 
@@ -581,6 +593,11 @@ public class WorkerConnector implements Runnable {
             log.error("{} Connector raised an error", WorkerConnector.this, e);
             onFailure(e);
             WorkerConnector.this.ctx.raiseError(e);
+        }
+
+        @Override
+        public PluginMetrics pluginMetrics() {
+            return WorkerConnector.this.ctx.pluginMetrics();
         }
     }
 

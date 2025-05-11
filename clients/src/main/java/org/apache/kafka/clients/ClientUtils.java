@@ -118,7 +118,7 @@ public final class ClientUtils {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
-                clientSaslMechanism, time, true, logContext);
+                clientSaslMechanism, time, logContext);
     }
 
     static List<InetAddress> resolve(String host, HostResolver hostResolver) throws UnknownHostException {
@@ -247,6 +247,7 @@ public final class ClientUtils {
                     logContext,
                     hostResolver,
                     clientTelemetrySender,
+                    config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
                     MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
             );
         } catch (Throwable t) {
@@ -256,9 +257,9 @@ public final class ClientUtils {
         }
     }
 
-    public static <T> List configuredInterceptors(AbstractConfig config,
-                                                  String interceptorClassesConfigName,
-                                                  Class<T> clazz) {
+    public static <T> List<?> configuredInterceptors(AbstractConfig config,
+                                                    String interceptorClassesConfigName,
+                                                    Class<T> clazz) {
         String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         return config.getConfiguredInstances(
                 interceptorClassesConfigName,

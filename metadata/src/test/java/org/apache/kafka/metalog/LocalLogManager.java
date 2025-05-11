@@ -27,13 +27,13 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -48,7 +48,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -67,8 +66,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * The LocalLogManager is a test implementation that relies on the contents of memory.
@@ -98,8 +95,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof LeaderChangeBatch)) return false;
-            LeaderChangeBatch other = (LeaderChangeBatch) o;
+            if (!(o instanceof LeaderChangeBatch other)) return false;
             return other.newLeader.equals(newLeader);
         }
 
@@ -137,8 +133,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof LocalRecordBatch)) return false;
-            LocalRecordBatch other = (LocalRecordBatch) o;
+            if (!(o instanceof LocalRecordBatch other)) return false;
 
             return leaderEpoch == other.leaderEpoch &&
                 appendTimestamp == other.appendTimestamp &&
@@ -263,8 +258,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             long nextEndOffset = prevOffset + batch.size();
             log.debug("append(batch={}, nextEndOffset={})", batch, nextEndOffset);
             batches.put(nextEndOffset, batch);
-            if (batch instanceof LeaderChangeBatch) {
-                LeaderChangeBatch leaderChangeBatch = (LeaderChangeBatch) batch;
+            if (batch instanceof LeaderChangeBatch leaderChangeBatch) {
                 leader = leaderChangeBatch.newLeader;
             }
             for (LocalLogManager logManager : logManagers.values()) {
@@ -331,63 +325,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         /**
-         * Returns the snapshot whose last offset is the committed offset.
-         *
-         * If such snapshot doesn't exist, it waits until it does.
-         */
-        synchronized RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
-            while (true) {
-                RawSnapshotReader reader = snapshots.get(committedOffset);
-                if (reader != null) {
-                    return reader;
-                } else {
-                    this.wait();
-                }
-            }
-        }
-
-        /**
-         * Returns the latest snapshot.
-         *
-         * If a snapshot doesn't exists, it waits until it does.
-         */
-        synchronized RawSnapshotReader waitForLatestSnapshot() throws InterruptedException {
-            while (snapshots.isEmpty()) {
-                this.wait();
-            }
-
-            return Objects.requireNonNull(snapshots.lastEntry()).getValue();
-        }
-
-        /**
          * Returns the snapshot id of the latest snapshot if there is one.
          *
          * If a snapshot doesn't exists, it return an empty Optional.
          */
         synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
             return Optional.ofNullable(snapshots.lastEntry()).map(entry -> entry.getValue().snapshotId());
-        }
-
-        synchronized long appendedBytes() {
-            ObjectSerializationCache objectCache = new ObjectSerializationCache();
-
-            return batches
-                .values()
-                .stream()
-                .flatMapToInt(batch -> {
-                    if (batch instanceof LocalRecordBatch) {
-                        LocalRecordBatch localBatch = (LocalRecordBatch) batch;
-                        return localBatch.records.stream().mapToInt(record -> messageSize(record, objectCache));
-                    } else {
-                        return IntStream.empty();
-                    }
-                })
-                .sum();
-        }
-
-        public SharedLogData setInitialMaxReadOffset(long initialMaxReadOffset) {
-            this.initialMaxReadOffset = initialMaxReadOffset;
-            return this;
         }
 
         public long initialMaxReadOffset() {
@@ -400,8 +343,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         public synchronized List<ApiMessageAndVersion> allRecords() {
             List<ApiMessageAndVersion> allRecords = new ArrayList<>();
             for (LocalBatch batch : batches.values()) {
-                if (batch instanceof LocalRecordBatch) {
-                    LocalRecordBatch recordBatch = (LocalRecordBatch) batch;
+                if (batch instanceof LocalRecordBatch recordBatch) {
                     allRecords.addAll(recordBatch.records);
                 }
             }
@@ -456,11 +398,13 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     private long lastOffset = -1;
+
      /**
      * A queue of prepared batches that have not been drained yet.
      */
     private final Queue<LocalBatch> preparedBatches = new LinkedList<>();
 
+    private final LogContext logContext;
 
     private final Logger log;
 
@@ -482,7 +426,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     /**
      * The latest kraft version used by this local log manager.
      */
-    private final KRaftVersion lastKRaftVersion;
+    private KRaftVersion lastKRaftVersion;
 
     /**
      * Whether this LocalLogManager has been shut down.
@@ -515,6 +459,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                            SharedLogData shared,
                            String threadNamePrefix,
                            KRaftVersion lastKRaftVersion) {
+        this.logContext = logContext;
         this.log = logContext.logger(LocalLogManager.class);
         this.nodeId = nodeId;
         this.shared = shared;
@@ -545,7 +490,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                         new  MetadataRecordSerde(),
                                         BufferSupplier.create(),
                                         Integer.MAX_VALUE,
-                                        true
+                                        true,
+                                        logContext
                                     )
                                 );
                             }
@@ -564,8 +510,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                 nodeId, numEntriesFound, entryOffset, maxReadOffset);
                             break;
                         }
-                        if (entry.getValue() instanceof LeaderChangeBatch) {
-                            LeaderChangeBatch batch = (LeaderChangeBatch) entry.getValue();
+                        if (entry.getValue() instanceof LeaderChangeBatch batch) {
                             log.trace("Node {}: handling LeaderChange to {}.",
                                 nodeId, batch.newLeader);
                             // Only notify the listener if it equals the shared leader state
@@ -582,15 +527,14 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                         nodeId, batch.newLeader, sharedLeader);
                                 listenerData.setOffset(entryOffset);
                             }
-                        } else if (entry.getValue() instanceof LocalRecordBatch) {
-                            LocalRecordBatch batch = (LocalRecordBatch) entry.getValue();
+                        } else if (entry.getValue() instanceof LocalRecordBatch batch) {
                             log.trace("Node {}: handling LocalRecordBatch with offset {}.",
                                 nodeId, entryOffset);
                             ObjectSerializationCache objectCache = new ObjectSerializationCache();
 
                             listenerData.handleCommit(
                                 MemoryBatchReader.of(
-                                    Collections.singletonList(
+                                    List.of(
                                         Batch.data(
                                             entryOffset - batch.records.size() + 1,
                                             batch.leaderEpoch,
@@ -843,7 +787,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {
         final CompletableFuture<List<RaftClient.Listener<ApiMessageAndVersion>>> future = new CompletableFuture<>();
         eventQueue.append(() ->
-            future.complete(listeners.values().stream().map(l -> l.listener).collect(Collectors.toList()))
+            future.complete(listeners.values().stream().map(l -> l.listener).toList())
         );
         try {
             return future.get();
@@ -875,4 +819,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public KRaftVersion kraftVersion() {
         return lastKRaftVersion;
     }
+
+    @Override
+    public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
+        if (!validateOnly) {
+            lastKRaftVersion = version;
+        }
+    }
 }
+

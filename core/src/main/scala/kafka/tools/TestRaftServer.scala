@@ -21,23 +21,25 @@ import java.net.InetSocketAddress
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.{OptionException, OptionSpec}
-import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.raft.{KafkaRaftManager, RaftManager}
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
+import kafka.network.SocketServer
+import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager, RaftManager}
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
 import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
-import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, RaftClient, QuorumConfig}
+import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, QuorumConfig, RaftClient}
 import org.apache.kafka.security.CredentialProvider
+import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.config.KRaftConfigs
@@ -81,13 +83,13 @@ class TestRaftServer(
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.CONTROLLER,
       true,
-      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
+      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
     val endpoints = Endpoints.fromInetSocketAddresses(
       config.effectiveAdvertisedControllerListeners
         .map { endpoint =>
-          (endpoint.listenerName, InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
+          (ListenerName.normalised(endpoint.listener), InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
         }
         .toMap
         .asJava
@@ -102,6 +104,7 @@ class TestRaftServer(
       topicId,
       time,
       metrics,
+      new DefaultExternalKRaftMetrics(None, None),
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
@@ -129,8 +132,7 @@ class TestRaftServer(
       requestHandler,
       time,
       config.numIoThreads,
-      s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
-      DataPlaneAcceptor.ThreadPrefix
+      "RequestHandlerAvgIdlePercent"
     )
 
     workloadGenerator.start()

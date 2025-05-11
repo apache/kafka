@@ -53,6 +53,7 @@ import org.apache.kafka.tiered.storage.specs.OffloadableSpec;
 import org.apache.kafka.tiered.storage.specs.OffloadedSegmentSpec;
 import org.apache.kafka.tiered.storage.specs.ProducableSpec;
 import org.apache.kafka.tiered.storage.specs.RemoteDeleteSegmentSpec;
+import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
 
@@ -61,7 +62,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -228,10 +228,17 @@ public final class TieredStorageTestBuilder {
     public TieredStorageTestBuilder expectFetchFromTieredStorage(Integer fromBroker,
                                                                  String topic,
                                                                  Integer partition,
-                                                                 Integer remoteFetchRequestCount) {
+                                                                 Integer segmentFetchRequestCount) {
+        return expectFetchFromTieredStorage(fromBroker, topic, partition, new RemoteFetchCount(segmentFetchRequestCount));
+    }
+
+    public TieredStorageTestBuilder expectFetchFromTieredStorage(Integer fromBroker,
+                                                                 String topic,
+                                                                 Integer partition,
+                                                                 RemoteFetchCount remoteFetchRequestCount) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         assertTrue(partition >= 0, "Partition must be >= 0");
-        assertTrue(remoteFetchRequestCount >= 0, "Expected fetch count from tiered storage must be >= 0");
+        assertTrue(remoteFetchRequestCount.getSegmentFetchCountAndOp().getCount() >= 0, "Expected fetch count from tiered storage must be >= 0");
         assertFalse(fetchables.containsKey(topicPartition), "Consume already in progress for " + topicPartition);
         fetchables.put(topicPartition, new FetchableSpec(fromBroker, remoteFetchRequestCount));
         return this;
@@ -358,7 +365,7 @@ public final class TieredStorageTestBuilder {
                         .map(spec ->
                                 new OffloadedSegmentSpec(spec.getSourceBrokerId(), topicPartition, spec.getBaseOffset(),
                                         spec.getRecords()))
-                        .collect(Collectors.toList());
+                        .toList();
                 ProduceAction action = new ProduceAction(topicPartition, offloadedSegmentSpecs, recordsToProduce,
                         producableSpec.getBatchSize(), producableSpec.getEarliestLocalLogOffset());
                 actions.add(action);
@@ -371,7 +378,7 @@ public final class TieredStorageTestBuilder {
     private void createConsumeAction() {
         if (!consumables.isEmpty()) {
             consumables.forEach((topicPartition, consumableSpec) -> {
-                FetchableSpec fetchableSpec = fetchables.computeIfAbsent(topicPartition, k -> new FetchableSpec(0, 0));
+                FetchableSpec fetchableSpec = fetchables.computeIfAbsent(topicPartition, k -> new FetchableSpec(0, new RemoteFetchCount(0)));
                 RemoteFetchSpec remoteFetchSpec = new RemoteFetchSpec(fetchableSpec.getSourceBrokerId(), topicPartition,
                         fetchableSpec.getFetchCount());
                 ConsumeAction action = new ConsumeAction(topicPartition, consumableSpec.getFetchOffset(),
@@ -408,7 +415,7 @@ public final class TieredStorageTestBuilder {
                             .map(spec -> new RemoteDeleteSegmentSpec(spec.getSourceBrokerId(), partition,
                                     spec.getEventType(), spec.getEventCount()));
                 })
-                .collect(Collectors.toList());
+                .toList();
         deleteSegmentSpecList.forEach(spec -> deletables.remove(spec.getTopicPartition()));
         return deleteSegmentSpecList;
     }

@@ -36,7 +36,6 @@ import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
@@ -61,7 +60,6 @@ public class CompletedFetch {
 
     final TopicPartition partition;
     final FetchResponseData.PartitionData partitionData;
-    final short requestVersion;
 
     private final Logger log;
     private final SubscriptionState subscriptions;
@@ -83,15 +81,14 @@ public class CompletedFetch {
     private boolean isConsumed = false;
     private boolean initialized = false;
 
-    CompletedFetch(LogContext logContext,
+    CompletedFetch(Logger log,
                    SubscriptionState subscriptions,
                    BufferSupplier decompressionBufferSupplier,
                    TopicPartition partition,
                    FetchResponseData.PartitionData partitionData,
                    FetchMetricsAggregator metricAggregator,
-                   Long fetchOffset,
-                   short requestVersion) {
-        this.log = logContext.logger(CompletedFetch.class);
+                   Long fetchOffset) {
+        this.log = log;
         this.subscriptions = subscriptions;
         this.decompressionBufferSupplier = decompressionBufferSupplier;
         this.partition = partition;
@@ -99,7 +96,6 @@ public class CompletedFetch {
         this.metricAggregator = metricAggregator;
         this.batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
         this.nextFetchOffset = fetchOffset;
-        this.requestVersion = requestVersion;
         this.lastEpoch = Optional.empty();
         this.abortedProducerIds = new HashSet<>();
         this.abortedTransactions = abortedTransactions(partitionData);
@@ -319,13 +315,13 @@ public class CompletedFetch {
         K key;
         V value;
         try {
-            key = keyBytes == null ? null : deserializers.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
+            key = keyBytes == null ? null : deserializers.keyDeserializer().deserialize(partition.topic(), headers, keyBytes);
         } catch (RuntimeException e) {
             log.error("Key Deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(DeserializationExceptionOrigin.KEY, partition, timestampType, record, e, headers);
         }
         try {
-            value = valueBytes == null ? null : deserializers.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
+            value = valueBytes == null ? null : deserializers.valueDeserializer().deserialize(partition.topic(), headers, valueBytes);
         } catch (RuntimeException e) {
             log.error("Value Deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(DeserializationExceptionOrigin.VALUE, partition, timestampType, record, e, headers);

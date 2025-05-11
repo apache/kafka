@@ -106,7 +106,7 @@ public class ProcessorNodeTest {
         final FailedProcessingException failedProcessingException = assertThrows(FailedProcessingException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
 
-        assertTrue(failedProcessingException.getCause() instanceof RuntimeException);
+        assertInstanceOf(RuntimeException.class, failedProcessingException.getCause());
         assertEquals("Processing exception should be caught and handled by the processing exception handler.",
             failedProcessingException.getCause().getMessage());
         assertEquals(NAME, failedProcessingException.failedProcessorNodeName());
@@ -217,7 +217,7 @@ public class ProcessorNodeTest {
     public void testMetricsWithBuiltInMetricsVersionLatest() {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-client", new MockTime());
+            new StreamsMetricsImpl(metrics, "test-client", "processId", new MockTime());
         final InternalMockProcessorContext<Object, Object> context = new InternalMockProcessorContext<>(streamsMetrics);
         final ProcessorNode<Object, Object, Object, Object> node =
             new ProcessorNode<>(NAME, new NoOpProcessor(), Collections.emptySet());
@@ -301,7 +301,7 @@ public class ProcessorNodeTest {
     public void testTopologyLevelClassCastExceptionDirect() {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-client", new MockTime());
+            new StreamsMetricsImpl(metrics, "test-client", "processId", new MockTime());
         final InternalMockProcessorContext<Object, Object> context = new InternalMockProcessorContext<>(streamsMetrics);
         final ProcessorNode<Object, Object, Object, Object> node =
             new ProcessorNode<>("pname", new ClassCastProcessor(), Collections.emptySet());
@@ -310,7 +310,7 @@ public class ProcessorNodeTest {
             StreamsException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP))
         );
-        assertTrue(se.getCause() instanceof ClassCastException);
+        assertInstanceOf(ClassCastException.class, se.getCause());
         assertTrue(se.getMessage().contains("default Serdes"));
         assertTrue(se.getMessage().contains("input types"));
         assertTrue(se.getMessage().contains("pname"));
@@ -321,7 +321,7 @@ public class ProcessorNodeTest {
         final InternalProcessorContext<Object, Object> internalProcessorContext = mock(InternalProcessorContext.class, withSettings().strictness(Strictness.LENIENT));
 
         when(internalProcessorContext.taskId()).thenReturn(TASK_ID);
-        when(internalProcessorContext.metrics()).thenReturn(new StreamsMetricsImpl(new Metrics(), "test-client", new MockTime()));
+        when(internalProcessorContext.metrics()).thenReturn(new StreamsMetricsImpl(new Metrics(), "test-client", "processId", new MockTime()));
         when(internalProcessorContext.topic()).thenReturn(TOPIC);
         when(internalProcessorContext.partition()).thenReturn(PARTITION);
         when(internalProcessorContext.offset()).thenReturn(OFFSET);
@@ -358,7 +358,7 @@ public class ProcessorNodeTest {
             assertEquals(internalProcessorContext.offset(), context.offset());
             assertEquals(internalProcessorContext.currentNode().name(), context.processorNodeId());
             assertEquals(internalProcessorContext.taskId(), context.taskId());
-            assertEquals(internalProcessorContext.timestamp(), context.timestamp());
+            assertEquals(internalProcessorContext.recordContext().timestamp(), context.timestamp());
             assertEquals(KEY, record.key());
             assertEquals(VALUE, record.value());
             assertInstanceOf(RuntimeException.class, exception);

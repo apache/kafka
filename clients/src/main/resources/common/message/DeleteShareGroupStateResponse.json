@@ -28,9 +28,9 @@
   // - INVALID_REQUEST (version 0+)
   "fields": [
     { "name": "Results", "type": "[]DeleteStateResult", "versions": "0+",
-      "about": "The delete results", "fields": [
+      "about": "The delete results.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",
-        "about": "The topic identifier" },
+        "about": "The topic identifier." },
       { "name": "Partitions", "type": "[]PartitionResult", "versions": "0+",
         "about" : "The results for the partitions.", "fields": [
         { "name": "Partition", "type": "int32", "versions": "0+",

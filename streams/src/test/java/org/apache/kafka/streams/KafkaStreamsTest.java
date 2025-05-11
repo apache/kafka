@@ -38,7 +38,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsNotStartedException;
-import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -89,7 +88,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -99,11 +98,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.not;
@@ -148,7 +145,7 @@ public class KafkaStreamsTest {
     private Properties props;
     private MockAdminClient adminClient;
     private StateListenerStub streamsStateListener;
-    
+
     @Mock
     private StreamThread streamThreadOne;
     @Mock
@@ -347,11 +344,47 @@ public class KafkaStreamsTest {
         }).when(thread).start();
     }
 
+    private final CountDownLatch terminableThreadBlockingLatch = new CountDownLatch(1);
+
     private void prepareTerminableThread(final StreamThread thread) throws InterruptedException {
         doAnswer(invocation -> {
-            Thread.sleep(2000L);
+            terminableThreadBlockingLatch.await();
             return null;
         }).when(thread).join();
+    }
+
+    private class KafkaStreamsWithTerminableThread extends KafkaStreams {
+
+        KafkaStreamsWithTerminableThread(final Topology topology,
+                                         final Properties props,
+                                         final KafkaClientSupplier clientSupplier,
+                                         final Time time) {
+            super(topology, props, clientSupplier, time);
+        }
+
+
+        KafkaStreamsWithTerminableThread(final Topology topology,
+                                         final Properties props,
+                                         final KafkaClientSupplier clientSupplier) {
+            super(topology, props, clientSupplier);
+        }
+
+        KafkaStreamsWithTerminableThread(final Topology topology,
+                                         final StreamsConfig applicationConfigs) {
+            super(topology, applicationConfigs);
+        }
+
+        KafkaStreamsWithTerminableThread(final Topology topology,
+                                         final StreamsConfig applicationConfigs,
+                                         final KafkaClientSupplier clientSupplier) {
+            super(topology, applicationConfigs, clientSupplier);
+        }
+
+        @Override
+        public void close() {
+            terminableThreadBlockingLatch.countDown();
+            super.close();
+        }
     }
 
     @Test
@@ -363,6 +396,44 @@ public class KafkaStreamsTest {
             streams.close();
 
             assertEquals(KafkaStreams.State.NOT_RUNNING, streams.state());
+        }
+    }
+
+    @Test
+    public void shouldInitializeTasksForLocalStateOnStart() {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StateDirectory> constructed = mockConstruction(StateDirectory.class,
+                (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()))) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                assertEquals(1, constructed.constructed().size());
+                final StateDirectory stateDirectory = constructed.constructed().get(0);
+                verify(stateDirectory, times(0)).initializeStartupTasks(any(), any(), any());
+                streams.start();
+                verify(stateDirectory, times(1)).initializeStartupTasks(any(), any(), any());
+            }
+        }
+    }
+
+    @Test
+    public void shouldCloseStartupTasksAfterFirstRebalance() throws Exception {
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        try (final MockedConstruction<StateDirectory> constructed = mockConstruction(StateDirectory.class,
+            (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()))) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                assertEquals(1, constructed.constructed().size());
+                final StateDirectory stateDirectory = constructed.constructed().get(0);
+                streams.setStateListener(streamsStateListener);
+                streams.start();
+                waitForCondition(() -> streams.state() == State.RUNNING, "Streams never started.");
+                verify(stateDirectory, times(1)).closeStartupTasks();
+            }
         }
     }
 
@@ -489,7 +560,7 @@ public class KafkaStreamsTest {
 
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             assertEquals(NUM_THREADS, streams.threads.size());
-            assertEquals(streams.state(), KafkaStreams.State.CREATED);
+            assertEquals(KafkaStreams.State.CREATED, streams.state());
 
             streams.start();
             waitForCondition(
@@ -548,7 +619,7 @@ public class KafkaStreamsTest {
             );
 
             streams.close();
-            assertEquals(streams.state(), KafkaStreams.State.ERROR, "KafkaStreams should remain in ERROR state after close.");
+            assertEquals(KafkaStreams.State.ERROR, streams.state(), "KafkaStreams should remain in ERROR state after close.");
             assertThat(appender.getMessages(), hasItem(containsString("State transition from RUNNING to PENDING_ERROR")));
             assertThat(appender.getMessages(), hasItem(containsString("State transition from PENDING_ERROR to ERROR")));
             assertThat(appender.getMessages(), hasItem(containsString("Streams client is already in the terminal ERROR state")));
@@ -572,7 +643,7 @@ public class KafkaStreamsTest {
             streams.start();
             final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
             streams.close();
-            assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+            assertEquals(KafkaStreams.State.NOT_RUNNING, streams.state());
             assertEquals(oldCloseCount + initDiff, MockMetricsReporter.CLOSE_COUNT.get());
         }
     }
@@ -803,7 +874,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
+            assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler(null));
         }
     }
 
@@ -814,7 +885,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
+            assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler(null));
         }
 
     }
@@ -824,7 +895,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            assertThrows(NullPointerException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
+            assertThrows(NullPointerException.class, () -> streams.setUncaughtExceptionHandler(null));
         }
     }
 
@@ -912,7 +983,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
         prepareTerminableThread(streamThreadOne);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -937,7 +1008,7 @@ public class KafkaStreamsTest {
 
         when(mockClientSupplier.getAdmin(any())).thenReturn(adminClient);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -962,7 +1033,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
         prepareTerminableThread(streamThreadOne);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -1119,7 +1190,7 @@ public class KafkaStreamsTest {
         prepareTerminableThread(streamThreadOne);
 
         // do not use mock time so that it can really elapse
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier)) {
             assertFalse(streams.close(Duration.ofMillis(10L)));
         }
     }
@@ -1131,7 +1202,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier, time)) {
             assertThrows(IllegalArgumentException.class, () -> streams.close(Duration.ofMillis(-1L)));
         }
     }
@@ -1143,7 +1214,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier, time)) {
             // with mock time that does not elapse, close would not return if it ever waits on the state transition
             assertFalse(streams.close(Duration.ZERO));
         }
@@ -1158,7 +1229,7 @@ public class KafkaStreamsTest {
 
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ofMillis(10L));
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier)) {
             assertFalse(streams.close(closeOptions));
         }
     }
@@ -1172,7 +1243,7 @@ public class KafkaStreamsTest {
 
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ofMillis(-1L));
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier, time)) {
             assertThrows(IllegalArgumentException.class, () -> streams.close(closeOptions));
         }
     }
@@ -1186,7 +1257,7 @@ public class KafkaStreamsTest {
 
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ZERO);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier)) {
             assertFalse(streams.close(closeOptions));
         }
     }
@@ -1205,7 +1276,7 @@ public class KafkaStreamsTest {
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ofMillis(10L));
         closeOptions.leaveGroup(true);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, mockClientSupplier)) {
             assertFalse(streams.close(closeOptions));
         }
     }
@@ -1223,7 +1294,7 @@ public class KafkaStreamsTest {
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ofMillis(-1L));
         closeOptions.leaveGroup(true);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
             assertThrows(IllegalArgumentException.class, () -> streams.close(closeOptions));
         }
     }
@@ -1242,7 +1313,7 @@ public class KafkaStreamsTest {
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ZERO);
         closeOptions.leaveGroup(true);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier)) {
+        try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, mockClientSupplier)) {
             assertFalse(streams.close(closeOptions));
         }
     }
@@ -1265,7 +1336,7 @@ public class KafkaStreamsTest {
             builder.table("topic", Materialized.as("store"));
             props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, RecordingLevel.DEBUG.name());
 
-            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier, time)) {
                 streams.start();
             }
 
@@ -1289,7 +1360,7 @@ public class KafkaStreamsTest {
         final StreamsConfig mockConfig = spy(config);
         when(mockConfig.getKafkaClientSupplier()).thenReturn(supplier);
 
-        try (final KafkaStreams ignored = new KafkaStreams(getBuilderWithSource().build(), mockConfig)) {
+        try (final KafkaStreams ignored = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), mockConfig)) {
             // no-op
         }
         // It's called once in above when mock
@@ -1297,7 +1368,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldGetClientSupplierFromConfigForConstructorWithTime() throws Exception {
+    public void shouldGetClientSupplierFromConfigForConstructorWithTime() {
         prepareStreams();
         final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
@@ -1326,7 +1397,7 @@ public class KafkaStreamsTest {
         final StreamsConfig config = new StreamsConfig(props);
         final StreamsConfig mockConfig = spy(config);
 
-        try (final KafkaStreams ignored = new KafkaStreams(getBuilderWithSource().build(), mockConfig, supplier)) {
+        try (final KafkaStreams ignored = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), mockConfig, supplier)) {
             // no-op
         }
         // It's called once in above when mock
@@ -1476,7 +1547,7 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
 
             assertThat(streams.threads.size(), equalTo(0));
-            assertEquals(streams.state(), KafkaStreams.State.CREATED);
+            assertEquals(KafkaStreams.State.CREATED, streams.state());
 
             streams.start();
             waitForCondition(
@@ -1635,13 +1706,41 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldThrowTimeoutExceptionWhenMainConsumerFutureDoesNotComplete() {
+    public void shouldReturnProducerAndConsumerInstanceIds() {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        final Uuid mainConsumerInstanceId = Uuid.randomUuid();
+        final Uuid producerInstanceId = Uuid.randomUuid();
+        final KafkaFutureImpl<Uuid> consumerFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Uuid> producerFuture = new KafkaFutureImpl<>();
+        consumerFuture.complete(mainConsumerInstanceId);
+        producerFuture.complete(producerInstanceId);
+        final Uuid adminInstanceId = Uuid.randomUuid();
+        adminClient.setClientInstanceId(adminInstanceId);
+        
+        final Map<String, KafkaFuture<Uuid>> expectedClientIds = Map.of("main-consumer", consumerFuture, "some-thread-producer", producerFuture);
+        when(streamThreadOne.clientInstanceIds(any())).thenReturn(expectedClientIds);
+
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ZERO);
+            assertThat(clientInstanceIds.consumerInstanceIds().size(), equalTo(1));
+            assertThat(clientInstanceIds.consumerInstanceIds().get("main-consumer"), equalTo(mainConsumerInstanceId));
+            assertThat(clientInstanceIds.producerInstanceIds().size(),  equalTo(1));
+            assertThat(clientInstanceIds.producerInstanceIds().get("some-thread-producer"), equalTo(producerInstanceId));
+            assertThat(clientInstanceIds.adminInstanceId(), equalTo(adminInstanceId));
+        }
+    }
+
+    @Test
+    public void shouldThrowTimeoutExceptionWhenAnyClientFutureDoesNotComplete() {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
 
-        when(streamThreadOne.consumerClientInstanceIds(any()))
-            .thenReturn(Collections.singletonMap("consumer", new KafkaFutureImpl<>()));
+        when(streamThreadOne.clientInstanceIds(any()))
+            .thenReturn(Collections.singletonMap("some-client", new KafkaFutureImpl<>()));
         adminClient.setClientInstanceId(Uuid.randomUuid());
 
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
@@ -1650,7 +1749,7 @@ public class KafkaStreamsTest {
                 TimeoutException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
-            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve consumer instance id for consumer."));
+            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve consumer/producer instance id for some-client."));
             assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
         }
     }
@@ -1660,11 +1759,6 @@ public class KafkaStreamsTest {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
-
-        final KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerFuture = new KafkaFutureImpl<>();
-        producerFuture.complete(Collections.emptyMap());
-        when(streamThreadOne.producersClientInstanceIds(any())).thenReturn(producerFuture);
-        when(streamThreadTwo.producersClientInstanceIds(any())).thenReturn(producerFuture);
 
         adminClient.setClientInstanceId(Uuid.randomUuid());
 
@@ -1686,27 +1780,6 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldThrowTimeoutExceptionWhenThreadProducerFutureDoesNotComplete() {
-        prepareStreams();
-        prepareStreamThread(streamThreadOne, 1);
-        prepareStreamThread(streamThreadTwo, 2);
-
-        when(streamThreadOne.producersClientInstanceIds(any())).thenReturn(new KafkaFutureImpl<>());
-        adminClient.setClientInstanceId(Uuid.randomUuid());
-
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            streams.start();
-
-            final TimeoutException timeoutException = assertThrows(
-                TimeoutException.class,
-                () -> streams.clientInstanceIds(Duration.ZERO)
-            );
-            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve producer instance id for processId-StreamThread-1."));
-            assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
-        }
-    }
-
-    @Test
     public void shouldCountDownTimeoutAcrossClient() {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
@@ -1719,14 +1792,10 @@ public class KafkaStreamsTest {
         final AtomicLong expectedTimeout = new AtomicLong(50L);
         final AtomicBoolean didAssertThreadOne = new AtomicBoolean(false);
         final AtomicBoolean didAssertThreadTwo = new AtomicBoolean(false);
-        final AtomicBoolean didAssertThreadProducer = new AtomicBoolean(false);
-        final AtomicBoolean didAssertTaskProducers = new AtomicBoolean(false);
-        final AtomicBoolean didAssertTask1 = new AtomicBoolean(false);
-        final AtomicBoolean didAssertTask2 = new AtomicBoolean(false);
         final AtomicBoolean didAssertGlobalThread = new AtomicBoolean(false);
 
-        when(streamThreadOne.consumerClientInstanceIds(any()))
-            .thenReturn(Collections.singletonMap("consumer1", new KafkaFutureImpl<Uuid>() {
+        when(streamThreadOne.clientInstanceIds(any()))
+            .thenReturn(Collections.singletonMap("any-client-1", new KafkaFutureImpl<>() {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertThreadOne.set(true);
@@ -1735,8 +1804,8 @@ public class KafkaStreamsTest {
                     return null;
                 }
             }));
-        when(streamThreadTwo.consumerClientInstanceIds(any()))
-            .thenReturn(Collections.singletonMap("consumer2", new KafkaFutureImpl<Uuid>() {
+        when(streamThreadTwo.clientInstanceIds(any()))
+            .thenReturn(Collections.singletonMap("any-client-2", new KafkaFutureImpl<>() {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertThreadTwo.set(true);
@@ -1746,51 +1815,6 @@ public class KafkaStreamsTest {
                 }
             }));
 
-        // mimic thread producer on stream-thread-one
-        final KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> threadProducerFuture = new KafkaFutureImpl<>();
-        threadProducerFuture.complete(Collections.singletonMap("threadProducer", new KafkaFutureImpl<Uuid>() {
-            @Override
-            public Uuid get(final long timeout, final TimeUnit timeUnit) {
-                didAssertThreadProducer.set(true);
-                assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-9L)));
-                mockTime.sleep(9L);
-                return null;
-            }
-        }));
-        when(streamThreadOne.producersClientInstanceIds(any())).thenReturn(threadProducerFuture);
-        // mimic task producer on stream-thread-two
-        final KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> taskProducersFuture = new KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>>() {
-            @Override
-            public Map<String, KafkaFuture<Uuid>> get(final long timeout, final TimeUnit timeUnit)
-                throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
-                didAssertTaskProducers.set(true);
-                assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-7L)));
-                mockTime.sleep(7L);
-                return super.get(timeout, timeUnit);
-            }
-        };
-        taskProducersFuture.complete(mkMap(
-            mkEntry("task1", new KafkaFutureImpl<Uuid>() {
-                @Override
-                public Uuid get(final long timeout, final TimeUnit timeUnit) {
-                    didAssertTask1.set(true);
-                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-4L)));
-                    mockTime.sleep(4L);
-                    return null;
-                }
-            }),
-            mkEntry("task2", new KafkaFutureImpl<Uuid>() {
-                @Override
-                public Uuid get(final long timeout, final TimeUnit timeUnit) {
-                    didAssertTask2.set(true);
-                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-6L)));
-                    mockTime.sleep(6L);
-                    return null;
-                }
-            })
-        ));
-        when(streamThreadTwo.producersClientInstanceIds(any())).thenReturn(taskProducersFuture);
-
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
@@ -1798,7 +1822,7 @@ public class KafkaStreamsTest {
             streams.start();
 
             when(globalStreamThreadMockedConstruction.constructed().get(0).globalConsumerInstanceId(any()))
-                .thenReturn(new KafkaFutureImpl<Uuid>() {
+                .thenReturn(new KafkaFutureImpl<>() {
                     @Override
                     public Uuid get(final long timeout, final TimeUnit timeUnit) {
                         didAssertGlobalThread.set(true);
@@ -1813,14 +1837,9 @@ public class KafkaStreamsTest {
 
         assertThat(didAssertThreadOne.get(), equalTo(true));
         assertThat(didAssertThreadTwo.get(), equalTo(true));
-        assertThat(didAssertThreadProducer.get(), equalTo(true));
-        assertThat(didAssertTaskProducers.get(), equalTo(true));
-        assertThat(didAssertTask1.get(), equalTo(true));
-        assertThat(didAssertTask2.get(), equalTo(true));
         assertThat(didAssertGlobalThread.get(), equalTo(true));
     }
 
-    @Deprecated // testing old PAPI
     private Topology getStatefulTopology(final String inputTopic,
                                          final String outputTopic,
                                          final String globalTopicName,

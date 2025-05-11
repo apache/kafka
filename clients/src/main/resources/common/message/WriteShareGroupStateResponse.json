@@ -24,13 +24,14 @@
   // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
   // - GROUP_ID_NOT_FOUND (version 0+)
   // - UNKNOWN_TOPIC_OR_PARTITION (version 0+)
+  // - FENCED_LEADER_EPOCH (version 0+)
   // - FENCED_STATE_EPOCH (version 0+)
   // - INVALID_REQUEST (version 0+)
   "fields": [
     { "name": "Results", "type": "[]WriteStateResult", "versions": "0+",
-      "about": "The write results", "fields": [
+      "about": "The write results.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",
-        "about": "The topic identifier" },
+        "about": "The topic identifier." },
       { "name": "Partitions", "type": "[]PartitionResult", "versions": "0+",
         "about" : "The results for the partitions.", "fields": [
         { "name": "Partition", "type": "int32", "versions": "0+",

@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import org.apache.kafka.common.message.FetchResponseData
@@ -28,15 +27,16 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.server.network.BrokerEndPoint
 
 import java.nio.ByteBuffer
 import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.{RichOption, RichOptional}
+import scala.jdk.OptionConverters.RichOptional
 import scala.util.Random
 
-class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, host = "localhost", port = Random.nextInt()),
+class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "localhost", Random.nextInt()),
                          truncateOnFetch: Boolean = true,
                          version: Short = ApiKeys.FETCH.latestVersion())
   extends LeaderEndPoint {
@@ -154,7 +154,7 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, ho
       if (state.isReadyForFetch) {
         val replicaState = replicaPartitionStateCallback(partition).getOrElse(throw new IllegalArgumentException(s"Unknown partition $partition"))
         val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-          state.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
+          state.lastFetchedEpoch
         else
           Optional.empty[Integer]
         fetchData.put(partition,

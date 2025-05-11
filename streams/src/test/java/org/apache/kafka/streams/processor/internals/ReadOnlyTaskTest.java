@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
@@ -25,8 +26,8 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -39,32 +40,28 @@ import static org.mockito.Mockito.verify;
 
 class ReadOnlyTaskTest {
 
-    private final List<String> readOnlyMethods = new LinkedList<String>() {
-        {
-            add("needsInitializationOrRestoration");
-            add("inputPartitions");
-            add("changelogPartitions");
-            add("commitRequested");
-            add("commitNeeded");
-            add("isActive");
-            add("changelogOffsets");
-            add("state");
-            add("id");
-            add("store");
-        }
-    };
+    private final List<String> readOnlyMethods = List.of(
+        "needsInitializationOrRestoration",
+        "inputPartitions",
+        "changelogPartitions",
+        "commitRequested",
+        "commitNeeded",
+        "isActive",
+        "changelogOffsets",
+        "state",
+        "id",
+        "store"
+    );
 
-    private final List<String> objectMethods = new LinkedList<String>() {
-        {
-            add("wait");
-            add("equals");
-            add("getClass");
-            add("hashCode");
-            add("notify");
-            add("notifyAll");
-            add("toString");
-        }
-    };
+    private final List<String> objectMethods = List.of(
+        "wait",
+        "equals",
+        "getClass",
+        "hashCode",
+        "notify",
+        "notifyAll",
+        "toString"
+    );
 
     final Task task = statelessTask(new TaskId(1, 0)).build();
 
@@ -203,6 +200,9 @@ class ReadOnlyTaskTest {
                     break;
                 case "org.apache.kafka.common.TopicPartition":
                     parameters[i] = new TopicPartition("topic", 0);
+                    break;
+                case "org.apache.kafka.clients.consumer.OffsetAndMetadata":
+                    parameters[i] = new OffsetAndMetadata(0, Optional.empty(), "");
                     break;
                 case "java.lang.Exception":
                     parameters[i] = new IllegalStateException();

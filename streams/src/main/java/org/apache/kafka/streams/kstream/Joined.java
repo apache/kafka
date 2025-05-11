@@ -169,7 +169,7 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
 
 
     /**
-     * Create an instance of {@code Joined} with aother value {@link Serde}.
+     * Create an instance of {@code Joined} with another value {@link Serde}.
      * {@code null} values are accepted and will be replaced by the default value serde as defined in config.
      *
      * @param rightValueSerde
@@ -273,7 +273,7 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
 
 
     /**
-     * @deprecated since 4.0 and should not be used any longer.
+     * @deprecated Since 4.0 and should not be used any longer.
      */
     @Deprecated
     public Duration gracePeriod() {
@@ -281,7 +281,7 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
     }
 
     /**
-     * @deprecated since 4.0 and should not be used any longer.
+     * @deprecated Since 4.0 and should not be used any longer.
      */
     @Deprecated
     public Serde<K> keySerde() {
@@ -289,7 +289,7 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
     }
 
     /**
-     * @deprecated since 4.0 and should not be used any longer.
+     * @deprecated Since 4.0 and should not be used any longer.
      */
     @Deprecated
     public Serde<VLeft> valueSerde() {
@@ -297,7 +297,7 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
     }
 
     /**
-     * @deprecated since 4.0 and should not be used any longer.
+     * @deprecated Since 4.0 and should not be used any longer.
      */
     @Deprecated
     public Serde<VRight> otherValueSerde() {

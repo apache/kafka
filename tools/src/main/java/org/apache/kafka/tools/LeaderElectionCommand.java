@@ -25,8 +25,6 @@ import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.Json;
@@ -102,7 +100,7 @@ public class LeaderElectionCommand {
          * The validate function should be checking that this option is required if the --topic and --path-to-json-file
          * are not specified.
          */
-        Optional<Set<TopicPartition>> topicPartitions = jsonFileTopicPartitions.map(Optional::of).orElse(singleTopicPartition);
+        Optional<Set<TopicPartition>> topicPartitions = jsonFileTopicPartitions.or(() -> singleTopicPartition);
 
         Properties props = new Properties();
         if (commandOptions.hasAdminClientConfig()) {

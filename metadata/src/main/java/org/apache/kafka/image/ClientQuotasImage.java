@@ -50,7 +50,7 @@ import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH
  * This class is thread-safe.
  */
 public final class ClientQuotasImage {
-    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Collections.emptyMap());
+    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Map.of());
 
     private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
 
@@ -176,8 +176,7 @@ public final class ClientQuotasImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotasImage)) return false;
-        ClientQuotasImage other = (ClientQuotasImage) o;
+        if (!(o instanceof ClientQuotasImage other)) return false;
         return entities.equals(other.entities);
     }
 

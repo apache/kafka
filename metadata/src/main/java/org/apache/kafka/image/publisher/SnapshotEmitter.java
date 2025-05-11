@@ -140,14 +140,14 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             provenance.snapshotId(),
             provenance.lastContainedLogTimeMs()
         );
-        if (!snapshotWriter.isPresent()) {
+        if (snapshotWriter.isEmpty()) {
             log.error("Not generating {} because it already exists.", provenance.snapshotName());
             return;
         }
         RaftSnapshotWriter writer = new RaftSnapshotWriter(snapshotWriter.get(), batchSize);
         try {
-            image.write(writer, new ImageWriterOptions.Builder().
-                    setMetadataVersion(image.features().metadataVersion()).
+            image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
+                    setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
                     build());
             writer.close(true);
             metrics.setLatestSnapshotGeneratedTimeMs(time.milliseconds());

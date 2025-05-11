@@ -68,7 +68,7 @@ public class ConsumerMetadata extends Metadata {
 
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
-        if (subscription.hasPatternSubscription())
+        if (subscription.hasPatternSubscription() || subscription.hasRe2JPatternSubscription())
             return MetadataRequest.Builder.allTopics();
         List<String> topics = new ArrayList<>();
         topics.addAll(subscription.metadataTopics());
@@ -94,6 +94,6 @@ public class ConsumerMetadata extends Metadata {
         if (isInternal && !includeInternalTopics)
             return false;
 
-        return subscription.matchesSubscribedPattern(topic);
+        return subscription.matchesSubscribedPattern(topic) || subscription.isAssignedFromRe2j(topic);
     }
 }

@@ -72,7 +72,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap = new ConcurrentSkipListMap<>();
     private final Set<InMemoryWindowStoreIteratorWrapper> openIterators = ConcurrentHashMap.newKeySet();
 
-    private InternalProcessorContext internalProcessorContext;
+    private InternalProcessorContext<?, ?> internalProcessorContext;
     private Sensor expiredRecordSensor;
     private int seqnum = 0;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
@@ -196,7 +196,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
     }
 
-    @Deprecated
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         return fetch(key, timeFrom, timeTo, true);
@@ -236,7 +235,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
     }
 
-    @Deprecated
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
@@ -294,7 +292,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
     }
 
-    @Deprecated
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         return fetchAll(timeFrom, timeTo, true);

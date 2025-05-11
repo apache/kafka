@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -29,7 +29,7 @@ import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Disabled, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
 import java.util.{Collections, Properties}
@@ -52,14 +52,14 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   }
 
   override def generateConfigs: collection.Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(numNodes, zkConnectOrNull, enableControlledShutdown = false, enableFetchFromFollower = true)
+    TestUtils.createBrokerConfigs(numNodes, enableControlledShutdown = false, enableFetchFromFollower = true)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
   @Timeout(15)
-  def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
+  def testFollowerCompleteDelayedFetchesOnReplication(groupProtocol: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     val partitionLeaders = TestUtils.createTopicWithAdmin(
@@ -101,9 +101,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(groupProtocol: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
@@ -123,15 +123,15 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     val topicPartition = new TopicPartition(topic, 0)
     TestUtils.waitUntilTrue(() => {
       val endpoints = brokers(leaderBrokerId).metadataCache.getPartitionReplicaEndpoints(topicPartition, listenerName)
-      !endpoints.contains(followerBrokerId)
+      !endpoints.containsKey(followerBrokerId)
     }, "follower is still reachable.")
 
     assertEquals(-1, getPreferredReplica)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testFetchFromFollowerWithRoll(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchFromFollowerWithRoll(groupProtocol: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
@@ -148,6 +148,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumerProps.put(ConsumerConfig.CLIENT_RACK_CONFIG, followerBrokerId.toString)
+    consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
     try {
       consumer.subscribe(List(topic).asJava)
@@ -181,9 +182,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   }
 
   @Disabled
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testRackAwareRangeAssignor(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testRackAwareRangeAssignor(groupProtocol: String): Unit = {
     val partitionList = brokers.indices.toList
 
     val topicWithAllPartitionsOnAllRacks = "topicWithAllPartitionsOnAllRacks"

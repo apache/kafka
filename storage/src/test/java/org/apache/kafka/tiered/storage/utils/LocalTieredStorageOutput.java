@@ -25,7 +25,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
 
@@ -39,7 +38,7 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
         this.keyDe = keyDe;
         this.valueDe = valueDe;
         // Columns length + 5 column separators.
-        output += repeatString("-", 51 + 8 + 13 + 10 + (3 * 2)) + System.lineSeparator();
+        output += "-".repeat(51 + 8 + 13 + 10 + (3 * 2)) + System.lineSeparator();
     }
 
     private String row(String file, Object offset, String record, String ident) {
@@ -52,14 +51,6 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
 
     private String row() {
         return row("", "", "");
-    }
-
-    private String repeatString(String str, int times) {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < times; i++) {
-            builder.append(str);
-        }
-        return builder.toString();
     }
 
     @Override
@@ -80,7 +71,7 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
                         .stream()
                         .map(record -> new Tuple2<>(record.offset(),
                                 "(" + des(keyDe, record.key()) + ", " + des(valueDe, record.value()) + ")"))
-                        .collect(Collectors.toList());
+                        .toList();
                 output += row(segFilename, offsetKeyValues.get(0).t1, offsetKeyValues.get(0).t2);
                 if (offsetKeyValues.size() > 1) {
                     offsetKeyValues.subList(1, records.size()).forEach(offsetKeyValue ->

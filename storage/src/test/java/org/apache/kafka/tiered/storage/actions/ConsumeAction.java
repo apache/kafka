@@ -25,20 +25,24 @@ import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
+import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchSpec;
 
 import java.io.PrintStream;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
+import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_OFFSET_INDEX;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
+import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TIME_INDEX;
+import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TRANSACTION_INDEX;
 import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueMatcher.correspondTo;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.tieredStorageRecords;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public final class ConsumeAction implements TieredStorageTestAction {
@@ -75,6 +79,9 @@ public final class ConsumeAction implements TieredStorageTestAction {
         // type has yet to happen.
         LocalTieredStorageHistory history = context.tieredStorageHistory(remoteFetchSpec.getSourceBrokerId());
         Optional<LocalTieredStorageEvent> latestEventSoFar = history.latestEvent(FETCH_SEGMENT, topicPartition);
+        Optional<LocalTieredStorageEvent> latestOffsetIdxEventSoFar = history.latestEvent(FETCH_OFFSET_INDEX, topicPartition);
+        Optional<LocalTieredStorageEvent> latestTimeIdxEventSoFar = history.latestEvent(FETCH_TIME_INDEX, topicPartition);
+        Optional<LocalTieredStorageEvent> latestTxnIdxEventSoFar = history.latestEvent(FETCH_TRANSACTION_INDEX, topicPartition);
 
         // Records are consumed here
         List<ConsumerRecord<String, String>> consumedRecords =
@@ -91,7 +98,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
                 .filter(record -> record.offset() >= fetchOffset)
                 .findFirst();
 
-        if (!firstExpectedRecordOpt.isPresent()) {
+        if (firstExpectedRecordOpt.isEmpty()) {
             // If no records could be found in the second-tier storage, no record would be consumed from that storage.
             if (expectedFromSecondTierCount > 0) {
                 fail("Could not find any record with offset >= " + fetchOffset + " from tier storage.");
@@ -119,16 +126,89 @@ public final class ConsumeAction implements TieredStorageTestAction {
         assertThat(storedRecords, correspondTo(readRecords, topicPartition, serde, serde));
 
         // (B) Assessment of the interactions between the source broker and the second-tier storage.
-        List<LocalTieredStorageEvent> events = history.getEvents(FETCH_SEGMENT, topicPartition);
-        List<LocalTieredStorageEvent> eventsInScope = latestEventSoFar
-                .map(latestEvent ->
-                        events.stream().filter(event -> event.isAfter(latestEvent)).collect(Collectors.toList()))
-                .orElse(events);
+        for (LocalTieredStorageEvent.EventType eventType : List.of(FETCH_SEGMENT, FETCH_OFFSET_INDEX, FETCH_TIME_INDEX, FETCH_TRANSACTION_INDEX)) {
+            Optional<LocalTieredStorageEvent> latestEvent;
+            switch (eventType) {
+                case FETCH_SEGMENT:
+                    latestEvent = latestEventSoFar;
+                    break;
+                case FETCH_OFFSET_INDEX:
+                    latestEvent = latestOffsetIdxEventSoFar;
+                    break;
+                case FETCH_TIME_INDEX:
+                    latestEvent = latestTimeIdxEventSoFar;
+                    break;
+                case FETCH_TRANSACTION_INDEX:
+                    latestEvent = latestTxnIdxEventSoFar;
+                    break;
+                default:
+                    latestEvent = Optional.empty();
+            }
 
-        assertEquals(remoteFetchSpec.getCount(), eventsInScope.size(),
-                "Number of fetch requests from broker " + remoteFetchSpec.getSourceBrokerId() + " to the " +
-                        "tier storage does not match the expected value for topic-partition "
-                        + remoteFetchSpec.getTopicPartition());
+            List<LocalTieredStorageEvent> events = history.getEvents(eventType, topicPartition);
+            List<LocalTieredStorageEvent> eventsInScope = latestEvent
+                    .map(e -> events.stream().filter(event -> event.isAfter(e)).toList())
+                    .orElse(events);
+
+            RemoteFetchCount remoteFetchCount = remoteFetchSpec.getRemoteFetchCount();
+            RemoteFetchCount.FetchCountAndOp expectedCountAndOp;
+            switch (eventType) {
+                case FETCH_SEGMENT:
+                    expectedCountAndOp = remoteFetchCount.getSegmentFetchCountAndOp();
+                    break;
+                case FETCH_OFFSET_INDEX:
+                    expectedCountAndOp = remoteFetchCount.getOffsetIdxFetchCountAndOp();
+                    break;
+                case FETCH_TIME_INDEX:
+                    expectedCountAndOp = remoteFetchCount.getTimeIdxFetchCountAndOp();
+                    break;
+                case FETCH_TRANSACTION_INDEX:
+                    expectedCountAndOp = remoteFetchCount.getTxnIdxFetchCountAndOp();
+                    break;
+                default:
+                    expectedCountAndOp = new RemoteFetchCount.FetchCountAndOp(-1, RemoteFetchCount.OperationType.EQUALS_TO);
+            }
+
+            RemoteFetchCount.OperationType exceptedOperationType = expectedCountAndOp.getOperationType();
+            int exceptedCount = expectedCountAndOp.getCount();
+            int actualCount = eventsInScope.size();
+            String message = errorMessage(eventType, actualCount, exceptedOperationType, exceptedCount);
+            if (exceptedCount != -1) {
+                if (exceptedOperationType == RemoteFetchCount.OperationType.EQUALS_TO) {
+                    assertEquals(exceptedCount, actualCount, message);
+                } else if (exceptedOperationType == RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO) {
+                    assertTrue(actualCount <= exceptedCount, message);
+                } else {
+                    assertTrue(actualCount >= exceptedCount, message);
+                }
+            }
+        }
+    }
+
+    private String errorMessage(
+        LocalTieredStorageEvent.EventType eventType,
+        int actualCount,
+        RemoteFetchCount.OperationType exceptedOperationType,
+        int exceptedCount
+    ) {
+        return String.format(
+            "Expected %s requests count from broker %d to tiered storage for topic-partition %s to be %s %d, " +
+                    "but actual count was %d.",
+            eventType,
+            remoteFetchSpec.getSourceBrokerId(),
+            remoteFetchSpec.getTopicPartition(),
+            operationTypeToString(exceptedOperationType),
+            exceptedCount,
+            actualCount
+        );
+    }
+
+    private String operationTypeToString(RemoteFetchCount.OperationType operationType) {
+        return switch (operationType) {
+            case EQUALS_TO -> "equal to";
+            case LESS_THAN_OR_EQUALS_TO -> "less than or equal to";
+            case GREATER_THAN_OR_EQUALS_TO -> "greater than or equal to";
+        };
     }
 
     @Override
@@ -138,5 +218,6 @@ public final class ConsumeAction implements TieredStorageTestAction {
         output.println("  fetch-offset = " + fetchOffset);
         output.println("  expected-record-count = " + expectedTotalCount);
         output.println("  expected-record-from-tiered-storage = " + expectedFromSecondTierCount);
+        output.println("  remote-fetch-spec = " + remoteFetchSpec);
     }
 }

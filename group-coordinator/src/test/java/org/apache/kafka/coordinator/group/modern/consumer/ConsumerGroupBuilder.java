@@ -37,6 +37,7 @@ public class ConsumerGroupBuilder {
     private final Map<String, ConsumerGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
     private Map<String, TopicMetadata> subscriptionMetadata;
+    private final Map<String, ResolvedRegularExpression> resolvedRegularExpressions = new HashMap<>();
 
     public ConsumerGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
@@ -46,6 +47,14 @@ public class ConsumerGroupBuilder {
 
     public ConsumerGroupBuilder withMember(ConsumerGroupMember member) {
         this.members.put(member.memberId(), member);
+        return this;
+    }
+
+    public ConsumerGroupBuilder withResolvedRegularExpression(
+        String regex,
+        ResolvedRegularExpression resolvedRegularExpression
+    ) {
+        this.resolvedRegularExpressions.put(regex, resolvedRegularExpression);
         return this;
     }
 
@@ -72,6 +81,11 @@ public class ConsumerGroupBuilder {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, member))
         );
 
+        // Add resolved regular expressions.
+        resolvedRegularExpressions.forEach((regex, resolvedRegularExpression) ->
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(groupId, regex, resolvedRegularExpression))
+        );
+
         // Add subscription metadata.
         if (subscriptionMetadata == null) {
             subscriptionMetadata = new HashMap<>();
@@ -94,7 +108,7 @@ public class ConsumerGroupBuilder {
         }
 
         // Add group epoch record.
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->

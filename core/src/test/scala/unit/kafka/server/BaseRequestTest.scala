@@ -20,7 +20,7 @@ package kafka.server
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.BrokerState
@@ -56,25 +56,9 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No live broker is available"))
   }
 
-  def controllerSocketServer: SocketServer = {
-    if (isKRaftTest()) {
-     controllerServer.socketServer
-    } else {
-      servers.find { server =>
-        server.kafkaController.isActive
-      }.map(_.socketServer).getOrElse(throw new IllegalStateException("No controller broker is available"))
-    }
-  }
+  def controllerSocketServer: SocketServer = controllerServer.socketServer
 
-  def notControllerSocketServer: SocketServer = {
-    if (isKRaftTest()) {
-      anySocketServer
-    } else {
-      servers.find { server =>
-        !server.kafkaController.isActive
-      }.map(_.socketServer).getOrElse(throw new IllegalStateException("No non-controller broker is available"))
-    }
-  }
+  def notControllerSocketServer: SocketServer = anySocketServer
 
   def brokerSocketServer(brokerId: Int): SocketServer = {
     brokers.find { broker =>
@@ -85,16 +69,9 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   /**
    * Return the socket server where admin request to be sent.
    *
-   * For KRaft clusters that is any broker as the broker will forward the request to the active
-   * controller. For Legacy clusters that is the controller broker.
+   * KRaft clusters that is any broker as the broker will forward the request to the active controller.
    */
-  def adminSocketServer: SocketServer = {
-    if (isKRaftTest()) {
-      anySocketServer
-    } else {
-      controllerSocketServer
-    }
-  }
+  def adminSocketServer: SocketServer = anySocketServer
 
   def connect(socketServer: SocketServer = anySocketServer,
               listenerName: ListenerName = listenerName): Socket = {
@@ -119,7 +96,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     val responseBuffer = ByteBuffer.wrap(responseBytes)
     ResponseHeader.parse(responseBuffer, apiKey.responseHeaderVersion(version))
 
-    AbstractResponse.parseResponse(apiKey, responseBuffer, version) match {
+    AbstractResponse.parseResponse(apiKey, new ByteBufferAccessor(responseBuffer), version) match {
       case response: T => response
       case response =>
         throw new ClassCastException(s"Expected response with type ${classTag.runtimeClass}, but found ${response.getClass}")

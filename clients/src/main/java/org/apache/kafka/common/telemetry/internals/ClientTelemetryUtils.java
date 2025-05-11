@@ -25,7 +25,6 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -191,24 +190,22 @@ public class ClientTelemetryUtils {
         return CompressionType.NONE;
     }
 
-    public static byte[] compress(byte[] raw, CompressionType compressionType) throws IOException {
+    public static ByteBuffer compress(MetricsData metrics, CompressionType compressionType) throws IOException {
         try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
             Compression compression = Compression.of(compressionType).build();
             try (OutputStream out = compression.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
-                out.write(raw);
-                out.flush();
+                metrics.writeTo(out);
             }
             compressedOut.buffer().flip();
-            return Utils.toArray(compressedOut.buffer());
+            return compressedOut.buffer();
         }
     }
 
-    public static ByteBuffer decompress(byte[] metrics, CompressionType compressionType) {
-        ByteBuffer data = ByteBuffer.wrap(metrics);
+    public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType) {
         Compression compression = Compression.of(compressionType).build();
-        try (InputStream in = compression.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
+        try (InputStream in = compression.wrapForInput(metrics, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
             ByteBufferOutputStream out = new ByteBufferOutputStream(512)) {
-            byte[] bytes = new byte[data.capacity() * 2];
+            byte[] bytes = new byte[metrics.limit() * 2];
             int nRead;
             while ((nRead = in.read(bytes, 0, bytes.length)) != -1) {
                 out.write(bytes, 0, nRead);

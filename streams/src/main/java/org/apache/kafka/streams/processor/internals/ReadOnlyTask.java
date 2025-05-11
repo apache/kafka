@@ -150,6 +150,11 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public void updateNextOffsets(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
     public boolean process(final long wallClockTime) {
         throw new UnsupportedOperationException("This task is read-only");
     }
@@ -175,7 +180,7 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
         throw new UnsupportedOperationException("This task is read-only");
     }
 

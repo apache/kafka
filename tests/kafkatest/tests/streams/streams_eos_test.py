@@ -39,15 +39,14 @@ class StreamsEosTest(KafkaTest):
         self.test_context = test_context
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.isolated_kraft])
+    @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_rebalance_simple(self, metadata_quorum):
         self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                            StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
-
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.isolated_kraft])
+    @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_rebalance_complex(self, metadata_quorum):
         self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
                            StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
@@ -81,15 +80,14 @@ class StreamsEosTest(KafkaTest):
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.isolated_kraft])
+    @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_failure_and_recovery(self, metadata_quorum):
         self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                                       StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
-
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.isolated_kraft])
+    @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_failure_and_recovery_complex(self, metadata_quorum):
         self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
                                       StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),

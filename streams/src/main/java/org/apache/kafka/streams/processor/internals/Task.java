@@ -177,6 +177,9 @@ public interface Task {
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
 
+    default void updateNextOffsets(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {
+    }
+
     default boolean process(final long wallClockTime) {
         return false;
     }
@@ -198,7 +201,7 @@ public interface Task {
     /**
      * @throws StreamsException fatal error, should close the thread
      */
-    Map<TopicPartition, OffsetAndMetadata> prepareCommit();
+    Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean);
 
     void postCommit(boolean enforceCheckpoint);
 

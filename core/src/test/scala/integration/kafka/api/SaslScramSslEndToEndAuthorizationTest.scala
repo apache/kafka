@@ -20,7 +20,6 @@ import kafka.security.JaasTestUtils
 
 import java.util.Properties
 import kafka.utils._
-import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.metadata.storage.Formatter
@@ -28,9 +27,7 @@ import org.apache.kafka.test.TestSslUtils
 
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -42,11 +39,6 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     super.configureSecurityBeforeServersStart(testInfo)
 
-    if (!TestInfoUtils.isKRaft(testInfo)) {
-      zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
-      // Create broker credentials before starting brokers
-      createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
-    }
     TestSslUtils.convertToPemWithoutFiles(producerConfig)
     TestSslUtils.convertToPemWithoutFiles(consumerConfig)
     TestSslUtils.convertToPemWithoutFiles(adminClientConfig)
@@ -74,9 +66,8 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
       createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAuthentications(quorum: String): Unit = {
+  @Test
+  def testAuthentications(): Unit = {
     val successfulAuths = TestUtils.totalMetricValue(brokers.head, "successful-authentication-total")
     assertTrue(successfulAuths > 0, "No successful authentications")
     val failedAuths = TestUtils.totalMetricValue(brokers.head, "failed-authentication-total")

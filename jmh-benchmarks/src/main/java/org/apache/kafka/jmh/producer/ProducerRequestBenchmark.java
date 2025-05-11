@@ -17,11 +17,11 @@
 
 package org.apache.kafka.jmh.producer;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
@@ -53,7 +53,7 @@ public class ProducerRequestBenchmark {
     private static final int NUMBER_OF_PARTITIONS = 3;
     private static final int NUMBER_OF_RECORDS = 3;
     private static final List<ProduceRequestData.TopicProduceData> TOPIC_PRODUCE_DATA = Collections.singletonList(new ProduceRequestData.TopicProduceData()
-            .setName("tp")
+            .setTopicId(Uuid.fromString("4NeOmt3TH3vW7AKKORPaCW"))
             .setPartitionData(IntStream.range(0, NUMBER_OF_PARTITIONS).mapToObj(partitionIndex -> new ProduceRequestData.PartitionProduceData()
                 .setIndex(partitionIndex)
                 .setRecords(MemoryRecords.withRecords(Compression.NONE, IntStream.range(0, NUMBER_OF_RECORDS)
@@ -68,7 +68,7 @@ public class ProducerRequestBenchmark {
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(TOPIC_PRODUCE_DATA.iterator()));
 
     private static ProduceRequest request() {
-        return ProduceRequest.forMagic(RecordBatch.CURRENT_MAGIC_VALUE, PRODUCE_REQUEST_DATA).build();
+        return ProduceRequest.builder(PRODUCE_REQUEST_DATA, false).build();
     }
 
     private static final ProduceRequest REQUEST = request();

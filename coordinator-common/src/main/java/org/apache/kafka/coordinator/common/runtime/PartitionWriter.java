@@ -105,6 +105,17 @@ public interface PartitionWriter {
         String transactionalId,
         long producerId,
         short producerEpoch,
-        short apiVersion
+        int apiVersion
+    ) throws KafkaException;
+
+    /**
+     * Delete records from a topic partition until specified offset
+     * @param tp                    The partition to delete records from
+     * @param deleteBeforeOffset    Offset to delete until, starting from the beginning
+     * @throws KafkaException       Any KafkaException caught during the operation.
+     */
+    CompletableFuture<Void> deleteRecords(
+        TopicPartition tp,
+        long deleteBeforeOffset
     ) throws KafkaException;
 }

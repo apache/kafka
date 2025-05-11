@@ -138,7 +138,7 @@ public class Fetcher<K, V> extends AbstractFetch {
             // here.
             log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
                     "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
-                    "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
+                    "KafkaConsumer.close(...)", timer.timeoutMs());
         }
     }
 
@@ -192,7 +192,7 @@ public class Fetcher<K, V> extends AbstractFetch {
             final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
             final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
 
-            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
+            responseFuture.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ClientResponse resp) {
                     successHandler.handle(fetchTarget, data, resp);

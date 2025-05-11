@@ -33,13 +33,12 @@ import java.util.function.Supplier;
  * @param <R> {@link org.apache.kafka.streams.KeyValue KeyValue} return type (both key and value type can be set
  *            arbitrarily)
  * @see Transformer
- * @see KStream#transform(TransformerSupplier, String...)
  * @see ValueTransformer
  * @see ValueTransformerSupplier
- * @see KStream#transformValues(ValueTransformerSupplier, String...)
  * @deprecated Since 4.0. Use {@link org.apache.kafka.streams.processor.api.ProcessorSupplier api.ProcessorSupplier} instead.
  */
 @Deprecated
+@FunctionalInterface
 public interface TransformerSupplier<K, V, R> extends ConnectedStoreProvider, Supplier<Transformer<K, V, R>> {
 
     /**
