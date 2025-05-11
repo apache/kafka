@@ -196,7 +196,10 @@ public class ConsumerConfig extends AbstractConfig {
             "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
             "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
             "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel.";
+            "<code>max.message.bytes</code> (topic config). A fetch request consists of many partitions, and there is another setting that controls how much " +
+            "data is returned for each partition in a fetch request - see <code>max.partition.fetch.bytes</code>. Note that there is a current limitation when " +
+            "performing remote reads from tiered storage (KIP-405) - only one partition out of the fetch request is fetched from the remote store (KAFKA-14915). " +
+            "Note also that the consumer performs multiple fetches in parallel.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
     /**
@@ -221,7 +224,9 @@ public class ConsumerConfig extends AbstractConfig {
             "partition of the fetch is larger than this limit, the " +
             "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
             "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
+            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size. " +
+            "Consider increasing <code>max.partition.fetch.bytes</code> especially in the cases of remote storage reads (KIP-405), because currently only " +
+            "one partition per fetch request is served from the remote store (KAFKA-14915).";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
     /** <code>send.buffer.bytes</code> */

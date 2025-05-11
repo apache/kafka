@@ -23,13 +23,15 @@ import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection
 import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, Struct, Type}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.coordinator.transaction.{TransactionState, TxnTransitMetadata}
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
 import java.nio.ByteBuffer
-import scala.collection.{Seq, mutable}
+import java.util.Collections
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class TransactionLogTest {
@@ -49,7 +51,7 @@ class TransactionLogTest {
     val producerId = 23423L
 
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], 0, 0, TV_0)
+      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, TransactionState.EMPTY, collection.mutable.Set.empty[TopicPartition], 0, 0, TV_0)
     txnMetadata.addPartitions(topicPartitions)
 
     assertThrows(classOf[IllegalStateException], () => TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2))
@@ -64,19 +66,19 @@ class TransactionLogTest {
       "four" -> 4L,
       "five" -> 5L)
 
-    val transactionStates = Map[Long, TransactionState](0L -> Empty,
-      1L -> Ongoing,
-      2L -> PrepareCommit,
-      3L -> CompleteCommit,
-      4L -> PrepareAbort,
-      5L -> CompleteAbort)
+    val transactionStates = Map[Long, TransactionState](0L -> TransactionState.EMPTY,
+      1L -> TransactionState.ONGOING,
+      2L -> TransactionState.PREPARE_COMMIT,
+      3L -> TransactionState.COMPLETE_COMMIT,
+      4L -> TransactionState.PREPARE_ABORT,
+      5L -> TransactionState.COMPLETE_ABORT)
 
     // generate transaction log messages
     val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
       val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
         RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, transactionStates(producerId), collection.mutable.Set.empty[TopicPartition], 0, 0, TV_0)
 
-      if (!txnMetadata.state.equals(Empty))
+      if (!txnMetadata.state.equals(TransactionState.EMPTY))
         txnMetadata.addPartitions(topicPartitions)
 
       val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -99,7 +101,7 @@ class TransactionLogTest {
           assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
           assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
 
-          if (txnMetadata.state.equals(Empty))
+          if (txnMetadata.state.equals(TransactionState.EMPTY))
             assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
           else
             assertEquals(topicPartitions, txnMetadata.topicPartitions)
@@ -113,14 +115,14 @@ class TransactionLogTest {
 
   @Test
   def testSerializeTransactionLogValueToHighestNonFlexibleVersion(): Unit = {
-    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, mutable.Set.empty, 500, 500, TV_0)
+    val txnTransitMetadata = new TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, Collections.emptySet(), 500, 500, TV_0)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_0))
     assertEquals(0, txnLogValueBuffer.getShort)
   }
 
   @Test
   def testSerializeTransactionLogValueToFlexibleVersion(): Unit = {
-    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, mutable.Set.empty, 500, 500, TV_2)
+    val txnTransitMetadata = new TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, Collections.emptySet(), 500, 500, TV_2)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_2))
     assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_VERSION, txnLogValueBuffer.getShort)
   }
@@ -134,7 +136,7 @@ class TransactionLogTest {
     val txnLogValue = new TransactionLogValue()
       .setProducerId(100)
       .setProducerEpoch(50.toShort)
-      .setTransactionStatus(CompleteCommit.id)
+      .setTransactionStatus(TransactionState.COMPLETE_COMMIT.id)
       .setTransactionStartTimestampMs(750L)
       .setTransactionLastUpdateTimestampMs(1000L)
       .setTransactionTimeoutMs(500)
@@ -145,7 +147,7 @@ class TransactionLogTest {
 
     assertEquals(100, deserialized.producerId)
     assertEquals(50, deserialized.producerEpoch)
-    assertEquals(CompleteCommit, deserialized.state)
+    assertEquals(TransactionState.COMPLETE_COMMIT, deserialized.state)
     assertEquals(750L, deserialized.txnStartTimestamp)
     assertEquals(1000L, deserialized.txnLastUpdateTimestamp)
     assertEquals(500, deserialized.txnTimeoutMs)
@@ -198,7 +200,7 @@ class TransactionLogTest {
     transactionLogValue.set("producer_id", 1000L)
     transactionLogValue.set("producer_epoch", 100.toShort)
     transactionLogValue.set("transaction_timeout_ms", 1000)
-    transactionLogValue.set("transaction_status", CompleteCommit.id)
+    transactionLogValue.set("transaction_status", TransactionState.COMPLETE_COMMIT.id)
     transactionLogValue.set("transaction_partitions", Array(txnPartitions))
     transactionLogValue.set("transaction_last_update_timestamp_ms", 2000L)
     transactionLogValue.set("transaction_start_timestamp_ms", 3000L)
@@ -227,7 +229,7 @@ class TransactionLogTest {
     assertEquals(1000L, txnMetadata.producerId)
     assertEquals(100, txnMetadata.producerEpoch)
     assertEquals(1000L, txnMetadata.txnTimeoutMs)
-    assertEquals(CompleteCommit, txnMetadata.state)
+    assertEquals(TransactionState.COMPLETE_COMMIT, txnMetadata.state)
     assertEquals(Set(new TopicPartition("topic", 1)), txnMetadata.topicPartitions)
     assertEquals(2000L, txnMetadata.txnLastUpdateTimestamp)
     assertEquals(3000L, txnMetadata.txnStartTimestamp)
