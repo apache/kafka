@@ -277,7 +277,7 @@ object DumpLogSegments {
         println(s"Snapshot end offset: ${path.snapshotId.offset}, epoch: ${path.snapshotId.epoch}")
       }
     }
-    val fileRecords = FileRecords.open(file, false).slice(0, maxBytes)
+    val fileRecords = FileRecords.open(file, false).slice(0, maxBytes).asInstanceOf[FileRecords]
     try {
       var validBytes = 0L
       var lastOffset = -1L
