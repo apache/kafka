@@ -26,7 +26,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -253,7 +252,7 @@ public class MetadataLoaderTest {
                             100,
                             4000,
                             10,
-                            List.of(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                            List.of(ControlRecord.of(new SnapshotHeaderRecord()))
                         ),
                         Batch.data(0, 0, 0, 0,
                             List.of(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -386,7 +385,7 @@ public class MetadataLoaderTest {
                     100,
                     4000,
                     10,
-                    List.of(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                    List.of(ControlRecord.of(new SnapshotHeaderRecord()))
                 )
             )
         );
@@ -485,7 +484,7 @@ public class MetadataLoaderTest {
                         100,
                         4000,
                         10,
-                        List.of(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                        List.of(ControlRecord.of(new SnapshotHeaderRecord()))
                     )
                 )
             ).setTime(time);
