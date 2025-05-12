@@ -58,18 +58,25 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic> results = new ArrayList<>();
-        data.topics().forEach(
-            topicResult -> results.add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                .setTopicName(topicResult.topicName())
-                .setPartitions(topicResult.partitions().stream()
-                    .map(partitionData -> new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partitionData.partitionIndex())
-                        .setErrorCode(Errors.forException(e).code())
-                        .setErrorMessage(Errors.forException(e).message()))
-                    .collect(Collectors.toList()))));
-        return new AlterShareGroupOffsetsResponse(new AlterShareGroupOffsetsResponseData()
-            .setResponses(results));
+        Errors errors = Errors.forException(e);
+        return new AlterShareGroupOffsetsResponse(getErrorResponse(throttleTimeMs, errors));
+    }
+
+    public static AlterShareGroupOffsetsResponseData getErrorResponse(int throttleTimeMs, Errors error) {
+        return new AlterShareGroupOffsetsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message());
+    }
+
+    public static AlterShareGroupOffsetsResponseData getErrorResponse(Errors errors) {
+        return getErrorResponse(errors.code(), errors.message());
+    }
+
+    public static AlterShareGroupOffsetsResponseData getErrorResponse(short errorCode, String errorMessage) {
+        return new AlterShareGroupOffsetsResponseData()
+                .setErrorCode(errorCode)
+                .setErrorMessage(errorMessage);
     }
 
     public static AlterShareGroupOffsetsRequest parse(Readable readable, short version) {
@@ -77,25 +84,6 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
             new AlterShareGroupOffsetsRequestData(readable, version),
             version
         );
-    }
-
-    public static AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic getErrorAlterShareGroup(
-        Errors error
-    ) {
-        return new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-            .setPartitions(List.of(
-                new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                    .setPartitionIndex(-1)
-                    .setErrorCode(error.code())
-                    .setErrorMessage(error.message())
-            ));
-    }
-
-    public static AlterShareGroupOffsetsResponseData from(
-        Errors error
-    ) {
-        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic responseTopic = getErrorAlterShareGroup(error);
-        return new AlterShareGroupOffsetsResponseData().setResponses(List.of(responseTopic));
     }
 
     @Override

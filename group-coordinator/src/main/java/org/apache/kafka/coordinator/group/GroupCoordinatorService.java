@@ -684,17 +684,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
                 log.error("Unable to initialize share group state for {}, {} while altering share group offsets", gtp.groupId(), gtp.topicsData(), exp);
                 Errors error = Errors.forException(exp);
-                gtp.topicsData().forEach(topicData -> {
-                    data.responses().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                        .setTopicName(topicData.topicId().toString())
-                        .setPartitions(new ArrayList<>(topicData.partitions().size())));
-                    topicData.partitions().forEach(partition -> data.responses().get(data.responses().size() - 1)
-                        .partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partition.partition())
-                            .setErrorCode(error.code())
-                            .setErrorMessage(error.message())));
-                });
-                // don't uninitialize share group state here, as we regard this alter share group offsets request failed.
+                data.setErrorCode(error.code())
+                    .setErrorMessage(error.message())
+                    .setResponses(response.responses());
+                // don't uninitialized share group state here, as we regard this alter share group offsets request failed.
                 return data;
             });
     }
@@ -1191,13 +1184,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     @Override
     public CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(AuthorizableRequestContext context, String groupId, AlterShareGroupOffsetsRequestData request) {
         if (!isActive.get() || metadataImage == null) {
-            return CompletableFuture.completedFuture(
-                AlterShareGroupOffsetsRequest.from(Errors.COORDINATOR_NOT_AVAILABLE));
+            return CompletableFuture.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
         
         if (groupId == null) {
-            return CompletableFuture.completedFuture(
-                AlterShareGroupOffsetsRequest.from(Errors.GROUP_ID_NOT_FOUND));
+            return CompletableFuture.failedFuture(Errors.GROUP_ID_NOT_FOUND.exception());
         }
 
         return runtime.scheduleWriteOperation(
@@ -1211,7 +1202,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "share-group-offsets-alter",
             request,
             exception,
-            (error, message) -> AlterShareGroupOffsetsRequest.from(error),
+            (error, message) -> AlterShareGroupOffsetsRequest.getErrorResponse(error),
             log
         ));
     }
