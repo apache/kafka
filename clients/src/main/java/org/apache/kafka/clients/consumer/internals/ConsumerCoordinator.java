@@ -1305,23 +1305,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         final Generation generation;
         final String groupInstanceId;
         if (subscriptions.hasAutoAssignedPartitions()) {
-            generation = generationIfStable();
-            groupInstanceId = rebalanceConfig.groupInstanceId.orElse(null);
-            // if the generation is null, we are not part of an active group (and we expect to be).
-            // the only thing we can do is fail the commit and let the user rejoin the group in poll().
-            if (generation == null) {
-                log.info("Failing OffsetCommit request since the consumer is not part of an active group");
+            synchronized (ConsumerCoordinator.this) {
+                generation = generationIfStable();
+                groupInstanceId = rebalanceConfig.groupInstanceId.orElse(null);
+                // if the generation is null, we are not part of an active group (and we expect to be).
+                // the only thing we can do is fail the commit and let the user rejoin the group in poll().
+                if (generation == null) {
+                    log.info("Failing OffsetCommit request since the consumer is not part of an active group");
 
-                if (rebalanceInProgress()) {
-                    // if the client knows it is already rebalancing, we can use RebalanceInProgressException instead of
-                    // CommitFailedException to indicate this is not a fatal error
-                    return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
-                        "consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance " +
-                        "by calling poll() and then retry the operation."));
-                } else {
-                    return RequestFuture.failure(new CommitFailedException("Offset commit cannot be completed since the " +
-                        "consumer is not part of an active group for auto partition assignment; it is likely that the consumer " +
-                        "was kicked out of the group."));
+                    if (rebalanceInProgress()) {
+                        // if the client knows it is already rebalancing, we can use RebalanceInProgressException instead of
+                        // CommitFailedException to indicate this is not a fatal error
+                        return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                            "consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance " +
+                            "by calling poll() and then retry the operation."));
+                    } else {
+                        return RequestFuture.failure(new CommitFailedException("Offset commit cannot be completed since the " +
+                            "consumer is not part of an active group for auto partition assignment; it is likely that the consumer " +
+                            "was kicked out of the group."));
+                    }
                 }
             }
         } else {
