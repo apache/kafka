@@ -98,7 +98,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         this.end = end;
         this.isSlice = true;
 
-        // don't check the file size if this is just a slice view
+        // don't check the file size since this is just a slice view
         this.size = new AtomicInteger(end - start);
 
         batches = batchesFrom(start);
