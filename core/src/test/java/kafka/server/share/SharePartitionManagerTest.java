@@ -2805,6 +2805,23 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testIsShareGroupEnabled() {
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withIsShareGroupsSupported(false)
+            .build();
+        // Toggle of isShareGroupEnabled from false to true.
+        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_1);
+        assertTrue(sharePartitionManager.isShareGroupsSupported());
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withIsShareGroupsSupported(true)
+            .build();
+        // Toggle of isShareGroupEnabled from true to false.
+        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
+        assertFalse(sharePartitionManager.isShareGroupsSupported());
+    }
+
+    @Test
     public void testOnShareVersionToggle() {
         String groupId = "grp";
         SharePartition sp0 = mock(SharePartition.class);
@@ -3054,6 +3071,7 @@ public class SharePartitionManagerTest {
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;
+        private boolean isShareGroupsSupported = true;
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -3090,6 +3108,11 @@ public class SharePartitionManagerTest {
             return this;
         }
 
+        private SharePartitionManagerBuilder withIsShareGroupsSupported(boolean isShareGroupsSupported) {
+            this.isShareGroupsSupported = isShareGroupsSupported;
+            return this;
+        }
+
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
@@ -3106,7 +3129,8 @@ public class SharePartitionManagerTest {
                 persister,
                 mock(GroupConfigManager.class),
                 shareGroupMetrics,
-                brokerTopicStats
+                brokerTopicStats,
+                isShareGroupsSupported
             );
         }
     }

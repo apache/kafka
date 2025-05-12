@@ -73,6 +73,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -145,6 +146,11 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final BrokerTopicStats brokerTopicStats;
 
+    /**
+     * Flag indicating if share groups have been turned on.
+     */
+    private final AtomicBoolean isShareGroupsSupported;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -154,7 +160,8 @@ public class SharePartitionManager implements AutoCloseable {
         int maxInFlightMessages,
         Persister persister,
         GroupConfigManager groupConfigManager,
-        BrokerTopicStats brokerTopicStats
+        BrokerTopicStats brokerTopicStats,
+        boolean isShareGroupsSupported
     ) {
         this(replicaManager,
             time,
@@ -166,7 +173,8 @@ public class SharePartitionManager implements AutoCloseable {
             persister,
             groupConfigManager,
             new ShareGroupMetrics(time),
-            brokerTopicStats
+            brokerTopicStats,
+            isShareGroupsSupported
         );
     }
 
@@ -181,7 +189,8 @@ public class SharePartitionManager implements AutoCloseable {
         Persister persister,
         GroupConfigManager groupConfigManager,
         ShareGroupMetrics shareGroupMetrics,
-        BrokerTopicStats brokerTopicStats
+        BrokerTopicStats brokerTopicStats,
+        boolean isShareGroupsSupported
     ) {
         this(replicaManager,
             time,
@@ -195,7 +204,8 @@ public class SharePartitionManager implements AutoCloseable {
             persister,
             groupConfigManager,
             shareGroupMetrics,
-            brokerTopicStats
+            brokerTopicStats,
+            isShareGroupsSupported
         );
     }
 
@@ -212,7 +222,8 @@ public class SharePartitionManager implements AutoCloseable {
             Persister persister,
             GroupConfigManager groupConfigManager,
             ShareGroupMetrics shareGroupMetrics,
-            BrokerTopicStats brokerTopicStats
+            BrokerTopicStats brokerTopicStats,
+            boolean isShareGroupsSupported
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -226,6 +237,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.groupConfigManager = groupConfigManager;
         this.shareGroupMetrics = shareGroupMetrics;
         this.brokerTopicStats = brokerTopicStats;
+        this.isShareGroupsSupported = new AtomicBoolean(isShareGroupsSupported);
     }
 
     /**
@@ -456,9 +468,12 @@ public class SharePartitionManager implements AutoCloseable {
                         ImplicitLinkedHashCollection<>(shareFetchData.size());
                 shareFetchData.forEach(topicIdPartition ->
                     cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
-                ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, reqMetadata.memberId(),
-                    cachedSharePartitions, clientConnectionId);
-                if (responseShareSessionKey == null) {
+                ShareSessionKey responseShareSessionKey = null;
+                if (isShareGroupsSupported.get()) {
+                    responseShareSessionKey = cache.maybeCreateSession(groupId, reqMetadata.memberId(),
+                        cachedSharePartitions, clientConnectionId);
+                }
+                if (responseShareSessionKey == null && isShareGroupsSupported.get()) {
                     log.error("Could not create a share session for group {} member {}", groupId, reqMetadata.memberId());
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
                 }
@@ -484,7 +499,9 @@ public class SharePartitionManager implements AutoCloseable {
                 }
                 Map<ShareSession.ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
                     shareFetchData, toForget);
-                cache.updateNumPartitions(shareSession);
+                if (isShareGroupsSupported.get()) {
+                    cache.updateNumPartitions(shareSession);
+                }
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
                 log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
                                 "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
@@ -525,7 +542,9 @@ public class SharePartitionManager implements AutoCloseable {
                             shareSession.epoch, reqMetadata.epoch());
                     throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
                 }
-                cache.updateNumPartitions(shareSession);
+                if (isShareGroupsSupported.get()) {
+                    cache.updateNumPartitions(shareSession);
+                }
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
         }
@@ -753,6 +772,7 @@ public class SharePartitionManager implements AutoCloseable {
      */
     public void onShareVersionToggle(ShareVersion shareVersion) {
         if (!shareVersion.supportsShareGroups()) {
+            isShareGroupsSupported.set(false);
             // Remove all share sessions from share session cache.
             synchronized (cache) {
                 cache.removeAllSessions();
@@ -762,12 +782,19 @@ public class SharePartitionManager implements AutoCloseable {
             sharePartitionKeys.forEach(sharePartitionKey ->
                 removeSharePartitionFromCache(sharePartitionKey, partitionCacheMap, replicaManager)
             );
+        } else {
+            isShareGroupsSupported.set(true);
         }
     }
 
     // Visible for testing.
     protected Map<SharePartitionKey, SharePartition> partitionCacheMap() {
         return new ConcurrentHashMap<>(partitionCacheMap);
+    }
+
+    // Visible for testing.
+    boolean isShareGroupsSupported() {
+        return isShareGroupsSupported.get();
     }
 
     /**
