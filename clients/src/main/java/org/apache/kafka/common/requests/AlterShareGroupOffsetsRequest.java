@@ -23,10 +23,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-
 public class AlterShareGroupOffsetsRequest extends AbstractRequest {
 
     private final AlterShareGroupOffsetsRequestData data;
