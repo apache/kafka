@@ -180,9 +180,13 @@ public class CompletableEventReaper {
     }
 
     public List<CompletableEvent<?>> uncompletedEvents() {
-        return tracked.stream()
-                .filter(e -> !e.future().isDone())
-                .collect(Collectors.toList());
+        List<CompletableEvent<?>> events = new ArrayList<>();
+
+        for (CompletableEvent<?> event : tracked) {
+            if (!event.future().isDone())
+                events.add(event);
+        }
+
+        return events;
     }
-    
 }
