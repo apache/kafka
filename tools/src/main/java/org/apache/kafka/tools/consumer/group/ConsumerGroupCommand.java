@@ -177,10 +177,11 @@ public class ConsumerGroupCommand {
 
     @SuppressWarnings("Regexp")
     static Set<GroupType> consumerGroupTypesFromString(String input) {
+        Set<GroupType> validTypes = Set.of(GroupType.CLASSIC, GroupType.CONSUMER);
         Set<GroupType> parsedTypes = Stream.of(input.toLowerCase().split(",")).map(s -> GroupType.parse(s.trim())).collect(Collectors.toSet());
-        if (parsedTypes.contains(GroupType.UNKNOWN)) {
-            List<String> validTypes = Arrays.stream(GroupType.values()).filter(t -> t != GroupType.UNKNOWN).map(Object::toString).collect(Collectors.toList());
-            throw new IllegalArgumentException("Invalid types list '" + input + "'. Valid types are: " + String.join(", ", validTypes));
+        if (!validTypes.containsAll(parsedTypes)) {
+            throw new IllegalArgumentException("Invalid types list '" + input + "'. Valid types are: " +
+                String.join(", ", validTypes.stream().map(GroupType::toString).collect(Collectors.toSet())));
         }
         return parsedTypes;
     }
@@ -779,30 +780,29 @@ public class ConsumerGroupCommand {
 
             switch (topLevelResult) {
                 case NONE:
-                    System.out.println("Request succeed for deleting offsets with topic " + String.join(", ", topics) + " group " + groupId);
+                    System.out.println("Request succeeded for deleting offsets from group " + groupId + ".");
                     break;
                 case INVALID_GROUP_ID:
-                    printError("'" + groupId + "' is not valid.", Optional.empty());
-                    break;
                 case GROUP_ID_NOT_FOUND:
-                    printError("'" + groupId + "' does not exist.", Optional.empty());
-                    break;
                 case GROUP_AUTHORIZATION_FAILED:
-                    printError("Access to '" + groupId + "' is not authorized.", Optional.empty());
-                    break;
                 case NON_EMPTY_GROUP:
-                    printError("Deleting offsets of a consumer group '" + groupId + "' is forbidden if the group is not empty.", Optional.empty());
+                    printError(topLevelResult.message(), Optional.empty());
                     break;
                 case GROUP_SUBSCRIBED_TO_TOPIC:
                 case TOPIC_AUTHORIZATION_FAILED:
                 case UNKNOWN_TOPIC_OR_PARTITION:
-                    printError("Encounter some partition level error, see the follow-up details:", Optional.empty());
+                    printError("Encountered some partition-level error, see the follow-up details.", Optional.empty());
                     break;
                 default:
-                    printError("Encounter some unknown error: " + topLevelResult, Optional.empty());
+                    printError("Encountered some unknown error: " + topLevelResult, Optional.empty());
             }
 
-            String format = "%n%-30s %-15s %-15s";
+            int maxTopicLen = 15;
+            for (TopicPartition tp : partitionLevelResult.keySet()) {
+                maxTopicLen = Math.max(maxTopicLen, tp.topic().length());
+            }
+
+            String format = "%n%" + (-maxTopicLen) + "s %-10s %-15s";
 
             System.out.printf(format, "TOPIC", "PARTITION", "STATUS");
             partitionLevelResult.entrySet().stream()
@@ -812,7 +812,7 @@ public class ConsumerGroupCommand {
                     Throwable error = e.getValue();
                     System.out.printf(format,
                         tp.topic(),
-                        tp.partition() >= 0 ? tp.partition() : "Not Provided",
+                        tp.partition() >= 0 ? tp.partition() : MISSING_COLUMN_VALUE,
                         error != null ? "Error: " + error.getMessage() : "Successful"
                     );
                 });

@@ -21,10 +21,8 @@ import kafka.security.JaasTestUtils
 import java.util
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import scala.concurrent.ExecutionException
 import scala.jdk.javaapi.OptionConverters
@@ -48,9 +46,8 @@ class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
     config
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDelegationTokenRequests(quorum: String): Unit = {
+  @Test
+  def testDelegationTokenRequests(): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
     val createResult = adminClient.createDelegationToken()
