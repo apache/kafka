@@ -50,11 +50,14 @@ public class OffsetFetchRequest extends AbstractRequest {
     private final OffsetFetchRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
-
         private final OffsetFetchRequestData data;
         private final boolean throwOnFetchStableOffsetsUnsupported;
 
-        public static Builder forTopicIdsOrNames(OffsetFetchRequestData data, boolean throwOnFetchStableOffsetsUnsupported, boolean enableUnstableLastVersion) {
+        public static Builder forTopicIdsOrNames(
+            OffsetFetchRequestData data,
+            boolean throwOnFetchStableOffsetsUnsupported,
+            boolean enableUnstableLastVersion
+        ) {
             return new Builder(
                 data,
                 throwOnFetchStableOffsetsUnsupported,
@@ -63,7 +66,10 @@ public class OffsetFetchRequest extends AbstractRequest {
             );
         }
 
-        public static Builder forTopicNames(OffsetFetchRequestData data, boolean throwOnFetchStableOffsetsUnsupported) {
+        public static Builder forTopicNames(
+            OffsetFetchRequestData data,
+            boolean throwOnFetchStableOffsetsUnsupported
+        ) {
             return new Builder(
                 data,
                 throwOnFetchStableOffsetsUnsupported,
@@ -83,13 +89,14 @@ public class OffsetFetchRequest extends AbstractRequest {
             this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
 
-        @Override
-        @SuppressWarnings("checkstyle:cyclomaticComplexity")
-        public OffsetFetchRequest build(short version) {
+        private void throwIfBatchingIsUnsupported(short version) {
             if (data.groups().size() > 1 && version < BATCH_MIN_VERSION) {
                 throw new NoBatchedOffsetFetchRequestException("Broker does not support"
                     + " batching groups for fetch offset request on version " + version);
             }
+        }
+
+        private void throwIfStableOffsetsUnsupported(short version) {
             if (data.requireStable() && version < REQUIRE_STABLE_OFFSET_MIN_VERSION) {
                 if (throwOnFetchStableOffsetsUnsupported) {
                     throw new UnsupportedVersionException("Broker unexpectedly " +
@@ -101,6 +108,9 @@ public class OffsetFetchRequest extends AbstractRequest {
                     data.setRequireStable(false);
                 }
             }
+        }
+
+        private void throwIfMissingRequiredTopicIdentifiers(short version) {
             if (version < TOPIC_ID_MIN_VERSION) {
                 data.groups().forEach(group -> {
                     if (group.topics() != null) {
@@ -124,37 +134,51 @@ public class OffsetFetchRequest extends AbstractRequest {
                     }
                 });
             }
-            // convert data to use the appropriate version since version 8 uses different format
-            if (version < BATCH_MIN_VERSION) {
-                OffsetFetchRequestData normalizedData;
-                if (!data.groups().isEmpty()) {
-                    OffsetFetchRequestGroup group = data.groups().get(0);
-                    String groupName = group.groupId();
-                    List<OffsetFetchRequestTopics> topics = group.topics();
-                    List<OffsetFetchRequestTopic> oldFormatTopics = null;
-                    if (topics != null) {
-                        oldFormatTopics = topics
-                            .stream()
-                            .map(t ->
-                                new OffsetFetchRequestTopic()
-                                    .setName(t.name())
-                                    .setPartitionIndexes(t.partitionIndexes()))
-                            .collect(Collectors.toList());
+        }
+
+        private void throwIfRequestingAllTopicsIsUnsupported(short version) {
+            if (version < TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION) {
+                data.groups().forEach(group -> {
+                    if (group.topics() == null) {
+                        throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
+                            "v" + version + ", but we need v2 or newer to request all topic partitions.");
                     }
-                    normalizedData = new OffsetFetchRequestData()
-                        .setGroupId(groupName)
-                        .setTopics(oldFormatTopics)
-                        .setRequireStable(data.requireStable());
-                } else {
-                    normalizedData = data;
-                }
-                if (normalizedData.topics() == null && version < TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION) {
-                    throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
-                        "v" + version + ", but we need v2 or newer to request all topic partitions.");
-                }
-                return new OffsetFetchRequest(normalizedData, version);
+                });
             }
-            return new OffsetFetchRequest(data, version);
+        }
+
+        private OffsetFetchRequestData maybeDowngrade(short version) {
+            // Convert data to use the appropriate version since version 8
+            // uses different format.
+            if (version >= BATCH_MIN_VERSION || data.groups().isEmpty()) return data;
+
+            OffsetFetchRequestGroup group = data.groups().get(0);
+            String groupName = group.groupId();
+            List<OffsetFetchRequestTopics> topics = group.topics();
+            List<OffsetFetchRequestTopic> oldFormatTopics = null;
+
+            if (topics != null) {
+                oldFormatTopics = topics
+                    .stream()
+                    .map(t -> new OffsetFetchRequestTopic()
+                        .setName(t.name())
+                        .setPartitionIndexes(t.partitionIndexes()))
+                    .collect(Collectors.toList());
+            }
+
+            return new OffsetFetchRequestData()
+                .setGroupId(groupName)
+                .setTopics(oldFormatTopics)
+                .setRequireStable(data.requireStable());
+        }
+
+        @Override
+        public OffsetFetchRequest build(short version) {
+            throwIfBatchingIsUnsupported(version);
+            throwIfStableOffsetsUnsupported(version);
+            throwIfMissingRequiredTopicIdentifiers(version);
+            throwIfRequestingAllTopicsIsUnsupported(version);
+            return new OffsetFetchRequest(maybeDowngrade(version), version);
         }
 
         @Override
