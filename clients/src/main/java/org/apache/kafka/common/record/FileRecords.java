@@ -64,7 +64,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
         this.start = 0;
         this.end = end;
         this.isSlice = false;
-        this.size = new AtomicInteger();
 
         if (channel.size() > Integer.MAX_VALUE) {
             throw new KafkaException(
@@ -74,10 +73,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
         }
 
         int limit = Math.min((int) channel.size(), end);
-        size.set(limit - start);
+        this.size = new AtomicInteger(limit - start);
 
-        // if this is not a slice, update the file pointer to the end of the file
-        // set the file position to the last byte in the file
+        // update the file position to the end of the file
         channel.position(limit);
 
         batches = batchesFrom(start);
@@ -99,10 +97,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
         this.start = start;
         this.end = end;
         this.isSlice = true;
-        this.size = new AtomicInteger();
 
         // don't check the file size if this is just a slice view
-        size.set(end - start);
+        this.size = new AtomicInteger(end - start);
 
         batches = batchesFrom(start);
     }

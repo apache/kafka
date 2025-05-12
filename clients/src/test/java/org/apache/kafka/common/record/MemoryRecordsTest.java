@@ -157,7 +157,8 @@ public class MemoryRecordsTest {
                 firstSequence,
                 false,
                 false,
-                partitionLeaderEpoch, buffer.limit()
+                partitionLeaderEpoch,
+                buffer.limit()
             )
         ) {
             for (SimpleRecord record : records) {
