@@ -49,9 +49,6 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -223,19 +220,19 @@ public class KStreamKTableLeftJoinTest {
             assertTrue(appender.getMessages().isEmpty());
         }
 
-        assertThat(
+        assertEquals(
+            0.0,
             driver.metrics().get(
-                    new MetricName(
-                        "dropped-records-total",
-                        "stream-task-metrics",
-                        "",
-                        mkMap(
-                            mkEntry("thread-id", Thread.currentThread().getName()),
-                            mkEntry("task-id", "0_0")
-                        )
-                    ))
-                .metricValue(),
-            is(0.0)
+                new MetricName(
+                    "dropped-records-total",
+                    "stream-task-metrics",
+                    "",
+                    mkMap(
+                        mkEntry("thread-id", Thread.currentThread().getName()),
+                        mkEntry("task-id", "0_0")
+                    )
+                ))
+                .metricValue()
         );
     }
 
@@ -246,26 +243,22 @@ public class KStreamKTableLeftJoinTest {
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
             inputTopic.pipeInput(1, null);
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
-                    + "offset=[0]")
-            );
+            assertTrue(appender.getMessages().contains("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] offset=[0]"));
         }
 
-        assertThat(
+        assertEquals(
+            1.0,
             driver.metrics().get(
-                    new MetricName(
-                        "dropped-records-total",
-                        "stream-task-metrics",
-                        "",
-                        mkMap(
-                            mkEntry("thread-id", Thread.currentThread().getName()),
-                            mkEntry("task-id", "0_0")
-                        )
-                    ))
-                .metricValue(),
-            is(1.0)
+                new MetricName(
+                    "dropped-records-total",
+                    "stream-task-metrics",
+                    "",
+                    mkMap(
+                        mkEntry("thread-id", Thread.currentThread().getName()),
+                        mkEntry("task-id", "0_0")
+                    )
+                ))
+                .metricValue()
         );
     }
 }
