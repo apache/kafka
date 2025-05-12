@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.OptionalInt;
