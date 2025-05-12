@@ -764,7 +764,7 @@ public class RaftUtil {
         // Takes minimum of the following:
         // 1. exponential backoff calculation (maxes out at 102.4 seconds)
         // 2. configurable electionBackoffMaxMs + jitter
-        // The jitter is added to prevent deadlock of elections.
+        // The jitter is added to prevent livelock of elections.
         return Math.min(
             backoffBaseMs * random.nextInt(1, 2 << Math.min(10, retries - 1)),
             backoffMaxMs + random.nextInt(backoffBaseMs)
