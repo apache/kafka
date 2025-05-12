@@ -53,11 +53,6 @@ public class ShareSessionCache {
      */
     private final Meter evictionsMeter;
     /**
-     * The listener for share group events. This is used to notify the listener when the group members
-     * change.
-     */
-    private ShareGroupListener shareGroupListener;
-    /**
      * The listener for connection disconnect events for the client.
      */
     private final ConnectionDisconnectListener connectionDisconnectListener;
@@ -74,6 +69,11 @@ public class ShareSessionCache {
      * from the cache when the respective client disconnects.
      */
     private final Map<String, ShareSessionKey> connectionIdToSessionMap;
+    /**
+     * The listener for share group events. This is used to notify the listener when the group members
+     * change.
+     */
+    private ShareGroupListener shareGroupListener;
 
     private final int maxEntries;
     private long numPartitions = 0;
@@ -131,7 +131,9 @@ public class ShareSessionCache {
             // Notify the share group listener that member has left the group. Notify listener prior
             // removing the session from the cache to ensure that the listener has access to the session
             // while it is still in the cache.
-            shareGroupListener.onMemberLeave(key.groupId(), key.memberId());
+            if (shareGroupListener != null) {
+                shareGroupListener.onMemberLeave(key.groupId(), key.memberId());
+            }
             // As session is not null hence it's removed as part of connection disconnect. Hence,
             // update the evictions metric.
             evictionsMeter.mark();
@@ -141,7 +143,7 @@ public class ShareSessionCache {
         }
         // Notify the share group listener if the group is empty. This should be checked regardless
         // session is evicted by connection disconnect or client's final epoch.
-        if (numMembersPerGroup.get(key.groupId()) == 0) {
+        if (numMembersPerGroup.get(key.groupId()) == 0 && shareGroupListener != null) {
             shareGroupListener.onEmpty(key.groupId());
         }
     }
@@ -207,6 +209,11 @@ public class ShareSessionCache {
     // Visible for testing.
     Meter evictionsMeter() {
         return evictionsMeter;
+    }
+
+    // Visible for testing.
+    int numMembers(String groupId) {
+        return numMembersPerGroup.get(groupId);
     }
 
     private final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {

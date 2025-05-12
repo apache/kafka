@@ -84,7 +84,7 @@ public class SharePartitionManager implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(SharePartitionManager.class);
 
     /**
-     * The partition cache map is used to store the SharePartition objects for each share group topic-partition.
+     * The partition cache is used to store the SharePartition objects for each share group topic-partition.
      */
     private final SharePartitionCache partitionCache;
 
@@ -342,7 +342,7 @@ public class SharePartitionManager implements AutoCloseable {
         String groupId,
         String memberId
     ) {
-        log.info("Release session request for groupId: {}, memberId: {}", groupId, memberId);
+        log.trace("Release session request for groupId: {}, memberId: {}", groupId, memberId);
         Uuid memberIdUuid = Uuid.fromString(memberId);
         List<TopicIdPartition> topicIdPartitions = cachedTopicIdPartitionsInShareSession(
             groupId, memberIdUuid);
@@ -659,8 +659,7 @@ public class SharePartitionManager implements AutoCloseable {
                     // However, as there could be multiple share partitions (per group name) for a single topic-partition,
                     // hence create separate listeners per share partition which holds the share partition key
                     // to identify the respective share partition.
-                    SharePartitionListener listener = new SharePartitionListener(sharePartitionKey, replicaManager,
-                        partitionCache);
+                    SharePartitionListener listener = new SharePartitionListener(sharePartitionKey, replicaManager, partitionCache);
                     replicaManager.maybeAddListener(sharePartitionKey.topicIdPartition().topicPartition(), listener);
                     return new SharePartition(
                             sharePartitionKey.groupId(),
@@ -719,12 +718,6 @@ public class SharePartitionManager implements AutoCloseable {
 
     private SharePartitionKey sharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {
         return new SharePartitionKey(groupId, topicIdPartition);
-    }
-
-    private void removeSharePartition(
-        SharePartitionKey sharePartitionKey
-    ) {
-        removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager);
     }
 
     private static void removeSharePartitionFromCache(

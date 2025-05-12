@@ -27,61 +27,72 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
- * The SharePartitionCache is used to cache the SharePartition objects for each share group topic-partition.
- * The cache is used to avoid creating new SharePartition instances. The cache is thread-safe.
+ * The SharePartitionCache is used to cache the SharePartition objects. The cache is thread-safe.
  */
 public class SharePartitionCache {
 
     /**
      * The map to store the share group id and the set of topic-partitions for that group.
      */
-    private final Map<String, Set<TopicIdPartition>> groupMap;
+    private final Map<String, Set<TopicIdPartition>> groups;
+
     /**
-     * The partition cache map is used to store the SharePartition objects for each share group topic-partition.
+     * The map is used to store the SharePartition objects for each share group topic-partition.
      */
-    private final Map<SharePartitionKey, SharePartition> partitionMap;
+    private final Map<SharePartitionKey, SharePartition> partitions;
 
     SharePartitionCache() {
-        this.groupMap = new HashMap<>();
-        this.partitionMap = new ConcurrentHashMap<>();
+        this.groups = new HashMap<>();
+        this.partitions = new ConcurrentHashMap<>();
     }
 
     public SharePartition get(SharePartitionKey partitionKey) {
-        return partitionMap.get(partitionKey);
-    }
-
-    public SharePartition put(SharePartitionKey partitionKey, SharePartition sharePartition) {
-        return partitionMap.put(partitionKey, sharePartition);
-    }
-
-    public int size() {
-        return partitionMap.size();
-    }
-
-    public boolean containsKey(SharePartitionKey partitionKey) {
-        return partitionMap.containsKey(partitionKey);
-    }
-
-    public boolean isEmpty() {
-        return partitionMap.isEmpty();
+        return partitions.get(partitionKey);
     }
 
     public synchronized SharePartition remove(SharePartitionKey partitionKey) {
-        groupMap.computeIfPresent(partitionKey.groupId(), (k, v) -> {
+        groups.computeIfPresent(partitionKey.groupId(), (k, v) -> {
             v.remove(partitionKey.topicIdPartition());
             return v;
         });
-        return partitionMap.remove(partitionKey);
+        return partitions.remove(partitionKey);
     }
 
     public synchronized SharePartition computeIfAbsent(SharePartitionKey partitionKey, Function<SharePartitionKey, SharePartition> mappingFunction) {
-        groupMap.putIfAbsent(partitionKey.groupId(), new HashSet<>());
-        groupMap.get(partitionKey.groupId()).add(partitionKey.topicIdPartition());
-        return partitionMap.computeIfAbsent(partitionKey, mappingFunction);
+        groups.putIfAbsent(partitionKey.groupId(), new HashSet<>());
+        groups.get(partitionKey.groupId()).add(partitionKey.topicIdPartition());
+        return partitions.computeIfAbsent(partitionKey, mappingFunction);
     }
 
     public synchronized void removeGroup(String groupId) {
-        Set<TopicIdPartition> topicIdPartitions = groupMap.remove(groupId);
-        topicIdPartitions.forEach(topicIdPartition -> partitionMap.remove(new SharePartitionKey(groupId, topicIdPartition)));
+        Set<TopicIdPartition> topicIdPartitions = groups.remove(groupId);
+        if (topicIdPartitions != null) {
+            topicIdPartitions.forEach(topicIdPartition -> partitions.remove(new SharePartitionKey(groupId, topicIdPartition)));
+        }
+    }
+
+    // Visible for testing. Should not be used outside the test classes.
+    void put(SharePartitionKey partitionKey, SharePartition sharePartition) {
+        partitions.put(partitionKey, sharePartition);
+    }
+
+    // Visible for testing.
+    int size() {
+        return partitions.size();
+    }
+
+    // Visible for testing.
+    boolean containsKey(SharePartitionKey partitionKey) {
+        return partitions.containsKey(partitionKey);
+    }
+
+    // Visible for testing.
+    boolean isEmpty() {
+        return partitions.isEmpty();
+    }
+
+    // Visible for testing.
+    Map<String, Set<TopicIdPartition>> groups() {
+        return Map.copyOf(groups);
     }
 }
