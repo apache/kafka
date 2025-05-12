@@ -517,7 +517,8 @@ public class GroupCoordinatorRecordHelpers {
                     .setMetadata(offsetAndMetadata.metadata)
                     .setCommitTimestamp(offsetAndMetadata.commitTimestampMs)
                     // Version 1 has a non-empty expireTimestamp field
-                    .setExpireTimestamp(offsetAndMetadata.expireTimestampMs.orElse(OffsetCommitRequest.DEFAULT_TIMESTAMP)),
+                    .setExpireTimestamp(offsetAndMetadata.expireTimestampMs.orElse(OffsetCommitRequest.DEFAULT_TIMESTAMP))
+                    .setTopicId(offsetAndMetadata.topicId),
                 version
             )
         );
