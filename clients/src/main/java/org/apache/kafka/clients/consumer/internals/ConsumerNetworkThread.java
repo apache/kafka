@@ -40,7 +40,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -169,22 +168,20 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
         lastPollTimeMs = currentTimeMs;
 
-        for (Optional<? extends RequestManager> rm : requestManagers.entries()) {
-            if (rm.isEmpty())
-                continue;
+        final long pollWaitTimeMs = requestManagers.entries().stream()
+                .map(rm -> rm.poll(currentTimeMs))
+                .mapToLong(networkClientDelegate::addAll)
+                .filter(ms -> ms <= MAX_POLL_TIMEOUT_MS)
+                .min()
+                .orElse(MAX_POLL_TIMEOUT_MS);
 
-            NetworkClientDelegate.PollResult pollResult = rm.get().poll(currentTimeMs);
-            networkClientDelegate.addAll(pollResult);
-        }
-
-        networkClientDelegate.poll(MAX_POLL_TIMEOUT_MS, currentTimeMs);
+        networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
         canWakeup.set(true);
 
         cachedMaximumTimeToWait = requestManagers.entries().stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
-                .reduce(Long.MAX_VALUE, Math::min);
+                .mapToLong(rm -> rm.maximumTimeToWait(currentTimeMs))
+                .min()
+                .orElse(Long.MAX_VALUE);
 
         reapExpiredApplicationEvents(currentTimeMs);
         List<CompletableEvent<?>> uncompletedEvents = applicationEventReaper.uncompletedEvents();
@@ -257,13 +254,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     // Visible for testing
-    static void runAtClose(final Collection<Optional<? extends RequestManager>> requestManagers,
+    static void runAtClose(final Collection<RequestManager> requestManagers,
                            final NetworkClientDelegate networkClientDelegate,
                            final long currentTimeMs) {
         // These are the optional outgoing requests at the
         requestManagers.stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
                 .map(rm -> rm.pollOnClose(currentTimeMs))
                 .forEach(networkClientDelegate::addAll);
     }

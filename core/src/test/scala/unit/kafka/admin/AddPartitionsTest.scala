@@ -25,9 +25,7 @@ import org.apache.kafka.clients.admin.{Admin, NewPartitions, NewTopic}
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import java.util
 import java.util.Arrays.asList
@@ -65,9 +63,8 @@ class AddPartitionsTest extends BaseRequestTest {
     admin = createAdminClient()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testWrongReplicaCount(quorum: String): Unit = {
+  @Test
+  def testWrongReplicaCount(): Unit = {
     assertEquals(classOf[InvalidReplicaAssignmentException], assertThrows(classOf[ExecutionException], () => {
         admin.createPartitions(Collections.singletonMap(topic1,
           NewPartitions.increaseTo(2, singletonList(asList(0, 1, 2))))).all().get()
@@ -78,9 +75,8 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createTopics, it must be 0-based
    * and consecutive.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testMissingPartitionsInCreateTopics(quorum: String): Unit = {
+  @Test
+  def testMissingPartitionsInCreateTopics(): Unit = {
     val topic6Placements = new util.HashMap[Integer, util.List[Integer]]
     topic6Placements.put(1, asList(0, 1))
     topic6Placements.put(2, asList(1, 0))
@@ -104,9 +100,8 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createPartitions, it must contain
    * enough partitions.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testMissingPartitionsInCreatePartitions(quorum: String): Unit = {
+  @Test
+  def testMissingPartitionsInCreatePartitions(): Unit = {
     val cause = assertThrows(classOf[ExecutionException], () =>
       admin.createPartitions(Collections.singletonMap(topic1,
         NewPartitions.increaseTo(3, singletonList(asList(0, 1, 2))))).all().get()).getCause
@@ -115,9 +110,8 @@ class AddPartitionsTest extends BaseRequestTest {
       "were specified."), "Unexpected error message: " + cause.getMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testIncrementPartitions(quorum: String): Unit = {
+  @Test
+  def testIncrementPartitions(): Unit = {
     admin.createPartitions(Collections.singletonMap(topic1, NewPartitions.increaseTo(3))).all().get()
 
     // wait until leader is elected
@@ -144,9 +138,8 @@ class AddPartitionsTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testManualAssignmentOfReplicas(quorum: String): Unit = {
+  @Test
+  def testManualAssignmentOfReplicas(): Unit = {
     // Add 2 partitions
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3,
       asList(asList(0, 1), asList(2, 3))))).all().get()
@@ -173,9 +166,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(Set(0, 1), replicas.asScala.toSet)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testReplicaPlacementAllServers(quorum: String): Unit = {
+  @Test
+  def testReplicaPlacementAllServers(): Unit = {
     admin.createPartitions(Collections.singletonMap(topic3, NewPartitions.increaseTo(7))).all().get()
 
     // read metadata from a broker and verify the new topic partitions exist
@@ -201,9 +193,8 @@ class AddPartitionsTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testReplicaPlacementPartialServers(quorum: String): Unit = {
+  @Test
+  def testReplicaPlacementPartialServers(): Unit = {
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3))).all().get()
 
     // read metadata from a broker and verify the new topic partitions exist
