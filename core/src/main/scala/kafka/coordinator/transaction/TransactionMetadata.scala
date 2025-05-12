@@ -21,41 +21,14 @@ import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.coordinator.transaction.TransactionState
+import org.apache.kafka.coordinator.transaction.{TransactionState, TxnTransitMetadata}
 import org.apache.kafka.server.common.TransactionVersion
 
 import scala.collection.{immutable, mutable}
+import scala.jdk.CollectionConverters._
 
 private[transaction] object TransactionMetadata {
   def isEpochExhausted(producerEpoch: Short): Boolean = producerEpoch >= Short.MaxValue - 1
-}
-
-// this is a immutable object representing the target transition of the transaction metadata
-private[transaction] case class TxnTransitMetadata(producerId: Long,
-                                                   prevProducerId: Long,
-                                                   nextProducerId: Long,
-                                                   producerEpoch: Short,
-                                                   lastProducerEpoch: Short,
-                                                   txnTimeoutMs: Int,
-                                                   txnState: TransactionState,
-                                                   topicPartitions: mutable.Set[TopicPartition],
-                                                   txnStartTimestamp: Long,
-                                                   txnLastUpdateTimestamp: Long,
-                                                   clientTransactionVersion: TransactionVersion) {
-  override def toString: String = {
-    "TxnTransitMetadata(" +
-      s"producerId=$producerId, " +
-      s"previousProducerId=$prevProducerId, " +
-      s"nextProducerId=$nextProducerId, " +
-      s"producerEpoch=$producerEpoch, " +
-      s"lastProducerEpoch=$lastProducerEpoch, " +
-      s"txnTimeoutMs=$txnTimeoutMs, " +
-      s"txnState=$txnState, " +
-      s"topicPartitions=$topicPartitions, " +
-      s"txnStartTimestamp=$txnStartTimestamp, " +
-      s"txnLastUpdateTimestamp=$txnLastUpdateTimestamp, " +
-      s"clientTransactionVersion=$clientTransactionVersion)"
-  }
 }
 
 /**
@@ -114,7 +87,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   // this is visible for test only
   def prepareNoTransit(): TxnTransitMetadata = {
     // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
-    TxnTransitMetadata(producerId, prevProducerId, nextProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, state, topicPartitions.clone(),
+    new TxnTransitMetadata(producerId, prevProducerId, nextProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, state, topicPartitions.clone().asJava,
       txnStartTimestamp, txnLastUpdateTimestamp, clientTransactionVersion)
   }
 
@@ -317,8 +290,8 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
     // check that the new state transition is valid and update the pending state if necessary
     if (state.validPreviousStates.contains(this.state)) {
-      val transitMetadata = TxnTransitMetadata(producerId, this.producerId, nextProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, state,
-        topicPartitions, txnStartTimestamp, txnLastUpdateTimestamp, clientTransactionVersion)
+      val transitMetadata = new TxnTransitMetadata(producerId, this.producerId, nextProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, state,
+        topicPartitions.asJava, txnStartTimestamp, txnLastUpdateTimestamp, clientTransactionVersion)
       debug(s"TransactionalId ${this.transactionalId} prepare transition from ${this.state} to $transitMetadata")
       pendingState = Some(state)
       transitMetadata
@@ -354,7 +327,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       toState match {
         case TransactionState.EMPTY => // from initPid
           if ((producerEpoch != transitMetadata.producerEpoch && !validProducerEpochBump(transitMetadata)) ||
-            transitMetadata.topicPartitions.nonEmpty ||
+            !transitMetadata.topicPartitions.isEmpty ||
             transitMetadata.txnStartTimestamp != -1) {
 
             throwStateTransitionFailure(transitMetadata)
@@ -362,7 +335,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
         case TransactionState.ONGOING => // from addPartitions
           if (!validProducerEpoch(transitMetadata) ||
-            !topicPartitions.subsetOf(transitMetadata.topicPartitions) ||
+            !topicPartitions.subsetOf(transitMetadata.topicPartitions.asScala) ||
             txnTimeoutMs != transitMetadata.txnTimeoutMs) {
 
             throwStateTransitionFailure(transitMetadata)
@@ -375,7 +348,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             (state == TransactionState.EMPTY || state == TransactionState.COMPLETE_COMMIT || state == TransactionState.COMPLETE_ABORT)
           val validTimestamp = txnStartTimestamp == transitMetadata.txnStartTimestamp || allowedEmptyAbort
           if (!validProducerEpoch(transitMetadata) ||
-            !topicPartitions.equals(transitMetadata.topicPartitions) ||
+            !topicPartitions.equals(transitMetadata.topicPartitions.asScala) ||
             txnTimeoutMs != transitMetadata.txnTimeoutMs || !validTimestamp) {
 
             throwStateTransitionFailure(transitMetadata)
@@ -411,7 +384,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       producerEpoch = transitMetadata.producerEpoch
       lastProducerEpoch = transitMetadata.lastProducerEpoch
       txnTimeoutMs = transitMetadata.txnTimeoutMs
-      topicPartitions = transitMetadata.topicPartitions
+      topicPartitions = transitMetadata.topicPartitions.asScala
       txnStartTimestamp = transitMetadata.txnStartTimestamp
       txnLastUpdateTimestamp = transitMetadata.txnLastUpdateTimestamp
       clientTransactionVersion = transitMetadata.clientTransactionVersion

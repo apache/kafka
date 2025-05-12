@@ -218,7 +218,7 @@ public class CommonClientConfigs {
                                                            + "the value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher "
                                                            + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances."
                                                            + "If <code>group.protocol</code> is set to \"consumer\", this config is not supported, as "
-                                                           + "the heartbeat interval is controlled by the broker with <code>group.consumer.heartbeat.interval.ms<code>.";
+                                                           + "the heartbeat interval is controlled by the broker with <code>group.consumer.heartbeat.interval.ms</code>.";
 
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
