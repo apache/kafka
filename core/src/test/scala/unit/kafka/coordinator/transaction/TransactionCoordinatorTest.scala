@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
-import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionState, TransactionStateManagerConfig}
+import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
 import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.server.util.MockScheduler
@@ -1217,18 +1217,18 @@ class TransactionCoordinatorTest {
     when(transactionManager.appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
-      ArgumentMatchers.eq(TxnTransitMetadata(
-        producerId = producerId,
-        prevProducerId = producerId,
-        nextProducerId = RecordBatch.NO_PRODUCER_ID,
-        producerEpoch = Short.MaxValue,
-        lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-        txnTimeoutMs = txnTimeoutMs,
-        txnState = TransactionState.PREPARE_ABORT,
-        topicPartitions = partitions.clone,
-        txnStartTimestamp = time.milliseconds(),
-        txnLastUpdateTimestamp = time.milliseconds(),
-        clientTransactionVersion = TV_0)),
+      ArgumentMatchers.eq(new TxnTransitMetadata(
+        producerId,
+        producerId,
+        RecordBatch.NO_PRODUCER_ID,
+        Short.MaxValue,
+        RecordBatch.NO_PRODUCER_EPOCH,
+        txnTimeoutMs,
+        TransactionState.PREPARE_ABORT,
+        partitions.clone.asJava,
+        time.milliseconds(),
+        time.milliseconds(),
+        TV_0)),
       capturedErrorsCallback.capture(),
       any(),
       any())
@@ -1250,18 +1250,18 @@ class TransactionCoordinatorTest {
     verify(transactionManager).appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
-      ArgumentMatchers.eq(TxnTransitMetadata(
-        producerId = producerId,
-        prevProducerId = producerId,
-        nextProducerId = RecordBatch.NO_PRODUCER_ID,
-        producerEpoch = Short.MaxValue,
-        lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-        txnTimeoutMs = txnTimeoutMs,
-        txnState = TransactionState.PREPARE_ABORT,
-        topicPartitions = partitions.clone,
-        txnStartTimestamp = time.milliseconds(),
-        txnLastUpdateTimestamp = time.milliseconds(),
-        clientTransactionVersion = TV_0)),
+      ArgumentMatchers.eq(new TxnTransitMetadata(
+        producerId,
+        producerId,
+        RecordBatch.NO_PRODUCER_ID,
+        Short.MaxValue,
+        RecordBatch.NO_PRODUCER_EPOCH,
+        txnTimeoutMs,
+        TransactionState.PREPARE_ABORT,
+        partitions.clone.asJava,
+        time.milliseconds(),
+        time.milliseconds(),
+        TV_0)),
       any(),
       any(),
       any())
@@ -1536,8 +1536,8 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
     // Transaction timeouts use FenceProducerEpoch so clientTransactionVersion is 0.
-    val expectedTransition = TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, (producerEpoch + 1).toShort,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.PREPARE_ABORT, partitions.clone, now,
+    val expectedTransition = new TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, (producerEpoch + 1).toShort,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.PREPARE_ABORT, partitions.clone.asJava, now,
       now + TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT, TV_0)
 
     when(transactionManager.transactionVersionLevel()).thenReturn(TV_0)
@@ -1626,8 +1626,8 @@ class TransactionCoordinatorTest {
 
     // Transaction timeouts use FenceProducerEpoch so clientTransactionVersion is 0.
     val bumpedEpoch = (producerEpoch + 1).toShort
-    val expectedTransition = TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, bumpedEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.PREPARE_ABORT, partitions.clone, now,
+    val expectedTransition = new TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, bumpedEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.PREPARE_ABORT, partitions.clone.asJava, now,
       now + TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT, TV_0)
 
     when(transactionManager.transactionVersionLevel()).thenReturn(TV_0)
@@ -1801,8 +1801,8 @@ class TransactionCoordinatorTest {
     val originalMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH,
       producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, now, now, TV_0)
 
-    val transition = TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, producerEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, transactionState, partitions.clone, now, now, clientTransactionVersion)
+    val transition = new TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, transactionState, partitions.clone.asJava, now, now, clientTransactionVersion)
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, originalMetadata))))

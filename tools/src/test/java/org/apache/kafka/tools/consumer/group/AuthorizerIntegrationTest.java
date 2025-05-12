@@ -21,8 +21,7 @@ import kafka.api.AbstractAuthorizerIntegrationTest;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
@@ -35,9 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
-    @ParameterizedTest
-    @ValueSource(strings = {"kraft"})
-    public void testDescribeGroupCliWithGroupDescribe(String quorum) throws Exception {
+    @Test
+    public void testDescribeGroupCliWithGroupDescribe() throws Exception {
         addAndVerifyAcls(CollectionConverters.asScala(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), "*", DESCRIBE, ALLOW))).toSet(), groupResource());
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group()};

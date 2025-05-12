@@ -9752,7 +9752,12 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testEmptyIncrementalAlterConfigsRequestWithKRaft(): Unit = {
-    val request = buildRequest(new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(), 1.toShort))
+    val alterConfigsRequest = new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(), 1.toShort)
+    assertEquals(
+      "IncrementalAlterConfigsRequestData(resources=[], validateOnly=false)",
+      alterConfigsRequest.toString
+    )
+    val request = buildRequest(alterConfigsRequest)
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
@@ -9764,15 +9769,23 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testLog4jIncrementalAlterConfigsRequestWithKRaft(): Unit = {
-    val request = buildRequest(new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData().
+    val alterConfigsRequest = new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData().
       setValidateOnly(true).
       setResources(new IAlterConfigsResourceCollection(asList(new IAlterConfigsResource().
         setResourceName(brokerId.toString).
         setResourceType(BROKER_LOGGER.id()).
         setConfigs(new IAlterableConfigCollection(asList(new IAlterableConfig().
           setName(LoggingController.ROOT_LOGGER).
-          setValue("TRACE")).iterator()))).iterator())),
-        1.toShort))
+          setValue("TRACE")).iterator()))).iterator())), 1.toShort)
+    assertEquals(
+      "IncrementalAlterConfigsRequestData(resources=[" +
+        "AlterConfigsResource(resourceType=" + BROKER_LOGGER.id() + ", " +
+        "resourceName='"+ brokerId + "', " +
+        "configs=[AlterableConfig(name='" + LoggingController.ROOT_LOGGER + "', configOperation=0, value='REDACTED')])], " +
+        "validateOnly=true)",
+      alterConfigsRequest.toString
+    )
+    val request = buildRequest(alterConfigsRequest)
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
