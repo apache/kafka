@@ -177,10 +177,11 @@ public class ConsumerGroupCommand {
 
     @SuppressWarnings("Regexp")
     static Set<GroupType> consumerGroupTypesFromString(String input) {
+        Set<GroupType> validTypes = Set.of(GroupType.CLASSIC, GroupType.CONSUMER);
         Set<GroupType> parsedTypes = Stream.of(input.toLowerCase().split(",")).map(s -> GroupType.parse(s.trim())).collect(Collectors.toSet());
-        if (parsedTypes.contains(GroupType.UNKNOWN)) {
-            List<String> validTypes = Arrays.stream(GroupType.values()).filter(t -> t != GroupType.UNKNOWN).map(Object::toString).collect(Collectors.toList());
-            throw new IllegalArgumentException("Invalid types list '" + input + "'. Valid types are: " + String.join(", ", validTypes));
+        if (!validTypes.containsAll(parsedTypes)) {
+            throw new IllegalArgumentException("Invalid types list '" + input + "'. Valid types are: " +
+                String.join(", ", validTypes.stream().map(GroupType::toString).collect(Collectors.toSet())));
         }
         return parsedTypes;
     }
