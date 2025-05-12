@@ -101,7 +101,7 @@ public class DefaultJwtRetriever implements JwtRetriever {
 
     @Override
     public void close() throws IOException {
-        Utils.closeQuietly(delegate, "delegate");
+        Utils.closeQuietly(delegate, "JWT retriever delegate");
     }
 
     /**

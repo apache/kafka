@@ -97,7 +97,7 @@ public class DefaultJwtValidator implements JwtValidator {
 
     @Override
     public void close() throws IOException {
-        Utils.closeQuietly(delegate, "delegate");
+        Utils.closeQuietly(delegate, "JWT validator delegate");
     }
 
     JwtValidator delegate() {

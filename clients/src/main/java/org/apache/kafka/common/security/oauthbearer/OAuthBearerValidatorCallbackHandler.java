@@ -160,8 +160,8 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     @Override
     public void close() {
-        Utils.closeQuietly(jwtValidator, "jwtValidator");
-        Utils.closeQuietly(verificationKeyResolver, "verificationKeyResolver");
+        Utils.closeQuietly(jwtValidator, "JWT validator");
+        Utils.closeQuietly(verificationKeyResolver, "JWT verification key resolver");
     }
 
     @Override

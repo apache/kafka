@@ -215,8 +215,8 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void close() {
-        Utils.closeQuietly(jwtRetriever, "jwtRetriever");
-        Utils.closeQuietly(jwtValidator, "jwtValidator");
+        Utils.closeQuietly(jwtRetriever, "JWT retriever");
+        Utils.closeQuietly(jwtValidator, "JWT validator");
     }
 
     @Override
