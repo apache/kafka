@@ -163,7 +163,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.producer = VerifiableProducer(self.test_context, self.num_producers,
                                            self.kafka, self.topic,
                                            throughput=self.producer_throughput,
-                                           # TODO Set this to True once KAFKA-18905 is fixed.
+                                           # Once KAFKA-18905 is fixed, the idempotent producer should be enabled.
                                            enable_idempotence=False,
                                            # This test aims to verify the reassignment without failure, assuming that all partitions have data.
                                            # To avoid the reassignment behavior being affected by the `BuiltInPartitioner` (due to the key not being set),
@@ -175,6 +175,6 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
                                         message_validator=is_int,
                                         consumer_properties=consumer_group.maybe_set_group_protocol(group_protocol))
 
-        # TODO Set this to True once KAFKA-18905 is fixed.
+        # Once KAFKA-18905 is fixed, the idempotent producer should be enabled.
         self.enable_idempotence = False
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))
