@@ -2767,17 +2767,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * @param currentTimeMs the current time
      * @param destination the node receiving the request
      * @param requestSupplier the function that creates the request
+     * @param api the type of request to maybe send
      * @return the first element in the pair indicates if the request was sent; the second element
      *         in the pair indicates the time to wait before retrying.
      */
     private RequestSendResult maybeSendRequest(
         long currentTimeMs,
         Node destination,
-        Supplier<ApiMessage> requestSupplier
+        Supplier<ApiMessage> requestSupplier,
+        ApiKeys api
     )  {
         var requestSent = false;
-        final var request = requestSupplier.get();
-        final var api = ApiKeys.forId(request.apiKey());
 
         if (requestManager.isBackingOff(destination, currentTimeMs, api)) {
             long remainingBackoffMs = requestManager.remainingBackoffMs(destination, currentTimeMs, api);
@@ -2787,6 +2787,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         if (requestManager.isReady(destination, currentTimeMs, api)) {
             int correlationId = channel.newCorrelationId();
+            final var request = requestSupplier.get();
 
             RaftRequest.Outbound requestMessage = new RaftRequest.Outbound(
                 correlationId,
@@ -2837,12 +2838,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private long maybeSendRequests(
         long currentTimeMs,
         Set<Node> destinations,
-        Supplier<ApiMessage> requestSupplier
+        Supplier<ApiMessage> requestSupplier,
+        ApiKeys requestType
     ) {
         long minBackoffMs = Long.MAX_VALUE;
         for (Node destination : destinations) {
-            long backoffMs = maybeSendRequest(currentTimeMs, destination, requestSupplier)
-                .timeToWaitMs();
+            long backoffMs = maybeSendRequest(
+                currentTimeMs,
+                destination,
+                requestSupplier,
+                requestType
+            ).timeToWaitMs();
             if (backoffMs < minBackoffMs) {
                 minBackoffMs = backoffMs;
             }
@@ -2854,14 +2860,16 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs,
         Set<ReplicaKey> remoteVoters,
         Function<Integer, Node> destinationSupplier,
-        Function<ReplicaKey, ApiMessage> requestSupplier
+        Function<ReplicaKey, ApiMessage> requestSupplier,
+        ApiKeys requestType
     ) {
         long minBackoffMs = Long.MAX_VALUE;
         for (ReplicaKey voter: remoteVoters) {
             long backoffMs = maybeSendRequest(
                 currentTimeMs,
                 destinationSupplier.apply(voter.id()),
-                () -> requestSupplier.apply(voter)
+                () -> requestSupplier.apply(voter),
+                requestType
             ).timeToWaitMs();
             minBackoffMs = Math.min(minBackoffMs, backoffMs);
         }
@@ -2917,7 +2925,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             node -> maybeSendRequest(
                 currentTimeMs,
                 node,
-                this::buildFetchRequest
+                this::buildFetchRequest,
+                ApiKeys.FETCH
             ).timeToWaitMs()
         ).orElseGet(() -> requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs));
     }
@@ -3044,7 +3053,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     .filter(key -> key.id() != quorum.localIdOrThrow())
                     .collect(Collectors.toSet()),
                 nodeSupplier,
-                this::buildBeginQuorumEpochRequest
+                this::buildBeginQuorumEpochRequest,
+                ApiKeys.BEGIN_QUORUM_EPOCH
             );
             state.resetBeginQuorumEpochTimer(currentTimeMs);
         }
@@ -3058,7 +3068,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             partitionState
                 .lastVoterSet()
                 .voterNodes(state.unackedVoters().stream(), channel.listenerName()),
-            () -> buildEndQuorumEpochRequest(state)
+            () -> buildEndQuorumEpochRequest(state),
+            ApiKeys.END_QUORUM_EPOCH
         );
 
         GracefulShutdown shutdown = this.shutdown.get();
@@ -3138,7 +3149,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                             )
                         )
                     ),
-                voterId -> buildVoteRequest(voterId, preVote)
+                voterId -> buildVoteRequest(voterId, preVote),
+                ApiKeys.VOTE
             );
         }
         return Long.MAX_VALUE;
@@ -3310,20 +3322,24 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private long maybeSendFetchOrFetchSnapshot(FollowerState state, long currentTimeMs) {
         final Supplier<ApiMessage> requestSupplier;
+        final ApiKeys requestType;
 
         if (state.fetchingSnapshot().isPresent()) {
             RawSnapshotWriter snapshot = state.fetchingSnapshot().get();
             long snapshotSize = snapshot.sizeInBytes();
 
             requestSupplier = () -> buildFetchSnapshotRequest(snapshot.snapshotId(), snapshotSize);
+            requestType = ApiKeys.FETCH_SNAPSHOT;
         } else {
             requestSupplier = this::buildFetchRequest;
+            requestType = ApiKeys.FETCH;
         }
 
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
-            requestSupplier
+            requestSupplier,
+            requestType
         ).timeToWaitMs();
     }
 
@@ -3341,7 +3357,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
-            this::buildUpdateVoterRequest
+            this::buildUpdateVoterRequest,
+            ApiKeys.UPDATE_RAFT_VOTER
         );
     }
 
