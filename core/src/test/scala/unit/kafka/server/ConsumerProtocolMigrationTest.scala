@@ -1211,7 +1211,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
                 .setTopicId(topicId)
                 .setPartitionIndexes(List[Integer](0, 1, 2).asJava)
             ).asJava),
-          requireStable = true,
+          requireStable = false,
           version = version.toShort
         )
       )

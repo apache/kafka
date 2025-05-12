@@ -8347,7 +8347,6 @@ class KafkaApisTest extends Logging {
             ).asJava)
         ).asJava)
 
-
       val group2Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
         .setGroupId("group-2")
         .setTopics(List(
