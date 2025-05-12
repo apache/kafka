@@ -1482,19 +1482,8 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-
-                // If this is a 2PC-enabled transaction with keepPreparedTxn=true, transition directly
-                // to PREPARED_TRANSACTION state IFF there is an ongoing transaction.
-                if (enable2PC && builder.data.keepPreparedTxn()) {
-                    if (initProducerIdResponse.data().ongoingTxnProducerId() != -1) {
-                        transitionTo(State.PREPARED_TRANSACTION);
-                    } else {
-                        throw new InvalidTxnStateException("There is no ongoing transaction, but keepPreparedTxn is set to true");
-                    }
-                } else {
-                    transitionTo(State.READY);
-                }
-
+                // TO_DO Add code to handle transition to prepared_txn when keepPrepared = true
+                transitionTo(State.READY);
                 lastError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
