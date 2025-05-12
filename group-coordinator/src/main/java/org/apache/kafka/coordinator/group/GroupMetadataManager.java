@@ -1842,7 +1842,7 @@ public class GroupMetadataManager {
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
         boolean shutdownApplication,
-        int endpointInformationEpoch
+        int memberEndpointEpochInRequest
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -1957,7 +1957,6 @@ public class GroupMetadataManager {
             targetAssignmentEpoch = group.assignmentEpoch();
             targetAssignment = group.targetAssignment(updatedMember.memberId());
         }
-        group.setEndpointInformationEpoch(targetAssignmentEpoch);
 
         // 5. Reconcile the member's assignment with the target assignment if the member is not
         // fully reconciled yet.
@@ -1986,9 +1985,12 @@ public class GroupMetadataManager {
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
 
-        if (group.endpointInformationEpoch() > endpointInformationEpoch) {
+        if (group.endpointInformationEpoch() > memberEndpointEpochInRequest) {
             response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
             response.setEndpointInformationEpoch(group.endpointInformationEpoch());
+        } else {
+            int responseEndpoint = Math.min(group.endpointInformationEpoch(), memberEndpointEpochInRequest);
+            response.setEndpointInformationEpoch(responseEndpoint);
         }
 
 
@@ -1999,6 +2001,7 @@ public class GroupMetadataManager {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().activeTasks()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
+            group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
         }
 
         Map<String, CreatableTopic> internalTopicsToBeCreated = Collections.emptyMap();
