@@ -4038,21 +4038,6 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testGetPreparedTransactionState() {
-        doInitTransactionsWith2PCEnabled(false);
-        runUntil(transactionManager::hasProducerId);
-
-        // Get the prepared transaction state
-        PreparedTxnState preparedState = transactionManager.getPreparedTransactionState();
-
-        // Validate the state contains the correct serialized producer ID and epoch
-        assertEquals(producerId + ":" + epoch, preparedState.toString());
-        assertEquals(producerId, preparedState.producerId());
-        assertEquals(epoch, preparedState.epoch());
-        assertTrue(preparedState.hasTransaction());
-    }
-
-    @Test
     public void testPrepareTransaction() {
         doInitTransactionsWith2PCEnabled(false);
         runUntil(transactionManager::hasProducerId);
@@ -4082,6 +4067,12 @@ public class TransactionManagerTest {
 
         transactionManager.prepareTransaction();
         assertTrue(transactionManager.isPrepared());
+
+        PreparedTxnState preparedState = transactionManager.preparedTransactionState();
+        // Validate the state contains the correct serialized producer ID and epoch
+        assertEquals(producerId + ":" + epoch, preparedState.toString());
+        assertEquals(producerId, preparedState.producerId());
+        assertEquals(epoch, preparedState.epoch());
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {

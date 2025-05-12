@@ -145,6 +145,7 @@ public class TransactionManager {
     private volatile long latestFinalizedFeaturesEpoch = -1;
     private volatile boolean isTransactionV2Enabled = false;
     private final boolean enable2PC;
+    private volatile PreparedTxnState preparedTxnState;
 
     private enum State {
         UNINITIALIZED,
@@ -227,6 +228,7 @@ public class TransactionManager {
         this.txnPartitionMap = new TxnPartitionMap(logContext);
         this.apiVersions = apiVersions;
         this.enable2PC = enable2PC;
+        this.preparedTxnState = new PreparedTxnState();
     }
 
     /**
@@ -337,12 +339,17 @@ public class TransactionManager {
     /**
      * Prepare a transaction for a two-phase commit.
      * This transitions the transaction to the PREPARED_TRANSACTION state.
+     * The preparedTxnState is set with the current producer ID and epoch.
      */
     public synchronized void prepareTransaction() {
         ensureTransactional();
         throwIfPendingState("prepareTransaction");
         maybeFailWithError();
         transitionTo(State.PREPARED_TRANSACTION);
+        this.preparedTxnState = new PreparedTxnState(
+            this.producerIdAndEpoch.producerId + ":" +
+            this.producerIdAndEpoch.epoch
+        );
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
@@ -1934,14 +1941,13 @@ public class TransactionManager {
     }
 
     /**
-     * Returns a PreparedTxnState object containing the current producer ID and epoch.
+     * Returns a PreparedTxnState object containing the producer ID and epoch
+     * of the ongoing transaction.
      * This is used when preparing a transaction for a two-phase commit.
      *
      * @return a PreparedTxnState with the current producer ID and epoch
      */
-    public PreparedTxnState getPreparedTransactionState() {
-        return new PreparedTxnState(
-            this.producerIdAndEpoch.producerId + ":" + this.producerIdAndEpoch.epoch
-        );
+    public PreparedTxnState preparedTransactionState() {
+        return this.preparedTxnState;
     }
 }

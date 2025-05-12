@@ -804,7 +804,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         flush();
         transactionManager.prepareTransaction();
         producerMetrics.recordPrepareTxn(time.nanoseconds() - now);
-        return transactionManager.getPreparedTransactionState();
+        return transactionManager.preparedTransactionState();
     }
 
     /**

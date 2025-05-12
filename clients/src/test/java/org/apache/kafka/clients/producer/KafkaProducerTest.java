@@ -1454,7 +1454,7 @@ public class KafkaProducerTest {
         doNothing().when(ctx.transactionManager).prepareTransaction();
 
         PreparedTxnState expectedState = mock(PreparedTxnState.class);
-        when(ctx.transactionManager.getPreparedTransactionState()).thenReturn(expectedState);
+        when(ctx.transactionManager.preparedTransactionState()).thenReturn(expectedState);
 
         try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
             PreparedTxnState returned = producer.prepareTransaction();
