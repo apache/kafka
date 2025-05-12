@@ -43,6 +43,9 @@ public class ServerLogConfigs {
     public static final String LOG_SEGMENT_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
     public static final String LOG_SEGMENT_BYTES_DOC = "The maximum size of a single log file";
 
+    public static final String INTERNAL_LOG_SEGMENT_BYTES_CONFIG = "internal." + ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
+    public static final String INTERNAL_LOG_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
+    
     public static final String LOG_ROLL_TIME_MILLIS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_MS_CONFIG);
     public static final String LOG_ROLL_TIME_HOURS_CONFIG = LOG_PREFIX + "roll.hours";
     public static final String LOG_ROLL_TIME_MILLIS_DOC = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LOG_ROLL_TIME_HOURS_CONFIG + " is used";

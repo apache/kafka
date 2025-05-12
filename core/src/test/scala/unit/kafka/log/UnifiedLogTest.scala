@@ -2734,7 +2734,7 @@ class UnifiedLogTest {
   @Test
   def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1000")
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
     val logConfig = new LogConfig(logProps)
