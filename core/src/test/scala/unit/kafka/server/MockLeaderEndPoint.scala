@@ -169,7 +169,7 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "l
         java.util.Optional.empty[ReplicaFetch]()
       else
         Optional.of(new ReplicaFetch(fetchData.asJava, fetchRequest))
-    new ResultWithPartitions[java.util.Optional[ReplicaFetch]](fetchRequestOpt, java.util.Collections.emptySet[TopicPartition]())
+    new ResultWithPartitions(fetchRequestOpt, java.util.Collections.emptySet())
   }
 
   private def checkLeaderEpochAndThrow(expectedEpoch: Int, partitionState: PartitionState): Unit = {

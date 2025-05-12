@@ -30,7 +30,6 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
 
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.{ClientIdAndBroker, InvalidRecordException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.LeaderEndPoint
@@ -210,23 +209,11 @@ abstract class AbstractFetcherThread(name: String,
    * occur during truncation.
    */
   private def truncateToEpochEndOffsets(latestEpochsForPartitions: Map[TopicPartition, EpochData]): Unit = {
-
-    val partitionsMap = new java.util.HashMap[TopicPartition, OffsetForLeaderPartition]()
-
-    latestEpochsForPartitions.asJava.forEach { case (tp, epochData) =>
-      // Create a new OffsetForLeaderPartition from EpochData
-      val offsetForLeaderPartition = new OffsetForLeaderPartition()
-        .setPartition(tp.partition())
-        .setCurrentLeaderEpoch(epochData.currentLeaderEpoch)
-        .setLeaderEpoch(epochData.leaderEpoch)
-
-      partitionsMap.put(tp, offsetForLeaderPartition)
-    }
-
-    val endOffsets = leader.fetchEpochEndOffsets(partitionsMap)
-
+    val endOffsets = leader.fetchEpochEndOffsets(latestEpochsForPartitions.asJava)
     // Ensure we hold a lock during truncation
+
     inLock(partitionMapLock) {
+      //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
 
       val epochEndOffsets = endOffsets.asScala.filter { case (tp, _) =>
         val curPartitionState = partitionStates.stateValue(tp)
@@ -304,7 +291,7 @@ abstract class AbstractFetcherThread(name: String,
       }
     }
 
-    new ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]](fetchOffsets, new java.util.HashSet[TopicPartition](partitionsWithError.asJava))
+    new ResultWithPartitions(fetchOffsets, partitionsWithError.asJava)
   }
 
   /**
@@ -799,7 +786,7 @@ abstract class AbstractFetcherThread(name: String,
 
       // TODO: use fetchTierStateMachine.maybeAdvanceState when implementing async tiering logic in KAFKA-13560
 
-      fetcherLagStats.getAndMaybePut(topicPartition).lag = if (newFetchState.lag.isPresent) newFetchState.lag.get() else 0L
+      fetcherLagStats.getAndMaybePut(topicPartition).lag = newFetchState.lag.orElse(0L)
       partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
       debug(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
         s"out of range or moved to remote tier. Reset fetch offset to ${newFetchState.fetchOffset}")

@@ -129,12 +129,12 @@ class RemoteLeaderEndPoint(logPrefix: String,
   }
 
   override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = {
-    val tmpPartitions = partitions.asScala.toMap
     if (partitions.isEmpty) {
       debug("Skipping leaderEpoch request since all partitions do not have an epoch")
       return java.util.Map.of()
     }
 
+    val tmpPartitions = partitions.asScala.toMap
     val topics = new OffsetForLeaderTopicCollection(partitions.size)
     tmpPartitions.foreachEntry { (topicPartition, epochData) =>
       var topic = topics.find(topicPartition.topic)
@@ -174,9 +174,8 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
   override def buildFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[java.util.Optional[ReplicaFetch]] = {
     val partitionsWithError = mutable.Set[TopicPartition]()
-    val tmpPartitions = partitions.asScala.toMap
     val builder = fetchSessionHandler.newBuilder(partitions.size, false)
-    tmpPartitions.foreachEntry { (topicPartition, fetchState) =>
+    partitions.forEach { (topicPartition, fetchState) =>
       // We will not include a replica in the fetch request if it should be throttled.
       if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, fetchState, topicPartition)) {
         try {
