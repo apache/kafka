@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -1488,7 +1489,7 @@ public class TransactionManager {
                     if (initProducerIdResponse.data().ongoingTxnProducerId() != -1) {
                         transitionTo(State.PREPARED_TRANSACTION);
                     } else {
-                        throw new IllegalStateException("There is no ongoing transaction, but keepPreparedTxn is set to true");
+                        throw new InvalidTxnStateException("There is no ongoing transaction, but keepPreparedTxn is set to true");
                     }
                 } else {
                     transitionTo(State.READY);
