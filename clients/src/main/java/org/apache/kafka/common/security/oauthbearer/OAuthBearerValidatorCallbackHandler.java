@@ -135,13 +135,13 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         }
 
         JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism, verificationKeyResolver);
-        configure(verificationKeyResolver, jwtValidator);
+        init(verificationKeyResolver, jwtValidator);
     }
 
     /*
      * Package-visible for testing.
      */
-    void configure(CloseableVerificationKeyResolver verificationKeyResolver, JwtValidator jwtValidator) {
+    void init(CloseableVerificationKeyResolver verificationKeyResolver, JwtValidator jwtValidator) {
         this.verificationKeyResolver = verificationKeyResolver;
         this.jwtValidator = jwtValidator;
 

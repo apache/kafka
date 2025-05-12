@@ -189,13 +189,13 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
         JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, saslMechanism, moduleOptions);
         JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism);
-        configure(moduleOptions, jwtRetriever, jwtValidator);
+        init(moduleOptions, jwtRetriever, jwtValidator);
     }
 
     /*
      * Package-visible for testing.
      */
-    void configure(Map<String, Object> moduleOptions, JwtRetriever jwtRetriever, JwtValidator jwtValidator) {
+    void init(Map<String, Object> moduleOptions, JwtRetriever jwtRetriever, JwtValidator jwtValidator) {
         this.moduleOptions = moduleOptions;
         this.jwtRetriever = jwtRetriever;
         this.jwtValidator = jwtValidator;

@@ -70,7 +70,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         JwtRetriever jwtRetriever = () -> accessToken;
         JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        handler.configure(Map.of(), jwtRetriever, jwtValidator);
+        handler.init(Map.of(), jwtRetriever, jwtValidator);
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
@@ -101,7 +101,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         JwtRetriever jwtRetriever = createJwtRetriever(configs, jaasConfig);
         JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        handler.configure(jaasConfig, jwtRetriever, jwtValidator);
+        handler.init(jaasConfig, jwtRetriever, jwtValidator);
 
         try {
             SaslExtensionsCallback callback = new SaslExtensionsCallback();
@@ -132,7 +132,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         JwtRetriever jwtRetriever = createJwtRetriever(configs, jaasConfig);
         JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        handler.configure(jaasConfig, jwtRetriever, jwtValidator);
+        handler.init(jaasConfig, jwtRetriever, jwtValidator);
 
         try {
             SaslExtensionsCallback callback = new SaslExtensionsCallback();
@@ -150,7 +150,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         JwtRetriever jwtRetriever = () -> "test";
         JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        handler.configure(Map.of(), jwtRetriever, jwtValidator);
+        handler.init(Map.of(), jwtRetriever, jwtValidator);
 
         try {
             Callback unsupportedCallback = new Callback() { };
@@ -176,7 +176,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         };
         JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        handler.configure(Map.of(), jwtRetriever, jwtValidator);
+        handler.init(Map.of(), jwtRetriever, jwtValidator);
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
@@ -205,7 +205,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         JwtRetriever jwtRetriever = new FileJwtRetriever(accessTokenFile.toPath());
         JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        handler.configure(Map.of(), jwtRetriever, jwtValidator);
+        handler.init(Map.of(), jwtRetriever, jwtValidator);
 
         OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
         try {
@@ -229,7 +229,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         JwtRetriever jwtRetriever = () -> accessToken;
         JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        handler.configure(Map.of(), jwtRetriever, jwtValidator);
+        handler.init(Map.of(), jwtRetriever, jwtValidator);
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();

@@ -58,7 +58,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
         JwtValidator jwtValidator = createJwtValidator(configs, verificationKeyResolver);
         OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-        handler.configure(verificationKeyResolver, jwtValidator);
+        handler.init(verificationKeyResolver, jwtValidator);
 
         try {
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
@@ -87,7 +87,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testConfigureThrowsExceptionOnJwtValidatorInit() throws IOException {
+    public void testHandlerInitThrowsException() throws IOException {
         AccessTokenBuilder builder = new AccessTokenBuilder()
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
@@ -105,15 +105,16 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
         OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
 
+        // An error initializing the JwtValidator should cause OAuthBearerValidatorCallbackHandler.init() to fail.
         assertThrowsWithMessage(
             KafkaException.class,
-            () -> handler.configure(verificationKeyResolver, jwtValidator),
+            () -> handler.init(verificationKeyResolver, jwtValidator),
             "encountered an error when initializing"
         );
     }
 
     @Test
-    public void testConfigureThrowsExceptionOnJwtValidatorClose() throws IOException {
+    public void testHandlerCloseDoesNotThrowException() throws IOException {
         AccessTokenBuilder builder = new AccessTokenBuilder()
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
@@ -130,8 +131,9 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         };
 
         OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-        handler.configure(verificationKeyResolver, jwtValidator);
+        handler.init(verificationKeyResolver, jwtValidator);
 
+        // An error closings the JwtValidator should *not* cause OAuthBearerValidatorCallbackHandler.close() to fail.
         assertDoesNotThrow(handler::close);
     }
 
@@ -142,7 +144,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
         JwtValidator jwtValidator = createJwtValidator(configs, verificationKeyResolver);
         OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-        handler.configure(verificationKeyResolver, jwtValidator);
+        handler.init(verificationKeyResolver, jwtValidator);
 
         try {
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
