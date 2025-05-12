@@ -21,7 +21,6 @@ import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.Values.Parser;
 import org.apache.kafka.connect.errors.DataException;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -886,7 +885,6 @@ public class ValuesTest {
         assertEquals(currentMillis, t5.getTime());
     }
 
-    @Disabled
     @Test
     public void shouldConvertDateValues() {
         LocalDateTime localTime = LocalDateTime.now();
