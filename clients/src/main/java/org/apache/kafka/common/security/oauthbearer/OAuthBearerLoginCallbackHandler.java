@@ -192,6 +192,9 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         configure(moduleOptions, jwtRetriever, jwtValidator);
     }
 
+    /*
+     * Package-visible for testing.
+     */
     void configure(Map<String, Object> moduleOptions, JwtRetriever jwtRetriever, JwtValidator jwtValidator) {
         this.moduleOptions = moduleOptions;
         this.jwtRetriever = jwtRetriever;
@@ -212,8 +215,8 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void close() {
-        Utils.closeQuietly(jwtRetriever, "The OAuth login callback encountered an error when closing the JwtRetriever");
-        Utils.closeQuietly(jwtValidator, "The OAuth login callback encountered an error when closing the JwtValidator");
+        Utils.closeQuietly(jwtRetriever, "jwtRetriever");
+        Utils.closeQuietly(jwtValidator, "jwtValidator");
     }
 
     @Override

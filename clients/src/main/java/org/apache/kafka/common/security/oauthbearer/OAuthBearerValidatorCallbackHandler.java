@@ -138,6 +138,9 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         configure(verificationKeyResolver, jwtValidator);
     }
 
+    /*
+     * Package-visible for testing.
+     */
     void configure(CloseableVerificationKeyResolver verificationKeyResolver, JwtValidator jwtValidator) {
         this.verificationKeyResolver = verificationKeyResolver;
         this.jwtValidator = jwtValidator;
@@ -157,8 +160,8 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     @Override
     public void close() {
-        Utils.closeQuietly(jwtValidator, "The OAuth validator callback encountered an error when closing the JwtValidator");
-        Utils.closeQuietly(verificationKeyResolver, "The OAuth validator callback encountered an error when closing the VerificationKeyResolver");
+        Utils.closeQuietly(jwtValidator, "jwtValidator");
+        Utils.closeQuietly(verificationKeyResolver, "verificationKeyResolver");
     }
 
     @Override
