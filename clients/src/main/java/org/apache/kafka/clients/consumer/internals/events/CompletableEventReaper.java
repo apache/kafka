@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -85,26 +86,39 @@ public class CompletableEventReaper {
      * @return The number of events that were expired
      */
     public long reap(long currentTimeMs) {
-        Consumer<CompletableEvent<?>> expireEvent = event -> {
-            long pastDueMs = currentTimeMs - event.deadlineMs();
-            TimeoutException error = new TimeoutException(String.format("%s was %s ms past its expiration of %s", event.getClass().getSimpleName(), pastDueMs, event.deadlineMs()));
+        int count = 0;
 
+        Iterator<CompletableEvent<?>> iterator = tracked.iterator();
+
+        while (iterator.hasNext()) {
+            CompletableEvent<?> event = iterator.next();
+
+            if (event.future().isDone()) {
+                // Remove any events that are already complete.
+                iterator.remove();
+                continue;
+            }
+
+            long deadlineMs = event.deadlineMs();
+            long pastDueMs = currentTimeMs - deadlineMs;
+
+            if (pastDueMs < 0)
+                continue;
+
+            TimeoutException error = new TimeoutException(String.format("%s was %s ms past its expiration of %s", event.getClass().getSimpleName(), pastDueMs, deadlineMs));
+
+            // Complete (exceptionally) any events that have passed their deadline AND aren't already complete.
             if (event.future().completeExceptionally(error)) {
-                log.debug("Event {} completed exceptionally since its expiration of {} passed {} ms ago", event, event.deadlineMs(), pastDueMs);
+                log.debug("Event {} completed exceptionally since its expiration of {} passed {} ms ago", event, deadlineMs, pastDueMs);
             } else {
                 log.trace("Event {} not completed exceptionally since it was previously completed", event);
             }
-        };
 
-        // First, complete (exceptionally) any events that have passed their deadline AND aren't already complete.
-        long count = tracked.stream()
-            .filter(e -> !e.future().isDone())
-            .filter(e -> currentTimeMs >= e.deadlineMs())
-            .peek(expireEvent)
-            .count();
-        // Second, remove any events that are already complete, just to make sure we don't hold references. This will
-        // include any events that finished successfully as well as any events we just completed exceptionally above.
-        tracked.removeIf(e -> e.future().isDone());
+            count++;
+
+            // Remove the events so that we don't hold a reference to it.
+            iterator.remove();
+        }
 
         return count;
     }

@@ -310,7 +310,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             manager.updateTimerAndMaybeCommit(event.currentTimeMs());
         }
 
-        log.info("Assigned to partition(s): {}", event.partitions().stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+        if (log.isInfoEnabled())
+            log.info("Assigned to partition(s): {}", event.partitions().stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+
         try {
             if (subscriptions.assignFromUser(new HashSet<>(event.partitions())))
                 metadata.requestUpdateForNewTopics();

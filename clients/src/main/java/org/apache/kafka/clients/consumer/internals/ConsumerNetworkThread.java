@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -168,20 +169,25 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
         lastPollTimeMs = currentTimeMs;
 
-        final long pollWaitTimeMs = requestManagers.entries().stream()
-                .map(rm -> rm.poll(currentTimeMs))
-                .mapToLong(networkClientDelegate::addAll)
-                .filter(ms -> ms <= MAX_POLL_TIMEOUT_MS)
-                .min()
-                .orElse(MAX_POLL_TIMEOUT_MS);
+        long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
+
+        for (RequestManager rm : requestManagers.entries()) {
+            NetworkClientDelegate.PollResult pollResult = rm.poll(currentTimeMs);
+            long timeoutMs = networkClientDelegate.addAll(pollResult);
+            pollWaitTimeMs = Math.min(pollWaitTimeMs, timeoutMs);
+        }
 
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
         canWakeup.set(true);
 
-        cachedMaximumTimeToWait = requestManagers.entries().stream()
-                .mapToLong(rm -> rm.maximumTimeToWait(currentTimeMs))
-                .min()
-                .orElse(Long.MAX_VALUE);
+        long maxTimeToWaitMs = Long.MAX_VALUE;
+
+        for (RequestManager rm : requestManagers.entries()) {
+            long waitMs = rm.maximumTimeToWait(currentTimeMs);
+            maxTimeToWaitMs = Math.min(maxTimeToWaitMs, waitMs);
+        }
+
+        cachedMaximumTimeToWait = maxTimeToWaitMs;
 
         reapExpiredApplicationEvents(currentTimeMs);
         List<CompletableEvent<?>> uncompletedEvents = applicationEventReaper.uncompletedEvents();
@@ -423,12 +429,18 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * If there is a metadata error, complete all uncompleted events that require subscription metadata.
      */
     private void maybeFailOnMetadataError(List<CompletableEvent<?>> events) {
-        List<? extends CompletableApplicationEvent<?>> subscriptionMetadataEvent = events.stream()
-                .filter(e -> e instanceof CompletableApplicationEvent<?>)
-                .map(e -> (CompletableApplicationEvent<?>) e)
-                .filter(CompletableApplicationEvent::requireSubscriptionMetadata)
-                .collect(Collectors.toList());
-        
+        List<CompletableApplicationEvent<?>> subscriptionMetadataEvent = new ArrayList<>();
+
+        for (CompletableEvent<?> ce : events) {
+            if (!(ce instanceof CompletableApplicationEvent))
+                continue;
+
+            CompletableApplicationEvent<?> cae = (CompletableApplicationEvent<?>) ce;
+
+            if (cae.requireSubscriptionMetadata())
+                subscriptionMetadataEvent.add(cae);
+        }
+
         if (subscriptionMetadataEvent.isEmpty())
             return;
         networkClientDelegate.getAndClearMetadataError().ifPresent(metadataError ->
