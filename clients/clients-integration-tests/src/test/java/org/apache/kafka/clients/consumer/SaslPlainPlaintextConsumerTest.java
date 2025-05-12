@@ -41,6 +41,8 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_MECHANISM;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG;
+import static org.apache.kafka.common.test.JaasUtils.KAFKA_PLAIN_ADMIN;
+import static org.apache.kafka.common.test.JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 
@@ -57,12 +59,10 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
 public class SaslPlainPlaintextConsumerTest {
 
     private final ClusterInstance cluster;
-    private static final String USERNAME = "plain-admin";
-    private static final String PASSWORD = "plain-admin-secret";
     public static final String MECHANISMS = "PLAIN";
     public static final String SASL_JAAS = "org.apache.kafka.common.security.plain.PlainLoginModule required "
-        + "username=\"" + USERNAME + "\" "
-        + "password=\"" + PASSWORD + "\";";
+        + "username=\"" + KAFKA_PLAIN_ADMIN + "\" "
+        + "password=\"" + KAFKA_PLAIN_ADMIN_PASSWORD + "\";";
 
     public SaslPlainPlaintextConsumerTest(ClusterInstance cluster) {
         this.cluster = cluster;
