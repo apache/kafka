@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.Uuid;
@@ -30,44 +29,39 @@ import java.util.Optional;
  * (2) Delayed, for example, due to an error, where we subsequently back off a bit
  * (3) ReadyForFetch, the active state where the thread is actively fetching data.
  */
-public class PartitionFetchState {
-    private final Optional<Uuid> topicId;
-    private final long fetchOffset;
-    private final Optional<Long> lag;
-    private final int currentLeaderEpoch;
-    private final Optional<Long> delay;
-    private final ReplicaState state;
-    private final Optional<Integer> lastFetchedEpoch;
-    private final Optional<Long> dueMs;
-
-
-    public PartitionFetchState(Optional<Uuid> topicId,
-                               long fetchOffset,
-                               Optional<Long> lag,
-                               int currentLeaderEpoch,
-                               ReplicaState state,
-                               Optional<Integer> lastFetchedEpoch) {
+public record PartitionFetchState(
+        Optional<Uuid> topicId,
+        long fetchOffset,
+        Optional<Long> lag,
+        int currentLeaderEpoch,
+        Optional<Long> delay,
+        ReplicaState state,
+        Optional<Integer> lastFetchedEpoch,
+        Optional<Long> dueMs
+) {
+    public PartitionFetchState(
+            Optional<Uuid> topicId,
+            long fetchOffset,
+            Optional<Long> lag,
+            int currentLeaderEpoch,
+            ReplicaState state,
+            Optional<Integer> lastFetchedEpoch) {
         this(topicId, fetchOffset, lag, currentLeaderEpoch,
-                Optional.empty(), state, lastFetchedEpoch);
+                Optional.empty(), state, lastFetchedEpoch,
+                Optional.empty());
     }
 
-    public PartitionFetchState(Optional<Uuid> topicId,
-                               long fetchOffset,
-                               Optional<Long> lag,
-                               int currentLeaderEpoch,
-                               Optional<Long> delay,
-                               ReplicaState state,
-                               Optional<Integer> lastFetchedEpoch) {
-        this.topicId = topicId;
-        this.fetchOffset = fetchOffset;
-        this.lag = lag;
-        this.currentLeaderEpoch = currentLeaderEpoch;
-        this.delay = delay;
-        this.state = state;
-        this.lastFetchedEpoch = lastFetchedEpoch;
-
-        // Initialize dueMs (equivalent to private val dueMs)
-        this.dueMs = delay.map(aLong -> aLong + Time.SYSTEM.milliseconds());
+    public PartitionFetchState(
+            Optional<Uuid> topicId,
+            long fetchOffset,
+            Optional<Long> lag,
+            int currentLeaderEpoch,
+            Optional<Long> delay,
+            ReplicaState state,
+            Optional<Integer> lastFetchedEpoch) {
+        this(topicId, fetchOffset, lag, currentLeaderEpoch,
+                delay, state, lastFetchedEpoch,
+                delay.map(aLong -> aLong + Time.SYSTEM.milliseconds()));
     }
 
     public boolean isReadyForFetch() {
@@ -86,34 +80,6 @@ public class PartitionFetchState {
         return dueMs.isPresent() && dueMs.get() > Time.SYSTEM.milliseconds();
     }
 
-    public Optional<Uuid> topicId() {
-        return topicId;
-    }
-
-    public long fetchOffset() {
-        return fetchOffset;
-    }
-
-    public Optional<Long> lag() {
-        return lag;
-    }
-
-    public int currentLeaderEpoch() {
-        return currentLeaderEpoch;
-    }
-
-    public Optional<Long> delay() {
-        return delay;
-    }
-
-    public ReplicaState state() {
-        return state;
-    }
-
-    public Optional<Integer> lastFetchedEpoch() {
-        return lastFetchedEpoch;
-    }
-
     @Override
     public String toString() {
         return "FetchState(topicId=" + topicId +
@@ -128,6 +94,6 @@ public class PartitionFetchState {
     public PartitionFetchState updateTopicId(Optional<Uuid> newTopicId) {
         return new PartitionFetchState(newTopicId, this.fetchOffset, this.lag,
                 this.currentLeaderEpoch, this.delay,
-                this.state, this.lastFetchedEpoch);
+                this.state, this.lastFetchedEpoch, this.dueMs);
     }
 }
