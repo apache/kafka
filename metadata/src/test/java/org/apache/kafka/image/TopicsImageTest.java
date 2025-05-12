@@ -444,6 +444,7 @@ public class TopicsImageTest {
         assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testTopicDeltaElectionStatsWithEmptyImage() {
         TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Collections.EMPTY_MAP);

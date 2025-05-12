@@ -109,6 +109,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         );
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testBuildRequestWithMultipleGroups() {
         var groupSpecs = new HashMap<>(multiGroupSpecs);
