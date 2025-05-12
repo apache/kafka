@@ -86,7 +86,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       if (fetchResponse.error == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
         throw Errors.forCode(fetchResponse.error().code()).exception()
       } else {
-        Map.empty()
+        java.util.Map.of()
       }
     } else {
       fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion())
