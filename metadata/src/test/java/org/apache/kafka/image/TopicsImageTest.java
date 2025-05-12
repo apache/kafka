@@ -446,7 +446,7 @@ public class TopicsImageTest {
 
     @Test
     public void testTopicDeltaElectionStatsWithEmptyImage() {
-        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Collections.<Integer, PartitionRegistration>emptyMap());
+        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Map.of());
         TopicDelta delta = new TopicDelta(image);
         delta.replay(new PartitionRecord().setPartitionId(0).setLeader(0).setIsr(List.of(0, 1)).setReplicas(List.of(0, 1, 2)));
         delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(2).setIsr(List.of(2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
