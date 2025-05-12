@@ -44,7 +44,6 @@ public class OffsetFetchRequestTest {
                         new OffsetFetchRequestData.OffsetFetchRequestTopics()
                             .setName("foo")
                             .setTopicId(Uuid.randomUuid())
-                            .setTopicId(Uuid.randomUuid())
                             .setPartitionIndexes(List.of(0, 1, 2))
                     )),
                 new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -52,7 +51,6 @@ public class OffsetFetchRequestTest {
                     .setTopics(List.of(
                         new OffsetFetchRequestData.OffsetFetchRequestTopics()
                             .setName("bar")
-                            .setTopicId(Uuid.randomUuid())
                             .setTopicId(Uuid.randomUuid())
                             .setPartitionIndexes(List.of(0, 1, 2))
                     ))
@@ -158,7 +156,6 @@ public class OffsetFetchRequestTest {
                             new OffsetFetchRequestData.OffsetFetchRequestTopics()
                                 .setName("foo")
                                 .setTopicId(Uuid.randomUuid())
-                                .setTopicId(Uuid.randomUuid())
                                 .setPartitionIndexes(List.of(0, 1))
                         ))
                 )),
@@ -216,7 +213,6 @@ public class OffsetFetchRequestTest {
                         .setTopics(List.of(
                             new OffsetFetchRequestData.OffsetFetchRequestTopics()
                                 .setName("foo")
-                                .setTopicId(Uuid.randomUuid())
                                 .setTopicId(Uuid.randomUuid())
                                 .setPartitionIndexes(List.of(0, 1, 2))
                         ))
