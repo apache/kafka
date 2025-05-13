@@ -911,6 +911,7 @@ project(':server') {
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':storage:storage-api').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1970,6 +1971,7 @@ project(':clients:clients-integration-tests') {
   }
 
   dependencies {
+    testImplementation libs.metrics
     testImplementation libs.slf4jApi
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')

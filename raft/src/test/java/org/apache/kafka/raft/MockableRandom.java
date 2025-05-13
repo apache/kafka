@@ -48,4 +48,9 @@ class MockableRandom extends Random {
     public int nextInt(int bound) {
         return nextIntFunction.apply(bound).orElse(super.nextInt(bound));
     }
+
+    @Override
+    public int nextInt(int origin, int bound) {
+        return nextIntFunction.apply(bound).orElse(super.nextInt(bound));
+    }
 }
