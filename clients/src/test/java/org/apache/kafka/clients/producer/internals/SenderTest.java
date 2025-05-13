@@ -3185,7 +3185,7 @@ public class SenderTest {
     public void testAbortableErrorIsConvertedToFatalErrorDuringAbort() throws Exception {
 
         // Initialize and begin transaction
-        TransactionManager transactionManager = new TransactionManager(logContext, "testTxn", 60000, 100, apiVersions);
+        TransactionManager transactionManager = new TransactionManager(logContext, "testAbortableErrorIsConvertedToFatalErrorDuringAbort", 60000, 100, apiVersions, false);
         setupWithTransactionState(transactionManager);
         doInitTransactions(transactionManager, new ProducerIdAndEpoch(1L, (short) 0));
         transactionManager.beginTransaction();

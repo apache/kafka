@@ -1691,7 +1691,7 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             EndTxnResponse endTxnResponse = (EndTxnResponse) response;
             Errors error = endTxnResponse.error();
-            boolean isAbortApi = !builder.data.committed();
+            boolean isAbort = !builder.data.committed();
             if (error == Errors.NONE) {
                 // For End Txn version 5+, the broker includes the producerId and producerEpoch in the EndTxnResponse.
                 // For versions lower than 5, the producer Id and epoch are set to -1 by default.
@@ -1724,7 +1724,7 @@ public class TransactionManager {
                 fatalError(error.exception());
             } else if (error == Errors.UNKNOWN_PRODUCER_ID) {
                 abortableErrorIfPossible(error.exception());
-            } else if (isAbortApi && error.exception() instanceof TransactionAbortableException) {
+            } else if (isAbort && error.exception() instanceof TransactionAbortableException) {
                 // When aborting a transaction, we must convert TRANSACTION_ABORTABLE errors to KafkaException
                 // because if an abort operation itself encounters an abortable error, retrying the abort would create a cycle.
                 // Instead, we treat this as fatal error at the application layer to ensure the transaction can be cleanly terminated.
