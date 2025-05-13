@@ -3049,6 +3049,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Creating the shareFetchContext for Share Session Handling. if context creation fails, the request is failed directly here.
       shareFetchContext = sharePartitionManager.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent, request.context.connectionId)
     } catch {
+      case _: ShareSessionLimitReachedException =>
+        sharePartitionManager.createIdleShareFetchTask(shareFetchRequest.maxWait).handle(
+          (_, exception) => {
+            if (exception != null) {
+              requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
+            } else {
+              requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.SHARE_SESSION_LIMIT_REACHED.exception))
+            }
+          }
+        )
+        return
       case e: Exception =>
         requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
         return
