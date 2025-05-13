@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
@@ -42,6 +43,7 @@ public class OffsetFetchRequestTest {
                     .setTopics(List.of(
                         new OffsetFetchRequestData.OffsetFetchRequestTopics()
                             .setName("foo")
+                            .setTopicId(Uuid.randomUuid())
                             .setPartitionIndexes(List.of(0, 1, 2))
                     )),
                 new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -49,10 +51,11 @@ public class OffsetFetchRequestTest {
                     .setTopics(List.of(
                         new OffsetFetchRequestData.OffsetFetchRequestTopics()
                             .setName("bar")
+                            .setTopicId(Uuid.randomUuid())
                             .setPartitionIndexes(List.of(0, 1, 2))
                     ))
             ));
-        var builder = new OffsetFetchRequest.Builder(data, false);
+        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(data, false, true);
 
         if (version < 8) {
             assertThrows(OffsetFetchRequest.NoBatchedOffsetFetchRequestException.class, () -> builder.build(version));
@@ -64,7 +67,7 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
     public void testThrowOnFetchStableOffsetsUnsupported(short version) {
-        var builder = new OffsetFetchRequest.Builder(
+        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setRequireStable(true)
                 .setGroups(List.of(
@@ -73,9 +76,11 @@ public class OffsetFetchRequestTest {
                         .setTopics(List.of(
                             new OffsetFetchRequestData.OffsetFetchRequestTopics()
                                 .setName("foo")
+                                .setTopicId(Uuid.randomUuid())
                                 .setPartitionIndexes(List.of(0, 1, 2))
                         ))
                 )),
+            true,
             true
         );
 
@@ -96,10 +101,11 @@ public class OffsetFetchRequestTest {
                     .setTopics(List.of(
                         new OffsetFetchRequestData.OffsetFetchRequestTopics()
                             .setName("foo")
+                            .setTopicId(Uuid.randomUuid())
                             .setPartitionIndexes(List.of(0, 1, 2))
                     ))
             ));
-        var builder = new OffsetFetchRequest.Builder(data, false);
+        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(data, false, true);
 
         if (version < 8) {
             var expectedRequest = new OffsetFetchRequestData()
@@ -124,7 +130,7 @@ public class OffsetFetchRequestTest {
                     .setGroupId("grp1")
                     .setTopics(null)
             ));
-        var builder = new OffsetFetchRequest.Builder(data, false);
+        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(data, false, true);
 
         if (version < 2) {
             assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
@@ -141,7 +147,7 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
     public void testGetErrorResponse(short version) {
-        var request = new OffsetFetchRequest.Builder(
+        var request = OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setGroups(List.of(
                     new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -149,10 +155,12 @@ public class OffsetFetchRequestTest {
                         .setTopics(List.of(
                             new OffsetFetchRequestData.OffsetFetchRequestTopics()
                                 .setName("foo")
+                                .setTopicId(Uuid.randomUuid())
                                 .setPartitionIndexes(List.of(0, 1))
                         ))
                 )),
-            false
+            false,
+            true
         ).build(version);
 
         if (version < 2) {
@@ -197,7 +205,7 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
     public void testGroups(short version) {
-        var request = new OffsetFetchRequest.Builder(
+        var request = OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setGroups(List.of(
                     new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -205,10 +213,12 @@ public class OffsetFetchRequestTest {
                         .setTopics(List.of(
                             new OffsetFetchRequestData.OffsetFetchRequestTopics()
                                 .setName("foo")
+                                .setTopicId(Uuid.randomUuid())
                                 .setPartitionIndexes(List.of(0, 1, 2))
                         ))
                 )),
-            false
+            false,
+            true
         ).build(version);
 
         if (version < 8) {
@@ -230,14 +240,15 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 2)
     public void testGroupsWithAllTopics(short version) {
-        var request = new OffsetFetchRequest.Builder(
+        var request = OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setGroups(List.of(
                     new OffsetFetchRequestData.OffsetFetchRequestGroup()
                         .setGroupId("grp1")
                         .setTopics(null)
                 )),
-            false
+            false,
+            true
         ).build(version);
 
         if (version < 8) {

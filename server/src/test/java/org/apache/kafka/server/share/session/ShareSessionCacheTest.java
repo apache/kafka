@@ -45,7 +45,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testShareSessionCache() throws InterruptedException {
-        ShareSessionCache cache = new ShareSessionCache(3);
+        ShareSessionCache cache = new ShareSessionCache(3, true);
         assertEquals(0, cache.size());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(10), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(20), "conn-2");
@@ -59,7 +59,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testResizeCachedSessions() throws InterruptedException {
-        ShareSessionCache cache = new ShareSessionCache(2);
+        ShareSessionCache cache = new ShareSessionCache(2, true);
         assertEquals(0, cache.size());
         assertEquals(0, cache.totalPartitions());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(2), "conn-1");
@@ -113,8 +113,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testRemoveConnection() throws InterruptedException {
-        ShareSessionCache cache = new ShareSessionCache(3);
-        
+        ShareSessionCache cache = new ShareSessionCache(3, true);
         assertEquals(0, cache.size());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(1), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(2), "conn-2");
@@ -143,6 +142,21 @@ public class ShareSessionCacheTest {
     }
 
     @Test
+    public void testRemoveAllSessions() {
+        ShareSessionCache cache = new ShareSessionCache(3, true);
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+        cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(10), "conn-1");
+        cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(20), "conn-2");
+        cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(30), "conn-3");
+        assertEquals(3, cache.size());
+        assertEquals(60, cache.totalPartitions());
+        cache.removeAllSessions();
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+    }
+
+    @Test
     public void testShareGroupListenerEvents() {
         ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
         ShareSessionCache cache = new ShareSessionCache(3);
@@ -153,13 +167,13 @@ public class ShareSessionCacheTest {
         Uuid memberId2 = Uuid.randomUuid();
         ShareSessionKey key1 = cache.maybeCreateSession(groupId, memberId1, mockedSharePartitionMap(1), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession(groupId, memberId2, mockedSharePartitionMap(1), "conn-2");
-        
+
         // Verify member count is tracked
         assertEquals(2, cache.size());
         assertNotNull(cache.get(key1));
         assertNotNull(cache.get(key2));
         assertEquals(2, cache.numMembers(groupId));
-        
+
         // Remove session and verify listener are not called as connection disconnect listener didn't
         // remove the session.
         cache.remove(key1);
@@ -224,15 +238,15 @@ public class ShareSessionCacheTest {
     @Test
     public void testNoShareGroupListenerRegistered() {
         ShareSessionCache cache = new ShareSessionCache(3);
-        
+
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();
         ShareSessionKey key = cache.maybeCreateSession(groupId, memberId, mockedSharePartitionMap(1), "conn-1");
-        
+
         // Verify member count is still tracked even without listener
         assertEquals(1, cache.numMembers(groupId));
         assertNotNull(cache.get(key));
-        
+
         // Remove session should not throw any exceptions.
         cache.connectionDisconnectListener().onDisconnect("conn-1");
         assertNull(cache.numMembers(groupId));

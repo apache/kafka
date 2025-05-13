@@ -30,6 +30,7 @@ import com.yammer.metrics.core.Meter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Caches share sessions.
@@ -70,6 +71,10 @@ public class ShareSessionCache {
      */
     private final Map<String, ShareSessionKey> connectionIdToSessionMap;
     /**
+     * Flag indicating if share groups have been turned on.
+     */
+    private final AtomicBoolean supportsShareGroups;
+    /**
      * The listener for share group events. This is used to notify the listener when the group members
      * change.
      */
@@ -79,8 +84,9 @@ public class ShareSessionCache {
     private long numPartitions = 0;
 
     @SuppressWarnings("this-escape")
-    public ShareSessionCache(int maxEntries) {
+    public ShareSessionCache(int maxEntries, boolean supportsShareGroups) {
         this.maxEntries = maxEntries;
+        this.supportsShareGroups = new AtomicBoolean(supportsShareGroups);
         // Register metrics for ShareSessionCache.
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareSessionCache");
         metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
@@ -105,6 +111,14 @@ public class ShareSessionCache {
      */
     public synchronized int size() {
         return sessions.size();
+    }
+
+    /**
+     * Remove all the share sessions from cache.
+     */
+    public synchronized void removeAllSessions() {
+        sessions.clear();
+        numPartitions = 0;
     }
 
     public synchronized long totalPartitions() {
@@ -173,7 +187,9 @@ public class ShareSessionCache {
      * @param session  The session.
      */
     public synchronized void updateNumPartitions(ShareSession session) {
-        numPartitions += session.updateCachedSize();
+        if (supportsShareGroups.get()) {
+            numPartitions += session.updateCachedSize();
+        }
     }
 
     /**
@@ -190,7 +206,7 @@ public class ShareSessionCache {
         ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
         String clientConnectionId
     ) {
-        if (sessions.size() < maxEntries) {
+        if (sessions.size() < maxEntries && supportsShareGroups.get()) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
                 ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
@@ -233,5 +249,18 @@ public class ShareSessionCache {
                 maybeRemoveAndNotifyListeners(shareSessionKey);
             }
         }
+    }
+
+    /**
+     * Update the value of supportsShareGroups to reflect if share groups are turned on.
+     * @param supportsShareGroups - Boolean indicating if share groups are turned on.
+     */
+    public void updateSupportsShareGroups(boolean supportsShareGroups) {
+        this.supportsShareGroups.set(supportsShareGroups);
+    }
+
+    // Visible for testing.
+    public boolean supportsShareGroups() {
+        return supportsShareGroups.get();
     }
 }
