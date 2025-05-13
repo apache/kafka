@@ -2832,26 +2832,26 @@ public class SharePartitionManagerTest {
         SharePartition sp3 = mock(SharePartition.class);
 
         // Mock the share partitions corresponding to the topic partitions.
-        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
-        partitionCacheMap.put(
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.put(
             new SharePartitionKey(groupId, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0))), sp0
         );
-        partitionCacheMap.put(
+        partitionCache.put(
             new SharePartitionKey(groupId, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 0))), sp1
         );
-        partitionCacheMap.put(
+        partitionCache.put(
             new SharePartitionKey(groupId, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo3", 0))), sp2
         );
-        partitionCacheMap.put(
+        partitionCache.put(
             new SharePartitionKey(groupId, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo4", 0))), sp3
         );
         sharePartitionManager = SharePartitionManagerBuilder.builder()
-            .withPartitionCacheMap(partitionCacheMap)
+            .withPartitionCacheMap(partitionCache)
             .build();
-        assertEquals(4, sharePartitionManager.partitionCacheSize());
+        assertEquals(4, partitionCache.size());
         sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
         // Because we are toggling to a share version which does not support share groups, the cache inside share partitions must be cleared.
-        assertEquals(0, sharePartitionManager.partitionCacheSize());
+        assertEquals(0, partitionCache.size());
         //Check if all share partitions have been fenced.
         Mockito.verify(sp0).markFenced();
         Mockito.verify(sp1).markFenced();

@@ -759,19 +759,14 @@ public class SharePartitionManager implements AutoCloseable {
             synchronized (cache) {
                 cache.removeAllSessions();
             }
-            Set<SharePartitionKey> sharePartitionKeys = new HashSet<>(partitionCacheMap.keySet());
+            Set<SharePartitionKey> sharePartitionKeys = partitionCache.cachedSharePartitionKeys();
             // Remove all share partitions from partition cache.
             sharePartitionKeys.forEach(sharePartitionKey ->
-                removeSharePartitionFromCache(sharePartitionKey, partitionCacheMap, replicaManager)
+                removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager)
             );
         } else {
             cache.updateSupportsShareGroups(true);
         }
-    }
-
-    // Visible for testing.
-    protected int partitionCacheSize() {
-        return partitionCacheMap.size();
     }
 
     /**
@@ -842,7 +837,17 @@ public class SharePartitionManager implements AutoCloseable {
 
         @Override
         public void onGroupEmpty(String groupId) {
-            partitionCache.removeGroup(groupId);
+            // Remove all share partitions from the cache. Instead of defining an API in SharePartitionCache
+            // for removing all share partitions for a group, share partitions are removed after fetching
+            // associated topic-partitions from the cache. This is done to mark the share partitions fenced
+            // and remove the listeners from the replica manager.
+            Set<TopicIdPartition> topicIdPartitions = partitionCache.topicIdPartitionsForGroup(groupId);
+            if (topicIdPartitions != null) {
+                // Remove all share partitions from partition cache.
+                topicIdPartitions.forEach(topicIdPartition ->
+                    removeSharePartitionFromCache(new SharePartitionKey(groupId, topicIdPartition), partitionCache, replicaManager)
+                );
+            }
         }
     }
 }

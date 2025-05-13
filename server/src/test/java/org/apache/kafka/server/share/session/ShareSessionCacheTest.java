@@ -159,7 +159,7 @@ public class ShareSessionCacheTest {
     @Test
     public void testShareGroupListenerEvents() {
         ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
-        ShareSessionCache cache = new ShareSessionCache(3);
+        ShareSessionCache cache = new ShareSessionCache(3, true);
         cache.registerShareGroupListener(mockListener);
 
         String groupId = "grp";
@@ -206,7 +206,7 @@ public class ShareSessionCacheTest {
     @Test
     public void testShareGroupListenerEventsMultipleGroups() {
         ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
-        ShareSessionCache cache = new ShareSessionCache(3);
+        ShareSessionCache cache = new ShareSessionCache(3, true);
         cache.registerShareGroupListener(mockListener);
 
         String groupId1 = "grp1";
@@ -237,7 +237,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testNoShareGroupListenerRegistered() {
-        ShareSessionCache cache = new ShareSessionCache(3);
+        ShareSessionCache cache = new ShareSessionCache(3, true);
 
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();

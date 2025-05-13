@@ -46,28 +46,64 @@ public class SharePartitionCache {
         this.partitions = new ConcurrentHashMap<>();
     }
 
+    /**
+     * Returns the share partition for the given key.
+     *
+     * @param partitionKey The key to get the share partition for.
+     * @return The share partition for the key or null if not found.
+     */
     public SharePartition get(SharePartitionKey partitionKey) {
         return partitions.get(partitionKey);
     }
 
+    /**
+     * Returns the set of topic-partitions for the given group id.
+     *
+     * @param groupId The group id to get the topic-partitions for.
+     * @return The set of topic-partitions for the group id.
+     */
+    public Set<TopicIdPartition> topicIdPartitionsForGroup(String groupId) {
+        return Set.copyOf(groups.get(groupId));
+    }
+
+    /**
+     * Removes the share partition from the cache. The method also removes the topic-partition from
+     * the group map.
+     *
+     * @param partitionKey The key to remove.
+     * @return The removed value or null if not found.
+     */
     public synchronized SharePartition remove(SharePartitionKey partitionKey) {
         groups.computeIfPresent(partitionKey.groupId(), (k, v) -> {
             v.remove(partitionKey.topicIdPartition());
-            return v;
+            return v.isEmpty() ? null : v;
         });
         return partitions.remove(partitionKey);
     }
 
+    /**
+     * Computes the value for the given key if it is not already present in the cache. Method also
+     * updates the group map with the topic-partition for the group id.
+     *
+     * @param partitionKey The key to compute the value for.
+     * @param mappingFunction The function to compute the value.
+     * @return The computed or existing value.
+     */
     public synchronized SharePartition computeIfAbsent(SharePartitionKey partitionKey, Function<SharePartitionKey, SharePartition> mappingFunction) {
         groups.computeIfAbsent(partitionKey.groupId(), k -> new HashSet<>()).add(partitionKey.topicIdPartition());
         return partitions.computeIfAbsent(partitionKey, mappingFunction);
     }
 
-    public synchronized void removeGroup(String groupId) {
-        Set<TopicIdPartition> topicIdPartitions = groups.remove(groupId);
-        if (topicIdPartitions != null) {
-            topicIdPartitions.forEach(topicIdPartition -> partitions.remove(new SharePartitionKey(groupId, topicIdPartition)));
-        }
+    /**
+     * Returns the set of all share partition keys in the cache. As the cache can't be cleaned without
+     * marking the share partitions fenced and detaching the partition listener in the replica manager,
+     * hence rather providing a method to clean the cache directly, this method is provided to fetch
+     * all the keys in the cache.
+     *
+     * @return The set of all share partition keys.
+     */
+    public Set<SharePartitionKey> cachedSharePartitionKeys() {
+        return partitions.keySet();
     }
 
     // Visible for testing. Should not be used outside the test classes.

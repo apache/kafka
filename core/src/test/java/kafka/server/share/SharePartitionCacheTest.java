@@ -99,7 +99,8 @@ public class SharePartitionCacheTest {
         assertEquals(1, cache.groups().get(group2).stream().filter(tp -> tp.equals(tp3)).count());
 
         // Remove one group and verify only its partitions are removed.
-        cache.removeGroup(group1);
+        cache.topicIdPartitionsForGroup(group1).forEach(
+            topicIdPartition -> cache.remove(new SharePartitionKey(group1, topicIdPartition)));
         assertEquals(1, cache.size());
         assertTrue(cache.containsKey(key3));
         assertEquals(1, cache.groups().size());
