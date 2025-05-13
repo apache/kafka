@@ -55,6 +55,7 @@ import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.ConsumerWrapper;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
@@ -550,12 +551,16 @@ public class StreamThread extends Thread implements ProcessingThread {
             );
             final ByteArrayDeserializer keyDeserializer = new ByteArrayDeserializer();
             final ByteArrayDeserializer valueDeserializer = new ByteArrayDeserializer();
+
             return new MainConsumerSetup(
-                new AsyncKafkaConsumer<>(
-                    new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(consumerConfigs, keyDeserializer, valueDeserializer)),
-                    keyDeserializer,
-                    valueDeserializer,
-                    streamsRebalanceData
+                maybeWrapConsumer(
+                    config.originals(),
+                    new AsyncKafkaConsumer<>(
+                        new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(consumerConfigs, keyDeserializer, valueDeserializer)),
+                        keyDeserializer,
+                        valueDeserializer,
+                        streamsRebalanceData
+                    )
                 ),
                 streamsRebalanceData
             );
@@ -565,6 +570,31 @@ public class StreamThread extends Thread implements ProcessingThread {
                 Optional.empty()
             );
         }
+    }
+
+    private static Consumer<byte[], byte[]> maybeWrapConsumer(final Map<String, ?> config,
+                                                              final Consumer<byte[], byte[]> consumer) {
+        final Object o = config.get(InternalConfig.INTERNAL_CONSUMER_WRAPPER);
+        if (o == null) {
+            return consumer;
+        }
+
+        final ConsumerWrapper wrapper;
+        if (o instanceof String) {
+            try {
+                wrapper = Utils.newInstance((String) o, ConsumerWrapper.class);
+            } catch (final ClassNotFoundException e) {
+                throw new IllegalArgumentException(e);
+            }
+        } else if (o instanceof Class<?>) {
+            wrapper = (ConsumerWrapper) Utils.newInstance((Class<?>) o);
+        } else {
+            throw new IllegalArgumentException("Internal config " + InternalConfig.INTERNAL_CONSUMER_WRAPPER + " must be a class or class name");
+        }
+
+        wrapper.wrapConsumer(consumer);
+
+        return wrapper;
     }
 
     private static class MainConsumerSetup {
