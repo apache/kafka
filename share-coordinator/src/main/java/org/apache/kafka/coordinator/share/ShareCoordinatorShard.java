@@ -625,6 +625,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @return A result containing relevant coordinator records and void response
      */
     public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareState(Set<Uuid> deletedTopicIds) {
+        if (deletedTopicIds.isEmpty()) {
+            return new CoordinatorResult<>(List.of());
+        }
         Set<SharePartitionKey> eligibleKeys = new HashSet<>();
         shareStateMap.forEach((key, __) -> {
             if (deletedTopicIds.contains(key.topicId())) {

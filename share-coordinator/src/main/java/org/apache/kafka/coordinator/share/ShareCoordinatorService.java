@@ -1053,10 +1053,13 @@ public class ShareCoordinatorService implements ShareCoordinator {
     @Override
     public void onTopicsDeleted(Set<Uuid> deletedTopicIds, BufferSupplier bufferSupplier) throws ExecutionException, InterruptedException {
         throwIfNotActive();
+        if (deletedTopicIds.isEmpty()) {
+            return;
+        }
         CompletableFuture.allOf(
             FutureUtils.mapExceptionally(
                 runtime.scheduleWriteAllOperation(
-                    "on-partition-deleted",
+                    "on-topics-deleted",
                     Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                     coordinator -> coordinator.maybeCleanupShareState(deletedTopicIds)
                 ),
