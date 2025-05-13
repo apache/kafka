@@ -118,6 +118,7 @@ public class ShareSessionCache {
      */
     public synchronized void removeAllSessions() {
         sessions.clear();
+        numMembersPerGroup.clear();
         numPartitions = 0;
     }
 
@@ -157,7 +158,8 @@ public class ShareSessionCache {
         }
         // Notify the share group listener if the group is empty. This should be checked regardless
         // session is evicted by connection disconnect or client's final epoch.
-        if (numMembersPerGroup.get(key.groupId()) == 0) {
+        int numMembers = numMembersPerGroup.getOrDefault(key.groupId(), 0);
+        if (numMembers == 0) {
             // Remove the group from the map as it is empty.
             numMembersPerGroup.remove(key.groupId());
             if (shareGroupListener != null) {
