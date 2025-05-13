@@ -250,7 +250,7 @@ public class EosTestDriver extends SmokeTestUtil {
         System.out.flush();
     }
 
-    private static void ensureStreamsApplicationDown(final Admin adminClient, String groupProtocol) {
+    private static void ensureStreamsApplicationDown(final Admin adminClient, final String groupProtocol) {
         final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         if (Objects.equals(groupProtocol, "streams")) {
             StreamsGroupDescription description;
