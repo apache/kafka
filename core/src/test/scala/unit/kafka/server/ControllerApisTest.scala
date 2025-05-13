@@ -74,7 +74,7 @@ import java.net.InetAddress
 import java.util
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.{Collections, Optional, Properties}
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -154,7 +154,8 @@ class ControllerApisTest {
   private def createControllerApis(authorizer: Option[Plugin[Authorizer]],
                                    controller: Controller,
                                    props: Properties = new Properties(),
-                                   throttle: Boolean = false): ControllerApis = {
+                                   throttle: Boolean = false,
+                                   errorLogCallback: Option[String => Unit] = None): ControllerApis = {
     props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId: java.lang.Integer)
     props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
@@ -175,7 +176,12 @@ class ControllerApisTest {
         true,
         () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting())),
       metadataCache
-    )
+    ) {
+      override def error(msg: => String, e: => Throwable): Unit = {
+        errorLogCallback.foreach(_(msg))
+        super.error(msg, e)
+      }
+    }
   }
 
   /**
@@ -963,6 +969,28 @@ class ControllerApisTest {
         hasClusterAuth = false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")))
+  }
+
+  @Test
+  def testDeleteTopicsWhenDeleteConfigDisable(): Unit = {
+    val deleteTopicData = new DeleteTopicsRequestData()
+    deleteTopicData.setTopicNames(Collections.singletonList("topicA"))
+    val deleteTopicsRequest = new DeleteTopicsRequest.Builder(deleteTopicData).build(ApiKeys.DELETE_TOPICS.latestVersion)
+    // boolean flag, it will set to true if error log triggered
+    val printUnexpectedLog = new AtomicBoolean(false)
+
+    // set 'delete.topic.enable' to false
+    val props = new Properties()
+    props.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "false")
+    controllerApis = createControllerApis(None, new MockController.Builder().build(), props = props, errorLogCallback = Some(msg => {
+      // set flag to true
+      if (msg != null && msg.startsWith("Unexpected error")) {
+        printUnexpectedLog.set(true)
+      }
+    }))
+
+    controllerApis.handle(buildRequest(deleteTopicsRequest), RequestLocal.noCaching)
+    assertFalse(printUnexpectedLog.get())
   }
 
   @ParameterizedTest
