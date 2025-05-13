@@ -2882,46 +2882,38 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val data = new ListConfigResourcesResponseData()
 
-      if (listConfigResourcesRequest.onlySupportClientMetrics) {
-        // Version 0 only supports client metrics.
-        data.setConfigResources(clientMetricsManager.listClientMetricsResources.stream.map(name =>
-            new ListConfigResourcesResponseData.ConfigResource().setResourceName(name).setResourceType(ConfigResource.Type.CLIENT_METRICS.id)
-          ).collect(Collectors.toList()))
-      } else {
-        // From version 1, supports all ConfigResource.Type.
-        var resourceTypes = listConfigResourcesRequest.data().resourceTypes()
-        if (resourceTypes.isEmpty) {
-          resourceTypes = ConfigResource.Type.values().map(c => java.lang.Byte.valueOf(c.id)).toList.asJava
-        }
-
-        val result = new util.ArrayList[ListConfigResourcesResponseData.ConfigResource]()
-        if (resourceTypes.contains(ConfigResource.Type.GROUP.id)) {
-          groupConfigManager.groupIds().forEach(id =>
-            result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(id).setResourceType(ConfigResource.Type.GROUP.id))
-          )
-        }
-        if (resourceTypes.contains(ConfigResource.Type.CLIENT_METRICS.id)) {
-          clientMetricsManager.listClientMetricsResources.forEach(name =>
-            result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(name).setResourceType(ConfigResource.Type.CLIENT_METRICS.id))
-          )
-        }
-        if (resourceTypes.contains(ConfigResource.Type.BROKER_LOGGER.id)) {
-          metadataCache.getBrokerNodes(request.context.listenerName).forEach(node =>
-            result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(node.id.toString).setResourceType(ConfigResource.Type.BROKER_LOGGER.id))
-          )
-        }
-        if (resourceTypes.contains(ConfigResource.Type.BROKER.id)) {
-          metadataCache.getBrokerNodes(request.context.listenerName).forEach(node =>
-            result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(node.id.toString).setResourceType(ConfigResource.Type.BROKER.id))
-          )
-        }
-        if (resourceTypes.contains(ConfigResource.Type.TOPIC.id)) {
-          metadataCache.getAllTopics.forEach(name =>
-            result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(name).setResourceType(ConfigResource.Type.TOPIC.id))
-          )
-        }
-        data.setConfigResources(result)
+      var resourceTypes = listConfigResourcesRequest.data().resourceTypes()
+      if (resourceTypes.isEmpty) {
+        resourceTypes = listConfigResourcesRequest.defaultResourceTypes()
       }
+
+      val result = new util.ArrayList[ListConfigResourcesResponseData.ConfigResource]()
+      if (resourceTypes.contains(ConfigResource.Type.GROUP.id)) {
+        groupConfigManager.groupIds().forEach(id =>
+          result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(id).setResourceType(ConfigResource.Type.GROUP.id))
+        )
+      }
+      if (resourceTypes.contains(ConfigResource.Type.CLIENT_METRICS.id)) {
+        clientMetricsManager.listClientMetricsResources.forEach(name =>
+          result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(name).setResourceType(ConfigResource.Type.CLIENT_METRICS.id))
+        )
+      }
+      if (resourceTypes.contains(ConfigResource.Type.BROKER_LOGGER.id)) {
+        metadataCache.getBrokerNodes(request.context.listenerName).forEach(node =>
+          result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(node.id.toString).setResourceType(ConfigResource.Type.BROKER_LOGGER.id))
+        )
+      }
+      if (resourceTypes.contains(ConfigResource.Type.BROKER.id)) {
+        metadataCache.getBrokerNodes(request.context.listenerName).forEach(node =>
+          result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(node.id.toString).setResourceType(ConfigResource.Type.BROKER.id))
+        )
+      }
+      if (resourceTypes.contains(ConfigResource.Type.TOPIC.id)) {
+        metadataCache.getAllTopics.forEach(name =>
+          result.add(new ListConfigResourcesResponseData.ConfigResource().setResourceName(name).setResourceType(ConfigResource.Type.TOPIC.id))
+        )
+      }
+      data.setConfigResources(result)
       requestHelper.sendMaybeThrottle(request, new ListConfigResourcesResponse(data))
     }
   }

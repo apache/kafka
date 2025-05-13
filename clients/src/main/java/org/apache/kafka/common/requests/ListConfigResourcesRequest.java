@@ -16,11 +16,16 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.ListConfigResourcesRequestData;
 import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class ListConfigResourcesRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListConfigResourcesRequest> {
@@ -72,7 +77,9 @@ public class ListConfigResourcesRequest extends AbstractRequest {
         return data.toString();
     }
 
-    public boolean onlySupportClientMetrics() {
-        return version() == 0;
+    public List<Byte> defaultResourceTypes() {
+        return version() == 0 ?
+            List.of(ConfigResource.Type.CLIENT_METRICS.id()) :
+            Arrays.stream(ConfigResource.Type.values()).map(ConfigResource.Type::id).collect(Collectors.toList());
     }
 }

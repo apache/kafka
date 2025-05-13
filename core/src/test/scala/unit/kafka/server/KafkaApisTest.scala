@@ -10951,14 +10951,12 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    val expectedResponse = new ListConfigResourcesResponse(
-      new ListConfigResourcesResponseData()
+    val expectedResponseData = new ListConfigResourcesResponseData()
         .setConfigResources(
           resources.stream.map(resource =>
             new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource)
-          ).toList)
-    )
-    assertEquals(expectedResponse.data, response.data)
+          ).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+    assertEquals(expectedResponseData, response.data)
 
     verify(metadataCache, never).getAllTopics
     verify(groupConfigManager, never).groupIds
@@ -10977,13 +10975,13 @@ class KafkaApisTest extends Logging {
     when(clientMetricsManager.listClientMetricsResources).thenReturn(clientMetrics)
     when(metadataCache.getAllTopics).thenReturn(topics)
     when(groupConfigManager.groupIds).thenReturn(groupIds)
-    when(metadataCache.getBrokerNodes(any())).thenReturn(nodeIds.stream().map(id => new Node(id, "localhost", 1234)).toList)
+    when(metadataCache.getBrokerNodes(any())).thenReturn(
+      nodeIds.stream().map(id => new Node(id, "localhost", 1234)).collect(java.util.stream.Collectors.toList()))
 
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    val expectedResponse = new ListConfigResourcesResponse(
-      new ListConfigResourcesResponseData()
+    val expectedResponseData = new ListConfigResourcesResponseData()
         .setConfigResources(
           util.stream.Stream.of(
             groupIds.stream().map(resource =>
@@ -11001,9 +10999,8 @@ class KafkaApisTest extends Logging {
             topics.stream().map(resource =>
               new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.TOPIC.id)
             ).toList
-          ).flatMap(s => s.stream).toList)
-    )
-    assertEquals(expectedResponse.data, response.data)
+          ).flatMap(s => s.stream).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+    assertEquals(expectedResponseData, response.data)
   }
 
   @Test
@@ -11018,15 +11015,12 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    val expectedResponse = new ListConfigResourcesResponse(
-      new ListConfigResourcesResponseData()
+    val expectedResponseData = new ListConfigResourcesResponseData()
         .setConfigResources(
           groupIds.stream().map(resource =>
             new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.GROUP.id)
-          ).toList,
-        )
-    )
-    assertEquals(expectedResponse.data, response.data)
+          ).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+    assertEquals(expectedResponseData, response.data)
 
     verify(metadataCache, never).getAllTopics
     verify(clientMetricsManager, never).listClientMetricsResources
@@ -11045,15 +11039,12 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    val expectedResponse = new ListConfigResourcesResponse(
-      new ListConfigResourcesResponseData()
+    val expectedResponseData = new ListConfigResourcesResponseData()
         .setConfigResources(
           clientMetrics.stream.map(resource =>
             new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.CLIENT_METRICS.id)
-          ).toList
-        )
-    )
-    assertEquals(expectedResponse.data, response.data)
+          ).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+    assertEquals(expectedResponseData, response.data)
 
     verify(metadataCache, never).getAllTopics
     verify(groupConfigManager, never).groupIds
@@ -11067,19 +11058,18 @@ class KafkaApisTest extends Logging {
     metadataCache = mock(classOf[KRaftMetadataCache])
 
     val nodeIds = util.List.of(1, 2)
-    when(metadataCache.getBrokerNodes(any())).thenReturn(nodeIds.stream().map(id => new Node(id, "localhost", 1234)).toList)
+    when(metadataCache.getBrokerNodes(any())).thenReturn(
+      nodeIds.stream().map(id => new Node(id, "localhost", 1234)).collect(java.util.stream.Collectors.toList()))
 
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    val expectedResponse = new ListConfigResourcesResponse(
-      new ListConfigResourcesResponseData()
+    val expectedResponseData = new ListConfigResourcesResponseData()
         .setConfigResources(
           nodeIds.stream().map(resource =>
             new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER_LOGGER.id)
-          ).toList)
-    )
-    assertEquals(expectedResponse.data, response.data)
+          ).collect(java.util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+    assertEquals(expectedResponseData, response.data)
 
     verify(metadataCache, never).getAllTopics
     verify(groupConfigManager, never).groupIds
@@ -11093,19 +11083,18 @@ class KafkaApisTest extends Logging {
     metadataCache = mock(classOf[KRaftMetadataCache])
 
     val nodeIds = util.List.of(1, 2)
-    when(metadataCache.getBrokerNodes(any())).thenReturn(nodeIds.stream().map(id => new Node(id, "localhost", 1234)).toList)
+    when(metadataCache.getBrokerNodes(any())).thenReturn(
+      nodeIds.stream().map(id => new Node(id, "localhost", 1234)).collect(java.util.stream.Collectors.toList()))
 
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    val expectedResponse = new ListConfigResourcesResponse(
-      new ListConfigResourcesResponseData()
+    val expectedResponseData = new ListConfigResourcesResponseData()
         .setConfigResources(
           nodeIds.stream().map(resource =>
             new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER.id)
-          ).toList)
-    )
-    assertEquals(expectedResponse.data, response.data)
+          ).collect(java.util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+    assertEquals(expectedResponseData, response.data)
 
     verify(metadataCache, never).getAllTopics
     verify(groupConfigManager, never).groupIds
@@ -11124,14 +11113,12 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    val expectedResponse = new ListConfigResourcesResponse(
-      new ListConfigResourcesResponseData()
+    val expectedResponseData = new ListConfigResourcesResponseData()
         .setConfigResources(
           topics.stream().map(resource =>
             new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.TOPIC.id)
-          ).toList)
-    )
-    assertEquals(expectedResponse.data, response.data)
+          ).collect(java.util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+    assertEquals(expectedResponseData, response.data)
 
     verify(groupConfigManager, never).groupIds
     verify(clientMetricsManager, never).listClientMetricsResources
@@ -11153,6 +11140,23 @@ class KafkaApisTest extends Logging {
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
     val expectedResponse = new ListConfigResourcesResponseData()
     assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testListConfigResourcesV1WithUnknown(): Unit = {
+    val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()
+      .setResourceTypes(util.List.of(ConfigResource.Type.UNKNOWN.id))).build(1))
+    metadataCache = mock(classOf[KRaftMetadataCache])
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, RequestLocal.noCaching)
+    val response = verifyNoThrottling[ListConfigResourcesResponse](request)
+    assertEquals(new ListConfigResourcesResponseData(), response.data)
+
+    verify(metadataCache, never).getAllTopics
+    verify(groupConfigManager, never).groupIds
+    verify(clientMetricsManager, never).listClientMetricsResources
+    verify(metadataCache, never).getBrokerNodes(any)
   }
 
   @Test
