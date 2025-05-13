@@ -20,11 +20,11 @@ import org.apache.kafka.server.util.timer.TimerTask;
 
 import java.util.concurrent.CompletableFuture;
 
-public class IdleShareFetchTimeTask extends TimerTask {
+public class IdleShareFetchTimerTask extends TimerTask {
 
-    CompletableFuture<Void> future;
+    private final CompletableFuture<Void> future;
 
-    public IdleShareFetchTimeTask(
+    public IdleShareFetchTimerTask(
         long delayMs,
         CompletableFuture<Void> future
     ) {

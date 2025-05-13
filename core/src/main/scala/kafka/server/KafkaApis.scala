@@ -3050,7 +3050,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       shareFetchContext = sharePartitionManager.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent, request.context.connectionId)
     } catch {
       case _: ShareSessionLimitReachedException =>
-        sharePartitionManager.createIdleShareFetchTask(shareFetchRequest.maxWait).handle(
+        sharePartitionManager.createIdleShareFetchTimerTask(shareFetchRequest.maxWait).handle(
           (_, exception) => {
             if (exception != null) {
               requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))

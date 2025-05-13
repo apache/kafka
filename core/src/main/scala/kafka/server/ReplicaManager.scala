@@ -451,7 +451,7 @@ class ReplicaManager(val config: KafkaConfig,
     delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, delayedShareFetchKeys)
   }
 
-  private[server] def addDelayedShareTimerRequest(timerTask: TimerTask): Unit = {
+  private[server] def addDelayedShareFetchTimerRequest(timerTask: TimerTask): Unit = {
     delayedShareFetchTimer.add(timerTask)
   }
 

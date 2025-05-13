@@ -4837,7 +4837,7 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any()))
       .thenThrow(Errors.SHARE_SESSION_LIMIT_REACHED.exception)
 
-    when(sharePartitionManager.createIdleShareFetchTask(any()))
+    when(sharePartitionManager.createIdleShareFetchTimerTask(any()))
       .thenAnswer(_ => CompletableFuture.runAsync(() => {}))
 
     val shareFetchRequestData = new ShareFetchRequestData().

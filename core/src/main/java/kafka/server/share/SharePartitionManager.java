@@ -397,10 +397,10 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @return A future that will be completed when the timer task is completed.
      */
-    public CompletableFuture<Void> createIdleShareFetchTask(long maxWaitMs) {
+    public CompletableFuture<Void> createIdleShareFetchTimerTask(long maxWaitMs) {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        TimerTask idleShareFetchTimerTask = new IdleShareFetchTimeTask(maxWaitMs, future);
-        replicaManager.addDelayedShareTimerRequest(idleShareFetchTimerTask);
+        TimerTask idleShareFetchTimerTask = new IdleShareFetchTimerTask(maxWaitMs, future);
+        replicaManager.addDelayedShareFetchTimerRequest(idleShareFetchTimerTask);
         return future;
     }
 
