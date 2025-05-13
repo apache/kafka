@@ -36,7 +36,6 @@ import com.dynatrace.hash4j.hashing.Hashing;
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -380,33 +379,35 @@ public class Utils {
      * @param clusterImage The cluster image.
      * @return The hash of the topic.
      */
-    static long computeTopicHash(TopicImage topicImage, ClusterImage clusterImage) throws IOException {
+    static long computeTopicHash(TopicImage topicImage, ClusterImage clusterImage) {
         HashStream64 hasher = Hashing.xxh3_64().hashStream();
-        hasher = hasher.putByte(TOPIC_HASH_MAGIC_BYTE) // magic byte
+        hasher = hasher
+            .putByte(TOPIC_HASH_MAGIC_BYTE) // magic byte
             .putLong(topicImage.id().hashCode()) // topic ID
             .putString(topicImage.name()) // topic name
             .putInt(topicImage.partitions().size()); // number of partitions
 
+        List<String> racks = new ArrayList<>();
         for (int i = 0; i < topicImage.partitions().size(); i++) {
             hasher = hasher.putInt(i); // partition id
-            // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
-            // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
-            // Add length before the rack string to avoid the edge case.
-            List<String> racks = new ArrayList<>();
+            racks.clear(); // Clear the list for reuse
             for (int replicaId : topicImage.partitions().get(i).replicas) {
                 BrokerRegistration broker = clusterImage.broker(replicaId);
                 if (broker != null) {
-                    Optional<String> rackOptional = broker.rack();
-                    rackOptional.ifPresent(racks::add);
+                    broker.rack().ifPresent(racks::add);
                 }
             }
 
             Collections.sort(racks);
             for (String rack : racks) {
                 // Format: "<length><value>"
+                // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
+                // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
+                // Add length before the rack string to avoid the edge case.
                 hasher = hasher.putInt(rack.length()).putString(rack);
             }
         }
+
         return hasher.getAsLong();
     }
 }

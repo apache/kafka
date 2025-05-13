@@ -26,7 +26,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -45,7 +44,7 @@ public class UtilsTest {
         .build();
 
     @Test
-    void testComputeTopicHash() throws IOException {
+    void testComputeTopicHash() {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         long expected = Hashing.xxh3_64().hashStream()
@@ -68,7 +67,7 @@ public class UtilsTest {
     }
 
     @Test
-    void testComputeTopicHashWithDifferentMagicByte() throws IOException {
+    void testComputeTopicHashWithDifferentMagicByte() {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         long expected = Hashing.xxh3_64().hashStream()
@@ -91,7 +90,7 @@ public class UtilsTest {
     }
 
     @Test
-    void testComputeTopicHashWithDifferentPartitionOrder() throws IOException {
+    void testComputeTopicHashWithDifferentPartitionOrder() {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         long expected = Hashing.xxh3_64().hashStream()
@@ -114,7 +113,7 @@ public class UtilsTest {
     }
 
     @Test
-    void testComputeTopicHashWithDifferentRackOrder() throws IOException {
+    void testComputeTopicHashWithDifferentRackOrder() {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         long expected = Hashing.xxh3_64().hashStream()
@@ -138,7 +137,7 @@ public class UtilsTest {
 
     @ParameterizedTest
     @MethodSource("differentFieldGenerator")
-    void testComputeTopicHashWithDifferentField(MetadataImage differentImage, Uuid topicId) throws IOException {
+    void testComputeTopicHashWithDifferentField(MetadataImage differentImage, Uuid topicId) {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         assertNotEquals(
@@ -153,7 +152,8 @@ public class UtilsTest {
     private static Stream<Arguments> differentFieldGenerator() {
         Uuid differentTopicId = Uuid.randomUuid();
         return Stream.of(
-            Arguments.of(new MetadataImageBuilder() // different topic id
+            Arguments.of(
+                new MetadataImageBuilder() // different topic id
                     .addTopic(differentTopicId, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
                     .addRacks()
                     .build(),
