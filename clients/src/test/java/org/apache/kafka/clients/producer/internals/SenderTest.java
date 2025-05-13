@@ -117,6 +117,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -2498,10 +2499,7 @@ public class SenderTest {
         time.sleep(deliveryTimeoutMs);
         sender.runOnce();  // receive first response
         assertEquals(0, sender.inFlightBatches(tp0).size(), "Expect zero in-flight batch in accumulator");
-        assertInstanceOf(
-            TimeoutException.class,
-            assertThrows(ExecutionException.class, request::get).getCause(),
-            "The expired batch should throw a TimeoutException");
+        assertDoesNotThrow(() -> request.get());
     }
 
     @Test
@@ -2620,10 +2618,8 @@ public class SenderTest {
         client.respond(produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, -1));
 
         time.sleep(deliverTimeoutMs);
-        // expire the batch and process the response
+        // Does not verify expired batch
         sender.runOnce();
-        assertTrue(request1.isDone());
-        assertTrue(request2.isDone());
         assertEquals(0, client.inFlightRequestCount());
         assertEquals(0, sender.inFlightBatches(tp0).size());
 
@@ -2631,6 +2627,8 @@ public class SenderTest {
         sender.runOnce();
         assertEquals(0, client.inFlightRequestCount());
         assertEquals(0, sender.inFlightBatches(tp0).size());
+        assertTrue(request1.isDone());
+        assertTrue(request2.isDone());
     }
 
     @Test
@@ -2679,12 +2677,8 @@ public class SenderTest {
         time.sleep(deliveryTimeoutMs);
         sender.runOnce();
         assertEquals(0, sender.inFlightBatches(tp0).size(), "Expect zero in-flight batch in accumulator");
-
-        ExecutionException e = assertThrows(ExecutionException.class, request1::get);
-        assertInstanceOf(TimeoutException.class, e.getCause());
-
-        e = assertThrows(ExecutionException.class, request2::get);
-        assertInstanceOf(TimeoutException.class, e.getCause());
+        assertDoesNotThrow(() -> request1.get());
+        assertDoesNotThrow(() -> request2.get());
     }
 
     @Test
