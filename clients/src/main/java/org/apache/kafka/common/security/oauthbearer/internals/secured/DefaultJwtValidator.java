@@ -25,7 +25,6 @@ import org.jose4j.keys.resolvers.VerificationKeyResolver;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -92,7 +91,10 @@ public class DefaultJwtValidator implements JwtValidator {
 
     @Override
     public OAuthBearerToken validate(String accessToken) throws ValidateException {
-        return Objects.requireNonNull(delegate).validate(accessToken);
+        if (delegate == null)
+            throw new IllegalStateException("JWT validator delegate is null; please call init() first");
+
+        return delegate.validate(accessToken);
     }
 
     @Override

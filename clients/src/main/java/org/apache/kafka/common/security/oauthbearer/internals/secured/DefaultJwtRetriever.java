@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 import javax.net.ssl.SSLSocketFactory;
 
@@ -96,7 +95,10 @@ public class DefaultJwtRetriever implements JwtRetriever {
 
     @Override
     public String retrieve() throws IOException {
-        return Objects.requireNonNull(delegate).retrieve();
+        if (delegate == null)
+            throw new IllegalStateException("JWT retriever delegate is null; please call init() first");
+
+        return delegate.retrieve();
     }
 
     @Override
