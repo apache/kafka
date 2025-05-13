@@ -306,7 +306,7 @@ class BrokerMetadataPublisher(
       if (topicsDelta.topicWasDeleted(topicName)) {
         topicsDelta.image.getTopic(topicName).partitions.entrySet.forEach { entry =>
           if (entry.getValue.leader == brokerId) {
-            resignation(entry.getKey, Some(entry.getValue.leaderEpoch))
+            resignation(entry.getKey, None)
           }
         }
       }
