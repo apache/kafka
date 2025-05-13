@@ -957,18 +957,24 @@ class ControllerApisTest {
     controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
-    assertThrows(classOf[TopicDeletionDisabledException],
-      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
-        ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-        hasClusterAuth = false,
-        _ => Set("foo", "bar"),
-        _ => Set("foo", "bar")))
-    assertThrows(classOf[InvalidRequestException],
-      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
-        1,
-        hasClusterAuth = false,
-        _ => Set("foo", "bar"),
-        _ => Set("foo", "bar")))
+
+    controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
+      ApiKeys.DELETE_TOPICS.latestVersion().toInt,
+      hasClusterAuth = false,
+      _ => Set("foo", "bar"),
+      _ => Set("foo", "bar")).exceptionally(e => {
+      assertTrue(e.isInstanceOf[TopicDeletionDisabledException])
+      return
+    })
+
+    controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
+      1,
+      hasClusterAuth = false,
+      _ => Set("foo", "bar"),
+      _ => Set("foo", "bar")).exceptionally(e => {
+      assertTrue(e.isInstanceOf[InvalidRequestException])
+      return
+    })
   }
 
   @Test

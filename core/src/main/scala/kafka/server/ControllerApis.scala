@@ -147,7 +147,6 @@ class ControllerApis(
       }
     } catch {
       case e: FatalExitError => throw e
-      case e: TopicDeletionDisabledException => requestHelper.handleError(request, e)
       case t: Throwable =>
         // This catches exceptions in the blocking parts of the request handlers
         error(s"Unexpected error handling request ${request.requestDesc(true)} " +
@@ -230,9 +229,9 @@ class ControllerApis(
     // Check if topic deletion is enabled at all.
     if (!config.deleteTopicEnable) {
       if (apiVersion < 3) {
-        throw new InvalidRequestException("Topic deletion is disabled.")
+        return CompletableFuture.failedFuture(new InvalidRequestException("Topic deletion is disabled."))
       } else {
-        throw new TopicDeletionDisabledException()
+        return CompletableFuture.failedFuture(new TopicDeletionDisabledException("Topic deletion is disabled"))
       }
     }
     // The first step is to load up the names and IDs that have been provided by the
