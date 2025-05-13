@@ -29,7 +29,6 @@ import com.yammer.metrics.core.Meter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Caches share sessions.
@@ -61,15 +60,10 @@ public class ShareSessionCache {
     private final Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
 
     private final Map<String, ShareSessionKey> connectionIdToSessionMap;
-    /**
-     * Flag indicating if share groups have been turned on.
-     */
-    private final AtomicBoolean supportsShareGroups;
 
     @SuppressWarnings("this-escape")
-    public ShareSessionCache(int maxEntries, boolean supportsShareGroups) {
+    public ShareSessionCache(int maxEntries) {
         this.maxEntries = maxEntries;
-        this.supportsShareGroups = new AtomicBoolean(supportsShareGroups);
         // Register metrics for ShareSessionCache.
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareSessionCache");
         metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
@@ -135,9 +129,7 @@ public class ShareSessionCache {
      * @param session  The session.
      */
     public synchronized void updateNumPartitions(ShareSession session) {
-        if (supportsShareGroups.get()) {
-            numPartitions += session.updateCachedSize();
-        }
+        numPartitions += session.updateCachedSize();
     }
 
     /**
@@ -154,7 +146,7 @@ public class ShareSessionCache {
         ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
         String clientConnectionId
     ) {
-        if (sessions.size() < maxEntries && supportsShareGroups.get()) {
+        if (sessions.size() < maxEntries) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
                 ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
@@ -188,18 +180,5 @@ public class ShareSessionCache {
                 }
             }
         }
-    }
-
-    /**
-     * Update the value of supportsShareGroups to reflect if share groups are turned on.
-     * @param supportsShareGroups - Boolean indicating if share groups are turned on.
-     */
-    public void updateSupportsShareGroups(boolean supportsShareGroups) {
-        this.supportsShareGroups.set(supportsShareGroups);
-    }
-
-    // Visible for testing.
-    public boolean supportsShareGroups() {
-        return supportsShareGroups.get();
     }
 }
