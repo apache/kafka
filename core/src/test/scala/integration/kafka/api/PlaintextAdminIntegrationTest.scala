@@ -30,7 +30,8 @@ import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
-import kafka.utils.{LoggingController, TestInfoUtils, TestUtils}
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.server.LoggingController
 import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource

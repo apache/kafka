@@ -19,7 +19,7 @@ package kafka.utils
 
 import com.typesafe.scalalogging.Logger
 import org.slf4j.{LoggerFactory, Marker, MarkerFactory}
-
+import org.apache.kafka.server.LoggingController
 
 object Log4jControllerRegistration {
   private val logger = Logger(this.getClass.getName)
