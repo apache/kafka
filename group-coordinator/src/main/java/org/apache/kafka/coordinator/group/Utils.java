@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.image.ClusterImage;
@@ -32,15 +31,12 @@ import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import com.dynatrace.hash4j.hashing.HashStream64;
+import com.dynatrace.hash4j.hashing.Hashing;
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
-import net.jpountz.xxhash.XXHash64;
-import net.jpountz.xxhash.XXHashFactory;
-
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -53,7 +49,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.function.LongFunction;
 import java.util.stream.Collectors;
 
 public class Utils {
@@ -339,7 +334,6 @@ public class Utils {
      * The magic byte used to identify the version of topic hash function.
      */
     static final byte TOPIC_HASH_MAGIC_BYTE = 0x00;
-    static final XXHash64 LZ4_HASH_INSTANCE = XXHashFactory.fastestInstance().hash64();
 
     /**
      * Computes the hash of the topics in a group.
@@ -348,45 +342,22 @@ public class Utils {
      * <p>
      * The hashing process involves the following steps:
      * 1. Sort the topic hashes by topic name.
-     * 2. Convert each long hash value into a byte array.
-     * 3. Combine the sorted byte arrays to produce a final hash for the group.
+     * 2. Write each topic hash in order.
      *
      * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
      * @return The hash of the group.
      */
     static long computeGroupHash(Map<String, Long> topicHashes) {
-        // Convert long to byte array. This is taken from guava LongHashCode#asBytes.
-        // https://github.com/google/guava/blob/bdf2a9d05342fca852645278d474082905e09d94/guava/src/com/google/common/hash/HashCode.java#L187-L199
-        LongFunction<byte[]> longToBytes = (long value) -> new byte[] {
-            (byte) value,
-            (byte) (value >> 8),
-            (byte) (value >> 16),
-            (byte) (value >> 24),
-            (byte) (value >> 32),
-            (byte) (value >> 40),
-            (byte) (value >> 48),
-            (byte) (value >> 56)
-        };
-
-        // Combine the sorted topic hashes.
-        byte[] resultBytes = new byte[8];
-
         // Sort entries by topic name
         List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>(topicHashes.entrySet());
         sortedEntries.sort(Map.Entry.comparingByKey());
 
+        HashStream64 hasher = Hashing.xxh3_64().hashStream();
         for (Map.Entry<String, Long> entry : sortedEntries) {
-            Long value = entry.getValue();
-            byte[] nextBytes = longToBytes.apply(value);
-
-            // Combine ordered hashes. This is taken from guava Hashing#combineOrdered.
-            // https://github.com/google/guava/blob/bdf2a9d05342fca852645278d474082905e09d94/guava/src/com/google/common/hash/Hashing.java#L689-L712
-            for (int i = 0; i < nextBytes.length; i++) {
-                resultBytes[i] = (byte) (resultBytes[i] * 37 ^ nextBytes[i]);
-            }
+            hasher.putLong(entry.getValue());
         }
 
-        return LZ4_HASH_INSTANCE.hash(resultBytes, 0, resultBytes.length, 0);
+        return hasher.getAsLong();
     }
 
     /**
@@ -400,7 +371,7 @@ public class Utils {
      * The hashing process involves the following steps:
      * 1. Write a magic byte to denote the version of the hash function.
      * 2. Write the hash code of the topic ID.
-     * 3. Write the UTF-8 encoded topic name.
+     * 3. Write the topic name.
      * 4. Write the number of partitions associated with the topic.
      * 5. For each partition, write the partition ID and a sorted list of rack identifiers.
      *    - Rack identifiers are formatted as "<length1><value1><length2><value2>" to prevent issues with simple separators.
@@ -410,36 +381,32 @@ public class Utils {
      * @return The hash of the topic.
      */
     static long computeTopicHash(TopicImage topicImage, ClusterImage clusterImage) throws IOException {
-        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
-             DataOutputStream dos = new DataOutputStream(bbos)) {
-            dos.writeByte(TOPIC_HASH_MAGIC_BYTE); // magic byte
-            dos.writeLong(topicImage.id().hashCode()); // topic ID
-            dos.writeUTF(topicImage.name()); // topic name
-            dos.writeInt(topicImage.partitions().size()); // number of partitions
-            for (int i = 0; i < topicImage.partitions().size(); i++) {
-                dos.writeInt(i); // partition id
-                // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
-                // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
-                // Add length before the rack string to avoid the edge case.
-                List<String> racks = new ArrayList<>();
-                for (int replicaId : topicImage.partitions().get(i).replicas) {
-                    BrokerRegistration broker = clusterImage.broker(replicaId);
-                    if (broker != null) {
-                        Optional<String> rackOptional = broker.rack();
-                        rackOptional.ifPresent(racks::add);
-                    }
-                }
+        HashStream64 hasher = Hashing.xxh3_64().hashStream();
+        hasher = hasher.putByte(TOPIC_HASH_MAGIC_BYTE) // magic byte
+            .putLong(topicImage.id().hashCode()) // topic ID
+            .putString(topicImage.name()) // topic name
+            .putInt(topicImage.partitions().size()); // number of partitions
 
-                Collections.sort(racks);
-                for (String rack : racks) {
-                    // Format: "<length><value>"
-                    dos.writeInt(rack.length());
-                    dos.writeUTF(rack);
+        for (int i = 0; i < topicImage.partitions().size(); i++) {
+            hasher = hasher.putInt(i); // partition id
+            // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
+            // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
+            // Add length before the rack string to avoid the edge case.
+            List<String> racks = new ArrayList<>();
+            for (int replicaId : topicImage.partitions().get(i).replicas) {
+                BrokerRegistration broker = clusterImage.broker(replicaId);
+                if (broker != null) {
+                    Optional<String> rackOptional = broker.rack();
+                    rackOptional.ifPresent(racks::add);
                 }
             }
-            dos.flush();
-            ByteBuffer topicBytes = bbos.buffer().flip();
-            return LZ4_HASH_INSTANCE.hash(topicBytes, 0);
+
+            Collections.sort(racks);
+            for (String rack : racks) {
+                // Format: "<length><value>"
+                hasher = hasher.putInt(rack.length()).putString(rack);
+            }
         }
+        return hasher.getAsLong();
     }
 }

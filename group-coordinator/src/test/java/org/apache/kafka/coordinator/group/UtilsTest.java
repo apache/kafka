@@ -17,20 +17,16 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.image.MetadataImage;
 
-import net.jpountz.xxhash.XXHash64;
-import net.jpountz.xxhash.XXHashFactory;
+import com.dynatrace.hash4j.hashing.Hashing;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -47,112 +43,97 @@ public class UtilsTest {
         .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
         .addRacks()
         .build();
-    private static final XXHash64 LZ4_HASH_INSTANCE = XXHashFactory.fastestInstance().hash64();
 
     @Test
     void testComputeTopicHash() throws IOException {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
-             DataOutputStream dos = new DataOutputStream(bbos)) {
-            dos.writeByte(0); // magic byte
-            dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
-            dos.writeUTF(FOO_TOPIC_NAME); // topic name
-            dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
-            dos.writeInt(0); // partition 0
-            dos.writeInt(5); // length of rack0
-            dos.writeUTF("rack0"); // The first rack in partition 0
-            dos.writeInt(5); // length of rack1
-            dos.writeUTF("rack1"); // The second rack in partition 0
-            dos.writeInt(1); // partition 1
-            dos.writeInt(5); // length of rack0
-            dos.writeUTF("rack1"); // The first rack in partition 1
-            dos.writeInt(5); // length of rack1
-            dos.writeUTF("rack2"); // The second rack in partition 1
-            dos.flush();
-            ByteBuffer topicBytes = bbos.buffer().flip();
-            assertEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
-        }
+        long expected = Hashing.xxh3_64().hashStream()
+            .putByte((byte) 0) // magic byte
+            .putLong(FOO_TOPIC_ID.hashCode()) // topic ID
+            .putString(FOO_TOPIC_NAME) // topic name
+            .putInt(FOO_NUM_PARTITIONS) // number of partitions
+            .putInt(0) // partition 0
+            .putInt(5) // length of rack0
+            .putString("rack0") // The first rack in partition 0
+            .putInt(5) // length of rack1
+            .putString("rack1") // The second rack in partition 0
+            .putInt(1) // partition 1
+            .putInt(5) // length of rack0
+            .putString("rack1") // The first rack in partition 1
+            .putInt(5) // length of rack1
+            .putString("rack2") // The second rack in partition 1
+            .getAsLong();
+        assertEquals(expected, result);
     }
 
     @Test
     void testComputeTopicHashWithDifferentMagicByte() throws IOException {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
-             DataOutputStream dos = new DataOutputStream(bbos)) {
-            dos.writeByte(1); // different magic byte
-            dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
-            dos.writeUTF(FOO_TOPIC_NAME); // topic name
-            dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
-            dos.writeInt(0); // partition 0
-            dos.writeInt(5); // length of rack0
-            dos.writeUTF("rack0"); // The first rack in partition 0
-            dos.writeInt(5); // length of rack1
-            dos.writeUTF("rack1"); // The second rack in partition 0
-            dos.writeInt(1); // partition 1
-            dos.writeInt(5); // length of rack0
-            dos.writeUTF("rack1"); // The first rack in partition 1
-            dos.writeInt(5); // length of rack1
-            dos.writeUTF("rack2"); // The second rack in partition 1
-            dos.flush();
-            ByteBuffer topicBytes = bbos.buffer().flip();
-            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
-        }
+        long expected = Hashing.xxh3_64().hashStream()
+            .putByte((byte) 1) // magic byte
+            .putLong(FOO_TOPIC_ID.hashCode()) // topic ID
+            .putString(FOO_TOPIC_NAME) // topic name
+            .putInt(FOO_NUM_PARTITIONS) // number of partitions
+            .putInt(0) // partition 0
+            .putInt(5) // length of rack0
+            .putString("rack0") // The first rack in partition 0
+            .putInt(5) // length of rack1
+            .putString("rack1") // The second rack in partition 0
+            .putInt(1) // partition 1
+            .putInt(5) // length of rack0
+            .putString("rack1") // The first rack in partition 1
+            .putInt(5) // length of rack1
+            .putString("rack2") // The second rack in partition 1
+            .getAsLong();
+        assertNotEquals(expected, result);
     }
 
     @Test
     void testComputeTopicHashWithDifferentPartitionOrder() throws IOException {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
-             DataOutputStream dos = new DataOutputStream(bbos)) {
-            dos.writeByte(0); // magic byte
-            dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
-            dos.writeUTF(FOO_TOPIC_NAME); // topic name
-            dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
-            // different partition order
-            dos.writeInt(1); // partition 1
-            dos.writeInt(5); // length of rack0
-            dos.writeUTF("rack1"); // The first rack in partition 1
-            dos.writeInt(5); // length of rack1
-            dos.writeUTF("rack2"); // The second rack in partition 1
-            dos.writeInt(0); // partition 0
-            dos.writeInt(5); // length of rack0
-            dos.writeUTF("rack0"); // The first rack in partition 0
-            dos.writeInt(5); // length of rack1
-            dos.writeUTF("rack1"); // The second rack in partition 0
-            dos.flush();
-            ByteBuffer topicBytes = bbos.buffer().flip();
-            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
-        }
+        long expected = Hashing.xxh3_64().hashStream()
+            .putByte((byte) 1) // magic byte
+            .putLong(FOO_TOPIC_ID.hashCode()) // topic ID
+            .putString(FOO_TOPIC_NAME) // topic name
+            .putInt(FOO_NUM_PARTITIONS) // number of partitions
+            .putInt(1) // partition 1
+            .putInt(5) // length of rack0
+            .putString("rack1") // The first rack in partition 1
+            .putInt(5) // length of rack1
+            .putString("rack2") // The second rack in partition 1
+            .putInt(0) // partition 0
+            .putInt(5) // length of rack0
+            .putString("rack0") // The first rack in partition 0
+            .putInt(5) // length of rack1
+            .putString("rack1") // The second rack in partition 0
+            .getAsLong();
+        assertNotEquals(expected, result);
     }
 
     @Test
     void testComputeTopicHashWithDifferentRackOrder() throws IOException {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
-             DataOutputStream dos = new DataOutputStream(bbos)) {
-            dos.writeByte(0); // magic byte
-            dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
-            dos.writeUTF(FOO_TOPIC_NAME); // topic name
-            dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
-            dos.writeInt(0); // partition 0
-            // different rack order of partition 0
-            dos.writeInt(5); // length of rack0
-            dos.writeUTF("rack1"); // The second rack in partition 0
-            dos.writeInt(5); // length of rack1
-            dos.writeUTF("rack0"); // The first rack in partition 0
-            dos.writeInt(1); // partition 1
-            dos.writeInt(5); // length of rack0
-            dos.writeUTF("rack1"); // The first rack in partition 1
-            dos.writeInt(5); // length of rack1
-            dos.writeUTF("rack2"); // The second rack in partition 1
-            dos.flush();
-            ByteBuffer topicBytes = bbos.buffer().flip();
-            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
-        }
+        long expected = Hashing.xxh3_64().hashStream()
+            .putByte((byte) 0) // magic byte
+            .putLong(FOO_TOPIC_ID.hashCode()) // topic ID
+            .putString(FOO_TOPIC_NAME) // topic name
+            .putInt(FOO_NUM_PARTITIONS) // number of partitions
+            .putInt(0) // partition 0
+            .putInt(5) // length of rack0
+            .putString("rack1") // The second rack in partition 0
+            .putInt(5) // length of rack1
+            .putString("rack0") // The first rack in partition 0
+            .putInt(1) // partition 1
+            .putInt(5) // length of rack0
+            .putString("rack1") // The first rack in partition 1
+            .putInt(5) // length of rack1
+            .putString("rack2") // The second rack in partition 1
+            .getAsLong();
+        assertNotEquals(expected, result);
     }
 
     @ParameterizedTest
