@@ -40,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
@@ -88,13 +89,15 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
     @Test
     public void testHandlerInitThrowsException() throws IOException {
+        IOException initError = new IOException("init() error");
+
         AccessTokenBuilder builder = new AccessTokenBuilder()
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
         JwtValidator jwtValidator = new JwtValidator() {
             @Override
             public void init() throws IOException {
-                throw new IOException("My init had an error!");
+                throw initError;
             }
 
             @Override
@@ -106,11 +109,13 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
 
         // An error initializing the JwtValidator should cause OAuthBearerValidatorCallbackHandler.init() to fail.
-        assertThrowsWithMessage(
+        KafkaException root = assertThrows(
             KafkaException.class,
-            () -> handler.init(verificationKeyResolver, jwtValidator),
-            "encountered an error when initializing"
+            () -> handler.init(verificationKeyResolver, jwtValidator)
         );
+        assertNotNull(root);
+        assertNotNull(root.getCause());
+        assertEquals(initError, root.getCause());
     }
 
     @Test
@@ -121,7 +126,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         JwtValidator jwtValidator = new JwtValidator() {
             @Override
             public void close() throws IOException {
-                throw new IOException("My close had an error!");
+                throw new IOException("close() error");
             }
 
             @Override
