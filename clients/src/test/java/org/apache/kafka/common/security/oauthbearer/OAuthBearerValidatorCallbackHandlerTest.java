@@ -113,7 +113,6 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
             KafkaException.class,
             () -> handler.init(verificationKeyResolver, jwtValidator)
         );
-        assertNotNull(root);
         assertNotNull(root.getCause());
         assertEquals(initError, root.getCause());
     }
