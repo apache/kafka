@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -26,6 +27,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.List;
 
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
+import static org.apache.kafka.common.requests.OffsetFetchResponse.NO_METADATA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -242,5 +246,44 @@ public class OffsetFetchResponseTest {
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             new OffsetFetchResponse(data, version).group("foo")
         );
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+    public void testSingleGroupWithError(short version) {
+        var group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("group1")
+            .setTopics(List.of(
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(List.of(0))
+            ));
+
+        if (version < 2) {
+            assertEquals(
+                new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId("group1")
+                    .setTopics(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                            .setName("foo")
+                            .setPartitions(List.of(
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(0)
+                                    .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                                    .setCommittedOffset(INVALID_OFFSET)
+                                    .setMetadata(NO_METADATA)
+                                    .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH)
+                            ))
+                    )),
+                OffsetFetchResponse.groupError(group, Errors.INVALID_GROUP_ID, version)
+            );
+        } else {
+            assertEquals(
+                new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId("group1")
+                    .setErrorCode(Errors.INVALID_GROUP_ID.code()),
+                OffsetFetchResponse.groupError(group, Errors.INVALID_GROUP_ID, version)
+            );
+        }
     }
 }
