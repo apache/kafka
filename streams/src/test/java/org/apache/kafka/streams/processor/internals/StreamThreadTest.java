@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -25,6 +26,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
@@ -69,6 +73,7 @@ import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.ConsumerWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -130,6 +135,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -138,6 +144,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -3923,6 +3930,195 @@ public class StreamThreadTest {
                 )
             )
         );
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldWrapMainConsumerFromClassConfig(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        streamsConfigProps.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsConfigProps.put(InternalConfig.INTERNAL_CONSUMER_WRAPPER, TestWrapper.class);
+
+        thread = createStreamThread("clientId", new StreamsConfig(streamsConfigProps));
+
+        assertInstanceOf(
+            AsyncKafkaConsumer.class,
+            assertInstanceOf(TestWrapper.class, thread.mainConsumer()).delegate
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldWrapMainConsumerFromStringConfig(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        streamsConfigProps.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsConfigProps.put(InternalConfig.INTERNAL_CONSUMER_WRAPPER, TestWrapper.class.getName());
+
+        thread = createStreamThread("clientId", new StreamsConfig(streamsConfigProps));
+
+        assertInstanceOf(
+            AsyncKafkaConsumer.class,
+            assertInstanceOf(TestWrapper.class, thread.mainConsumer()).delegate
+        );
+    }
+
+    public static final class TestWrapper implements ConsumerWrapper {
+        private Consumer<byte[], byte[]> delegate;
+
+        @Override
+        public void wrapConsumer(final Consumer<byte[], byte[]> delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Set<TopicPartition> assignment() {
+            return Set.of();
+        }
+        @Override
+        public Set<String> subscription() {
+            return Set.of();
+        }
+        @Override
+        public void subscribe(final Collection<String> topics) { }
+        @Override
+        public void subscribe(final Collection<String> topics, final ConsumerRebalanceListener callback) { }
+        @Override
+        public void assign(final Collection<TopicPartition> partitions) { }
+        @Override
+        public void subscribe(final Pattern pattern, final ConsumerRebalanceListener callback) { }
+        @Override
+        public void subscribe(final Pattern pattern) { }
+        @Override
+        public void subscribe(final SubscriptionPattern pattern, final ConsumerRebalanceListener callback) { }
+        @Override
+        public void subscribe(final SubscriptionPattern pattern) { }
+        @Override
+        public void unsubscribe() { }
+        @Override
+        public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
+            return null;
+        }
+        @Override
+        public void commitSync() { }
+        @Override
+        public void commitSync(final Duration timeout) { }
+        @Override
+        public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) { }
+        @Override
+        public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) { }
+        @Override
+        public void commitAsync() { }
+        @Override
+        public void commitAsync(final OffsetCommitCallback callback) { }
+        @Override
+        public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) { }
+        @Override
+        public void registerMetricForSubscription(final KafkaMetric metric) { }
+        @Override
+        public void unregisterMetricFromSubscription(final KafkaMetric metric) { }
+        @Override
+        public void seek(final TopicPartition partition, final long offset) { }
+        @Override
+        public void seek(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) { }
+        @Override
+        public void seekToBeginning(final Collection<TopicPartition> partitions) { }
+        @Override
+        public void seekToEnd(final Collection<TopicPartition> partitions) { }
+        @Override
+        public long position(final TopicPartition partition) {
+            return 0;
+        }
+        @Override
+        public long position(final TopicPartition partition, final Duration timeout) {
+            return 0;
+        }
+        @Override
+        public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+            return Map.of();
+        }
+        @Override
+        public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions, final Duration timeout) {
+            return Map.of();
+        }
+        @Override
+        public Uuid clientInstanceId(final Duration timeout) {
+            return null;
+        }
+        @Override
+        public Map<MetricName, ? extends Metric> metrics() {
+            return Map.of();
+        }
+        @Override
+        public List<PartitionInfo> partitionsFor(final String topic) {
+            return List.of();
+        }
+        @Override
+        public List<PartitionInfo> partitionsFor(final String topic, final Duration timeout) {
+            return List.of();
+        }
+        @Override
+        public Map<String, List<PartitionInfo>> listTopics() {
+            return Map.of();
+        }
+        @Override
+        public Map<String, List<PartitionInfo>> listTopics(final Duration timeout) {
+            return Map.of();
+        }
+        @Override
+        public Set<TopicPartition> paused() {
+            return Set.of();
+        }
+        @Override
+        public void pause(final Collection<TopicPartition> partitions) { }
+        @Override
+        public void resume(final Collection<TopicPartition> partitions) { }
+        @Override
+        public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+            return Map.of();
+        }
+        @Override
+        public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch, final Duration timeout) {
+            return Map.of();
+        }
+        @Override
+        public Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
+            return Map.of();
+        }
+        @Override
+        public Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions, final Duration timeout) {
+            return Map.of();
+        }
+        @Override
+        public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+            return Map.of();
+        }
+        @Override
+        public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions, final Duration timeout) {
+            return Map.of();
+        }
+        @Override
+        public OptionalLong currentLag(final TopicPartition topicPartition) {
+            return OptionalLong.empty();
+        }
+
+        @Override
+        public ConsumerGroupMetadata groupMetadata() {
+            return delegate.groupMetadata();
+        }
+
+        @Override
+        public void enforceRebalance() { }
+        @Override
+        public void enforceRebalance(final String reason) { }
+        @Override
+        public void close() { }
+        @Deprecated
+        @Override
+        public void close(final Duration timeout) { }
+        @Override
+        public void close(final CloseOptions option) { }
+        @Override
+        public void wakeup() { }
     }
 
     private StreamThread setUpThread(final Properties streamsConfigProps) {
