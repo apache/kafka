@@ -43,9 +43,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, A
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.net.InetAddress
 import java.util
@@ -133,32 +131,28 @@ class RequestQuotaTest extends BaseRequestTest {
     finally super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testResponseThrottleTime(quorum: String): Unit = {
+  @Test
+  def testResponseThrottleTime(): Unit = {
     for (apiKey <- clientActions ++ clusterActionsWithThrottleForBroker)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated(quorum: String): Unit = {
+  @Test
+  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated(): Unit = {
     submitTest(ApiKeys.PRODUCE, () => checkSmallQuotaProducerRequestThrottleTime())
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated(quorum: String): Unit = {
+  @Test
+  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated(): Unit = {
     submitTest(ApiKeys.FETCH, () => checkSmallQuotaConsumerRequestThrottleTime())
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUnthrottledClient(quorum: String): Unit = {
+  @Test
+  def testUnthrottledClient(): Unit = {
     for (apiKey <- clientActions) {
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
     }
@@ -166,9 +160,8 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testExemptRequestTime(quorum: String): Unit = {
+  @Test
+  def testExemptRequestTime(): Unit = {
     // Exclude `DESCRIBE_QUORUM`, maybe it shouldn't be a cluster action
     val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope -- RequestQuotaTest.ShareGroupState - ApiKeys.DESCRIBE_QUORUM
     for (apiKey <- actions) {
@@ -178,9 +171,8 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUnauthorizedThrottle(quorum: String): Unit = {
+  @Test
+  def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
     val apiKeys = ApiKeys.brokerApis
