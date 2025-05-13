@@ -135,13 +135,39 @@ public class RequestManagerTest {
         assertFalse(cache.isReady(node, time.milliseconds(), fetch));
         cache.onResponseResult(node, correlationId + 1, true, time.milliseconds(), fetch);
         assertFalse(cache.isReady(node, time.milliseconds(), fetch));
+    }
+
+    @Test
+    public void testIgnoreOtherRequestTypeResponses() {
+        Node node = new Node(1, "mock-host-1", 4321);
+
+        RequestManager cache = new RequestManager(
+            makeBootstrapList(3),
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
+        long correlationId = 1;
 
         // completing a request of a different type should not affect the state of other requests
+        assertTrue(cache.isReady(node, time.milliseconds(), updateVoter));
+        assertTrue(cache.isReady(node, time.milliseconds(), fetch));
+
+        cache.onRequestSent(node, correlationId, time.milliseconds(), fetch);
+        assertTrue(cache.isReady(node, time.milliseconds(), updateVoter));
+        assertFalse(cache.isReady(node, time.milliseconds(), fetch));
+
         cache.onRequestSent(node, correlationId, time.milliseconds(), updateVoter);
         assertFalse(cache.isReady(node, time.milliseconds(), updateVoter));
+        assertFalse(cache.isReady(node, time.milliseconds(), fetch));
+
         cache.onResponseResult(node, correlationId, true, time.milliseconds(), updateVoter);
         assertTrue(cache.isReady(node, time.milliseconds(), updateVoter));
         assertFalse(cache.isReady(node, time.milliseconds(), fetch));
+
+        cache.onResponseResult(node, correlationId, true, time.milliseconds(), fetch);
+        assertTrue(cache.isReady(node, time.milliseconds(), updateVoter));
+        assertTrue(cache.isReady(node, time.milliseconds(), fetch));
     }
 
     @Test
@@ -208,20 +234,31 @@ public class RequestManagerTest {
         Node bootstrapNode3 = cache.findReadyBootstrapServer(time.milliseconds()).get();
         assertEquals(bootstrapNode1, bootstrapNode3);
         assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
+    }
+
+    @Test
+    public void testRequestToBootstrapListMultipleRequests() {
+        List<Node> bootstrapList = makeBootstrapList(2);
+        RequestManager cache = new RequestManager(
+            bootstrapList,
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
 
         // Pending fetch snapshot requests should also result in a returned backoff
-        Node bootstrapNode4 = assertReadyBootstrapServer(cache, bootstrapList);
+        Node bootstrapNode = assertReadyBootstrapServer(cache, bootstrapList);
 
         // Send a request and check the cache state
-        cache.onRequestSent(bootstrapNode4, 1, time.milliseconds(), fetchSnapshot);
+        cache.onRequestSent(bootstrapNode, 1, time.milliseconds(), fetchSnapshot);
         assertNotReadyBootstrapServer(cache);
 
         // Other pending requests should not affect readiness of bootstrap servers
-        cache.onRequestSent(bootstrapNode4, 1, time.milliseconds(), updateVoter);
+        cache.onRequestSent(bootstrapNode, 1, time.milliseconds(), updateVoter);
         assertEquals(requestTimeoutMs, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
 
         // Complete the fetch snapshot request and show that node is ready
-        cache.onResponseResult(bootstrapNode4, 1, true, time.milliseconds(), fetchSnapshot);
+        cache.onResponseResult(bootstrapNode, 1, true, time.milliseconds(), fetchSnapshot);
         assertTrue(cache.findReadyBootstrapServer(time.milliseconds()).isPresent());
         assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
     }
@@ -245,7 +282,7 @@ public class RequestManagerTest {
     }
 
     @Test
-    public void testFindReadyWithInflightRequest() {
+    public void testFindReadyWithInflightFetchRequest() {
         Node otherNode = new Node(1, "other-node", 1234);
         List<Node> bootstrapList = makeBootstrapList(3);
         RequestManager cache = new RequestManager(
@@ -256,18 +293,35 @@ public class RequestManagerTest {
         );
 
         // Send request to a node that is not in the bootstrap list
-        cache.onRequestSent(otherNode, 1, time.milliseconds(), fetch);
-        assertEquals(Optional.empty(), cache.findReadyBootstrapServer(time.milliseconds()));
-        cache.onResponseResult(otherNode, 1, true, time.milliseconds(), fetch);
-        assertTrue(cache.findReadyBootstrapServer(time.milliseconds()).isPresent());
+        completeFetchAndCheckReadiness(cache, otherNode, fetch);
 
         // A pending fetch snapshot request does not return a ready node
-        cache.onRequestSent(otherNode, 1, time.milliseconds(), fetchSnapshot);
-        assertEquals(Optional.empty(), cache.findReadyBootstrapServer(time.milliseconds()));
-        cache.onResponseResult(otherNode, 1, true, time.milliseconds(), fetchSnapshot);
-        assertTrue(cache.findReadyBootstrapServer(time.milliseconds()).isPresent());
+        completeFetchAndCheckReadiness(cache, otherNode, fetchSnapshot);
+    }
 
-        // Other pending requests do return a ready node
+    private void completeFetchAndCheckReadiness(
+        RequestManager cache,
+        Node destination,
+        ApiKeys apiKey
+    ) {
+        cache.onRequestSent(destination, 1, time.milliseconds(), apiKey);
+        assertEquals(Optional.empty(), cache.findReadyBootstrapServer(time.milliseconds()));
+        cache.onResponseResult(destination, 1, true, time.milliseconds(), apiKey);
+        assertTrue(cache.findReadyBootstrapServer(time.milliseconds()).isPresent());
+    }
+
+    @Test
+    public void testFindReadyWithOtherInflightRequest() {
+        Node otherNode = new Node(1, "other-node", 1234);
+        List<Node> bootstrapList = makeBootstrapList(3);
+        RequestManager cache = new RequestManager(
+            bootstrapList,
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
+
+        // Other pending request types do not affect readiness of bootstrap servers
         cache.onRequestSent(otherNode, 1, time.milliseconds(), updateVoter);
         assertTrue(cache.findReadyBootstrapServer(time.milliseconds()).isPresent());
     }
@@ -296,7 +350,39 @@ public class RequestManagerTest {
     }
 
     @Test
-    public void testAnyInflightRequestWithAnyRequest() {
+    public void testAnyInflightRequestOneRequest() {
+        Node otherNode = new Node(1, "other-node", 1234);
+        List<Node> bootstrapList = makeBootstrapList(3);
+        RequestManager cache = new RequestManager(
+            bootstrapList,
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
+
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+
+        // Send a request and check state
+        cache.onRequestSent(otherNode, 11, time.milliseconds(), fetch);
+        assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+
+        // Wait until the request times out
+        time.sleep(requestTimeoutMs);
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+
+        // Send another request and fail it
+        cache.onRequestSent(otherNode, 12, time.milliseconds(), fetch);
+        cache.onResponseResult(otherNode, 12, false, time.milliseconds(), fetch);
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+
+        // Send another request and mark it successful
+        cache.onRequestSent(otherNode, 12, time.milliseconds(), fetch);
+        cache.onResponseResult(otherNode, 12, true, time.milliseconds(), fetch);
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+    }
+
+    @Test
+    public void testAnyInflightRequestMultipleRequests() {
         Node otherNode = new Node(1, "other-node", 1234);
         List<Node> bootstrapList = makeBootstrapList(3);
         RequestManager cache = new RequestManager(
@@ -326,6 +412,7 @@ public class RequestManagerTest {
         time.sleep(requestTimeoutMs);
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
 
         // Results should not affect the connection state of other request types
         cache.onRequestSent(otherNode, 12, time.milliseconds(), updateVoter);
@@ -337,9 +424,9 @@ public class RequestManagerTest {
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
 
         // Send another request and mark it successful
-        cache.onRequestSent(otherNode, 12, time.milliseconds(), fetch);
-        cache.onResponseResult(otherNode, 12, true, time.milliseconds(), fetch);
-        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        cache.onRequestSent(otherNode, 12, time.milliseconds(), fetchSnapshot);
+        cache.onResponseResult(otherNode, 12, true, time.milliseconds(), fetchSnapshot);
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
     }
 
