@@ -314,6 +314,8 @@ class LogConfigTest {
     assertThrows(classOf[ConfigException], () => validateCleanupPolicy())
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact,delete")
     assertThrows(classOf[ConfigException], () => validateCleanupPolicy())
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "delete,delete,delete")
+    validateCleanupPolicy()
   }
 
   @ParameterizedTest(name = "testEnableRemoteLogStorage with sysRemoteStorageEnabled: {0}")
