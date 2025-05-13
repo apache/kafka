@@ -352,7 +352,7 @@ public class RequestManagerTest {
     }
 
     @Test
-    public void testAnyInflightRequest() {
+    public void testAnyInflightRequestWithMultipleRequestTypes() {
         Node otherNode = new Node(1, "other-node", 1234);
         List<Node> bootstrapList = makeBootstrapList(3);
         RequestManager cache = new RequestManager(
@@ -401,7 +401,7 @@ public class RequestManagerTest {
     }
 
     @Test
-    public void testAnyInflightRequestWithMultipleRequestTypes() {
+    public void testAnyInflightRequestWithAnyRequest() {
         Node otherNode = new Node(1, "other-node", 1234);
         List<Node> bootstrapList = makeBootstrapList(3);
         RequestManager cache = new RequestManager(
