@@ -1332,6 +1332,7 @@ public class TransactionManager {
         newPartitionsInTransaction.clear();
         pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
+        preparedTxnState = new PreparedTxnState();
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
