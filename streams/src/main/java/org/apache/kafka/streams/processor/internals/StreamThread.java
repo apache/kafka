@@ -787,7 +787,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         ThreadMetrics.addThreadStateMetric(
             threadId,
             streamsMetrics,
-            (metricConfig, now) -> this.state());
+            (metricConfig, now) -> this.state().name());
         ThreadMetrics.addThreadBlockedTimeMetric(
             threadId,
             new StreamThreadTotalBlockedTime(
