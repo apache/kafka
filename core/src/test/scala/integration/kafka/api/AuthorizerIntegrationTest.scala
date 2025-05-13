@@ -952,11 +952,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   /**
-   * Test that the produce request fails with UNKNOWN_TOPIC_ID if both topic name and id are default values when request version >= 13.
+   * Test that the produce request fails with UNKNOWN_TOPIC_ID if topic id is zero when request version >= 13.
    * The produce request only supports topic id above version 13.
    */
   @Test
-  def testEmptyTopicNameAndIDForProduceVersionFrom13ToNewest(): Unit = {
+  def testZeroTopicIdForProduceVersionFrom13ToNewest(): Unit = {
     for (version <- 13 to ApiKeys.PRODUCE.latestVersion()) {
       val request = createProduceRequest("", Uuid.ZERO_UUID, version.toShort)
       val response = connectAndReceive[AbstractResponse](request, listenerName = listenerName)
@@ -968,6 +968,26 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .errorCode
 
       assertEquals(Errors.UNKNOWN_TOPIC_ID.code(), errorCode, s"unexpected error for produce request version $version")
+    }
+  }
+
+  /**
+   * Test that the produce request fails with TOPIC_AUTHORIZATION_FAILED if topic name is empty when request version <= 12.
+   * The produce request only supports topic name below version 12.
+   */
+  @Test
+  def testEmptyTopicNameForProduceVersionFromOldestTo12(): Unit = {
+    for (version <- ApiKeys.PRODUCE.oldestVersion() to 12) {
+      val request = createProduceRequest("", Uuid.ZERO_UUID, version.toShort)
+      val response = connectAndReceive[AbstractResponse](request, listenerName = listenerName)
+      val errorCode = response.asInstanceOf[ProduceResponse]
+        .data()
+        .responses()
+        .find("", Uuid.ZERO_UUID)
+        .partitionResponses.asScala.find(_.index == part).get
+        .errorCode
+
+      assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), errorCode, s"unexpected error for produce request version $version")
     }
   }
 
