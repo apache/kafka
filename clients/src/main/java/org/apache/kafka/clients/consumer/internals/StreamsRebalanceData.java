@@ -361,6 +361,7 @@ public class StreamsRebalanceData {
     public int endpointInformationEpoch() {
         return endpointInformationEpoch.get();
     }
+
     public int topologyEpoch() {
         return 0;
     }
