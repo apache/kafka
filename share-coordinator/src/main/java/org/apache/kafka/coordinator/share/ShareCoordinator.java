@@ -38,6 +38,7 @@ import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 public interface ShareCoordinator {
@@ -129,7 +130,7 @@ public interface ShareCoordinator {
      * @param topicPartitions   The deleted topic ids.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      */
-    void onPartitionsDeleted(Set<Uuid> topicPartitions, BufferSupplier bufferSupplier);
+    void onTopicsDeleted(Set<Uuid> topicPartitions, BufferSupplier bufferSupplier) throws ExecutionException, InterruptedException;
 
     /**
      * A new metadata image is available.

@@ -8109,6 +8109,9 @@ public class GroupMetadataManager {
     public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
         Set<Uuid> deletedTopicIds
     ) {
+        if (deletedTopicIds.isEmpty()) {
+            return new CoordinatorResult<>(List.of());
+        }
         List<CoordinatorRecord> records = new ArrayList<>();
         shareGroupPartitionMetadata.forEach((groupId, metadata) -> {
             Set<Uuid> initializingDeletedCurrent = new HashSet<>(metadata.initializingTopics().keySet());

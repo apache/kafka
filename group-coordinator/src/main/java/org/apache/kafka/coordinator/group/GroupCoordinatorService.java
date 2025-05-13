@@ -2047,23 +2047,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .map(tp -> metadataImage.topics().getTopic(tp.topic()).id())
             .collect(Collectors.toSet());
 
-        List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
-            "maybe-cleanup-share-group-state",
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
-            coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
-        );
-
-        timer.add(new TimerTask(0L) {
-            @Override
-            public void run() {
-                CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
-                    .whenComplete((__, exp) -> {
-                        if (exp != null) {
-                            log.error("Unable to cleanup state for the deleted topics {}", topicIds, exp);
-                        }
-                    });
-            }
-        });
+        CompletableFuture.allOf(
+            FutureUtils.mapExceptionally(
+                runtime.scheduleWriteAllOperation(
+                    "maybe-cleanup-share-group-state",
+                    Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                    coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+                ),
+                exception -> {
+                    log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
+                    return null;
+                }
+            ).toArray(new CompletableFuture<?>[0])
+        ).get();
     }
 
     /**

@@ -56,6 +56,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 
@@ -71,6 +72,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -1049,25 +1051,21 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public void onPartitionsDeleted(Set<Uuid> deletedTopicIds, BufferSupplier bufferSupplier) {
+    public void onTopicsDeleted(Set<Uuid> deletedTopicIds, BufferSupplier bufferSupplier) throws ExecutionException, InterruptedException {
         throwIfNotActive();
-        List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
-            "cleanup-deleted-topic-partitions-state",
-            Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
-            coordinator -> coordinator.maybeCleanupShareState(deletedTopicIds)
-        );
-
-        timer.add(new TimerTask(0L) {
-            @Override
-            public void run() {
-                CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
-                    .whenComplete((__, exp) -> {
-                        if (exp != null) {
-                            log.error("Received error while trying to cleanup deleted topics.", exp);
-                        }
-                    });
-            }
-        });
+        CompletableFuture.allOf(
+            FutureUtils.mapExceptionally(
+                runtime.scheduleWriteAllOperation(
+                    "on-partition-deleted",
+                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
+                    coordinator -> coordinator.maybeCleanupShareState(deletedTopicIds)
+                ),
+                exception -> {
+                    log.error("Received error while trying to cleanup deleted topics.", exception);
+                    return null;
+                }
+            ).toArray(new CompletableFuture<?>[0])
+        ).get();
     }
 
     @Override
