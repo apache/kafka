@@ -342,7 +342,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             // If an error was thrown from initializeResources(), it's possible that the list of request managers
             // is null, so check before using. If the request manager list is null, there wasn't any real work
             // performed, so not being able to close the request managers isn't so bad.
-            if (requestManagers != null)
+            if (requestManagers != null && networkClientDelegate != null)
                 runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
         } catch (Exception e) {
             log.error("Unexpected error during shutdown. Proceed with closing.", e);
