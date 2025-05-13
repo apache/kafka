@@ -1823,6 +1823,7 @@ public class GroupMetadataManager {
      * @param userEndpoint        User-defined endpoint for Interactive Queries, or null.
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
+     * @param memberEndpointEpoch The last endpoint information epoch seen be the group member.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -1842,7 +1843,7 @@ public class GroupMetadataManager {
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
         boolean shutdownApplication,
-        int memberEndpointEpochInRequest
+        int memberEndpointEpoch
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -1984,16 +1985,6 @@ public class GroupMetadataManager {
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
-
-        if (group.endpointInformationEpoch() > memberEndpointEpochInRequest) {
-            response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
-            response.setEndpointInformationEpoch(group.endpointInformationEpoch());
-        } else {
-            int responseEndpoint = Math.min(group.endpointInformationEpoch(), memberEndpointEpochInRequest);
-            response.setEndpointInformationEpoch(responseEndpoint);
-        }
-
-
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
@@ -2003,6 +1994,11 @@ public class GroupMetadataManager {
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
             group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
         }
+
+        if (group.endpointInformationEpoch() != memberEndpointEpoch) {
+            response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group, updatedMember));
+        }
+        response.setEndpointInformationEpoch(group.endpointInformationEpoch());
 
         Map<String, CreatableTopic> internalTopicsToBeCreated = Collections.emptyMap();
         if (updatedConfiguredTopology.topicConfigurationException().isPresent()) {
@@ -2104,13 +2100,14 @@ public class GroupMetadataManager {
             .collect(Collectors.toList());
     }
 
-    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group) {
+    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group,
+                                                                                                        StreamsGroupMember updatedMember) {
         List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
         final Map<String, StreamsGroupMember> members = group.members();
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
             final String memberIdForAssignment = entry.getKey();
             final Optional<StreamsGroupMemberMetadataValue.Endpoint> endpointOptional = members.get(memberIdForAssignment).userEndpoint();
-            StreamsGroupMember groupMember = entry.getValue();
+            StreamsGroupMember groupMember = updatedMember != null && memberIdForAssignment.equals(updatedMember.memberId()) ? updatedMember : members.get(memberIdForAssignment);
             if (endpointOptional.isPresent()) {
                 final StreamsGroupMemberMetadataValue.Endpoint endpoint = endpointOptional.get();
                 final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
