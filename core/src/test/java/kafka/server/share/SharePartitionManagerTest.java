@@ -186,7 +186,7 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testNewContextReturnsFinalContextWithoutRequestData() {
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -213,7 +213,7 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testNewContextReturnsFinalContextWithRequestData() {
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -243,7 +243,7 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testNewContextReturnsFinalContextWhenTopicPartitionsArePresentInRequestData() {
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -274,7 +274,7 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testNewContext() {
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -435,7 +435,7 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testZeroSizeShareSession() {
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -481,7 +481,7 @@ public class SharePartitionManagerTest {
     @Test
     public void testToForgetPartitions() {
         String groupId = "grp";
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -519,7 +519,7 @@ public class SharePartitionManagerTest {
     @Test
     public void testShareSessionUpdateTopicIdsBrokerSide() {
         String groupId = "grp";
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -570,7 +570,7 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testGetErroneousAndValidTopicIdPartitions() {
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -663,7 +663,7 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testShareFetchContextResponseSize() {
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -764,7 +764,7 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testCachedTopicPartitionsWithNoTopicPartitions() {
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -775,7 +775,7 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testCachedTopicPartitionsForValidShareSessions() {
-        ShareSessionCache cache = new ShareSessionCache(10);
+        ShareSessionCache cache = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
             .build();
@@ -2806,19 +2806,21 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testIsShareGroupEnabled() {
+        ShareSessionCache cache1 = new ShareSessionCache(10, false);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
-            .withIsShareGroupsSupported(false)
+            .withCache(cache1)
             .build();
-        // Toggle of isShareGroupEnabled from false to true.
+        // Toggle of supportsShareGroups from false to true.
         sharePartitionManager.onShareVersionToggle(ShareVersion.SV_1);
-        assertTrue(sharePartitionManager.isShareGroupsSupported());
+        assertTrue(cache1.supportsShareGroups());
 
+        ShareSessionCache cache2 = new ShareSessionCache(10, true);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
-            .withIsShareGroupsSupported(true)
+            .withCache(cache2)
             .build();
-        // Toggle of isShareGroupEnabled from true to false.
+        // Toggle of supportsShareGroups from true to false.
         sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
-        assertFalse(sharePartitionManager.isShareGroupsSupported());
+        assertFalse(cache2.supportsShareGroups());
     }
 
     @Test
@@ -2846,10 +2848,10 @@ public class SharePartitionManagerTest {
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
             .build();
-        assertEquals(4, sharePartitionManager.partitionCacheMap().size());
+        assertEquals(4, sharePartitionManager.partitionCacheSize());
         sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
         // Because we are toggling to a share version which does not support share groups, the cache inside share partitions must be cleared.
-        assertTrue(sharePartitionManager.partitionCacheMap().isEmpty());
+        assertEquals(0, sharePartitionManager.partitionCacheSize());
         //Check if all share partitions have been fenced.
         Mockito.verify(sp0).markFenced();
         Mockito.verify(sp1).markFenced();
@@ -3066,12 +3068,11 @@ public class SharePartitionManagerTest {
         private final Persister persister = new NoOpStatePersister();
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private Time time = new MockTime();
-        private ShareSessionCache cache = new ShareSessionCache(10);
+        private ShareSessionCache cache = new ShareSessionCache(10, true);
         private Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;
-        private boolean isShareGroupsSupported = true;
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -3108,11 +3109,6 @@ public class SharePartitionManagerTest {
             return this;
         }
 
-        private SharePartitionManagerBuilder withIsShareGroupsSupported(boolean isShareGroupsSupported) {
-            this.isShareGroupsSupported = isShareGroupsSupported;
-            return this;
-        }
-
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
@@ -3129,8 +3125,7 @@ public class SharePartitionManagerTest {
                 persister,
                 mock(GroupConfigManager.class),
                 shareGroupMetrics,
-                brokerTopicStats,
-                isShareGroupsSupported
+                brokerTopicStats
             );
         }
     }

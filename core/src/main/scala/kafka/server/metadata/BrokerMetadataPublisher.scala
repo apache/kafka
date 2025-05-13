@@ -245,7 +245,7 @@ class BrokerMetadataPublisher(
         try {
           val newFinalizedFeatures = new FinalizedFeatures(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
           // Share version feature has been toggled.
-          if (!(newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort) == finalizedShareVersion)) {
+          if (newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort) != finalizedShareVersion) {
             finalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
             val shareVersion: ShareVersion = ShareVersion.fromFeatureLevel(finalizedShareVersion)
             info(s"Feature share.version has been updated to version $finalizedShareVersion")
