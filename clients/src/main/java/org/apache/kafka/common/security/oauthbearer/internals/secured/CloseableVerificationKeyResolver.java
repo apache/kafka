@@ -23,6 +23,8 @@ import org.jose4j.keys.resolvers.VerificationKeyResolver;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The {@link OAuthBearerValidatorCallbackHandler} uses a {@link VerificationKeyResolver} as
@@ -41,7 +43,7 @@ public interface CloseableVerificationKeyResolver extends Initable, Closeable, V
     /**
      * Lifecycle method to perform a clean shutdown of the {@link VerificationKeyResolver}.
      * This must be performed by the caller to ensure the correct state, freeing up
-     * and releasing any resources performed in {@link #init()}.
+     * and releasing any resources performed in {@link #configure(Map, String, List)}.
      *
      * @throws IOException Thrown on errors related to IO during closure
      */
@@ -49,5 +51,4 @@ public interface CloseableVerificationKeyResolver extends Initable, Closeable, V
     default void close() throws IOException {
         // This method left intentionally blank.
     }
-
 }

@@ -41,6 +41,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -63,7 +64,9 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         String accessToken = builder.build();
         JwtRetriever jwtRetriever = () -> accessToken;
-        JwtValidator jwtValidator = createJwtValidator(configs);
+        JwtValidator jwtValidator = new DefaultJwtValidator();
+        jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig());
+
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         handler.init(Map.of(), jwtRetriever, jwtValidator);
 
@@ -93,8 +96,10 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         jaasConfig.put("extension_bar", 2);
         jaasConfig.put("EXTENSION_baz", "3");
 
-        JwtRetriever jwtRetriever = createJwtRetriever(configs, jaasConfig);
-        JwtValidator jwtValidator = createJwtValidator(configs);
+        JwtRetriever jwtRetriever = new DefaultJwtRetriever();
+        jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig(jaasConfig));
+        JwtValidator jwtValidator = new DefaultJwtValidator();
+        jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig(jaasConfig));
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         handler.init(jaasConfig, jwtRetriever, jwtValidator);
 
@@ -124,8 +129,11 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         jaasConfig.put(CLIENT_SECRET_CONFIG, "a secret");
         jaasConfig.put(illegalKey, "this key isn't allowed per OAuthBearerClientInitialResponse.validateExtensions");
 
-        JwtRetriever jwtRetriever = createJwtRetriever(configs, jaasConfig);
-        JwtValidator jwtValidator = createJwtValidator(configs);
+        JwtRetriever jwtRetriever = new DefaultJwtRetriever();
+        jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig(jaasConfig));
+        JwtValidator jwtValidator = new DefaultJwtValidator();
+        jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig(jaasConfig));
+
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         handler.init(jaasConfig, jwtRetriever, jwtValidator);
 
@@ -143,7 +151,9 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     public void testInvalidCallbackGeneratesUnsupportedCallbackException() {
         Map<String, ?> configs = getSaslConfigs();
         JwtRetriever jwtRetriever = () -> "test";
-        JwtValidator jwtValidator = createJwtValidator(configs);
+        JwtValidator jwtValidator = new DefaultJwtValidator();
+        jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig());
+
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         handler.init(Map.of(), jwtRetriever, jwtValidator);
 
@@ -169,7 +179,9 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         JwtRetriever jwtRetriever = () -> {
             throw new JwtRetrieverException("The token endpoint response access_token value must be non-null");
         };
-        JwtValidator jwtValidator = createJwtValidator(configs);
+        JwtValidator jwtValidator = new DefaultJwtValidator();
+        jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig());
+
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         handler.init(Map.of(), jwtRetriever, jwtValidator);
 
@@ -194,11 +206,24 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         String withNewline = expected + "\n";
 
         File tmpDir = createTempDir("access-token");
-        File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", withNewline);
+        String jwtFileUrl = createTempFile(tmpDir, "jwt-", ".json", withNewline).toURI().toString();
 
-        Map<String, ?> configs = getSaslConfigs();
-        JwtRetriever jwtRetriever = new FileJwtRetriever(accessTokenFile.toPath());
-        JwtValidator jwtValidator = createJwtValidator(configs);
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, jwtFileUrl);
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, jwtFileUrl);
+        JwtRetriever jwtRetriever = new FileJwtRetriever();
+        jwtRetriever.configure(
+            configs,
+            OAUTHBEARER_MECHANISM,
+            getJaasConfig()
+        );
+
+        JwtValidator jwtValidator = new DefaultJwtValidator();
+        jwtValidator.configure(
+            configs,
+            OAUTHBEARER_MECHANISM,
+            getJaasConfig()
+        );
+
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         handler.init(Map.of(), jwtRetriever, jwtValidator);
 
@@ -222,7 +247,9 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     private void testInvalidAccessToken(String accessToken, String expectedMessageSubstring) throws Exception {
         Map<String, ?> configs = getSaslConfigs();
         JwtRetriever jwtRetriever = () -> accessToken;
-        JwtValidator jwtValidator = createJwtValidator(configs);
+        JwtValidator jwtValidator = new DefaultJwtValidator();
+        jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig());
+
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         handler.init(Map.of(), jwtRetriever, jwtValidator);
 
@@ -239,17 +266,5 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         } finally {
             handler.close();
         }
-    }
-
-    private static DefaultJwtRetriever createJwtRetriever(Map<String, ?> configs) {
-        return createJwtRetriever(configs, Map.of());
-    }
-
-    private static DefaultJwtRetriever createJwtRetriever(Map<String, ?> configs, Map<String, Object> jaasConfigs) {
-        return new DefaultJwtRetriever(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, jaasConfigs);
-    }
-
-    private static DefaultJwtValidator createJwtValidator(Map<String, ?> configs) {
-        return new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM);
     }
 }

@@ -17,6 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.jose4j.http.Get;
 import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.jwk.VerificationJwkSelector;
@@ -29,8 +32,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URL;
 import java.security.Key;
 import java.util.List;
+import java.util.Map;
+
+import javax.net.ssl.SSLSocketFactory;
+import javax.security.auth.login.AppConfigurationEntry;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 
 /**
  * <code>RefreshingHttpsJwksVerificationKeyResolver</code> is a
@@ -85,45 +98,54 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
 
-    private final RefreshingHttpsJwks refreshingHttpsJwks;
-
     private final VerificationJwkSelector verificationJwkSelector;
 
+    private RefreshingHttpsJwks refreshingHttpsJwks;
     private boolean isInitialized;
 
-    public RefreshingHttpsJwksVerificationKeyResolver(RefreshingHttpsJwks refreshingHttpsJwks) {
-        this.refreshingHttpsJwks = refreshingHttpsJwks;
+    public RefreshingHttpsJwksVerificationKeyResolver() {
         this.verificationJwkSelector = new VerificationJwkSelector();
     }
 
     @Override
-    public void init() throws IOException {
-        try {
-            log.debug("init started");
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
+        JaasOptionsUtils jou = new JaasOptionsUtils(JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries));
+        SSLSocketFactory sslSocketFactory = null;
 
-            refreshingHttpsJwks.init();
-        } finally {
-            isInitialized = true;
+        URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-            log.debug("init completed");
+        if (jou.shouldCreateSSLSocketFactory(jwksEndpointUrl))
+            sslSocketFactory = jou.createSSLSocketFactory();
+
+        HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUrl.toString());
+        httpsJwks.setDefaultCacheDuration(refreshIntervalMs);
+
+        if (sslSocketFactory != null) {
+            Get get = new Get();
+            get.setSslSocketFactory(sslSocketFactory);
+            httpsJwks.setSimpleHttpGet(get);
         }
+
+        refreshingHttpsJwks = new RefreshingHttpsJwks(Time.SYSTEM,
+            httpsJwks,
+            refreshIntervalMs,
+            cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS),
+            cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS));
+        refreshingHttpsJwks.configure(configs, saslMechanism, jaasConfigEntries);
+        isInitialized = true;
     }
 
     @Override
     public void close() {
-        try {
-            log.debug("close started");
-
-            refreshingHttpsJwks.close();
-        } finally {
-            log.debug("close completed");
-        }
+        Utils.closeQuietly(refreshingHttpsJwks, "HTTPS JWKS");
     }
 
     @Override
     public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
         if (!isInitialized)
-            throw new IllegalStateException("Please call init() first");
+            throw new IllegalStateException("Please call configure() first");
 
         try {
             List<JsonWebKey> jwks = refreshingHttpsJwks.getJsonWebKeys();
@@ -148,5 +170,4 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
             throw new UnresolvableKeyException(sb, e);
         }
     }
-
 }

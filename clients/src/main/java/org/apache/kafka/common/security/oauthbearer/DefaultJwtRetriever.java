@@ -24,8 +24,11 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
@@ -37,36 +40,26 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  */
 public class DefaultJwtRetriever implements JwtRetriever {
 
-    private final Map<String, ?> configs;
-    private final String saslMechanism;
-    private final Map<String, Object> jaasConfig;
-
     private JwtRetriever delegate;
 
-    public DefaultJwtRetriever(Map<String, ?> configs, String saslMechanism, Map<String, Object> jaasConfig) {
-        this.configs = configs;
-        this.saslMechanism = saslMechanism;
-        this.jaasConfig = jaasConfig;
-    }
-
     @Override
-    public void init() throws IOException {
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
         if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
-            delegate = new FileJwtRetriever(cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL));
+            delegate = new FileJwtRetriever();
         } else {
-            delegate = new ClientCredentialsJwtRetriever(configs, saslMechanism, jaasConfig);
+            delegate = new ClientCredentialsJwtRetriever();
         }
 
-        delegate.init();
+        delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     @Override
     public String retrieve() throws JwtRetrieverException {
         if (delegate == null)
-            throw new IllegalStateException("JWT retriever delegate is null; please call init() first");
+            throw new IllegalStateException("JWT retriever delegate is null; please call configure() first");
 
         return delegate.retrieve();
     }

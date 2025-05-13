@@ -17,47 +17,43 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
-import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DefaultJwtValidatorTest extends OAuthBearerTest {
 
     @Test
-    public void testConfigureWithVerificationKeyResolver() {
-        AccessTokenBuilder builder = new AccessTokenBuilder()
-            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
-        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
-        Map<String, ?> configs = getSaslConfigs();
-        DefaultJwtValidator jwtValidator = new DefaultJwtValidator(
-            configs,
-            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-            verificationKeyResolver
-        );
-        assertDoesNotThrow(jwtValidator::init);
-        assertInstanceOf(BrokerJwtValidator.class, jwtValidator.delegate());
+    public void testConfigureWithVerificationKeyResolver() throws IOException {
+        String url = "http://www.example.com/";
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url);
+        Map<String, ?> configs = getSaslConfigs(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, url);
+
+        try (DefaultJwtValidator jwtValidator = new DefaultJwtValidator()) {
+            assertThrows(ConfigException.class, () -> jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig()));
+            assertInstanceOf(BrokerJwtValidator.class, jwtValidator.delegate());
+        }
     }
 
     @Test
-    public void testConfigureWithoutVerificationKeyResolver() {
+    public void testConfigureWithoutVerificationKeyResolver() throws IOException {
         Map<String, ?> configs = getSaslConfigs();
-        DefaultJwtValidator jwtValidator = new DefaultJwtValidator(
-            configs,
-            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM
-        );
-        assertDoesNotThrow(jwtValidator::init);
-        assertInstanceOf(ClientJwtValidator.class, jwtValidator.delegate());
-    }
 
-    private CloseableVerificationKeyResolver createVerificationKeyResolver(AccessTokenBuilder builder) {
-        return (jws, nestingContext) -> builder.jwk().getPublicKey();
+        try (DefaultJwtValidator jwtValidator = new DefaultJwtValidator()) {
+            assertDoesNotThrow(() -> jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, List.of()));
+            assertInstanceOf(ClientJwtValidator.class, jwtValidator.delegate());
+        }
     }
 }

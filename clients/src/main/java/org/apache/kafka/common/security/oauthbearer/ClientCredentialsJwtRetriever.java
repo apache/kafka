@@ -24,9 +24,11 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOption
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.List;
 import java.util.Map;
 
 import javax.net.ssl.SSLSocketFactory;
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
@@ -44,24 +46,14 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
  */
 public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
-    private final Map<String, ?> configs;
-    private final String saslMechanism;
-    private final Map<String, Object> jaasConfig;
-
     private HttpJwtRetriever delegate;
 
-    public ClientCredentialsJwtRetriever(Map<String, ?> configs, String saslMechanism, Map<String, Object> jaasConfig) {
-        this.configs = configs;
-        this.saslMechanism = saslMechanism;
-        this.jaasConfig = jaasConfig;
-    }
-
     @Override
-    public void init() throws IOException {
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
+        JaasOptionsUtils jou = new JaasOptionsUtils(JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries));
         String clientId = jou.validateString(CLIENT_ID_CONFIG);
         String clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
         String scope = jou.validateString(SCOPE_CONFIG, false);
@@ -88,7 +80,7 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
     @Override
     public String retrieve() throws JwtRetrieverException {
         if (delegate == null)
-            throw new IllegalStateException("JWT retriever delegate is null; please call init() first");
+            throw new IllegalStateException("JWT retriever delegate is null; please call configure() first");
 
         try {
             return delegate.retrieve();

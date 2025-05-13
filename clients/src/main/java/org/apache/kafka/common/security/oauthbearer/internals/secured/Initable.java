@@ -18,6 +18,10 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 public interface Initable {
 
@@ -28,7 +32,7 @@ public interface Initable {
      * @throws IOException Thrown on errors related to IO during initialization
      */
 
-    default void init() throws IOException {
+    default void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         // This method left intentionally blank.
     }
 }

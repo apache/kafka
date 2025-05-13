@@ -15,58 +15,56 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Utils;
-
-import org.jose4j.keys.resolvers.VerificationKeyResolver;
+import org.jose4j.jws.JsonWebSignature;
+import org.jose4j.jwx.JsonWebStructure;
+import org.jose4j.lang.UnresolvableKeyException;
 
 import java.io.IOException;
+import java.net.URL;
+import java.security.Key;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 
-/**
- * This {@link JwtValidator} uses the delegation approach, instantiating and delegating calls to a
- * more concrete implementation. The underlying implementation is determined by the presence/absence
- * of the {@link VerificationKeyResolver}: if it's present, a {@link BrokerJwtValidator} is
- * created, otherwise a {@link ClientJwtValidator} is created.
- */
-public class DefaultJwtValidator implements JwtValidator {
+public class DefaultVerificationKeyResolver implements CloseableVerificationKeyResolver {
 
-    private JwtValidator delegate;
+    private CloseableVerificationKeyResolver delegate;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-        if (cu.validateString(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, false) != null) {
-            delegate = new BrokerJwtValidator();
+        if (jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
+            delegate = new JwksFileVerificationKeyResolver();
         } else {
-            delegate = new ClientJwtValidator();
+            delegate = new RefreshingHttpsJwksVerificationKeyResolver();
         }
 
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     @Override
-    public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
+    public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
         if (delegate == null)
-            throw new IllegalStateException("JWT validator delegate is null; please call configure() first");
+            throw new IllegalStateException("Verification key resolver delegate is null; please call configure() first");
 
-        return delegate.validate(accessToken);
+        return delegate.resolveKey(jws, nestingContext);
     }
 
     @Override
     public void close() throws IOException {
-        Utils.closeQuietly(delegate, "JWT validator delegate");
+        Utils.closeQuietly(delegate, "Verification key resolver delegate");
     }
 
-    JwtValidator delegate() {
+    CloseableVerificationKeyResolver delegate() {
         return delegate;
     }
 }

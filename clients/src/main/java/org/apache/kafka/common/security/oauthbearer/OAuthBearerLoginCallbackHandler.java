@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -181,10 +180,11 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, saslMechanism, moduleOptions);
-        JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism);
-        init(moduleOptions, jwtRetriever, jwtValidator);
+        moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+        jwtRetriever = new DefaultJwtRetriever();
+        jwtRetriever.configure(configs, saslMechanism, jaasConfigEntries);
+        jwtValidator = new DefaultJwtValidator();
+        jwtValidator.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     /*
@@ -194,18 +194,6 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         this.moduleOptions = moduleOptions;
         this.jwtRetriever = jwtRetriever;
         this.jwtValidator = jwtValidator;
-
-        try {
-            this.jwtRetriever.init();
-        } catch (IOException e) {
-            throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtRetriever", e);
-        }
-
-        try {
-            this.jwtValidator.init();
-        } catch (IOException e) {
-            throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtValidator", e);
-        }
     }
 
     @Override

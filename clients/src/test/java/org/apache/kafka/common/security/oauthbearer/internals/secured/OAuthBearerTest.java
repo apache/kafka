@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,9 +46,12 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -173,6 +177,20 @@ public abstract class OAuthBearerTest {
 
     protected Map<String, ?> getSaslConfigs() {
         return getSaslConfigs(Collections.emptyMap());
+    }
+
+    protected List<AppConfigurationEntry> getJaasConfig() {
+        return getJaasConfig(Map.of());
+    }
+
+    protected List<AppConfigurationEntry> getJaasConfig(Map<String, Object> options) {
+        return List.of(
+            new AppConfigurationEntry(
+                OAuthBearerLoginModule.class.getName(),
+                AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+                options
+            )
+        );
     }
 
     protected PublicJsonWebKey createRsaJwk() throws JoseException {

@@ -23,13 +23,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
+public class DefaultVerificationKeyResolverTest extends OAuthBearerTest {
 
     @AfterEach
     public void tearDown() throws Exception {
@@ -43,20 +47,24 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
 
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile.toURI().toString());
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
-        Map<String, Object> jaasConfig = Collections.emptyMap();
 
         // verify it won't throw exception
-        try (CloseableVerificationKeyResolver verificationKeyResolver = VerificationKeyResolverFactory.create(configs, jaasConfig)) { }
+        try (DefaultVerificationKeyResolver verificationKeyResolver = new DefaultVerificationKeyResolver()) {
+            assertThrows(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig()));
+            assertInstanceOf(JwksFileVerificationKeyResolver.class, verificationKeyResolver.delegate());
+        }
     }
 
     @Test
-    public void testConfigureRefreshingFileVerificationKeyResolverWithInvalidDirectory() {
+    public void testConfigureRefreshingFileVerificationKeyResolverWithInvalidDirectory() throws IOException {
         // Should fail because the parent path doesn't exist.
         String file = new File("/tmp/this-directory-does-not-exist/foo.json").toURI().toString();
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
-        Map<String, Object> jaasConfig = Collections.emptyMap();
-        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, jaasConfig), "that doesn't exist");
+
+        try (CloseableVerificationKeyResolver verificationKeyResolver = new DefaultVerificationKeyResolver()) {
+            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig()), "that doesn't exist");
+        }
     }
 
     @Test
@@ -67,7 +75,10 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile.toURI().toString());
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
-        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, jaasConfig), "that doesn't exist");
+
+        try (CloseableVerificationKeyResolver verificationKeyResolver = new DefaultVerificationKeyResolver()) {
+            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig()), "that doesn't exist");
+        }
     }
 
     @Test
@@ -76,7 +87,9 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         File tmpDir = createTempDir("not_allowed");
         File verificationKeyFile = new File(tmpDir, "not_allowed.json");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
-        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, Collections.emptyMap()),
-                ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+
+        try (CloseableVerificationKeyResolver verificationKeyResolver = new DefaultVerificationKeyResolver()) {
+            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig()), ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+        }
     }
 }

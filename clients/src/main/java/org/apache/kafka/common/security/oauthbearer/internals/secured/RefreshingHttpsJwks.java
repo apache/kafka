@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator;
 import org.apache.kafka.common.utils.Time;
 
@@ -39,6 +40,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 /**
  * Implementation of {@link HttpsJwks} that will periodically refresh the JWKS cache to reduce or
@@ -82,7 +85,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
      * perform any operation (directly or indirectly) that could cause blocking. This is because
      * the JWKS logic is part of the larger authentication logic which operates on Kafka's network
      * thread. It's OK to execute {@link HttpsJwks#getJsonWebKeys()} (which calls
-     * {@link HttpsJwks#refresh()}) from within {@link #init()} as that method is called only at
+     * {@link HttpsJwks#refresh()}) from within {@link #configure(Map, String, List)} as that method is called only at
      * startup, and we can afford the blocking hit there.
      */
 
@@ -173,7 +176,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
     }
 
     @Override
-    public void init() throws IOException {
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         try {
             log.debug("init started");
 
@@ -181,8 +184,8 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
             try {
                 localJWKs = httpsJwks.getJsonWebKeys();
-            } catch (JoseException e) {
-                throw new IOException("Could not refresh JWKS", e);
+            } catch (IOException | JoseException e) {
+                throw new ConfigException("Could not refresh JWKS", e);
             }
 
             try {
@@ -244,7 +247,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
     public List<JsonWebKey> getJsonWebKeys() throws JoseException, IOException {
         if (!isInitialized)
-            throw new IllegalStateException("Please call init() first");
+            throw new IllegalStateException("Please call configure() first");
 
         try {
             refreshLock.readLock().lock();
@@ -270,7 +273,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
      * </p>
      *
      * <p>
-     * The <i>scheduled</i> refresh is scheduled in {@link #init()} and runs every
+     * The <i>scheduled</i> refresh is scheduled in {@link #configure(Map, String, List)} and runs every
      * {@link #refreshMs} milliseconds. An <i>expedited</i> refresh is performed when an
      * incoming JWT refers to a key ID that isn't in our JWKS cache ({@link #jsonWebKeys})
      * and we try to perform a refresh sooner than the next scheduled refresh.
