@@ -56,24 +56,6 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     }
 
     /**
-     * Set of topic Ids.
-     *
-     * @return The set of topic Ids.
-     */
-    public Set<Uuid> subscriptionTopicIdSet() {
-        return this.subscriptionTopicIdSet;
-    }
-
-    /**
-     * The metadata image that contains the latest metadata information.
-     *
-     * @return The metadata image that contains the latest metadata information.
-     */
-    public MetadataImage metadataImage() {
-        return this.metadataImage;
-    }
-
-    /**
      * The number of partitions for the given topic Id.
      *
      * @param topicId   Uuid corresponding to the topic.

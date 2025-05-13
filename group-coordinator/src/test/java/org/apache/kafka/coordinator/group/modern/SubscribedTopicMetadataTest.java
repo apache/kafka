@@ -54,12 +54,6 @@ public class SubscribedTopicMetadataTest {
     }
 
     @Test
-    public void testAttribute() {
-        assertEquals(subscriptionTopicIdSet, subscribedTopicMetadata.subscriptionTopicIdSet());
-        assertEquals(metadataImage, subscribedTopicMetadata.metadataImage());
-    }
-
-    @Test
     public void testSubscriptionTopicIdSetCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(null, metadataImage));
     }
