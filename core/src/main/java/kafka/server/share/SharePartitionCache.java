@@ -62,7 +62,7 @@ public class SharePartitionCache {
      * @param groupId The group id to get the topic-partitions for.
      * @return The set of topic-partitions for the group id.
      */
-    public Set<TopicIdPartition> topicIdPartitionsForGroup(String groupId) {
+    public synchronized Set<TopicIdPartition> topicIdPartitionsForGroup(String groupId) {
         return Set.copyOf(groups.get(groupId));
     }
 
@@ -127,7 +127,7 @@ public class SharePartitionCache {
     }
 
     // Visible for testing.
-    Map<String, Set<TopicIdPartition>> groups() {
+    synchronized Map<String, Set<TopicIdPartition>> groups() {
         return Map.copyOf(groups);
     }
 }
