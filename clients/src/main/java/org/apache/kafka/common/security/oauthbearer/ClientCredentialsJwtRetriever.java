@@ -15,14 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 
 import java.io.IOException;
 import java.net.URL;
-import java.util.Locale;
 import java.util.Map;
 
 import javax.net.ssl.SSLSocketFactory;
@@ -39,20 +40,17 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 
 /**
- * {@code DefaultJwtRetriever} instantiates and delegates {@link JwtRetriever} API calls to an embedded implementation
- * based on configuration. If {@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL} is configured with a
- * {@code file}-based URL, a {@link FileJwtRetriever} is created and the JWT is expected be contained in the file
- * specified. Otherwise, it's assumed to be an HTTP/HTTPS-based URL, so an {@link HttpJwtRetriever} is created.
+ *
  */
-public class DefaultJwtRetriever implements JwtRetriever {
+public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
     private final Map<String, ?> configs;
     private final String saslMechanism;
     private final Map<String, Object> jaasConfig;
 
-    private JwtRetriever delegate;
+    private HttpJwtRetriever delegate;
 
-    public DefaultJwtRetriever(Map<String, ?> configs, String saslMechanism, Map<String, Object> jaasConfig) {
+    public ClientCredentialsJwtRetriever(Map<String, ?> configs, String saslMechanism, Map<String, Object> jaasConfig) {
         this.configs = configs;
         this.saslMechanism = saslMechanism;
         this.jaasConfig = jaasConfig;
@@ -63,47 +61,40 @@ public class DefaultJwtRetriever implements JwtRetriever {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
-            delegate = new FileJwtRetriever(cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL));
-        } else {
-            JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
-            String clientId = jou.validateString(CLIENT_ID_CONFIG);
-            String clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
-            String scope = jou.validateString(SCOPE_CONFIG, false);
+        JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
+        String clientId = jou.validateString(CLIENT_ID_CONFIG);
+        String clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
+        String scope = jou.validateString(SCOPE_CONFIG, false);
 
-            SSLSocketFactory sslSocketFactory = null;
+        SSLSocketFactory sslSocketFactory = null;
 
-            if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
-                sslSocketFactory = jou.createSSLSocketFactory();
+        if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
+            sslSocketFactory = jou.createSSLSocketFactory();
 
-            boolean urlencodeHeader = validateUrlencodeHeader(cu);
+        boolean urlencodeHeader = validateUrlencodeHeader(cu);
 
-            delegate = new HttpJwtRetriever(clientId,
-                clientSecret,
-                scope,
-                sslSocketFactory,
-                tokenEndpointUrl.toString(),
-                cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
-                cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
-                cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
-                cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false),
-                urlencodeHeader);
-        }
-
-        delegate.init();
+        delegate = new HttpJwtRetriever(clientId,
+            clientSecret,
+            scope,
+            sslSocketFactory,
+            tokenEndpointUrl.toString(),
+            cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
+            cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
+            cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
+            cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false),
+            urlencodeHeader);
     }
 
     @Override
-    public String retrieve() throws IOException {
+    public String retrieve() throws JwtRetrieverException {
         if (delegate == null)
             throw new IllegalStateException("JWT retriever delegate is null; please call init() first");
 
-        return delegate.retrieve();
-    }
-
-    @Override
-    public void close() throws IOException {
-        Utils.closeQuietly(delegate, "JWT retriever delegate");
+        try {
+            return delegate.retrieve();
+        } catch (IOException e) {
+            throw new JwtRetrieverException(e);
+        }
     }
 
     /**
@@ -123,9 +114,5 @@ public class DefaultJwtRetriever implements JwtRetriever {
             return urlencodeHeader;
         else
             return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
-    }
-
-    JwtRetriever delegate() {
-        return delegate;
     }
 }

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -42,15 +44,15 @@ public class ClaimValidationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testValidateScopesDisallowsDuplicates() {
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "b", "a")));
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "b", "  a  ")));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "b", "a")));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "b", "  a  ")));
     }
 
     @Test
     public void testValidateScopesDisallowsEmptyNullAndWhitespace() {
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "")));
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", null)));
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "  ")));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "")));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", null)));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "  ")));
     }
 
     @Test
@@ -100,12 +102,12 @@ public class ClaimValidationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testValidateExpirationDisallowsNull() {
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateExpiration("exp", null));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateExpiration("exp", null));
     }
 
     @Test
     public void testValidateExpirationDisallowsNegatives() {
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateExpiration("exp", -1L));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateExpiration("exp", -1L));
     }
 
     @Test
@@ -117,9 +119,9 @@ public class ClaimValidationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testValidateSubjectDisallowsEmptyNullAndWhitespace() {
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateSubject("sub", ""));
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateSubject("sub", null));
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateSubject("sub", "  "));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", ""));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", null));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", "  "));
     }
 
     @Test
@@ -131,9 +133,9 @@ public class ClaimValidationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testValidateClaimNameOverrideDisallowsEmptyNullAndWhitespace() {
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateSubject("sub", ""));
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateSubject("sub", null));
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateSubject("sub", "  "));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", ""));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", null));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", "  "));
     }
 
     @Test
@@ -159,7 +161,7 @@ public class ClaimValidationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testValidateIssuedAtDisallowsNegatives() {
-        assertThrows(ValidateException.class, () -> ClaimValidationUtils.validateIssuedAt("iat", -1L));
+        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateIssuedAt("iat", -1L));
     }
 
 }

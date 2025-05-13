@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -192,11 +193,11 @@ public class ConfigurationUtils {
         return url;
     }
 
-    public String validateString(String name) throws ValidateException {
+    public String validateString(String name) throws JwtValidatorException {
         return validateString(name, true);
     }
 
-    public String validateString(String name, boolean isRequired) throws ValidateException {
+    public String validateString(String name, boolean isRequired) throws JwtValidatorException {
         String value = get(name);
 
         if (value == null) {

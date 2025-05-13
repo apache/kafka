@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.utils.Utils;
 
@@ -54,7 +55,7 @@ import javax.net.ssl.SSLSocketFactory;
  * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/{@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
  * to a publicized token endpoint URL ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  */
-public class HttpJwtRetriever implements JwtRetriever {
+public class HttpJwtRetriever {
 
     private static final Logger log = LoggerFactory.getLogger(HttpJwtRetriever.class);
 
@@ -146,7 +147,6 @@ public class HttpJwtRetriever implements JwtRetriever {
      * @throws IOException Thrown on errors related to IO during retrieval
      */
 
-    @Override
     public String retrieve() throws IOException {
         String authorizationHeader = formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader);
         String requestBody = formatRequestBody(scope);

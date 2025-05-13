@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 
@@ -81,18 +83,18 @@ public class ClientJwtValidator implements JwtValidator {
      *
      * @param accessToken Non-<code>null</code> JWT access token
      * @return {@link OAuthBearerToken}
-     * @throws ValidateException Thrown on errors performing validation of given token
+     * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
 
     @SuppressWarnings("unchecked")
-    public OAuthBearerToken validate(String accessToken) throws ValidateException {
+    public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
         Map<String, Object> payload;
 
         try {
             payload = OAuthBearerUnsecuredJws.toMap(serializedJwt.getPayload());
         } catch (OAuthBearerIllegalTokenException e) {
-            throw new ValidateException(String.format("Could not validate the access token: %s", e.getMessage()), e);
+            throw new JwtValidatorException(String.format("Could not validate the access token: %s", e.getMessage()), e);
         }
 
         Object scopeRaw = getClaim(payload, scopeClaimName);

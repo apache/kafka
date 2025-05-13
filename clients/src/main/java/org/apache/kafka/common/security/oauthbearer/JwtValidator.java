@@ -15,17 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.Initable;
 
 import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * An instance of <code>JwtValidator</code> acts as a function object that, given an access
- * token in base-64 encoded JWT format, can parse the data, perform validation, and construct an
+ * An instance of <code>JwtValidator</code> acts as a function object that, given a String in
+ * base 64-encoded JWT format, can parse the data, perform validation, and construct an
  * {@link OAuthBearerToken} for use by the caller.
+ *
+ * <p/>
  *
  * The primary reason for this abstraction is that client and broker may have different libraries
  * available to them to perform these operations. Additionally, the exact steps for validation may
@@ -33,7 +35,7 @@ import java.io.IOException;
  * client does not have bundled a robust library to perform this logic, and it is not the
  * responsibility of the client to perform vigorous validation. However, the Kafka broker ships with
  * a richer set of library dependencies that can perform more substantial validation and is also
- * expected to perform a trust-but-verify test of the access token's signature.
+ * expected to perform a trust-but-verify test of the token's signature.
  *
  * See:
  *
@@ -43,29 +45,31 @@ import java.io.IOException;
  *     <li><a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-access-token-jwt">RFC 6750, Section 2.1</a></li>
  * </ul>
  *
- * @see ClientJwtValidator A basic JwtValidator used by client-side login authentication
- * @see BrokerJwtValidator A more robust JwtValidator that is used on the broker to validate the token's
- *                         contents and verify the signature
+ * @see DefaultJwtValidator   Default validator that acts as a wrapper over one of the other validators
+ * @see ClientJwtValidator    A basic JwtValidator used by client-side login authentication
+ * @see BrokerJwtValidator    A more robust JwtValidator that is used on the broker
+ *                            to validate the token's contents and verify the signature
  */
 
 public interface JwtValidator extends Initable, Closeable {
 
     /**
-     * Accepts an OAuth JWT access token in base-64 encoded format, validates, and returns an
+     * Accepts an OAuth JWT in base 64-encoded format, validates, and returns an
      * OAuthBearerToken.
      *
-     * @param accessToken Non-<code>null</code> JWT access token
+     * @param token Non-<code>null</code> String in JWT format
      *
      * @return {@link OAuthBearerToken}
      *
-     * @throws ValidateException Thrown on errors performing validation of given token
+     * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
-
-    OAuthBearerToken validate(String accessToken) throws ValidateException;
+    OAuthBearerToken validate(String token) throws JwtValidatorException;
 
     /**
-     * Closes any resources that were initialized by {@link #init()}.
+     * Closes any resources used by this implementation. The default implementation of
+     * this method is a no op, for convenience to implementors.
      */
+    @Override
     default void close() throws IOException {
         // Do nothing...
     }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.ConnectionMode;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
@@ -82,11 +83,11 @@ public class JaasOptionsUtils {
         return socketFactory;
     }
 
-    public String validateString(String name) throws ValidateException {
+    public String validateString(String name) throws JwtValidatorException {
         return validateString(name, true);
     }
 
-    public String validateString(String name, boolean isRequired) throws ValidateException {
+    public String validateString(String name, boolean isRequired) throws JwtValidatorException {
         String value = (String) options.get(name);
 
         if (value == null) {

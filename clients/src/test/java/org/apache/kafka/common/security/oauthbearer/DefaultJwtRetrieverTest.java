@@ -15,10 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -139,14 +140,14 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
             jaasConfigs
         );
         assertDoesNotThrow(jwtRetriever::init);
-        assertInstanceOf(HttpJwtRetriever.class, jwtRetriever.delegate());
+        assertInstanceOf(ClientCredentialsJwtRetriever.class, jwtRetriever.delegate());
     }
 
     @ParameterizedTest
     @MethodSource("urlencodeHeaderSupplier")
     public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
         ConfigurationUtils cu = new ConfigurationUtils(configs);
-        boolean actualValue = DefaultJwtRetriever.validateUrlencodeHeader(cu);
+        boolean actualValue = ClientCredentialsJwtRetriever.validateUrlencodeHeader(cu);
         assertEquals(expectedValue, actualValue);
     }
 
