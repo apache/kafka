@@ -27,9 +27,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import java.lang.{Byte => JByte}
 import java.util.Properties
@@ -48,15 +46,13 @@ class DescribeClusterRequestTest extends BaseRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDescribeClusterRequestIncludingClusterAuthorizedOperations(quorum: String): Unit = {
+  @Test
+  def testDescribeClusterRequestIncludingClusterAuthorizedOperations(): Unit = {
     testDescribeClusterRequest(true)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDescribeClusterRequestExcludingClusterAuthorizedOperations(quorum: String): Unit = {
+  @Test
+  def testDescribeClusterRequestExcludingClusterAuthorizedOperations(): Unit = {
     testDescribeClusterRequest(false)
   }
 
