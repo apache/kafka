@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -1130,7 +1131,8 @@ public class TransactionManager {
             // because they indicate that the transaction cannot be completed after all retry attempts.
             // This conversion ensures the application layer treats these errors as abortable,
             // preventing duplicate message delivery.
-            if (error instanceof RetriableException) {
+            if (error instanceof RetriableException ||
+                error instanceof InvalidTxnStateException) {
                 error = new TransactionAbortableException("Transaction Request was aborted after exhausting retries.", error);
             }
 

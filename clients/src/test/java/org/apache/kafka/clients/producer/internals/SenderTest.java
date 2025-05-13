@@ -96,6 +96,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
@@ -3031,8 +3033,9 @@ public class SenderTest {
         verifyErrorMessage(produceResponse(tp0, 0L, Errors.INVALID_REQUEST, 0, -1, errorMessage), errorMessage);
     }
 
-    @Test
-    public void testSenderShouldTransitionToAbortableAfterRetriesExhausted() throws InterruptedException {
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"COORDINATOR_LOAD_IN_PROGRESS", "INVALID_TXN_STATE"})
+    public void testSenderShouldTransitionToAbortableAfterRetriesExhausted(Errors error) throws InterruptedException {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         TransactionManager txnManager = new TransactionManager(
                 logContext,
@@ -3055,14 +3058,14 @@ public class SenderTest {
 
         // First produce request
         appendToAccumulator(tp0);
-        client.prepareResponse(produceResponse(tp0, -1, Errors.COORDINATOR_LOAD_IN_PROGRESS, -1));
+        client.prepareResponse(produceResponse(tp0, -1, error, -1));
         sender.runOnce();
 
         // Sleep for retry backoff
         time.sleep(RETRY_BACKOFF_MS);
 
         // Second attempt to process record - PREPARE the response before sending
-        client.prepareResponse(produceResponse(tp0, -1, Errors.COORDINATOR_LOAD_IN_PROGRESS, -1));
+        client.prepareResponse(produceResponse(tp0, -1, error, -1));
         sender.runOnce();
 
         // Now transaction should be in abortable state after retry is exhausted
