@@ -29,7 +29,7 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.coordinator.transaction.TransactionState
+import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -43,7 +43,6 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{clearInvocations, mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable
 import scala.util.Try
 
 class TransactionMarkerChannelManagerTest {
@@ -69,9 +68,9 @@ class TransactionMarkerChannelManagerTest {
   private val txnTimeoutMs = 0
   private val txnResult = TransactionResult.COMMIT
   private val txnMetadata1 = new TransactionMetadata(transactionalId1, producerId1, producerId1, RecordBatch.NO_PRODUCER_ID,
-    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, mutable.Set[TopicPartition](partition1, partition2), 0L, 0L, TransactionVersion.TV_2)
+    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(partition1, partition2), 0L, 0L, TransactionVersion.TV_2)
   private val txnMetadata2 = new TransactionMetadata(transactionalId2, producerId2, producerId2, RecordBatch.NO_PRODUCER_ID,
-    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, mutable.Set[TopicPartition](partition1), 0L, 0L, TransactionVersion.TV_2)
+    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(partition1), 0L, 0L, TransactionVersion.TV_2)
 
   private val capturedErrorsCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
   private val time = new MockTime
@@ -480,7 +479,7 @@ class TransactionMarkerChannelManagerTest {
 
     assertEquals(0, channelManager.numTxnsWithPendingMarkers)
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
-    assertEquals(None, txnMetadata2.pendingState)
+    assertTrue(txnMetadata2.pendingState.isEmpty)
     assertEquals(TransactionState.COMPLETE_COMMIT, txnMetadata2.state)
   }
 
@@ -509,7 +508,7 @@ class TransactionMarkerChannelManagerTest {
       any(),
       any()))
       .thenAnswer(_ => {
-        txnMetadata2.pendingState = None
+        txnMetadata2.setPendingState(util.Optional.empty())
         capturedErrorsCallback.getValue.apply(Errors.NOT_COORDINATOR)
       })
 
@@ -533,7 +532,7 @@ class TransactionMarkerChannelManagerTest {
 
     assertEquals(0, channelManager.numTxnsWithPendingMarkers)
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
-    assertEquals(None, txnMetadata2.pendingState)
+    assertTrue(txnMetadata2.pendingState.isEmpty)
     assertEquals(TransactionState.PREPARE_COMMIT, txnMetadata2.state)
   }
 
@@ -594,7 +593,7 @@ class TransactionMarkerChannelManagerTest {
 
     assertEquals(0, channelManager.numTxnsWithPendingMarkers)
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
-    assertEquals(None, txnMetadata2.pendingState)
+    assertTrue(txnMetadata2.pendingState.isEmpty)
     assertEquals(TransactionState.COMPLETE_COMMIT, txnMetadata2.state)
   }
 
@@ -634,11 +633,11 @@ class TransactionMarkerChannelManagerTest {
     txnMetadata: TransactionMetadata
   ): Unit = {
     if (isTransactionV2Enabled) {
-      txnMetadata.clientTransactionVersion = TransactionVersion.TV_2
-      txnMetadata.producerEpoch = (producerEpoch + 1).toShort
-      txnMetadata.lastProducerEpoch = producerEpoch
+      txnMetadata.setClientTransactionVersion(TransactionVersion.TV_2)
+      txnMetadata.setProducerEpoch((producerEpoch + 1).toShort)
+      txnMetadata.setLastProducerEpoch(producerEpoch)
     } else {
-      txnMetadata.clientTransactionVersion = TransactionVersion.TV_1
+      txnMetadata.setClientTransactionVersion(TransactionVersion.TV_1)
     }
   }
 }
