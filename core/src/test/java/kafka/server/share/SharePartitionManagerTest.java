@@ -2805,7 +2805,7 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    public void testIsShareGroupEnabled() {
+    public void testShareSessionCacheSupportsShareGroups() {
         ShareSessionCache cache1 = new ShareSessionCache(10, false);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache1)

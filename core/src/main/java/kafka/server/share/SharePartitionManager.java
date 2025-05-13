@@ -457,7 +457,7 @@ public class SharePartitionManager implements AutoCloseable {
                 shareFetchData.forEach(topicIdPartition ->
                     cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
                 ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, reqMetadata.memberId(),
-                        cachedSharePartitions, clientConnectionId);
+                    cachedSharePartitions, clientConnectionId);
                 if (responseShareSessionKey == null) {
                     log.error("Could not create a share session for group {} member {}", groupId, reqMetadata.memberId());
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
