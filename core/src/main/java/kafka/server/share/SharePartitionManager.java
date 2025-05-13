@@ -814,7 +814,7 @@ public class SharePartitionManager implements AutoCloseable {
         }
 
         @Override
-        public void onEmpty(String groupId) {
+        public void onGroupEmpty(String groupId) {
             partitionCache.removeGroup(groupId);
         }
     }

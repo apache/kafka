@@ -36,5 +36,5 @@ public interface ShareGroupListener {
      *
      * @param groupId The id of the group.
      */
-    void onEmpty(String groupId);
+    void onGroupEmpty(String groupId);
 }

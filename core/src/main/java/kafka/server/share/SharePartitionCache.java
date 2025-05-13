@@ -59,8 +59,7 @@ public class SharePartitionCache {
     }
 
     public synchronized SharePartition computeIfAbsent(SharePartitionKey partitionKey, Function<SharePartitionKey, SharePartition> mappingFunction) {
-        groups.putIfAbsent(partitionKey.groupId(), new HashSet<>());
-        groups.get(partitionKey.groupId()).add(partitionKey.topicIdPartition());
+        groups.computeIfAbsent(partitionKey.groupId(), k -> new HashSet<>()).add(partitionKey.topicIdPartition());
         return partitions.computeIfAbsent(partitionKey, mappingFunction);
     }
 

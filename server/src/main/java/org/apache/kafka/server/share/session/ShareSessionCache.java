@@ -143,8 +143,12 @@ public class ShareSessionCache {
         }
         // Notify the share group listener if the group is empty. This should be checked regardless
         // session is evicted by connection disconnect or client's final epoch.
-        if (numMembersPerGroup.get(key.groupId()) == 0 && shareGroupListener != null) {
-            shareGroupListener.onEmpty(key.groupId());
+        if (numMembersPerGroup.get(key.groupId()) == 0) {
+            // Remove the group from the map as it is empty.
+            numMembersPerGroup.remove(key.groupId());
+            if (shareGroupListener != null) {
+                shareGroupListener.onGroupEmpty(key.groupId());
+            }
         }
     }
 
@@ -158,7 +162,7 @@ public class ShareSessionCache {
         ShareSession removeResult = sessions.remove(session.key());
         if (removeResult != null) {
             numPartitions = numPartitions - session.cachedSize();
-            numMembersPerGroup.merge(session.key().groupId(), -1, Integer::sum);
+            numMembersPerGroup.compute(session.key().groupId(), (k, v) -> v != null ? v - 1 : 0);
         }
         return removeResult;
     }
@@ -191,7 +195,7 @@ public class ShareSessionCache {
                 ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
             updateNumPartitions(session);
-            numMembersPerGroup.merge(session.key().groupId(), 1, Integer::sum);
+            numMembersPerGroup.compute(session.key().groupId(), (k, v) -> v != null ? v + 1 : 1);
             connectionIdToSessionMap.put(clientConnectionId, session.key());
             return session.key();
         }
@@ -212,7 +216,7 @@ public class ShareSessionCache {
     }
 
     // Visible for testing.
-    int numMembers(String groupId) {
+    Integer numMembers(String groupId) {
         return numMembersPerGroup.get(groupId);
     }
 
