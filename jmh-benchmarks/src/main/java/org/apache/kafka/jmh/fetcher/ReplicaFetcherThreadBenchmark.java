@@ -84,8 +84,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -277,8 +279,8 @@ public class ReplicaFetcherThreadBenchmark {
                         }
 
                         @Override
-                        public java.util.Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(java.util.Map<TopicPartition, OffsetForLeaderPartition> partitions) {
-                            java.util.Map<TopicPartition, EpochEndOffset> endOffsets = new java.util.HashMap<>();
+                        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
+                            var endOffsets = new HashMap<TopicPartition, EpochEndOffset>();
                             for (TopicPartition tp : partitions.keySet()) {
                                 endOffsets.put(tp, new EpochEndOffset()
                                         .setPartition(tp.partition())
@@ -290,8 +292,8 @@ public class ReplicaFetcherThreadBenchmark {
                         }
 
                         @Override
-                        public java.util.Map<TopicPartition, FetchResponseData.PartitionData> fetch(FetchRequest.Builder fetchRequest) {
-                            return new java.util.HashMap<>();
+                        public Map<TopicPartition, FetchResponseData.PartitionData> fetch(FetchRequest.Builder fetchRequest) {
+                            return Map.of();
                         }
                     },
                     config,

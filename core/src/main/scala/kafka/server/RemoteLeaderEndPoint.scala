@@ -134,9 +134,8 @@ class RemoteLeaderEndPoint(logPrefix: String,
       return java.util.Map.of()
     }
 
-    val tmpPartitions = partitions.asScala.toMap
     val topics = new OffsetForLeaderTopicCollection(partitions.size)
-    tmpPartitions.foreachEntry { (topicPartition, epochData) =>
+    partitions.forEach { (topicPartition, epochData) =>
       var topic = topics.find(topicPartition.topic)
       if (topic == null) {
         topic = new OffsetForLeaderTopic().setTopic(topicPartition.topic)
@@ -164,7 +163,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
         // if we get any unexpected exception, mark all partitions with an error
         val error = Errors.forException(t)
-        tmpPartitions.map { case (tp, _) =>
+        partitions.asScala.map { case (tp, _) =>
           tp -> new EpochEndOffset()
             .setPartition(tp.partition)
             .setErrorCode(error.code)

@@ -136,22 +136,20 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "l
   }
 
   override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = {
-    val endOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
-    val tmpPartitions = partitions.asScala
-    tmpPartitions.foreachEntry { (partition, epochData) =>
+    val endOffsets = new java.util.HashMap[TopicPartition, EpochEndOffset]()
+    partitions.forEach { (partition, epochData) =>
       assert(partition.partition == epochData.partition,
         "Partition must be consistent between TopicPartition and EpochData")
       val leaderState = leaderPartitionState(partition)
       val epochEndOffset = lookupEndOffsetForEpoch(partition, epochData, leaderState)
       endOffsets.put(partition, epochEndOffset)
     }
-    endOffsets.asJava
+    endOffsets
   }
 
   override def buildFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[java.util.Optional[ReplicaFetch]] = {
     val fetchData = mutable.Map.empty[TopicPartition, FetchRequest.PartitionData]
-    val tmpPartitions = partitions.asScala.toMap
-    tmpPartitions.foreach { case (partition, state) =>
+    partitions.forEach { case (partition, state) =>
       if (state.isReadyForFetch) {
         val replicaState = replicaPartitionStateCallback(partition).getOrElse(throw new IllegalArgumentException(s"Unknown partition $partition"))
         val lastFetchedEpoch = if (isTruncationOnFetchSupported)

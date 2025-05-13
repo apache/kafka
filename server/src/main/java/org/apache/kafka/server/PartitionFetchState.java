@@ -47,8 +47,7 @@ public record PartitionFetchState(
             ReplicaState state,
             Optional<Integer> lastFetchedEpoch) {
         this(topicId, fetchOffset, lag, currentLeaderEpoch,
-                Optional.empty(), state, lastFetchedEpoch,
-                Optional.empty());
+                Optional.empty(), state, lastFetchedEpoch);
     }
 
     public PartitionFetchState(
@@ -77,7 +76,7 @@ public record PartitionFetchState(
     }
 
     public boolean isDelayed() {
-        return dueMs.isPresent() && dueMs.get() > Time.SYSTEM.milliseconds();
+        return dueMs.filter(aLong -> aLong > Time.SYSTEM.milliseconds()).isPresent();
     }
 
     @Override
