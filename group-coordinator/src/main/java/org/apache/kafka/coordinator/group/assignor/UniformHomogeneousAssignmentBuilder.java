@@ -64,7 +64,7 @@ public class UniformHomogeneousAssignmentBuilder {
     private final Set<Uuid> subscribedTopicIds;
 
     /**
-     * The members that are at or below their quota.
+     * The members that are below their quota.
      */
     private final List<MemberWithRemainingQuota> unfilledMembers;
 
@@ -154,7 +154,11 @@ public class UniformHomogeneousAssignmentBuilder {
      */
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     private void maybeRevokePartitions() {
+        int memberCount = groupSpec.memberIds().size();
+        int memberIndex = -1;
         for (String memberId : groupSpec.memberIds()) {
+            memberIndex++;
+
             Map<Uuid, Set<Integer>> oldAssignment = groupSpec.memberAssignment(memberId).partitions();
             Map<Uuid, Set<Integer>> newAssignment = null;
 
@@ -210,22 +214,22 @@ public class UniformHomogeneousAssignmentBuilder {
                 }
             }
 
+            if (quota > 0 &&
+                quotaHasExtraPartition &&
+                memberCount - memberIndex > remainingMembersToGetAnExtraPartition) {
+                // Give up the extra partition quota for another member to claim,
+                // unless this member is one of the last remainingMembersToGetAnExtraPartition
+                // members in the list and must take the extra partition.
+                quota--;
+                quotaHasExtraPartition = false;
+            }
+
             if (quota > 0) {
-                if (quotaHasExtraPartition) {
-                    // Give up the extra partition quota for another member to claim.
-                    quota--;
-                }
-                if (quota > 0 || unfilledMembers.size() < remainingMembersToGetAnExtraPartition) {
-                    unfilledMembers.add(new MemberWithRemainingQuota(memberId, quota));
-                }
-            } else {
-                // The member exhausted the partition quota...
-                if (quotaHasExtraPartition) {
-                    // ...and must be one of those that get an extra partition.
-                    remainingMembersToGetAnExtraPartition--;
-                } else {
-                    // ...and there are no more extra partitions available.
-                }
+                unfilledMembers.add(new MemberWithRemainingQuota(memberId, quota));
+            }
+
+            if (quotaHasExtraPartition) {
+                remainingMembersToGetAnExtraPartition--;
             }
 
             if (newAssignment == null) {
@@ -234,15 +238,6 @@ public class UniformHomogeneousAssignmentBuilder {
                 targetAssignment.put(memberId, new MemberAssignmentImpl(newAssignment));
             }
         }
-
-        // Distribute the remaining extra partitions to the members that are at or under the minimum
-        // quota. When there are remaining extra partitions, we can't run out of unfilledMembers
-        // here because all members either subtracted from remainingMembersToGetAnExtraPartition or
-        // went into the unfilledMembers list.
-        for (int i = 0; i < remainingMembersToGetAnExtraPartition; i++) {
-            unfilledMembers.get(i).remainingQuota++;
-        }
-        remainingMembersToGetAnExtraPartition = 0;
     }
 
     /**
@@ -254,10 +249,6 @@ public class UniformHomogeneousAssignmentBuilder {
         for (MemberWithRemainingQuota unfilledMember : unfilledMembers) {
             String memberId = unfilledMember.memberId;
             int remainingQuota = unfilledMember.remainingQuota;
-
-            if (remainingQuota == 0) {
-                continue;
-            }
 
             Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).partitions();
             if (AssignorHelpers.isImmutableMap(newAssignment)) {
@@ -283,7 +274,7 @@ public class UniformHomogeneousAssignmentBuilder {
 
     private static class MemberWithRemainingQuota {
         final String memberId;
-        int remainingQuota;
+        final int remainingQuota;
 
         MemberWithRemainingQuota(
             String memberId,
