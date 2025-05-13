@@ -168,7 +168,8 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  */
 @SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity", "ParameterNumber", "NPathComplexity", "JavaNCSS" })
 public final class KafkaRaftClient<T> implements RaftClient<T> {
-    private static final int RETRY_BACKOFF_BASE_MS = 100;
+    // visible for testing
+    static final int RETRY_BACKOFF_BASE_MS = 50;
     private static final int MAX_NUMBER_OF_BATCHES = 10;
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
@@ -1030,7 +1031,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 // replica has failed multiple elections in succession.
                 candidate.startBackingOff(
                     currentTimeMs,
-                    binaryExponentialElectionBackoffMs(candidate.retries())
+                    RaftUtil.binaryExponentialElectionBackoffMs(
+                        quorumConfig.electionBackoffMaxMs(),
+                        RETRY_BACKOFF_BASE_MS,
+                        candidate.retries(),
+                        random
+                    )
                 );
             }
         } else if (state instanceof ProspectiveState prospective) {
@@ -1046,17 +1052,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 "Expected to be a NomineeState (Prospective or Candidate), but current state is " + state
             );
         }
-    }
-
-    private int binaryExponentialElectionBackoffMs(int retries) {
-        if (retries <= 0) {
-            throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
-        }
-        // upper limit exponential co-efficients at 20 to avoid overflow
-        return Math.min(
-            RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries - 1)),
-            quorumConfig.electionBackoffMaxMs()
-        );
     }
 
     private int strictExponentialElectionBackoffMs(int positionInSuccessors, int totalNumSuccessors) {

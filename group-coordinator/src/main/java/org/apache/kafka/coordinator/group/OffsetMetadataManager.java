@@ -1000,13 +1000,14 @@ public class OffsetMetadataManager {
      * @param groupId The group id.
      * @param records The list of records to populate with offset commit tombstone records.
      *
-     * @return True if no offsets exist or if all offsets expired, false otherwise.
+     * @return True if no offsets exist after expiry and no pending transactional offsets exist,
+     *         false otherwise.
      */
     public boolean cleanupExpiredOffsets(String groupId, List<CoordinatorRecord> records) {
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
             offsets.offsetsByGroup.get(groupId);
         if (offsetsByTopic == null) {
-            return true;
+            return !openTransactions.contains(groupId);
         }
 
         // We expect the group to exist.
