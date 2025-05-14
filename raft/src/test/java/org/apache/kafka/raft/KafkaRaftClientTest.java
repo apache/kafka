@@ -1811,7 +1811,7 @@ class KafkaRaftClientTest {
         context.client.poll();
         assertTrue(candidate.isBackingOff());
         assertEquals(
-            context.electionBackoffMaxMs,
+            context.electionBackoffMaxMs + exponentialFactor,
             candidate.remainingBackoffMs(context.time.milliseconds())
         );
 
@@ -1820,7 +1820,7 @@ class KafkaRaftClientTest {
 
         // Even though candidacy was rejected, local replica will backoff for jitter period
         // before transitioning to prospective and starting a new election.
-        context.time.sleep(context.electionBackoffMaxMs - 1);
+        context.time.sleep(context.electionBackoffMaxMs + exponentialFactor - 1);
         context.client.poll();
         context.assertVotedCandidate(epoch, localId);
 

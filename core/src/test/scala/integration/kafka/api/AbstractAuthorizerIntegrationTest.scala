@@ -80,11 +80,13 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
   val tp = new TopicPartition(topic, part)
   val logDir = "logDir"
   val group = "my-group"
+  val shareGroup = "share-group"
   val protocolType = "consumer"
   val protocolName = "consumer-range"
   val clusterResource = new ResourcePattern(CLUSTER, Resource.CLUSTER_NAME, LITERAL)
   val topicResource = new ResourcePattern(TOPIC, topic, LITERAL)
   val groupResource = new ResourcePattern(GROUP, group, LITERAL)
+  val shareGroupResource = new ResourcePattern(GROUP, shareGroup, LITERAL)
   val transactionalIdResource = new ResourcePattern(TRANSACTIONAL_ID, transactionalId, LITERAL)
 
   producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")

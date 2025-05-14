@@ -855,7 +855,7 @@ public class StreamsConfigTest {
 
         try {
             new StreamsConfig(props).getProducerConfigs(clientId);
-            fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be paresed into an integer");
+            fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be parsed into an integer");
         } catch (final ConfigException e) {
             assertEquals(
                 "Invalid value not-a-number for configuration max.in.flight.requests.per.connection:" +
@@ -875,8 +875,8 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
-        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"none\"");
+        final String actualOptimizedConfig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        assertEquals(expectedOptimizeConfig, actualOptimizedConfig, "Optimization should be \"none\"");
     }
 
     @Test
@@ -884,8 +884,8 @@ public class StreamsConfigTest {
         final String expectedOptimizeConfig = "all";
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"all\"");
+        final String actualOptimizedConfig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        assertEquals(expectedOptimizeConfig, actualOptimizedConfig, "Optimization should be \"all\"");
     }
 
     @Test
@@ -1216,13 +1216,13 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldtSetMinTrafficRackAwareAssignmentConfig() {
+    public void shouldSetMinTrafficRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC);
         assertEquals("min_traffic", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
     }
 
     @Test
-    public void shouldtSetBalanceSubtopologyRackAwareAssignmentConfig() {
+    public void shouldSetBalanceSubtopologyRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY);
         assertEquals("balance_subtopology", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
     }

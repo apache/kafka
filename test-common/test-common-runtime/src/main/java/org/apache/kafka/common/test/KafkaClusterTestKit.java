@@ -119,6 +119,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         private final String controllerSecurityProtocol;
         private boolean standalone;
         private Optional<Map<Integer, Uuid>> initialVoterSet = Optional.empty();
+        private boolean deleteOnClose;
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
@@ -126,6 +127,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             this.controllerListenerName = nodes.controllerListenerName().value();
             this.brokerSecurityProtocol = nodes.brokerListenerProtocol().name;
             this.controllerSecurityProtocol = nodes.controllerListenerProtocol().name;
+            this.deleteOnClose = true;
         }
 
         public Builder setConfigProp(String key, Object value) {
@@ -248,6 +250,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return Optional.empty();
         }
 
+        public Builder setDeleteOnClose(boolean deleteOnClose) {
+            this.deleteOnClose = deleteOnClose;
+            return this;
+        }
+
         public KafkaClusterTestKit build() throws Exception {
             Map<Integer, ControllerServer> controllers = new HashMap<>();
             Map<Integer, BrokerServer> brokers = new HashMap<>();
@@ -337,7 +344,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     socketFactoryManager,
                     jaasFile,
                     standalone,
-                    initialVoterSet);
+                    initialVoterSet,
+                    deleteOnClose);
         }
 
         private String listeners(int node) {
@@ -384,6 +392,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final Optional<File> jaasFile;
     private final boolean standalone;
     private final Optional<Map<Integer, Uuid>> initialVoterSet;
+    private final boolean deleteOnClose;
 
     private KafkaClusterTestKit(
         TestKitNodes nodes,
@@ -394,8 +403,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
         PreboundSocketFactoryManager socketFactoryManager,
         Optional<File> jaasFile,
         boolean standalone,
-        Optional<Map<Integer, Uuid>> initialVoterSet
-    ) throws Exception {
+        Optional<Map<Integer, Uuid>> initialVoterSet,
+        boolean deleteOnClose
+    ) {
         /*
           Number of threads = Total number of brokers + Total number of controllers + Total number of Raft Managers
                             = Total number of brokers + Total number of controllers * 2
@@ -413,6 +423,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         this.jaasFile = jaasFile;
         this.standalone = standalone;
         this.initialVoterSet = initialVoterSet;
+        this.deleteOnClose = deleteOnClose;
     }
 
     public void format() throws Exception {
@@ -708,9 +719,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();
-            Utils.delete(baseDirectory);
-            if (jaasFile.isPresent()) {
-                Utils.delete(jaasFile.get());
+            if (deleteOnClose) {
+                Utils.delete(baseDirectory);
+                if (jaasFile.isPresent()) {
+                    Utils.delete(jaasFile.get());
+                }
             }
         } catch (Exception e) {
             for (Entry<String, Future<?>> entry : futureEntries) {

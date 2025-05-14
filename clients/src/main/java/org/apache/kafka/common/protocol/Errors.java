@@ -229,7 +229,7 @@ public enum Errors {
             "The group member's supported protocols are incompatible with those of existing members " +
             "or first group member tried to join with empty protocol type or empty protocol list.",
             InconsistentGroupProtocolException::new),
-    INVALID_GROUP_ID(24, "The configured groupId is invalid.",
+    INVALID_GROUP_ID(24, "The group id is invalid.",
             InvalidGroupIdException::new),
     UNKNOWN_MEMBER_ID(25, "The coordinator is not aware of this member.",
             UnknownMemberIdException::new),
