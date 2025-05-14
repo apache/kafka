@@ -23,7 +23,6 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -40,13 +39,13 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.jaasOptions;
 
 /**
  * <p>
  * <code>OAuthBearerLoginCallbackHandler</code> is an {@link AuthenticateCallbackHandler} that
  * accepts {@link OAuthBearerTokenCallback} and {@link SaslExtensionsCallback} callbacks to
- * perform the steps to request a JWT from an OAuth/OIDC provider using the
- * <code>clientcredentials</code>. This grant type is commonly used for non-interactive
+ * perform the steps to request a JWT from an OAuth/OIDC provider using non-interactive
  * "service accounts" where there is no user available to interactively supply credentials.
  * </p>
  *
@@ -86,19 +85,8 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  * </p>
  *
  * <p>
- * The Kafka configuration must also include JAAS configuration which includes the following
- * OAuth-specific options:
- *
- * <ul>
- *     <li><code>clientId</code>OAuth client ID (required)</li>
- *     <li><code>clientSecret</code>OAuth client secret (required)</li>
- *     <li><code>scope</code>OAuth scope (optional)</li>
- * </ul>
- * </p>
- *
- * <p>
- * The JAAS configuration can also include any SSL options that are needed. The configuration
- * options are the same as those specified by the configuration in
+ * The JAAS configuration ({@code sasl.jaas.config} may also include any SSL options that are needed.
+ * The configuration options are the same as those specified by the configuration in
  * {@link org.apache.kafka.common.config.SslConfigs#addClientSslSupport(ConfigDef)}.
  * </p>
  *
@@ -180,7 +168,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+        moduleOptions = jaasOptions(saslMechanism, jaasConfigEntries);
         jwtRetriever = new DefaultJwtRetriever();
         jwtRetriever.configure(configs, saslMechanism, jaasConfigEntries);
         jwtValidator = new DefaultJwtValidator();
