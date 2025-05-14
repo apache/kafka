@@ -1992,7 +1992,9 @@ public class GroupMetadataManager {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().activeTasks()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
-            group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
+            if (!updatedMember.assignedTasks().isEmpty()) {
+                group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
+            }
         }
 
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
