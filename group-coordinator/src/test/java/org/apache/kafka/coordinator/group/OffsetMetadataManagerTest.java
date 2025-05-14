@@ -1835,6 +1835,44 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
+    public void testFetchOffsetsWithTopicIds() {
+        Uuid fooId = Uuid.randomUuid();
+        Uuid barId = Uuid.randomUuid();
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
+
+        context.commitOffset("group", "foo", 0, 100L, 1);
+        context.commitOffset("group", "bar", 0, 200L, 1);
+
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> request = List.of(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setTopicId(fooId)
+                .setPartitionIndexes(List.of(0)),
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("bar")
+                .setTopicId(barId)
+                .setPartitionIndexes(List.of(0))
+        );
+
+        assertEquals(List.of(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setTopicId(fooId)
+                .setPartitions(List.of(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setTopicId(barId)
+                .setPartitions(List.of(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata")
+                ))
+        ), context.fetchOffsets("group", request, Long.MAX_VALUE));
+    }
+
+    @Test
     public void testFetchOffsetsAtDifferentCommittedOffset() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 

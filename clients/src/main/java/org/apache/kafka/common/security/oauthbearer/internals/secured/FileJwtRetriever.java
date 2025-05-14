@@ -23,19 +23,19 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /**
- * <code>FileTokenRetriever</code> is an {@link AccessTokenRetriever} that will load the contents,
- * interpreting them as a JWT access key in the serialized form.
+ * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
+ * of a file, interpreting them as a JWT access key in the serialized form.
  *
- * @see AccessTokenRetriever
+ * @see JwtRetriever
  */
 
-public class FileTokenRetriever implements AccessTokenRetriever {
+public class FileJwtRetriever implements JwtRetriever {
 
     private final Path accessTokenFile;
 
     private String accessToken;
 
-    public FileTokenRetriever(Path accessTokenFile) {
+    public FileJwtRetriever(Path accessTokenFile) {
         this.accessTokenFile = accessTokenFile;
     }
 

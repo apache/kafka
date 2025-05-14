@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -881,7 +882,9 @@ public class OffsetMetadataManager {
 
         request.topics().forEach(topic -> {
             final OffsetFetchResponseData.OffsetFetchResponseTopics topicResponse =
-                new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name());
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setTopicId(topic.topicId())
+                    .setName(topic.name());
             topicResponses.add(topicResponse);
 
             final TimelineHashMap<Integer, OffsetAndMetadata> topicOffsets = groupOffsets == null ?
@@ -962,7 +965,11 @@ public class OffsetMetadataManager {
                     (requireStable && openTransactionsByTopic != null) ? openTransactionsByTopic.get(topic, lastCommittedOffset) : null;
 
                 final OffsetFetchResponseData.OffsetFetchResponseTopics topicResponse =
-                    new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic);
+                    new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                        // It is set to zero for now but it will be set to the persisted
+                        // topic id along the committed offset, if present.
+                        .setTopicId(Uuid.ZERO_UUID)
+                        .setName(topic);
                 topicResponses.add(topicResponse);
 
                 topicOffsets.entrySet(lastCommittedOffset).forEach(partitionEntry -> {

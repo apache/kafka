@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -39,11 +40,14 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -277,6 +281,59 @@ public class ConsumerNetworkThreadTest {
                     metrics.metricName("application-event-queue-time-max", CONSUMER_METRIC_GROUP)
                 ).metricValue()
             );
+        }
+    }
+
+    @Test
+    public void testNetworkClientDelegateInitializeResourcesError() {
+        Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> {
+            throw new KafkaException("Injecting NetworkClientDelegate initialization failure");
+        };
+        Supplier<RequestManagers> requestManagersSupplier = () -> requestManagers;
+        testInitializeResourcesError(networkClientDelegateSupplier, requestManagersSupplier);
+    }
+
+    @Test
+    public void testRequestManagersInitializeResourcesError() {
+        Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> networkClientDelegate;
+        Supplier<RequestManagers> requestManagersSupplier = () -> {
+            throw new KafkaException("Injecting RequestManagers initialization failure");
+        };
+        testInitializeResourcesError(networkClientDelegateSupplier, requestManagersSupplier);
+    }
+
+    @Test
+    public void testNetworkClientDelegateAndRequestManagersInitializeResourcesError() {
+        Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> {
+            throw new KafkaException("Injecting NetworkClientDelegate initialization failure");
+        };
+        Supplier<RequestManagers> requestManagersSupplier = () -> {
+            throw new KafkaException("Injecting RequestManagers initialization failure");
+        };
+        testInitializeResourcesError(networkClientDelegateSupplier, requestManagersSupplier);
+    }
+
+    /**
+     * Tests that when an error occurs during {@link ConsumerNetworkThread#initializeResources()} that the
+     * logic in {@link ConsumerNetworkThread#cleanup()} will not throw errors when closing.
+     */
+    private void testInitializeResourcesError(Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+                                              Supplier<RequestManagers> requestManagersSupplier) {
+        // A new ConsumerNetworkThread is created because the shared one doesn't have any issues initializing its
+        // resources. However, most of the mocks can be reused, so this is mostly boilerplate except for the error
+        // when a supplier is invoked.
+        try (ConsumerNetworkThread thread = new ConsumerNetworkThread(
+            new LogContext(),
+            time,
+            applicationEventQueue,
+            applicationEventReaper,
+            () -> applicationEventProcessor,
+            networkClientDelegateSupplier,
+            requestManagersSupplier,
+            asyncConsumerMetrics
+        )) {
+            assertThrows(KafkaException.class, thread::initializeResources, "initializeResources should fail because one or more Supplier throws an error on get()");
+            assertDoesNotThrow(thread::cleanup, "cleanup() should not cause an error because all references are checked before use");
         }
     }
 }

@@ -15,20 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.io.IOException;
+package org.apache.kafka.server;
 
-public interface Initable {
+/**
+ * Represents the state of a replica.
+ */
+public enum ReplicaState {
+    TRUNCATING {
+        @Override
+        public String toString() {
+            return "Truncating";
+        }
+    },
 
-    /**
-     * Lifecycle method to perform any one-time initialization of a given resource. This must
-     * be invoked by the caller to ensure the correct state before methods are invoked.
-     *
-     * @throws IOException Thrown on errors related to IO during initialization
-     */
-
-    default void init() throws IOException {
-        // This method left intentionally blank.
-    }
+    FETCHING {
+        @Override
+        public String toString() {
+            return "Fetching";
+        }
+    };
 }

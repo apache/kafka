@@ -14,21 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.share;
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+import org.apache.kafka.common.Uuid;
 
-import java.io.IOException;
-
-public interface Initable {
+/**
+ * The ShareGroupListener is used to notify when there is a change in the share group members.
+ */
+public interface ShareGroupListener {
 
     /**
-     * Lifecycle method to perform any one-time initialization of a given resource. This must
-     * be invoked by the caller to ensure the correct state before methods are invoked.
+     * Called when member leaves the group.
      *
-     * @throws IOException Thrown on errors related to IO during initialization
+     * @param groupId  The id of the group.
+     * @param memberId The id of the member.
      */
+    void onMemberLeave(String groupId, Uuid memberId);
 
-    default void init() throws IOException {
-        // This method left intentionally blank.
-    }
+    /**
+     * Called when the group is empty.
+     *
+     * @param groupId The id of the group.
+     */
+    void onGroupEmpty(String groupId);
 }

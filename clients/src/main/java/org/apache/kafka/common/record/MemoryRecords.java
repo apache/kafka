@@ -301,7 +301,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public Records slice(int position, int size) {
+    public MemoryRecords slice(int position, int size) {
         if (position < 0)
             throw new IllegalArgumentException("Invalid position: " + position + " in read from " + this);
         if (position > buffer.limit())
