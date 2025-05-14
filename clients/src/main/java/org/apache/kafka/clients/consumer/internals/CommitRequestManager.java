@@ -589,6 +589,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         if (memberEpoch.isEmpty() && memberInfo.memberEpoch.isPresent()) {
             log.info("Member {} won't include epoch in following offset " +
                 "commit/fetch requests because it has left the group.", memberInfo.memberId);
+        } else if (memberEpoch.isPresent()) {
+            log.debug("Member {} will include new member epoch {} in following offset commit/fetch requests.", memberId, memberEpoch);
         }
         memberInfo.memberId = memberId;
         memberInfo.memberEpoch = memberEpoch;
