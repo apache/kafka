@@ -161,11 +161,10 @@ public class OptimizedUniformAssignmentBuilderTest {
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0),
             mkTopicAssignment(topic3Uuid, 0, 1)
         ));
         expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1, 2)
+            mkTopicAssignment(topic1Uuid, 0, 1, 2)
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
@@ -218,15 +217,15 @@ public class OptimizedUniformAssignmentBuilderTest {
 
         // Topic 3 has 2 partitions but three members subscribed to it - one of them should not get an assignment.
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic3Uuid, 0)
-        ));
-        expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic3Uuid, 1)
-        ));
-        expectedAssignment.put(memberC,
+        expectedAssignment.put(memberA,
             Map.of()
         );
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic3Uuid, 0)
+        ));
+        expectedAssignment.put(memberC, mkAssignment(
+            mkTopicAssignment(topic3Uuid, 1)
+        ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
@@ -382,11 +381,11 @@ public class OptimizedUniformAssignmentBuilderTest {
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 2, 3),
+            mkTopicAssignment(topic1Uuid, 0, 2),
             mkTopicAssignment(topic2Uuid, 0, 3, 4)
         ));
         expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1, 4, 5),
+            mkTopicAssignment(topic1Uuid, 1, 3, 4, 5),
             mkTopicAssignment(topic2Uuid, 1, 2)
         ));
 
@@ -585,6 +584,75 @@ public class OptimizedUniformAssignmentBuilderTest {
         ));
         expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic2Uuid, 1)
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        assertAssignment(expectedAssignment, computedAssignment);
+        checkValidityAndBalance(members, computedAssignment);
+    }
+
+    @Test
+    public void testReassignmentStickinessWhenAlreadyBalanced() {
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            5
+        ));
+
+        // A TreeMap ensures that memberA is first in the iteration order.
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        // Two members must have extra partitions. In the previous assignment, they were members A
+        // and C.
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 3)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 1)
+            ))
+        ));
+
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2, 4)
+            ))
+        ));
+
+        // Members A and C should keep their partitions.
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 3)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1)
+        ));
+        expectedAssignment.put(memberC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2, 4)
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(

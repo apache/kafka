@@ -1502,11 +1502,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return clientId;
     }
 
-    // Visible for testing
-    TransactionManager getTransactionManager() {
-        return transactionManager;
-    }
-
     private static class ClusterAndWaitTime {
         final Cluster cluster;
         final long waitedOnMetadataMs;

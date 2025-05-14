@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
@@ -744,6 +745,32 @@ public class SharePartitionManager implements AutoCloseable {
                 brokerTopicStats.topicStats(topic).failedShareAcknowledgementRequestRate().mark();
             });
         };
+    }
+
+    /**
+     * The handler for share version feature metadata changes.
+     * @param shareVersion the new share version feature
+     */
+    public void onShareVersionToggle(ShareVersion shareVersion) {
+        if (!shareVersion.supportsShareGroups()) {
+            cache.updateSupportsShareGroups(false);
+            // Remove all share sessions from share session cache.
+            synchronized (cache) {
+                cache.removeAllSessions();
+            }
+            Set<SharePartitionKey> sharePartitionKeys = new HashSet<>(partitionCacheMap.keySet());
+            // Remove all share partitions from partition cache.
+            sharePartitionKeys.forEach(sharePartitionKey ->
+                removeSharePartitionFromCache(sharePartitionKey, partitionCacheMap, replicaManager)
+            );
+        } else {
+            cache.updateSupportsShareGroups(true);
+        }
+    }
+
+    // Visible for testing.
+    protected int partitionCacheSize() {
+        return partitionCacheMap.size();
     }
 
     /**
