@@ -106,7 +106,7 @@ public class ProcessorNodeTest {
         final FailedProcessingException failedProcessingException = assertThrows(FailedProcessingException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
 
-        assertTrue(failedProcessingException.getCause() instanceof RuntimeException);
+        assertInstanceOf(RuntimeException.class, failedProcessingException.getCause());
         assertEquals("Processing exception should be caught and handled by the processing exception handler.",
             failedProcessingException.getCause().getMessage());
         assertEquals(NAME, failedProcessingException.failedProcessorNodeName());
@@ -310,7 +310,7 @@ public class ProcessorNodeTest {
             StreamsException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP))
         );
-        assertTrue(se.getCause() instanceof ClassCastException);
+        assertInstanceOf(ClassCastException.class, se.getCause());
         assertTrue(se.getMessage().contains("default Serdes"));
         assertTrue(se.getMessage().contains("input types"));
         assertTrue(se.getMessage().contains("pname"));

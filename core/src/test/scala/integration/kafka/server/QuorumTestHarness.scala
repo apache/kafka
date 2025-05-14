@@ -159,10 +159,6 @@ abstract class QuorumTestHarness extends Logging {
   private var testInfo: TestInfo = _
   protected var implementation: QuorumImplementation = _
 
-  def isShareGroupTest(): Boolean = {
-    TestInfoUtils.isShareGroupTest(testInfo)
-  }
-
   def maybeGroupProtocolSpecified(): Option[GroupProtocol] = {
     TestInfoUtils.maybeGroupProtocolSpecified(testInfo)
   }

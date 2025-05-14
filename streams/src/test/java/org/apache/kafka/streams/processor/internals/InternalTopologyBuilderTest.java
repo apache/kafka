@@ -116,7 +116,7 @@ public class InternalTopologyBuilderTest {
         assertThat(builder.offsetResetStrategy(earliestTopic), equalTo(AutoOffsetResetStrategy.EARLIEST));
         assertThat(builder.offsetResetStrategy(latestTopic), equalTo(AutoOffsetResetStrategy.LATEST));
         assertThat(builder.offsetResetStrategy(durationTopic).type(), equalTo(AutoOffsetResetStrategy.StrategyType.BY_DURATION));
-        assertThat(builder.offsetResetStrategy(durationTopic).duration().get().toSeconds(), equalTo(42L));
+        assertThat(builder.offsetResetStrategy(durationTopic).duration().orElseThrow().toSeconds(), equalTo(42L));
     }
 
     @Test
@@ -127,7 +127,7 @@ public class InternalTopologyBuilderTest {
         final String durationTopicPattern = "duration.*Topic";
 
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.none()), "source0", null, null, null, Pattern.compile(noneTopicPattern));
-        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.earliest()), "sourc1", null, null, null, Pattern.compile(earliestTopicPattern));
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.earliest()), "source1", null, null, null, Pattern.compile(earliestTopicPattern));
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source2", null, null, null,  Pattern.compile(latestTopicPattern));
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.byDuration(Duration.ofSeconds(42))), "source3", null, null, null, Pattern.compile(durationTopicPattern));
 
@@ -137,7 +137,7 @@ public class InternalTopologyBuilderTest {
         assertThat(builder.offsetResetStrategy("earliestTestTopic"), equalTo(AutoOffsetResetStrategy.EARLIEST));
         assertThat(builder.offsetResetStrategy("latestTestTopic"), equalTo(AutoOffsetResetStrategy.LATEST));
         assertThat(builder.offsetResetStrategy("durationTestTopic").type(), equalTo(AutoOffsetResetStrategy.StrategyType.BY_DURATION));
-        assertThat(builder.offsetResetStrategy("durationTestTopic").duration().get().toSeconds(), equalTo(42L));
+        assertThat(builder.offsetResetStrategy("durationTestTopic").duration().orElseThrow().toSeconds(), equalTo(42L));
     }
 
     @Test

@@ -153,7 +153,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         List.of(
             new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
                 .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(8080))
-                .setPartitions(List.of(
+                .setActivePartitions(List.of(
                     new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("topic").setPartitions(List.of(0)))
                 )
         );
@@ -591,9 +591,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 .get(new StreamsRebalanceData.HostInfo(
                     ENDPOINT_TO_PARTITIONS.get(0).userEndpoint().host(),
                     ENDPOINT_TO_PARTITIONS.get(0).userEndpoint().port())
-                );
-            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).partitions().get(0).topic(), topicPartitions.get(0).topic());
-            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).partitions().get(0).partitions().get(0), topicPartitions.get(0).partition());
+                ).activePartitions();
+            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).topic(), topicPartitions.get(0).topic());
+            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).partitions().get(0), topicPartitions.get(0).partition());
             assertEquals(
                 1.0,
                 metrics.metric(metrics.metricName("heartbeat-total", "consumer-coordinator-metrics")).metricValue()

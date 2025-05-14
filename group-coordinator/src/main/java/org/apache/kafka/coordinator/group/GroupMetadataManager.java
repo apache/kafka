@@ -158,6 +158,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.image.MetadataDelta;
@@ -1982,7 +1983,8 @@ public class GroupMetadataManager {
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
+            .setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
 
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
@@ -2091,6 +2093,25 @@ public class GroupMetadataManager {
                 .setSubtopologyId(entry.getKey())
                 .setPartitions(entry.getValue().stream().sorted().toList()))
             .collect(Collectors.toList());
+    }
+
+    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group) {
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
+        final Map<String, StreamsGroupMember> members = group.members();
+        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
+            final String memberIdForAssignment = entry.getKey();
+            final Optional<StreamsGroupMemberMetadataValue.Endpoint> endpointOptional = members.get(memberIdForAssignment).userEndpoint();
+            StreamsGroupMember groupMember = entry.getValue();
+            if (endpointOptional.isPresent()) {
+                final StreamsGroupMemberMetadataValue.Endpoint endpoint = endpointOptional.get();
+                final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+                responseEndpoint.setHost(endpoint.host());
+                responseEndpoint.setPort(endpoint.port());
+                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
+                endpointToPartitionsList.add(endpointToPartitions);
+            }
+        }
+        return endpointToPartitionsList.isEmpty() ? null : endpointToPartitionsList;
     }
 
     /**
@@ -2613,7 +2634,6 @@ public class GroupMetadataManager {
         if (memberEpoch == 0 || isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(ShareGroupHeartbeatResponse.createAssignment(updatedMember.assignedPartitions()));
         }
-
         return new CoordinatorResult<>(
             records,
             Map.entry(
@@ -2663,7 +2683,12 @@ public class GroupMetadataManager {
 
         Map<Uuid, Set<Integer>> topicPartitionChangeMap = new HashMap<>();
         ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
-        Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? new HashMap<>() : mergeShareGroupInitMaps(info.initializedTopics(), info.initializingTopics());
+
+        // We are only considering initialized TPs here. This is because it could happen
+        // that some topics have been moved to initializing but the corresponding persister request
+        // could not be made/failed (invoked by the group coordinator). Then there would be no way to try
+        // the persister call. This way we get the opportunity to retry.
+        Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? new HashMap<>() : info.initializedTopics();
 
         subscriptionMetadata.forEach((topicName, topicMetadata) -> {
             Set<Integer> alreadyInitializedPartSet = alreadyInitialized.getOrDefault(topicMetadata.id(), Set.of());
@@ -8070,6 +8095,63 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Iterates over the share state metadata map and removes any
+     * deleted topic ids from the initialized and initializing maps.
+     * Also, updates the deleted set with valid values. This method does
+     * not add new topic ids to the deleted map but removed input ids from
+     * initializing, initialized and deleting maps.
+     * Meant to be executed on topic delete events, in parallel
+     * with counterpart method share coordinator.
+     *
+     * @param deletedTopicIds   The set of topics which are deleted
+     * @return A result containing new records or empty if no change, and void response.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
+        Set<Uuid> deletedTopicIds
+    ) {
+        if (deletedTopicIds.isEmpty()) {
+            return new CoordinatorResult<>(List.of());
+        }
+        List<CoordinatorRecord> records = new ArrayList<>();
+        shareGroupPartitionMetadata.forEach((groupId, metadata) -> {
+            Set<Uuid> initializingDeletedCurrent = new HashSet<>(metadata.initializingTopics().keySet());
+            Set<Uuid> initializedDeletedCurrent = new HashSet<>(metadata.initializedTopics().keySet());
+
+            initializingDeletedCurrent.retainAll(deletedTopicIds);
+            initializedDeletedCurrent.retainAll(deletedTopicIds);
+
+            // The deleted topic ids are neither present in initializing
+            // not initialized, so we have nothing to do.
+            if (initializingDeletedCurrent.isEmpty() && initializedDeletedCurrent.isEmpty()) {
+                return;
+            }
+
+            // At this point some initialized or initializing topics
+            // are to be deleted but, we will not move them to deleted
+            // because the call setup of this method is such that the
+            // persister call is automatically done by the BrokerMetadataPublisher
+            // increasing efficiency and removing need of chained futures.
+            Map<Uuid, Set<Integer>> finalInitializing = new HashMap<>(metadata.initializingTopics());
+            initializingDeletedCurrent.forEach(finalInitializing::remove);
+
+            Map<Uuid, Set<Integer>> finalInitialized = new HashMap<>(metadata.initializedTopics());
+            initializedDeletedCurrent.forEach(finalInitialized::remove);
+
+            Set<Uuid> deletingTopics = new HashSet<>(metadata.deletingTopics());
+            deletingTopics.removeAll(deletedTopicIds);
+
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                attachTopicName(finalInitializing),
+                attachTopicName(finalInitialized),
+                attachTopicName(deletingTopics)
+            ));
+        });
+
+        return new CoordinatorResult<>(records);
+    }
+
+    /*
      * Returns a list of {@link DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic} corresponding to the
      * topics for which persister delete share group state request was successful
      * @param groupId                    group ID of the share group
