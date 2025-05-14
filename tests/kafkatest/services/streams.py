@@ -320,13 +320,14 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
 class StreamsSmokeTestBaseService(StreamsTestBaseService):
     """Base class for Streams Smoke Test services providing some common settings and functionality"""
 
-    def __init__(self, test_context, kafka, command, processing_guarantee = 'at_least_once', num_threads = 3, replication_factor = 3):
+    def __init__(self, test_context, kafka, command, processing_guarantee = 'at_least_once', group_protocol = 'classic', num_threads = 3, replication_factor = 3):
         super(StreamsSmokeTestBaseService, self).__init__(test_context,
                                                           kafka,
                                                           "org.apache.kafka.streams.tests.StreamsSmokeTest",
                                                           command)
         self.NUM_THREADS = num_threads
         self.PROCESSING_GUARANTEE = processing_guarantee
+        self.GROUP_PROTOCOL = group_protocol
         self.KAFKA_STREAMS_VERSION = ""
         self.UPGRADE_FROM = None
         self.REPLICATION_FACTOR = replication_factor
@@ -341,6 +342,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
+                      streams_property.GROUP_PROTOCOL: self.GROUP_PROTOCOL,
                       streams_property.NUM_THREADS: self.NUM_THREADS,
                       "replication.factor": self.REPLICATION_FACTOR,
                       "num.standby.replicas": 2,
@@ -436,8 +438,8 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
         return cmd
 
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
-    def __init__(self, test_context, kafka, processing_guarantee, num_threads = 3, replication_factor = 3):
-        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, num_threads, replication_factor)
+    def __init__(self, test_context, kafka, processing_guarantee, group_protocol = 'classic', num_threads = 3, replication_factor = 3):
+        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, group_protocol, num_threads, replication_factor)
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):

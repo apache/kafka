@@ -42,11 +42,13 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -753,5 +755,19 @@ public class RaftUtil {
                    data.topics().get(0).topicName().equals(topicPartition.topic()) &&
                    data.topics().get(0).partitions().size() == 1 &&
                    data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    }
+
+    static int binaryExponentialElectionBackoffMs(int backoffMaxMs, int backoffBaseMs, int retries, Random random) {
+        if (retries <= 0) {
+            throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
+        }
+        // Takes minimum of the following:
+        // 1. exponential backoff calculation (maxes out at 102.4 seconds)
+        // 2. configurable electionBackoffMaxMs + jitter
+        // The jitter is added to prevent livelock of elections.
+        return Math.min(
+            backoffBaseMs * random.nextInt(1, 2 << Math.min(10, retries - 1)),
+            backoffMaxMs + random.nextInt(backoffBaseMs)
+        );
     }
 }
