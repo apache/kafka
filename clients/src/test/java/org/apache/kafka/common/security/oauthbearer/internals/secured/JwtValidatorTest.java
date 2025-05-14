@@ -26,42 +26,42 @@ import org.junit.jupiter.api.TestInstance.Lifecycle;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @TestInstance(Lifecycle.PER_CLASS)
-public abstract class AccessTokenValidatorTest extends OAuthBearerTest {
+public abstract class JwtValidatorTest extends OAuthBearerTest {
 
-    protected abstract AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder accessTokenBuilder) throws Exception;
+    protected abstract JwtValidator createJwtValidator(AccessTokenBuilder accessTokenBuilder) throws Exception;
 
-    protected AccessTokenValidator createAccessTokenValidator() throws Exception {
+    protected JwtValidator createJwtValidator() throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder();
-        return createAccessTokenValidator(builder);
+        return createJwtValidator(builder);
     }
 
     @Test
     public void testNull() throws Exception {
-        AccessTokenValidator validator = createAccessTokenValidator();
+        JwtValidator validator = createJwtValidator();
         assertThrowsWithMessage(ValidateException.class, () -> validator.validate(null), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testEmptyString() throws Exception {
-        AccessTokenValidator validator = createAccessTokenValidator();
+        JwtValidator validator = createJwtValidator();
         assertThrowsWithMessage(ValidateException.class, () -> validator.validate(""), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testWhitespace() throws Exception {
-        AccessTokenValidator validator = createAccessTokenValidator();
+        JwtValidator validator = createJwtValidator();
         assertThrowsWithMessage(ValidateException.class, () -> validator.validate("    "), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testEmptySections() throws Exception {
-        AccessTokenValidator validator = createAccessTokenValidator();
+        JwtValidator validator = createJwtValidator();
         assertThrowsWithMessage(ValidateException.class, () -> validator.validate(".."), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testMissingHeader() throws Exception {
-        AccessTokenValidator validator = createAccessTokenValidator();
+        JwtValidator validator = createJwtValidator();
         String header = "";
         String payload = createBase64JsonJwtSection(node -> { });
         String signature = "";
@@ -71,7 +71,7 @@ public abstract class AccessTokenValidatorTest extends OAuthBearerTest {
 
     @Test
     public void testMissingPayload() throws Exception {
-        AccessTokenValidator validator = createAccessTokenValidator();
+        JwtValidator validator = createJwtValidator();
         String header = createBase64JsonJwtSection(node -> node.put(HeaderParameterNames.ALGORITHM, AlgorithmIdentifiers.NONE));
         String payload = "";
         String signature = "";
@@ -81,7 +81,7 @@ public abstract class AccessTokenValidatorTest extends OAuthBearerTest {
 
     @Test
     public void testMissingSignature() throws Exception {
-        AccessTokenValidator validator = createAccessTokenValidator();
+        JwtValidator validator = createJwtValidator();
         String header = createBase64JsonJwtSection(node -> node.put(HeaderParameterNames.ALGORITHM, AlgorithmIdentifiers.NONE));
         String payload = createBase64JsonJwtSection(node -> { });
         String signature = "";

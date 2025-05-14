@@ -39,20 +39,20 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
+public class HttpJwtRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void test() throws IOException {
         String expectedResponse = "Hiya, buddy";
         HttpURLConnection mockedCon = createHttpURLConnection(expectedResponse);
-        String response = HttpAccessTokenRetriever.post(mockedCon, null, null, null, null);
+        String response = HttpJwtRetriever.post(mockedCon, null, null, null, null);
         assertEquals(expectedResponse, response);
     }
 
     @Test
     public void testEmptyResponse() throws IOException {
         HttpURLConnection mockedCon = createHttpURLConnection("");
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+        assertThrows(IOException.class, () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
     }
 
     @Test
@@ -60,7 +60,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         HttpURLConnection mockedCon = createHttpURLConnection("dummy");
         when(mockedCon.getInputStream()).thenThrow(new IOException("Can't read"));
 
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+        assertThrows(IOException.class, () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
     }
 
     @Test
@@ -72,7 +72,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
                 .getBytes(StandardCharsets.UTF_8)));
         when(mockedCon.getResponseCode()).thenReturn(HttpURLConnection.HTTP_BAD_REQUEST);
         UnretryableException ioe = assertThrows(UnretryableException.class,
-            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
         assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
     }
 
@@ -85,7 +85,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
                 .getBytes(StandardCharsets.UTF_8)));
         when(mockedCon.getResponseCode()).thenReturn(HttpURLConnection.HTTP_INTERNAL_ERROR);
         IOException ioe = assertThrows(IOException.class,
-            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
         assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
 
         // error response body has different keys
@@ -93,7 +93,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
             "{\"errorCode\":\"some_arg\", \"errorSummary\":\"some problem with arg\"}"
                 .getBytes(StandardCharsets.UTF_8)));
         ioe = assertThrows(IOException.class,
-            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
         assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
 
         // error response is valid json but unknown keys
@@ -101,7 +101,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
             "{\"err\":\"some_arg\", \"err_des\":\"some problem with arg\"}"
                 .getBytes(StandardCharsets.UTF_8)));
         ioe = assertThrows(IOException.class,
-            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
         assertTrue(ioe.getMessage().contains("{\"err\":\"some_arg\", \"err_des\":\"some problem with arg\"}"));
     }
 
@@ -113,7 +113,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
             "non json error output".getBytes(StandardCharsets.UTF_8)));
         when(mockedCon.getResponseCode()).thenReturn(HttpURLConnection.HTTP_INTERNAL_ERROR);
         IOException ioe = assertThrows(IOException.class,
-            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
         assertTrue(ioe.getMessage().contains("{non json error output}"));
     }
 
@@ -124,7 +124,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         r.nextBytes(expected);
         InputStream in = new ByteArrayInputStream(expected);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        HttpAccessTokenRetriever.copy(in, out);
+        HttpJwtRetriever.copy(in, out);
         assertArrayEquals(expected, out.toByteArray());
     }
 
@@ -133,7 +133,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         InputStream mockedIn = mock(InputStream.class);
         OutputStream out = new ByteArrayOutputStream();
         when(mockedIn.read(any(byte[].class))).thenThrow(new IOException());
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.copy(mockedIn, out));
+        assertThrows(IOException.class, () -> HttpJwtRetriever.copy(mockedIn, out));
     }
 
     @Test
@@ -143,7 +143,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         ObjectNode node = mapper.createObjectNode();
         node.put("access_token", expected);
 
-        String actual = HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node));
+        String actual = HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node));
         assertEquals(expected, actual);
     }
 
@@ -153,7 +153,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         ObjectNode node = mapper.createObjectNode();
         node.put("access_token", "");
 
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node)));
     }
 
     @Test
@@ -162,12 +162,12 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         ObjectNode node = mapper.createObjectNode();
         node.put("sub", "jdoe");
 
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node)));
     }
 
     @Test
     public void testParseAccessTokenInvalidJson() {
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.parseAccessToken("not valid JSON"));
+        assertThrows(IOException.class, () -> HttpJwtRetriever.parseAccessToken("not valid JSON"));
     }
 
     @Test
@@ -184,27 +184,27 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
     }
 
     private void assertAuthorizationHeader(String clientId, String clientSecret, boolean urlencode, String expected) {
-        String actual = HttpAccessTokenRetriever.formatAuthorizationHeader(clientId, clientSecret, urlencode);
+        String actual = HttpJwtRetriever.formatAuthorizationHeader(clientId, clientSecret, urlencode);
         assertEquals(expected, actual, String.format("Expected the HTTP Authorization header generated for client ID \"%s\" and client secret \"%s\" to match", clientId, clientSecret));
     }
 
     @Test
     public void testFormatAuthorizationHeaderMissingValues() {
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, "secret", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", null, false));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, null, false));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", "secret", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", "", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", "", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "secret", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", "  ", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "  ", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader(null, "secret", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("id", null, false));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader(null, null, false));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("", "secret", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("id", "", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("", "", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("  ", "secret", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("id", "  ", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("  ", "  ", false));
     }
 
     @Test
     public void testFormatRequestBody() {
         String expected = "grant_type=client_credentials&scope=scope";
-        String actual = HttpAccessTokenRetriever.formatRequestBody("scope");
+        String actual = HttpJwtRetriever.formatRequestBody("scope");
         assertEquals(expected, actual);
     }
 
@@ -214,24 +214,24 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         String exclamationMark = "%21";
 
         String expected = String.format("grant_type=client_credentials&scope=earth+is+great%s", exclamationMark);
-        String actual = HttpAccessTokenRetriever.formatRequestBody("earth is great!");
+        String actual = HttpJwtRetriever.formatRequestBody("earth is great!");
         assertEquals(expected, actual);
 
         expected = String.format("grant_type=client_credentials&scope=what+on+earth%s%s%s%s%s", questionMark, exclamationMark, questionMark, exclamationMark, questionMark);
-        actual = HttpAccessTokenRetriever.formatRequestBody("what on earth?!?!?");
+        actual = HttpJwtRetriever.formatRequestBody("what on earth?!?!?");
         assertEquals(expected, actual);
     }
 
     @Test
     public void testFormatRequestBodyMissingValues() {
         String expected = "grant_type=client_credentials";
-        String actual = HttpAccessTokenRetriever.formatRequestBody(null);
+        String actual = HttpJwtRetriever.formatRequestBody(null);
         assertEquals(expected, actual);
 
-        actual = HttpAccessTokenRetriever.formatRequestBody("");
+        actual = HttpJwtRetriever.formatRequestBody("");
         assertEquals(expected, actual);
 
-        actual = HttpAccessTokenRetriever.formatRequestBody("  ");
+        actual = HttpJwtRetriever.formatRequestBody("  ");
         assertEquals(expected, actual);
     }
 
