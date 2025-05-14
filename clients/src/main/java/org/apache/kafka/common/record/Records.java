@@ -18,7 +18,6 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.utils.AbstractIterator;
 
-import java.io.IOException;
 import java.util.Iterator;
 import java.util.Optional;
 
@@ -105,5 +104,5 @@ public interface Records extends TransferableRecords {
      * @param size The number of bytes after the start position to include
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
-    Records slice(int position, int size) throws IOException;
+    Records slice(int position, int size);
 }

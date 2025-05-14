@@ -17,11 +17,11 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-public class LoginAccessTokenValidatorTest extends AccessTokenValidatorTest {
+public class ClientJwtValidatorTest extends JwtValidatorTest {
 
     @Override
-    protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) {
-        return new LoginAccessTokenValidator(builder.scopeClaimName(), builder.subjectClaimName());
+    protected JwtValidator createJwtValidator(AccessTokenBuilder builder) {
+        return new ClientJwtValidator(builder.scopeClaimName(), builder.subjectClaimName());
     }
 
 }
