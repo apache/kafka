@@ -88,7 +88,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
 
     public OffsetFetchRequest.Builder buildBatchedRequest(Set<CoordinatorKey> groupIds) {
         // Create a request that only contains the consumer groups owned by the coordinator.
-        return new OffsetFetchRequest.Builder(
+        return OffsetFetchRequest.Builder.forTopicNames(
             new OffsetFetchRequestData()
                 .setRequireStable(requireStable)
                 .setGroups(groupIds.stream().map(groupId -> {
