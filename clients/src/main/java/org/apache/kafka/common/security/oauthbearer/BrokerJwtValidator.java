@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
@@ -52,6 +51,10 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimExpiration;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimIssuedAt;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimScopes;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimSubject;
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
@@ -173,11 +176,11 @@ public class BrokerJwtValidator implements JwtValidator {
         String subRaw = getClaim(() -> claims.getStringClaimValue(subClaimName), subClaimName);
         NumericDate issuedAtRaw = getClaim(claims::getIssuedAt, ReservedClaimNames.ISSUED_AT);
 
-        Set<String> scopes = ClaimValidationUtils.validateScopes(scopeClaimName, scopeRawCollection);
-        long expiration = ClaimValidationUtils.validateExpiration(ReservedClaimNames.EXPIRATION_TIME,
+        Set<String> scopes = validateClaimScopes(scopeClaimName, scopeRawCollection);
+        long expiration = validateClaimExpiration(ReservedClaimNames.EXPIRATION_TIME,
             expirationRaw != null ? expirationRaw.getValueInMillis() : null);
-        String sub = ClaimValidationUtils.validateSubject(subClaimName, subRaw);
-        Long issuedAt = ClaimValidationUtils.validateIssuedAt(ReservedClaimNames.ISSUED_AT,
+        String sub = validateClaimSubject(subClaimName, subRaw);
+        Long issuedAt = validateClaimIssuedAt(ReservedClaimNames.ISSUED_AT,
             issuedAtRaw != null ? issuedAtRaw.getValueInMillis() : null);
 
         return new BasicOAuthBearerToken(accessToken,

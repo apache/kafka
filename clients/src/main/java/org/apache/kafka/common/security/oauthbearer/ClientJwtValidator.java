@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
@@ -39,6 +38,11 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimExpiration;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimIssuedAt;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimNameOverride;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimScopes;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimSubject;
 
 /**
  * {@code ClientJwtValidator} is an implementation of {@link JwtValidator} that is used
@@ -73,11 +77,11 @@ public class ClientJwtValidator implements JwtValidator {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
-        scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(
+        scopeClaimName = validateClaimNameOverride(
             DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME,
             config.getString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME)
         );
-        subClaimName = ClaimValidationUtils.validateClaimNameOverride(
+        subClaimName = validateClaimNameOverride(
             DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME,
             config.getString(SASL_OAUTHBEARER_SUB_CLAIM_NAME)
         );
@@ -117,11 +121,11 @@ public class ClientJwtValidator implements JwtValidator {
         String subRaw = (String) getClaim(payload, subClaimName);
         Number issuedAtRaw = (Number) getClaim(payload, ISSUED_AT_CLAIM_NAME);
 
-        Set<String> scopes = ClaimValidationUtils.validateScopes(scopeClaimName, scopeRawCollection);
-        long expiration = ClaimValidationUtils.validateExpiration(EXPIRATION_CLAIM_NAME,
+        Set<String> scopes = validateClaimScopes(scopeClaimName, scopeRawCollection);
+        long expiration = validateClaimExpiration(EXPIRATION_CLAIM_NAME,
             expirationRaw != null ? expirationRaw.longValue() * 1000L : null);
-        String subject = ClaimValidationUtils.validateSubject(subClaimName, subRaw);
-        Long issuedAt = ClaimValidationUtils.validateIssuedAt(ISSUED_AT_CLAIM_NAME,
+        String subject = validateClaimSubject(subClaimName, subRaw);
+        Long issuedAt = validateClaimIssuedAt(ISSUED_AT_CLAIM_NAME,
             issuedAtRaw != null ? issuedAtRaw.longValue() * 1000L : null);
 
         return new BasicOAuthBearerToken(

@@ -34,6 +34,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimNameOverride;
+
 public class AccessTokenBuilder {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -146,8 +148,8 @@ public class AccessTokenBuilder {
     }
 
     public AccessTokenBuilder addCustomClaim(String name, String value) {
-        String validatedName = ClaimValidationUtils.validateClaimNameOverride("claim name", name);
-        String validatedValue = ClaimValidationUtils.validateClaimNameOverride(validatedName, value);
+        String validatedName = validateClaimNameOverride("claim name", name);
+        String validatedValue = validateClaimNameOverride(validatedName, value);
 
         customClaims.put(validatedName, validatedValue);
         return this;

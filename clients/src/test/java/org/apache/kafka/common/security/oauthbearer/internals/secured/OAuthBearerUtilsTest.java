@@ -26,16 +26,21 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimExpiration;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimIssuedAt;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimNameOverride;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimScopes;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimSubject;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ClaimValidationUtilsTest extends OAuthBearerTest {
+public class OAuthBearerUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testValidateScopes() {
-        Set<String> scopes = ClaimValidationUtils.validateScopes("scope", Arrays.asList("  a  ", "    b    "));
+        Set<String> scopes = validateClaimScopes("scope", Arrays.asList("  a  ", "    b    "));
 
         assertEquals(2, scopes.size());
         assertTrue(scopes.contains("a"));
@@ -44,21 +49,21 @@ public class ClaimValidationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testValidateScopesDisallowsDuplicates() {
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "b", "a")));
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "b", "  a  ")));
+        assertThrows(JwtValidatorException.class, () -> validateClaimScopes("scope", Arrays.asList("a", "b", "a")));
+        assertThrows(JwtValidatorException.class, () -> validateClaimScopes("scope", Arrays.asList("a", "b", "  a  ")));
     }
 
     @Test
     public void testValidateScopesDisallowsEmptyNullAndWhitespace() {
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "")));
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", null)));
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateScopes("scope", Arrays.asList("a", "  ")));
+        assertThrows(JwtValidatorException.class, () -> validateClaimScopes("scope", Arrays.asList("a", "")));
+        assertThrows(JwtValidatorException.class, () -> validateClaimScopes("scope", Arrays.asList("a", null)));
+        assertThrows(JwtValidatorException.class, () -> validateClaimScopes("scope", Arrays.asList("a", "  ")));
     }
 
     @Test
     public void testValidateScopesResultIsImmutable() {
         SortedSet<String> callerSet = new TreeSet<>(Arrays.asList("a", "b", "c"));
-        Set<String> scopes = ClaimValidationUtils.validateScopes("scope", callerSet);
+        Set<String> scopes = validateClaimScopes("scope", callerSet);
 
         assertEquals(3, scopes.size());
 
@@ -82,86 +87,86 @@ public class ClaimValidationUtilsTest extends OAuthBearerTest {
     @Test
     public void testValidateScopesResultThrowsExceptionOnMutation() {
         SortedSet<String> callerSet = new TreeSet<>(Arrays.asList("a", "b", "c"));
-        Set<String> scopes = ClaimValidationUtils.validateScopes("scope", callerSet);
+        Set<String> scopes = validateClaimScopes("scope", callerSet);
         assertThrows(UnsupportedOperationException.class, scopes::clear);
     }
 
     @Test
     public void testValidateExpiration() {
         Long expected = 1L;
-        Long actual = ClaimValidationUtils.validateExpiration("exp", expected);
+        Long actual = validateClaimExpiration("exp", expected);
         assertEquals(expected, actual);
     }
 
     @Test
     public void testValidateExpirationAllowsZero() {
         Long expected = 0L;
-        Long actual = ClaimValidationUtils.validateExpiration("exp", expected);
+        Long actual = validateClaimExpiration("exp", expected);
         assertEquals(expected, actual);
     }
 
     @Test
     public void testValidateExpirationDisallowsNull() {
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateExpiration("exp", null));
+        assertThrows(JwtValidatorException.class, () -> validateClaimExpiration("exp", null));
     }
 
     @Test
     public void testValidateExpirationDisallowsNegatives() {
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateExpiration("exp", -1L));
+        assertThrows(JwtValidatorException.class, () -> validateClaimExpiration("exp", -1L));
     }
 
     @Test
     public void testValidateSubject() {
         String expected = "jdoe";
-        String actual = ClaimValidationUtils.validateSubject("sub", expected);
+        String actual = validateClaimSubject("sub", expected);
         assertEquals(expected, actual);
     }
 
     @Test
     public void testValidateSubjectDisallowsEmptyNullAndWhitespace() {
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", ""));
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", null));
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", "  "));
+        assertThrows(JwtValidatorException.class, () -> validateClaimSubject("sub", ""));
+        assertThrows(JwtValidatorException.class, () -> validateClaimSubject("sub", null));
+        assertThrows(JwtValidatorException.class, () -> validateClaimSubject("sub", "  "));
     }
 
     @Test
     public void testValidateClaimNameOverride() {
         String expected = "email";
-        String actual = ClaimValidationUtils.validateClaimNameOverride("sub", String.format("  %s  ", expected));
+        String actual = validateClaimNameOverride("sub", String.format("  %s  ", expected));
         assertEquals(expected, actual);
     }
 
     @Test
     public void testValidateClaimNameOverrideDisallowsEmptyNullAndWhitespace() {
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", ""));
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", null));
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateSubject("sub", "  "));
+        assertThrows(JwtValidatorException.class, () -> validateClaimSubject("sub", ""));
+        assertThrows(JwtValidatorException.class, () -> validateClaimSubject("sub", null));
+        assertThrows(JwtValidatorException.class, () -> validateClaimSubject("sub", "  "));
     }
 
     @Test
     public void testValidateIssuedAt() {
         Long expected = 1L;
-        Long actual = ClaimValidationUtils.validateIssuedAt("iat", expected);
+        Long actual = validateClaimIssuedAt("iat", expected);
         assertEquals(expected, actual);
     }
 
     @Test
     public void testValidateIssuedAtAllowsZero() {
         Long expected = 0L;
-        Long actual = ClaimValidationUtils.validateIssuedAt("iat", expected);
+        Long actual = validateClaimIssuedAt("iat", expected);
         assertEquals(expected, actual);
     }
 
     @Test
     public void testValidateIssuedAtAllowsNull() {
         Long expected = null;
-        Long actual = ClaimValidationUtils.validateIssuedAt("iat", expected);
+        Long actual = validateClaimIssuedAt("iat", expected);
         assertEquals(expected, actual);
     }
 
     @Test
     public void testValidateIssuedAtDisallowsNegatives() {
-        assertThrows(JwtValidatorException.class, () -> ClaimValidationUtils.validateIssuedAt("iat", -1L));
+        assertThrows(JwtValidatorException.class, () -> validateClaimIssuedAt("iat", -1L));
     }
 
 }
