@@ -23,9 +23,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class ListConfigResourcesRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListConfigResourcesRequest> {
