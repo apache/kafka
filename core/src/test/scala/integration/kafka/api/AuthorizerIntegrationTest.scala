@@ -326,6 +326,13 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     requests.FetchRequest.Builder.forConsumer(version, 100, Int.MaxValue, partitionMap).build()
   }
 
+  private def createFetchRequestWithEmptyTopicNameAndZeroTopicId(version: Short) = {
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(new TopicPartition("", part),
+      new requests.FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 100, Optional.of(27)))
+    requests.FetchRequest.Builder.forConsumer(version, 100, Int.MaxValue, partitionMap).build()
+  }
+
   private def createFetchFollowerRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID),
@@ -1063,6 +1070,50 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       )
 
       sendRequests(requestKeyToRequest, withTopicExisting, topicNames)
+    }
+  }
+
+  /**
+   * Test that the fetch request fails with UNKNOWN_TOPIC_ID if topic id is zero when request version >= 13.
+   * The fetch request only supports topic id above version 13.
+   */
+  @Test
+  def testZeroTopicIdForFetchVersionFrom13ToNewest(): Unit = {
+    for (version <- 13 to ApiKeys.FETCH.latestVersion) {
+      val request = createFetchRequestWithEmptyTopicNameAndZeroTopicId(version.toShort)
+      val response = connectAndReceive[AbstractResponse](request, listenerName = listenerName)
+
+      val errorCode = response.asInstanceOf[FetchResponse]
+        .data()
+        .responses()
+        .get(0)
+        .partitions()
+        .get(0)
+        .errorCode
+
+      assertEquals(Errors.UNKNOWN_TOPIC_ID.code(), errorCode, s"unexpected error for fetch request version $version")
+    }
+  }
+
+  /**
+   * Test that the fetch request fails with TOPIC_AUTHORIZATION_FAILED if topic name is empty when request version <= 12.
+   * The fetch request only supports topic name below version 12.
+   */
+  @Test
+  def testEmptyTopicNameForFetchVersionFromOldestTo12(): Unit = {
+    for (version <- ApiKeys.FETCH.oldestVersion to 12) {
+      val request = createFetchRequestWithEmptyTopicNameAndZeroTopicId(version.toShort)
+      val response = connectAndReceive[AbstractResponse](request, listenerName = listenerName)
+
+      val errorCode = response.asInstanceOf[FetchResponse]
+        .data()
+        .responses()
+        .get(0)
+        .partitions()
+        .get(0)
+        .errorCode
+
+      assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), errorCode, s"unexpected error for fetch request version $version")
     }
   }
 
