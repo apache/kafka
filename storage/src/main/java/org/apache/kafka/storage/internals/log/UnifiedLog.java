@@ -647,8 +647,9 @@ public class UnifiedLog implements AutoCloseable {
 
         // cache the current high watermark to avoid a concurrent update invalidating the range check
         LogOffsetMetadata highWatermarkMetadata = fetchHighWatermarkMetadata();
-        if (firstUnstableOffsetMetadata.isPresent() && firstUnstableOffsetMetadata.get().messageOffset < highWatermarkMetadata.messageOffset) {
-            LogOffsetMetadata lom = firstUnstableOffsetMetadata.get();
+        Optional<LogOffsetMetadata> firstUnstableOffsetMetadataCopy = firstUnstableOffsetMetadata;
+        if (firstUnstableOffsetMetadataCopy.isPresent() && firstUnstableOffsetMetadataCopy.get().messageOffset < highWatermarkMetadata.messageOffset) {
+            LogOffsetMetadata lom = firstUnstableOffsetMetadataCopy.get();
             if (lom.messageOffsetOnly()) {
                 synchronized (lock) {
                     LogOffsetMetadata fullOffset = maybeConvertToOffsetMetadata(lom.messageOffset);
