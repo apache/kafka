@@ -272,36 +272,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
         PreparedTxnState currentState = new PreparedTxnState(1000L, (short) 1);
         
         if (currentState.equals(preparedTxnState)) {
-            // If states match, commit the transaction
-            if (this.commitTransactionException != null) {
-                throw this.commitTransactionException;
-            }
-            
-            flush();
-            
-            this.sent.addAll(this.uncommittedSends);
-            if (!this.uncommittedConsumerGroupOffsets.isEmpty())
-                this.consumerGroupOffsets.add(this.uncommittedConsumerGroupOffsets);
-            
-            this.uncommittedSends.clear();
-            this.uncommittedConsumerGroupOffsets = new HashMap<>();
-            this.transactionCommitted = true;
-            this.transactionAborted = false;
-            this.transactionInFlight = false;
-            
-            ++this.commitCount;
+            commitTransaction();
         } else {
-            // If states don't match, abort the transaction
-            if (this.abortTransactionException != null) {
-                throw this.abortTransactionException;
-            }
-            
-            flush();
-            this.uncommittedSends.clear();
-            this.uncommittedConsumerGroupOffsets.clear();
-            this.transactionCommitted = false;
-            this.transactionAborted = true;
-            this.transactionInFlight = false;
+            abortTransaction();
         }
     }
 
