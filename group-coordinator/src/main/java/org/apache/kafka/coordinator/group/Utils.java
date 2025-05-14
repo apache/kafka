@@ -376,7 +376,7 @@ public class Utils {
      * For non-existent topics, the hash value is set to 0.
      * For existent topics, the hashing process involves the following steps:
      * 1. Write a magic byte to denote the version of the hash function.
-     * 2. Write the hash code of the topic ID.
+     * 2. Write the hash code of the topic ID with mostSignificantBits and leastSignificantBits.
      * 3. Write the topic name.
      * 4. Write the number of partitions associated with the topic.
      * 5. For each partition, write the partition ID and a sorted list of rack identifiers.
@@ -394,15 +394,16 @@ public class Utils {
 
         HashStream64 hasher = Hashing.xxh3_64().hashStream();
         hasher = hasher
-            .putByte(TOPIC_HASH_MAGIC_BYTE) // magic byte
-            .putLong(topicImage.id().hashCode()) // topic ID
-            .putString(topicImage.name()) // topic name
-            .putInt(topicImage.partitions().size()); // number of partitions
+            .putByte(TOPIC_HASH_MAGIC_BYTE)
+            .putLong(topicImage.id().getMostSignificantBits())
+            .putLong(topicImage.id().getLeastSignificantBits())
+            .putString(topicImage.name())
+            .putInt(topicImage.partitions().size());
 
         ClusterImage clusterImage = metadataImage.cluster();
         List<String> racks = new ArrayList<>();
         for (int i = 0; i < topicImage.partitions().size(); i++) {
-            hasher = hasher.putInt(i); // partition id
+            hasher = hasher.putInt(i);
             racks.clear(); // Clear the list for reuse
             for (int replicaId : topicImage.partitions().get(i).replicas) {
                 BrokerRegistration broker = clusterImage.broker(replicaId);

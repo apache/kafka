@@ -53,10 +53,11 @@ public class UtilsTest {
         long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         long expected = Hashing.xxh3_64().hashStream()
-            .putByte((byte) 0) // magic byte
-            .putLong(FOO_TOPIC_ID.hashCode()) // topic ID
-            .putString(FOO_TOPIC_NAME) // topic name
-            .putInt(FOO_NUM_PARTITIONS) // number of partitions
+            .putByte((byte) 0)
+            .putLong(FOO_TOPIC_ID.getMostSignificantBits())
+            .putLong(FOO_TOPIC_ID.getLeastSignificantBits())
+            .putString(FOO_TOPIC_NAME)
+            .putInt(FOO_NUM_PARTITIONS)
             .putInt(0) // partition 0
             .putInt(5) // length of rack0
             .putString("rack0") // The first rack in partition 0
@@ -76,10 +77,35 @@ public class UtilsTest {
         long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         long expected = Hashing.xxh3_64().hashStream()
-            .putByte((byte) 1) // magic byte
-            .putLong(FOO_TOPIC_ID.hashCode()) // topic ID
-            .putString(FOO_TOPIC_NAME) // topic name
-            .putInt(FOO_NUM_PARTITIONS) // number of partitions
+            .putByte((byte) 1) // different magic byte
+            .putLong(FOO_TOPIC_ID.getMostSignificantBits())
+            .putLong(FOO_TOPIC_ID.getLeastSignificantBits())
+            .putString(FOO_TOPIC_NAME)
+            .putInt(FOO_NUM_PARTITIONS)
+            .putInt(0) // partition 0
+            .putInt(5) // length of rack0
+            .putString("rack0") // The first rack in partition 0
+            .putInt(5) // length of rack1
+            .putString("rack1") // The second rack in partition 0
+            .putInt(1) // partition 1
+            .putInt(5) // length of rack0
+            .putString("rack1") // The first rack in partition 1
+            .putInt(5) // length of rack1
+            .putString("rack2") // The second rack in partition 1
+            .getAsLong();
+        assertNotEquals(expected, result);
+    }
+
+    @Test
+    void testComputeTopicHashWithLeastSignificantBitsFirst() {
+        long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
+
+        long expected = Hashing.xxh3_64().hashStream()
+            .putByte((byte) 0)
+            .putLong(FOO_TOPIC_ID.getLeastSignificantBits()) // different order
+            .putLong(FOO_TOPIC_ID.getMostSignificantBits())
+            .putString(FOO_TOPIC_NAME)
+            .putInt(FOO_NUM_PARTITIONS)
             .putInt(0) // partition 0
             .putInt(5) // length of rack0
             .putString("rack0") // The first rack in partition 0
@@ -99,10 +125,11 @@ public class UtilsTest {
         long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         long expected = Hashing.xxh3_64().hashStream()
-            .putByte((byte) 1) // magic byte
-            .putLong(FOO_TOPIC_ID.hashCode()) // topic ID
-            .putString(FOO_TOPIC_NAME) // topic name
-            .putInt(FOO_NUM_PARTITIONS) // number of partitions
+            .putByte((byte) 1)
+            .putLong(FOO_TOPIC_ID.getMostSignificantBits())
+            .putLong(FOO_TOPIC_ID.getLeastSignificantBits())
+            .putString(FOO_TOPIC_NAME)
+            .putInt(FOO_NUM_PARTITIONS)
             .putInt(1) // partition 1
             .putInt(5) // length of rack0
             .putString("rack1") // The first rack in partition 1
@@ -122,10 +149,11 @@ public class UtilsTest {
         long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         long expected = Hashing.xxh3_64().hashStream()
-            .putByte((byte) 0) // magic byte
-            .putLong(FOO_TOPIC_ID.hashCode()) // topic ID
-            .putString(FOO_TOPIC_NAME) // topic name
-            .putInt(FOO_NUM_PARTITIONS) // number of partitions
+            .putByte((byte) 0)
+            .putLong(FOO_TOPIC_ID.getMostSignificantBits())
+            .putLong(FOO_TOPIC_ID.getLeastSignificantBits())
+            .putString(FOO_TOPIC_NAME)
+            .putInt(FOO_NUM_PARTITIONS)
             .putInt(0) // partition 0
             .putInt(5) // length of rack0
             .putString("rack1") // The second rack in partition 0
