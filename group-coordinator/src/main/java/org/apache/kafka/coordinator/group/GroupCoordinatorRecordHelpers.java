@@ -528,9 +528,7 @@ public class GroupCoordinatorRecordHelpers {
         if (expireTimestampMs) {
             return 1;
         } else {
-            // Serialize with the highest supported non-flexible version
-            // until a tagged field is introduced or the version is bumped.
-            return  3;
+            return  4;
         }
     }
 

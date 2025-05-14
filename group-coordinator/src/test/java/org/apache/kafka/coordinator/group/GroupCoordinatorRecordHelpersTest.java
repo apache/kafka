@@ -723,7 +723,7 @@ public class GroupCoordinatorRecordHelpersTest {
     @Test
     public void testOffsetCommitValueVersion() {
         assertEquals((short) 1, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(true));
-        assertEquals((short) 3, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false));
+        assertEquals((short) 4, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false));
     }
 
     private static Stream<Uuid> uuids() {
