@@ -30,7 +30,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -330,8 +329,6 @@ public class StreamsRebalanceData {
 
     private final AtomicReference<List<StreamsGroupHeartbeatResponseData.Status>> statuses = new AtomicReference<>(List.of());
 
-    private final AtomicInteger endpointInformationEpoch = new AtomicInteger(-1);
-
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
                                 final Map<String, Subtopology> subtopologies,
@@ -358,10 +355,6 @@ public class StreamsRebalanceData {
         return subtopologies;
     }
 
-    public int endpointInformationEpoch() {
-        return endpointInformationEpoch.get();
-    }
-
     public int topologyEpoch() {
         return 0;
     }
@@ -376,10 +369,6 @@ public class StreamsRebalanceData {
 
     public void setPartitionsByHost(final Map<HostInfo, EndpointPartitions> partitionsByHost) {
         this.partitionsByHost.set(partitionsByHost);
-    }
-
-    public void setEndpointInformationEpoch(final int endpointInformationEpoch) {
-        this.endpointInformationEpoch.set(endpointInformationEpoch);
     }
 
     public Map<HostInfo, EndpointPartitions> partitionsByHost() {
