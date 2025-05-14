@@ -13166,6 +13166,109 @@ class KafkaApisTest extends Logging {
     })
   }
 
+  @Test
+  def testAlterShareGroupOffsetsSuccess(): Unit = {
+    val groupId = "group"
+    val topicName1 = "foo"
+    val topicId1 = Uuid.randomUuid
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
+    val topicCollection = new AlterShareGroupOffsetsRequestTopicCollection();
+    topicCollection.addAll(util.List.of(
+      new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+        .setTopicName(topicName1)
+        .setPartitions(List(
+          new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+            .setPartitionIndex(0)
+            .setStartOffset(0L),
+          new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+            .setPartitionIndex(1)
+            .setStartOffset(0L)
+        ).asJava)))
+
+    val alterRequestData = new AlterShareGroupOffsetsRequestData()
+      .setGroupId(groupId)
+      .setTopics(topicCollection)
+
+    val requestChannelRequest = buildRequest(new AlterShareGroupOffsetsRequest.Builder(alterRequestData).build)
+    val resultFuture = new CompletableFuture[AlterShareGroupOffsetsResponseData]
+    when(groupCoordinator.alterShareGroupOffsets(
+      any(),
+      ArgumentMatchers.eq[String](groupId),
+      ArgumentMatchers.any(classOf[AlterShareGroupOffsetsRequestData])
+    )).thenReturn(resultFuture)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val alterShareGroupOffsetsResponse = new AlterShareGroupOffsetsResponseData()
+    resultFuture.complete(alterShareGroupOffsetsResponse)
+    val response = verifyNoThrottling[AlterShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(alterShareGroupOffsetsResponse, response.data)
+  }
+
+  @Test
+  def testAlterShareGroupOffsetsAuthorizationFailed(): Unit = {
+    val groupId = "group"
+    val topicName1 = "foo"
+    val topicId1 = Uuid.randomUuid
+    val topicName2 = "bar"
+    val topicId2 = Uuid.randomUuid
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
+    addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
+    val topicCollection = new AlterShareGroupOffsetsRequestTopicCollection();
+    topicCollection.addAll(util.List.of(
+      new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+        .setTopicName(topicName1)
+        .setPartitions(List(
+          new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+            .setPartitionIndex(0)
+            .setStartOffset(0L),
+          new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+            .setPartitionIndex(1)
+            .setStartOffset(0L)
+        ).asJava),
+      new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+        .setTopicName(topicName2)
+        .setPartitions(List(
+          new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+            .setPartitionIndex(0)
+            .setStartOffset(0L)
+        ).asJava)))
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava, Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
+
+    val alterRequestData = new AlterShareGroupOffsetsRequestData()
+      .setGroupId(groupId)
+      .setTopics(topicCollection)
+
+    val requestChannelRequest = buildRequest(new AlterShareGroupOffsetsRequest.Builder(alterRequestData).build)
+    val resultFuture = new CompletableFuture[AlterShareGroupOffsetsResponseData]
+    when(groupCoordinator.alterShareGroupOffsets(
+      any(),
+      ArgumentMatchers.eq[String](groupId),
+      ArgumentMatchers.any(classOf[AlterShareGroupOffsetsRequestData])
+    )).thenReturn(resultFuture)
+
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val alterShareGroupOffsetsResponse = new AlterShareGroupOffsetsResponseData()
+    resultFuture.complete(alterShareGroupOffsetsResponse)
+    val response = verifyNoThrottling[AlterShareGroupOffsetsResponse](requestChannelRequest)
+
+    assertNotNull(response.data)
+    assertEquals(2, response.errorCounts().get(Errors.TOPIC_AUTHORIZATION_FAILED))
+    assertEquals(1, response.data().responses().size())
+    val foo = response.data().responses().get(0)
+    foo.partitions().forEach(partition => {
+      assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), partition.errorCode())
+    })
+  }
+
   def getShareGroupDescribeResponse(groupIds: util.List[String], enableShareGroups: Boolean = true,
                                     verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                     describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup]): ShareGroupDescribeResponse = {

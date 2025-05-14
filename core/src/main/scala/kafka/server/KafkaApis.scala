@@ -3750,8 +3750,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val authorizedTopicPartitions = new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection()
 
       alterShareGroupOffsetsRequest.data.topics.forEach(topic => {
-        val invalidTopicError = checkValidTopic(topic.topicName())
-        val topicError = invalidTopicError.orElse {
+        val topicError = {
           if (!authHelper.authorize(request.context, READ, TOPIC, topic.topicName())) {
             Some(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED))
           } else if (!metadataCache.contains(topic.topicName())) {
