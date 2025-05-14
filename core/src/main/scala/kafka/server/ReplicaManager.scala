@@ -291,7 +291,6 @@ class ReplicaManager(val config: KafkaConfig,
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
   private val addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(config)
-
   val delayedShareFetchTimer = new SystemTimer("ShareFetch")
 
   val delayedProducePurgatory = delayedProducePurgatoryParam.getOrElse(
@@ -451,7 +450,11 @@ class ReplicaManager(val config: KafkaConfig,
     delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, delayedShareFetchKeys)
   }
 
-  private[server] def addDelayedShareFetchTimerRequest(timerTask: TimerTask): Unit = {
+  /**
+   * Add a timer task to the delayedShareFetchTimer.
+   * @param timerTask The timer task to be added to the delayedShareFetchTimer
+   */
+  private[server] def addShareFetchTimerRequest(timerTask: TimerTask): Unit = {
     delayedShareFetchTimer.add(timerTask)
   }
 

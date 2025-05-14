@@ -2809,8 +2809,7 @@ public class SharePartitionManagerTest {
     public void testCreateIdleShareFetchTask() throws Exception {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
-        MockTime mockTime = new MockTime();
-        MockTimer mockTimer = new MockTimer(mockTime);
+        MockTimer mockTimer = new MockTimer((MockTime) time);
         long maxWaitMs = 1000L;
 
         // Set up the mock to capture and add the timer task
@@ -2818,16 +2817,15 @@ public class SharePartitionManagerTest {
             TimerTask timerTask = invocation.getArgument(0);
             mockTimer.add(timerTask);
             return null;
-        }).when(replicaManager).addDelayedShareFetchTimerRequest(Mockito.any(TimerTask.class));
+        }).when(replicaManager).addShareFetchTimerRequest(Mockito.any(TimerTask.class));
 
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withReplicaManager(replicaManager)
-            .withTime(mockTime)
+            .withTime(time)
             .withTimer(mockTimer)
             .build();
 
         CompletableFuture<Void> future = sharePartitionManager.createIdleShareFetchTimerTask(maxWaitMs);
-
         // Future should not be completed immediately
         assertFalse(future.isDone());
 
@@ -2835,7 +2833,6 @@ public class SharePartitionManagerTest {
         assertFalse(future.isDone());
 
         mockTimer.advanceClock(maxWaitMs);
-
         // Verify the future is completed after the wait time
         assertTrue(future.isDone());
         assertFalse(future.isCompletedExceptionally());

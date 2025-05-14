@@ -391,7 +391,7 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     /**
-     * The createShareFetchTask creates a timer task to delay the share fetch request for maxWaitMs duration.
+     * The method creates a timer task to delay the share fetch request for maxWaitMs duration.
      * A future is created and returned which will be completed when the timer task is completed.
      *
      * @param maxWaitMs The duration after which the timer task will be completed.
@@ -401,7 +401,7 @@ public class SharePartitionManager implements AutoCloseable {
     public CompletableFuture<Void> createIdleShareFetchTimerTask(long maxWaitMs) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         TimerTask idleShareFetchTimerTask = new IdleShareFetchTimerTask(maxWaitMs, future);
-        replicaManager.addDelayedShareFetchTimerRequest(idleShareFetchTimerTask);
+        replicaManager.addShareFetchTimerRequest(idleShareFetchTimerTask);
         return future;
     }
 
@@ -843,4 +843,35 @@ public class SharePartitionManager implements AutoCloseable {
             removeSharePartitionFromCache(sharePartitionKey, partitionCacheMap, replicaManager);
         }
     }
+
+    /**
+     * The IdleShareFetchTimerTask creates a timer task for a share fetch request which tries to initialize a new share
+     * session when the share session cache is full. Such a request is delayed for maxWaitMs by passing the corresponding
+     * IdleShareFetchTimerTask to {@link ReplicaManager#delayedShareFetchTimer}.
+     */
+    public static class IdleShareFetchTimerTask extends TimerTask {
+
+        /**
+         * This future is used to complete the share fetch request when the timer task is completed.
+         */
+        private final CompletableFuture<Void> future;
+
+        public IdleShareFetchTimerTask(
+            long delayMs,
+            CompletableFuture<Void> future
+        ) {
+            super(delayMs);
+            this.future = future;
+        }
+
+        /**
+         * The run method which is executed when the timer task expires. This completes the future indicating that the
+         * delay for the corresponding share fetch request is over.
+         */
+        @Override
+        public void run() {
+            future.complete(null);
+        }
+    }
+
 }
