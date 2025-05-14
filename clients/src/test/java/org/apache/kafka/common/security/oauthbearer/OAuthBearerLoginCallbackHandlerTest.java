@@ -170,7 +170,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         testInvalidAccessToken("this isn't valid", "Malformed JWT provided");
         testInvalidAccessToken("this.isn't.valid", "malformed Base64 URL encoded value");
         testInvalidAccessToken(createAccessKey("this", "isn't", "valid"), "malformed JSON");
-        testInvalidAccessToken(createAccessKey("{}", "{}", "{}"), "exp value must be non-null");
+        testInvalidAccessToken(createAccessKey("{}", "{}", "{}"), "No value was found for the JWT claim exp");
     }
 
     @Test

@@ -16,36 +16,17 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
-import javax.security.auth.login.AppConfigurationEntry;
+public class OAuthBearerJwtClaims extends OAuthBearerTypedMap {
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.jaasOptions;
+    private final Map<String, Object> payload;
 
-/**
- * <code>OAuthBearerJaasConfig</code> is a utility class to perform logic for the JAAS options and
- * is separated out here for easier, more direct testing.
- */
-public class OAuthBearerJaasConfig extends OAuthBearerTypedMap {
-
-    private final Map<String, Object> options;
-
-    public OAuthBearerJaasConfig(Map<String, Object> options) {
-        this.options = Collections.unmodifiableMap(options);
-    }
-
-    public OAuthBearerJaasConfig(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        this.options = jaasOptions(saslMechanism, jaasConfigEntries);
-    }
-
-    public Map<String, Object> options() {
-        return options;
+    public OAuthBearerJwtClaims(Map<String, Object> payload) {
+        this.payload = payload;
     }
 
     @Override
@@ -53,7 +34,7 @@ public class OAuthBearerJaasConfig extends OAuthBearerTypedMap {
         String s = get(key);
 
         if (Utils.isBlank(s)) {
-            throw new ConfigException("No value was found for the OAuth option " + key + " in " + SASL_JAAS_CONFIG);
+            throw new JwtValidatorException("No value was found for the JWT claim " + key);
         } else {
             return s.trim();
         }
@@ -66,17 +47,17 @@ public class OAuthBearerJaasConfig extends OAuthBearerTypedMap {
 
     @Override
     public boolean containsKey(String key) {
-        return options.get(key) != null;
+        return payload.get(key) != null;
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> T get(String key) {
-        T value = (T) options.get(key);
+    public <T> T get(String claimName) {
+        T value = (T) payload.get(claimName);
 
         if (value != null)
             return value;
 
-        throw new ConfigException("No value was found for the OAuth option " + key + " in " + SASL_JAAS_CONFIG);
+        throw new JwtValidatorException("No value was found for the JWT claim " + claimName);
     }
 }

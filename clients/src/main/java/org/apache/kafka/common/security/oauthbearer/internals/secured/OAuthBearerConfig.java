@@ -21,15 +21,13 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * <code>OAuthBearerConfig</code> is a utility class to perform basic configuration-related
  * logic and is separated out here for easier, more direct testing.
  */
-public class OAuthBearerConfig extends OAuthBearerAbstractConfig {
+public class OAuthBearerConfig extends OAuthBearerTypedMap {
 
     private final Map<String, ?> configs;
 
@@ -42,45 +40,6 @@ public class OAuthBearerConfig extends OAuthBearerAbstractConfig {
             this.prefix = ListenerName.saslMechanismPrefix(saslMechanism.trim());
         else
             this.prefix = null;
-    }
-
-    public Short getShort(String key) {
-        return (Short) get(key);
-    }
-
-    public Integer getInt(String key) {
-        return (Integer) get(key);
-    }
-
-    public Optional<Integer> maybeGetInt(String key) {
-        if (containsKey(key))
-            return Optional.of(getInt(key));
-
-        return Optional.empty();
-    }
-
-    public Long getLong(String key) {
-        return (Long) get(key);
-    }
-
-    public Double getDouble(String key) {
-        return (Double) get(key);
-    }
-
-    @SuppressWarnings("unchecked")
-    public List<String> getList(String key) {
-        return (List<String>) get(key);
-    }
-
-    public Boolean getBoolean(String key) {
-        return (Boolean) get(key);
-    }
-
-    public Optional<Boolean> maybeGetBoolean(String key) {
-        if (containsKey(key))
-            return Optional.of(getBoolean(key));
-
-        return Optional.empty();
     }
 
     @Override
@@ -104,13 +63,6 @@ public class OAuthBearerConfig extends OAuthBearerAbstractConfig {
         } else {
             return s.trim();
         }
-    }
-
-    public Optional<String> maybeGetString(String key) {
-        if (containsKey(key))
-            return Optional.of(getString(key));
-
-        return Optional.empty();
     }
 
     @Override

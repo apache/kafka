@@ -179,7 +179,6 @@ public class OAuthBearerUtils {
      * </ul>
      *
      * @param scopeClaimName Name of the claim used for the scope values
-     * @param scopes         Collection of String scopes
      *
      * @return Unmodifiable {@link Set} that includes the values of the original set, but with
      *         each value trimmed
@@ -191,20 +190,63 @@ public class OAuthBearerUtils {
 
     public static Set<String> validateClaimScopes(String scopeClaimName, Collection<String> scopes) throws JwtValidatorException {
         if (scopes == null)
-            throw new JwtValidatorException(String.format("%s value must be non-null", scopeClaimName));
+            throw new JwtValidatorException(String.format("The OAuth JWT claim %s must be non-null", scopeClaimName));
 
         Set<String> copy = new HashSet<>();
 
         for (String scope : scopes) {
-            scope = validateClaimValue(scopeClaimName, scope);
+            if (Utils.isBlank(scope))
+                throw new JwtValidatorException(String.format("The OAuth JWT claim %s must be non-null, non-empty, and non-whitespace", scopeClaimName));
+
+            scope = scope.trim();
 
             if (copy.contains(scope))
-                throw new JwtValidatorException(String.format("%s value must not contain duplicates - %s already present", scopeClaimName, scope));
+                throw new JwtValidatorException(String.format("The OAuth JWT claim %s must not contain duplicates - %s already present", scopeClaimName, scope));
 
             copy.add(scope);
         }
 
         return Collections.unmodifiableSet(copy);
+    }
+
+    /**
+     * Validates that the scopes are valid, where <i>invalid</i> means <i>any</i> of
+     * the following:
+     *
+     * <ul>
+     *     <li>Collection is <code>null</code></li>
+     *     <li>Collection has duplicates</li>
+     *     <li>Any of the elements in the collection are <code>null</code></li>
+     *     <li>Any of the elements in the collection are zero length</li>
+     *     <li>Any of the elements in the collection are whitespace only</li>
+     * </ul>
+     *
+     * @param scopeClaimName Name of the claim used for the scope values
+     *
+     * @return Unmodifiable {@link Set} that includes the values of the original set, but with
+     *         each value trimmed
+     *
+     * @throws JwtValidatorException Thrown if the value is <code>null</code>, contains duplicates, or
+     *                           if any of the values in the set are <code>null</code>, empty,
+     *                           or whitespace only
+     */
+    @SuppressWarnings("unchecked")
+    public static Set<String> validateClaimScopes(OAuthBearerTypedMap claims,
+                                                  String scopeClaimName) throws JwtValidatorException {
+        if (!claims.containsKey(scopeClaimName))
+            return Set.of();
+
+        Object obj = claims.get(scopeClaimName);
+        Collection<String> scopes;
+
+        if (obj instanceof String)
+            scopes = List.of((String) obj);
+        else if (obj instanceof Collection)
+            scopes = (Collection<String>) obj;
+        else
+            scopes = Set.of();
+
+        return validateClaimScopes(scopeClaimName, scopes);
     }
 
     /**
@@ -319,7 +361,7 @@ public class OAuthBearerUtils {
      * If the value is null or an empty string, it is assumed to be an "empty" value and thus.
      * ignored. Any whitespace is trimmed off of the beginning and end.
      */
-    public static File validateFile(OAuthBearerAbstractConfig config, String key) {
+    public static File validateFile(OAuthBearerTypedMap config, String key) {
         String fileName = config.getString(key);
         File file = new File(fileName);
         return validateFile(key, file);
@@ -337,7 +379,7 @@ public class OAuthBearerUtils {
      * If the value is null or an empty string, it is assumed to be an "empty" value and thus.
      * ignored. Any whitespace is trimmed off of the beginning and end.
      */
-    public static File validateFileUrl(OAuthBearerAbstractConfig config, String key) {
+    public static File validateFileUrl(OAuthBearerTypedMap config, String key) {
         URL url = validateUrl(config, key);
         File file;
 
@@ -384,7 +426,7 @@ public class OAuthBearerUtils {
      *
      * No effort is made to connect to the URL in the validation step.
      */
-    public static URL validateUrl(OAuthBearerAbstractConfig config, String key) {
+    public static URL validateUrl(OAuthBearerTypedMap config, String key) {
         String value = config.getString(key);
         URL url;
 

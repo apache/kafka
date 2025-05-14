@@ -21,13 +21,10 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuth
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerJwtClaims;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
-import org.apache.kafka.common.utils.Utils;
 
-import org.jose4j.jwt.JwtClaims;
-import org.jose4j.jwt.MalformedClaimException;
-import org.jose4j.jwt.NumericDate;
 import org.jose4j.jwt.ReservedClaimNames;
 import org.jose4j.jwt.consumer.InvalidJwtException;
 import org.jose4j.jwt.consumer.JwtConsumer;
@@ -36,9 +33,6 @@ import org.jose4j.jwt.consumer.JwtContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,10 +45,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimExpiration;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimIssuedAt;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimScopes;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimSubject;
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
@@ -152,62 +143,26 @@ public class BrokerJwtValidator implements JwtValidator {
 
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
 
-        JwtContext jwt;
+        OAuthBearerJwtClaims claims;
 
         try {
-            jwt = jwtConsumer.process(serializedJwt.getToken());
+            JwtContext jwt = jwtConsumer.process(serializedJwt.getToken());
+            claims = new OAuthBearerJwtClaims(jwt.getJwtClaims().getClaimsMap());
         } catch (InvalidJwtException e) {
             throw new JwtValidatorException(String.format("Could not validate the access token: %s", e.getMessage()), e);
         }
 
-        JwtClaims claims = jwt.getJwtClaims();
+        String subject = claims.maybeGetString(subClaimName).orElse(null);
+        Long issuedAt = claims.maybeGetNumber(ReservedClaimNames.ISSUED_AT).map(n -> n.longValue() * 1000L).orElse(null);
+        Set<String> scopes = validateClaimScopes(claims, scopeClaimName);
+        long expiration = claims.getNumber(ReservedClaimNames.EXPIRATION_TIME).longValue() * 1000L;
 
-        Object scopeRaw = getClaim(() -> claims.getClaimValue(scopeClaimName), scopeClaimName);
-        Collection<String> scopeRawCollection;
-
-        if (scopeRaw instanceof String)
-            scopeRawCollection = Collections.singletonList((String) scopeRaw);
-        else if (scopeRaw instanceof Collection)
-            scopeRawCollection = (Collection<String>) scopeRaw;
-        else
-            scopeRawCollection = Collections.emptySet();
-
-        NumericDate expirationRaw = getClaim(claims::getExpirationTime, ReservedClaimNames.EXPIRATION_TIME);
-        String subRaw = getClaim(() -> claims.getStringClaimValue(subClaimName), subClaimName);
-        NumericDate issuedAtRaw = getClaim(claims::getIssuedAt, ReservedClaimNames.ISSUED_AT);
-
-        Set<String> scopes = validateClaimScopes(scopeClaimName, scopeRawCollection);
-        long expiration = validateClaimExpiration(ReservedClaimNames.EXPIRATION_TIME,
-            expirationRaw != null ? expirationRaw.getValueInMillis() : null);
-        String sub = validateClaimSubject(subClaimName, subRaw);
-        Long issuedAt = validateClaimIssuedAt(ReservedClaimNames.ISSUED_AT,
-            issuedAtRaw != null ? issuedAtRaw.getValueInMillis() : null);
-
-        return new BasicOAuthBearerToken(accessToken,
+        return new BasicOAuthBearerToken(
+            accessToken,
             scopes,
             expiration,
-            sub,
-            issuedAt);
-    }
-
-    @Override
-    public void close() throws IOException {
-        Utils.closeQuietly(verificationKeyResolver, "JWT verification key resolver");
-    }
-
-    private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws JwtValidatorException {
-        try {
-            T value = supplier.get();
-            log.debug("getClaim - {}: {}", claimName, value);
-            return value;
-        } catch (MalformedClaimException e) {
-            throw new JwtValidatorException(String.format("Could not extract the '%s' claim from the access token", claimName), e);
-        }
-    }
-
-    public interface ClaimSupplier<T> {
-
-        T get() throws MalformedClaimException;
-
+            subject,
+            issuedAt
+        );
     }
 }

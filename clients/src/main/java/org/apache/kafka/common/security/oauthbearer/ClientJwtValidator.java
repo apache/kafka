@@ -19,15 +19,11 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerJwtClaims;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,11 +34,8 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimExpiration;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimIssuedAt;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimNameOverride;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimScopes;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimSubject;
 
 /**
  * {@code ClientJwtValidator} is an implementation of {@link JwtValidator} that is used
@@ -63,8 +56,6 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAu
  */
 
 public class ClientJwtValidator implements JwtValidator {
-
-    private static final Logger log = LoggerFactory.getLogger(ClientJwtValidator.class);
 
     public static final String EXPIRATION_CLAIM_NAME = "exp";
 
@@ -95,38 +86,21 @@ public class ClientJwtValidator implements JwtValidator {
      * @return {@link OAuthBearerToken}
      * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
-
-    @SuppressWarnings("unchecked")
     public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
-        SerializedJwt serializedJwt = new SerializedJwt(accessToken);
-        Map<String, Object> payload;
+        OAuthBearerJwtClaims claims;
 
         try {
-            payload = OAuthBearerUnsecuredJws.toMap(serializedJwt.getPayload());
+            SerializedJwt serializedJwt = new SerializedJwt(accessToken);
+            Map<String, Object> payload = OAuthBearerUnsecuredJws.toMap(serializedJwt.getPayload());
+            claims = new OAuthBearerJwtClaims(payload);
         } catch (OAuthBearerIllegalTokenException e) {
             throw new JwtValidatorException(String.format("Could not validate the access token: %s", e.getMessage()), e);
         }
 
-        Object scopeRaw = getClaim(payload, scopeClaimName);
-        Collection<String> scopeRawCollection;
-
-        if (scopeRaw instanceof String)
-            scopeRawCollection = Collections.singletonList((String) scopeRaw);
-        else if (scopeRaw instanceof Collection)
-            scopeRawCollection = (Collection<String>) scopeRaw;
-        else
-            scopeRawCollection = Collections.emptySet();
-
-        Number expirationRaw = (Number) getClaim(payload, EXPIRATION_CLAIM_NAME);
-        String subRaw = (String) getClaim(payload, subClaimName);
-        Number issuedAtRaw = (Number) getClaim(payload, ISSUED_AT_CLAIM_NAME);
-
-        Set<String> scopes = validateClaimScopes(scopeClaimName, scopeRawCollection);
-        long expiration = validateClaimExpiration(EXPIRATION_CLAIM_NAME,
-            expirationRaw != null ? expirationRaw.longValue() * 1000L : null);
-        String subject = validateClaimSubject(subClaimName, subRaw);
-        Long issuedAt = validateClaimIssuedAt(ISSUED_AT_CLAIM_NAME,
-            issuedAtRaw != null ? issuedAtRaw.longValue() * 1000L : null);
+        String subject = claims.maybeGetString(subClaimName).orElse(null);
+        Long issuedAt = claims.maybeGetNumber(ISSUED_AT_CLAIM_NAME).map(n -> n.longValue() * 1000L).orElse(null);
+        Set<String> scopes = validateClaimScopes(claims, scopeClaimName);
+        long expiration = claims.getNumber(EXPIRATION_CLAIM_NAME).longValue() * 1000L;
 
         return new BasicOAuthBearerToken(
             accessToken,
@@ -135,11 +109,5 @@ public class ClientJwtValidator implements JwtValidator {
             subject,
             issuedAt
         );
-    }
-
-    private Object getClaim(Map<String, Object> payload, String claimName) {
-        Object value = payload.get(claimName);
-        log.debug("getClaim - {}: {}", claimName, value);
-        return value;
     }
 }
