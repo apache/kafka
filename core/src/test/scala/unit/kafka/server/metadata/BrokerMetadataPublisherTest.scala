@@ -289,6 +289,6 @@ class BrokerMetadataPublisherTest {
     )
 
     // SharePartitionManager is receiving the latest changes.
-    verify(sharePartitionManager).onShareVersionToggle(any())
+    verify(sharePartitionManager).onShareVersionToggle(any(), any())
   }
 }

@@ -2830,7 +2830,7 @@ public class SharePartitionManagerTest {
             .withPartitionCacheMap(partitionCache)
             .build();
         assertEquals(4, partitionCache.size());
-        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
+        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0, false);
         // Because we are toggling to a share version which does not support share groups, the cache inside share partitions must be cleared.
         assertEquals(0, partitionCache.size());
         //Check if all share partitions have been fenced.
@@ -2838,6 +2838,24 @@ public class SharePartitionManagerTest {
         Mockito.verify(sp1).markFenced();
         Mockito.verify(sp2).markFenced();
         Mockito.verify(sp3).markFenced();
+    }
+
+    @Test
+    public void testOnShareVersionToggleWhenEnabledFromConfig() {
+        SharePartition sp0 = mock(SharePartition.class);
+        // Mock the share partitions corresponding to the topic partitions.
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.put(
+            new SharePartitionKey("grp", new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))), sp0
+        );
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCache)
+            .build();
+        assertEquals(1, partitionCache.size());
+        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0, true);
+        // Though share version is toggled to off, but it's enabled from config, hence the cache should not be cleared.
+        assertEquals(1, partitionCache.size());
+        Mockito.verify(sp0, times(0)).markFenced();
     }
 
     private Timer systemTimerReaper() {
