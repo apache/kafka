@@ -84,8 +84,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -93,8 +95,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 import scala.Option;
-import scala.collection.Iterator;
-import scala.collection.Map;
 import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
@@ -279,10 +279,8 @@ public class ReplicaFetcherThreadBenchmark {
 
                         @Override
                         public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
-                            scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
-                            Iterator<TopicPartition> iterator = partitions.keys().iterator();
-                            while (iterator.hasNext()) {
-                                TopicPartition tp = iterator.next();
+                            var endOffsets = new HashMap<TopicPartition, EpochEndOffset>();
+                            for (TopicPartition tp : partitions.keySet()) {
                                 endOffsets.put(tp, new EpochEndOffset()
                                         .setPartition(tp.partition())
                                         .setErrorCode(Errors.NONE.code())
@@ -294,7 +292,7 @@ public class ReplicaFetcherThreadBenchmark {
 
                         @Override
                         public Map<TopicPartition, FetchResponseData.PartitionData> fetch(FetchRequest.Builder fetchRequest) {
-                            return new scala.collection.mutable.HashMap<>();
+                            return Map.of();
                         }
                     },
                     config,

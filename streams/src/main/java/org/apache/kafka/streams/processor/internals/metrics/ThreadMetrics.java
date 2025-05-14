@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 
 import java.util.Collections;
@@ -313,7 +312,7 @@ public class ThreadMetrics {
 
     public static void addThreadStateMetric(final String threadId,
                                             final StreamsMetricsImpl streamsMetrics,
-                                            final Gauge<StreamThread.State> threadStateProvider) {
+                                            final Gauge<String> threadStateProvider) {
         streamsMetrics.addThreadLevelMutableMetric(
             STATE,
             THREAD_STATE_DESCRIPTION,

@@ -27,9 +27,7 @@ import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerialize
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.io.File
 import java.util.Properties
@@ -104,9 +102,8 @@ class LogRecoveryTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testHWCheckpointNoFailuresSingleLogSegment(quorum: String): Unit = {
+  @Test
+  def testHWCheckpointNoFailuresSingleLogSegment(): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
 
@@ -122,9 +119,8 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(numMessages, followerHW)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testHWCheckpointWithFailuresSingleLogSegment(quorum: String): Unit = {
+  @Test
+  def testHWCheckpointWithFailuresSingleLogSegment(): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
     assertEquals(0L, hwFile1.read().getOrDefault(topicPartition, 0L))
@@ -183,9 +179,8 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testHWCheckpointNoFailuresMultipleLogSegments(quorum: String): Unit = {
+  @Test
+  def testHWCheckpointNoFailuresMultipleLogSegments(): Unit = {
     sendMessages(20)
     val hw = 20L
     // give some time for follower 1 to record leader HW of 600
@@ -200,9 +195,8 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, followerHW)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testHWCheckpointWithFailuresMultipleLogSegments(quorum: String): Unit = {
+  @Test
+  def testHWCheckpointWithFailuresMultipleLogSegments(): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
     sendMessages(2)
