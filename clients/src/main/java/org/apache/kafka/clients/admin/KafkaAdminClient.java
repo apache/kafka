@@ -3511,27 +3511,29 @@ public class KafkaAdminClient extends AdminClient {
                         }
 
                         private void maybeAddGroup(ListGroupsResponseData.ListedGroup group) {
-                            final String groupId = group.groupId();
-                            final Optional<GroupType> type;
-                            if (group.groupType() == null || group.groupType().isEmpty()) {
-                                type = Optional.empty();
-                            } else {
-                                type = Optional.of(GroupType.parse(group.groupType()));
+                            String protocolType = group.protocolType();
+                            if (options.protocolTypes().isEmpty() || options.protocolTypes().contains(protocolType)) {
+                                final String groupId = group.groupId();
+                                final Optional<GroupType> type;
+                                if (group.groupType() == null || group.groupType().isEmpty()) {
+                                    type = Optional.empty();
+                                } else {
+                                    type = Optional.of(GroupType.parse(group.groupType()));
+                                }
+                                final Optional<GroupState> groupState;
+                                if (group.groupState() == null || group.groupState().isEmpty()) {
+                                    groupState = Optional.empty();
+                                } else {
+                                    groupState = Optional.of(GroupState.parse(group.groupState()));
+                                }
+                                final GroupListing groupListing = new GroupListing(
+                                    groupId,
+                                    type,
+                                    protocolType,
+                                    groupState
+                                );
+                                results.addListing(groupListing);
                             }
-                            final String protocolType = group.protocolType();
-                            final Optional<GroupState> groupState;
-                            if (group.groupState() == null || group.groupState().isEmpty()) {
-                                groupState = Optional.empty();
-                            } else {
-                                groupState = Optional.of(GroupState.parse(group.groupState()));
-                            }
-                            final GroupListing groupListing = new GroupListing(
-                                groupId,
-                                type,
-                                protocolType,
-                                groupState
-                            );
-                            results.addListing(groupListing);
                         }
 
                         @Override

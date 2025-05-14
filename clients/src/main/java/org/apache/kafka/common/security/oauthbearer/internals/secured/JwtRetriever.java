@@ -21,20 +21,20 @@ import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * An <code>AccessTokenRetriever</code> is the internal API by which the login module will
+ * A <code>JwtRetriever</code> is the internal API by which the login module will
  * retrieve an access token for use in authorization by the broker. The implementation may
  * involve authentication to a remote system, or it can be as simple as loading the contents
  * of a file or configuration setting.
  *
  * <i>Retrieval</i> is a separate concern from <i>validation</i>, so it isn't necessary for
- * the <code>AccessTokenRetriever</code> implementation to validate the integrity of the JWT
+ * the <code>JwtRetriever</code> implementation to validate the integrity of the JWT
  * access token.
  *
- * @see HttpAccessTokenRetriever
- * @see FileTokenRetriever
+ * @see HttpJwtRetriever
+ * @see FileJwtRetriever
  */
 
-public interface AccessTokenRetriever extends Initable, Closeable {
+public interface JwtRetriever extends Initable, Closeable {
 
     /**
      * Retrieves a JWT access token in its serialized three-part form. The implementation

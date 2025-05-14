@@ -1028,6 +1028,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return new CoordinatorResult<>(records, false);
     }
 
+    public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
+        Set<Uuid> deletedTopicIds
+    ) {
+        return groupMetadataManager.maybeCleanupShareGroupState(deletedTopicIds);
+    }
+
     /**
      * Schedules (or reschedules) the group size counter for the classic/consumer groups.
      */
