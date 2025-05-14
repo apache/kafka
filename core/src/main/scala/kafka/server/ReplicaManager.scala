@@ -2511,21 +2511,27 @@ class ReplicaManager(val config: KafkaConfig,
       warn(s"Broker $localBrokerId stopped fetcher for partitions ${newOfflinePartitions.mkString(",")} and stopped moving logs " +
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
-    logManager.handleLogDirFailure(dir)
-    if (dir == new File(config.metadataLogDir).getAbsolutePath && config.processRoles.nonEmpty) {
-      fatal(s"Shutdown broker because the metadata log dir $dir has failed")
-      Exit.halt(1)
-    }
 
-    if (notifyController) {
-      if (uuid.isDefined) {
-        directoryEventHandler.handleFailure(uuid.get)
-      } else {
-        fatal(s"Unable to propagate directory failure disabled because directory $dir has no UUID")
+    try {
+      logManager.handleLogDirFailure(dir)
+    } catch {
+      case e: Exception => error(e.getMessage)
+    } finally {
+      if (dir == new File(config.metadataLogDir).getAbsolutePath && config.processRoles.nonEmpty) {
+        fatal(s"Shutdown broker because the metadata log dir $dir has failed")
         Exit.halt(1)
       }
+
+      if (notifyController) {
+        if (uuid.isDefined) {
+          directoryEventHandler.handleFailure(uuid.get)
+        } else {
+          fatal(s"Unable to propagate directory failure disabled because directory $dir has no UUID")
+          Exit.halt(1)
+        }
+      }
+      warn(s"Stopped serving replicas in dir $dir")
     }
-    warn(s"Stopped serving replicas in dir $dir")
   }
 
   def removeMetrics(): Unit = {
