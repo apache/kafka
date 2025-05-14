@@ -21,7 +21,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, TopicRecord}
@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogDirFailureChannel}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito.mock
 
 import java.io.File
+import java.util.{Map => JMap}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
@@ -48,7 +50,8 @@ class LocalLeaderEndPointTest extends Logging {
   val topicId = Uuid.randomUuid()
   val topic = "test"
   val partition = 5
-  val topicPartition = new TopicPartition(topic, partition)
+  val topicIdPartition = new TopicIdPartition(topicId, partition, topic)
+  val topicPartition = topicIdPartition.topicPartition()
   val sourceBroker: BrokerEndPoint = new BrokerEndPoint(0, "localhost", 9092)
   var replicaManager: ReplicaManager = _
   var endPoint: LeaderEndPoint = _
@@ -115,52 +118,52 @@ class LocalLeaderEndPointTest extends Logging {
 
   @Test
   def testFetchLatestOffset(): Unit = {
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    assertEquals(new OffsetAndEpoch(3L, 0), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch = 0))
+    assertEquals(new OffsetAndEpoch(3L, 0), endPoint.fetchLatestOffset(topicPartition, 0))
     bumpLeaderEpoch()
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    assertEquals(new OffsetAndEpoch(6L, 1), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch = 7))
+    assertEquals(new OffsetAndEpoch(6L, 1), endPoint.fetchLatestOffset(topicPartition, 7))
   }
 
   @Test
   def testFetchEarliestOffset(): Unit = {
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 0))
+    assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, 0))
 
     bumpLeaderEpoch()
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 3), _ => ())
-    assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
+    assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestOffset(topicPartition, 7))
   }
 
   @Test
   def testFetchEarliestLocalOffset(): Unit = {
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch = 0))
+    assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestLocalOffset(topicPartition, 0))
 
     bumpLeaderEpoch()
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     replicaManager.logManager.getLog(topicPartition).foreach(log => log.updateLocalLogStartOffset(3))
-    assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
-    assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch = 7))
+    assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, 7))
+    assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestLocalOffset(topicPartition, 7))
   }
 
   @Test
   def testFetchEpochEndOffsets(): Unit = {
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
 
-    var result = endPoint.fetchEpochEndOffsets(Map(
-      topicPartition -> new OffsetForLeaderPartition()
+    var result = endPoint.fetchEpochEndOffsets(JMap.of(
+      topicPartition, new OffsetForLeaderPartition()
         .setPartition(topicPartition.partition)
-        .setLeaderEpoch(0)
-    ))
+        .setLeaderEpoch(0))
+    ).asScala
 
     var expected = Map(
       topicPartition -> new EpochEndOffset()
@@ -177,14 +180,14 @@ class LocalLeaderEndPointTest extends Logging {
     bumpLeaderEpoch()
     assertEquals(2, replicaManager.getPartitionOrException(topicPartition).getLeaderEpoch)
 
-    appendRecords(replicaManager, topicPartition, records)
+    appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
 
-    result = endPoint.fetchEpochEndOffsets(Map(
-      topicPartition -> new OffsetForLeaderPartition()
+    result = endPoint.fetchEpochEndOffsets(JMap.of(
+      topicPartition, new OffsetForLeaderPartition()
         .setPartition(topicPartition.partition)
         .setLeaderEpoch(2)
-    ))
+    )).asScala
 
     expected = Map(
       topicPartition -> new EpochEndOffset()
@@ -197,11 +200,11 @@ class LocalLeaderEndPointTest extends Logging {
     assertEquals(expected, result)
 
     // Check missing epoch: 1, we expect the API to return (leader_epoch=0, end_offset=3).
-    result = endPoint.fetchEpochEndOffsets(Map(
-      topicPartition -> new OffsetForLeaderPartition()
+    result = endPoint.fetchEpochEndOffsets(JMap.of(
+      topicPartition, new OffsetForLeaderPartition()
         .setPartition(topicPartition.partition)
         .setLeaderEpoch(1)
-    ))
+    )).asScala
 
     expected = Map(
       topicPartition -> new EpochEndOffset()
@@ -213,11 +216,11 @@ class LocalLeaderEndPointTest extends Logging {
     assertEquals(expected, result)
 
     // Check missing epoch: 5, we expect the API to return (leader_epoch=-1, end_offset=-1)
-    result = endPoint.fetchEpochEndOffsets(Map(
-      topicPartition -> new OffsetForLeaderPartition()
+    result = endPoint.fetchEpochEndOffsets(JMap.of(
+      topicPartition, new OffsetForLeaderPartition()
         .setPartition(topicPartition.partition)
         .setLeaderEpoch(5)
-    ))
+    )).asScala
 
     expected = Map(
       topicPartition -> new EpochEndOffset()
@@ -263,12 +266,12 @@ class LocalLeaderEndPointTest extends Logging {
   }
 
   private def appendRecords(replicaManager: ReplicaManager,
-                            partition: TopicPartition,
+                            partition: TopicIdPartition,
                             records: MemoryRecords,
                             origin: AppendOrigin = AppendOrigin.CLIENT,
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
-    def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
+    def appendCallback(responses: scala.collection.Map[TopicIdPartition, PartitionResponse]): Unit = {
       val response = responses.get(partition)
       assertTrue(response.isDefined)
       result.fire(response.get)

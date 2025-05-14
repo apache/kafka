@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -129,7 +129,7 @@ public class PluginTest {
         Plugin<SomeMonitorablePlugin> plugin = Plugin.wrapInstance(new SomeMonitorablePlugin(), METRICS, CONFIG);
         PluginMetrics pluginMetrics = plugin.get().pluginMetrics;
         plugin.close();
-        assertThrows(IllegalStateException.class, () -> pluginMetrics.metricName("", "", Collections.emptyMap()));
+        assertThrows(IllegalStateException.class, () -> pluginMetrics.metricName("", "", new LinkedHashMap<>()));
         assertThrows(IllegalStateException.class, () -> pluginMetrics.addMetric(null, null));
         assertThrows(IllegalStateException.class, () -> pluginMetrics.removeMetric(null));
         assertThrows(IllegalStateException.class, () -> pluginMetrics.addSensor(""));

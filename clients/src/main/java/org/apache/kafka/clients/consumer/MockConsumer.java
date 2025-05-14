@@ -335,7 +335,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
      * @param maxPollRecords the max.poll.records.
      */
     public synchronized void setMaxPollRecords(long maxPollRecords) {
-        if (this.maxPollRecords < 1) {
+        if (maxPollRecords < 1) {
             throw new IllegalArgumentException("MaxPollRecords must be strictly superior to 0");
         }
         this.maxPollRecords = maxPollRecords;
@@ -575,8 +575,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
     }
 
+    @Deprecated
     @Override
-    @SuppressWarnings("deprecation")
     public synchronized void close(Duration timeout) {
         this.closed = true;
     }

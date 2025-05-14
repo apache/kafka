@@ -26,8 +26,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import java.util
 import java.util.Optional
@@ -41,9 +40,8 @@ import scala.util.Random
   */
 class FetchRequestTest extends BaseFetchRequestTest {
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testBrokerRespectsPartitionsOrderAndSizeLimits(quorum: String): Unit = {
+  @Test
+  def testBrokerRespectsPartitionsOrderAndSizeLimits(): Unit = {
     initProducer()
 
     val messagesPerPartition = 9
@@ -144,9 +142,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
     evaluateResponse4(fetchResponse4V12, 12)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testFetchRequestV4WithReadCommitted(quorum: String): Unit = {
+  @Test
+  def testFetchRequestV4WithReadCommitted(): Unit = {
     initProducer()
     val maxPartitionBytes = 200
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
@@ -163,9 +160,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertTrue(records(partitionData).map(_.sizeInBytes).sum > 0)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testFetchRequestToNonReplica(quorum: String): Unit = {
+  @Test
+  def testFetchRequestToNonReplica(): Unit = {
     val topic = "topic"
     val partition = 0
     val topicPartition = new TopicPartition(topic, partition)
@@ -194,15 +190,13 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, oldPartitionData.errorCode)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testLastFetchedEpochValidation(quorum: String): Unit = {
+  @Test
+  def testLastFetchedEpochValidation(): Unit = {
     checkLastFetchedEpochValidation(ApiKeys.FETCH.latestVersion())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testLastFetchedEpochValidationV12(quorum: String): Unit = {
+  @Test
+  def testLastFetchedEpochValidationV12(): Unit = {
     checkLastFetchedEpochValidation(12)
   }
 
@@ -249,15 +243,13 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(firstEpochEndOffset, divergingEpoch.endOffset)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCurrentEpochValidation(quorum: String): Unit = {
+  @Test
+  def testCurrentEpochValidation(): Unit = {
     checkCurrentEpochValidation(ApiKeys.FETCH.latestVersion())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCurrentEpochValidationV12(quorum: String): Unit = {
+  @Test
+  def testCurrentEpochValidationV12(): Unit = {
     checkCurrentEpochValidation(12)
   }
 
@@ -299,15 +291,13 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testEpochValidationWithinFetchSession(quorum: String): Unit = {
+  @Test
+  def testEpochValidationWithinFetchSession(): Unit = {
     checkEpochValidationWithinFetchSession(ApiKeys.FETCH.latestVersion())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testEpochValidationWithinFetchSessionV12(quorum: String): Unit = {
+  @Test
+  def testEpochValidationWithinFetchSessionV12(): Unit = {
     checkEpochValidationWithinFetchSession(12)
   }
 
@@ -367,9 +357,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
    * those partitions are returned in all incremental fetch requests.
    * This tests using FetchRequests that don't use topic IDs
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCreateIncrementalFetchWithPartitionsInErrorV12(quorum: String): Unit = {
+  @Test
+  def testCreateIncrementalFetchWithPartitionsInErrorV12(): Unit = {
     def createConsumerFetchRequest(topicPartitions: Seq[TopicPartition],
                            metadata: JFetchMetadata,
                            toForget: Seq[TopicIdPartition]): FetchRequest =
@@ -430,9 +419,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
   /**
    * Test that when a Fetch Request receives an unknown topic ID, it returns a top level error.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testFetchWithPartitionsWithIdError(quorum: String): Unit = {
+  @Test
+  def testFetchWithPartitionsWithIdError(): Unit = {
     def createConsumerFetchRequest(fetchData: util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData],
                            metadata: JFetchMetadata,
                            toForget: Seq[TopicIdPartition]): FetchRequest = {
@@ -475,9 +463,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData1.get(bar0).errorCode)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testZStdCompressedTopic(quorum: String): Unit = {
+  @Test
+  def testZStdCompressedTopic(): Unit = {
     // ZSTD compressed topic
     val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.ZSTD.name)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
@@ -523,9 +510,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(3, records(data2).size)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testZStdCompressedRecords(quorum: String): Unit = {
+  @Test
+  def testZStdCompressedRecords(): Unit = {
     // Producer compressed topic
     val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.PRODUCER.name)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
