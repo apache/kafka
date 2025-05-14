@@ -646,7 +646,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 timer.add(new TimerTask(0L) {
                     @Override
                     public void run() {
-                        persisterInitialize(result.getValue().get(), result.getKey());
+                        persisterInitialize(result.getValue().get(), result.getKey())
+                            .whenComplete((__, exp) -> {
+                                if (exp != null) {
+                                    log.error("Persister initialization failed", exp);
+                                }
+                            });
                     }
                 });
             }
@@ -2031,6 +2036,26 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     log.error("Could not delete offsets for deleted partitions {} due to: {}.",
                         topicPartitions, exception.getMessage(), exception
                     );
+                    return null;
+                }
+            ).toArray(new CompletableFuture<?>[0])
+        ).get();
+
+        // At this point the metadata will not have been updated
+        // with the deleted topics.
+        Set<Uuid> topicIds = topicPartitions.stream()
+            .map(tp -> metadataImage.topics().getTopic(tp.topic()).id())
+            .collect(Collectors.toSet());
+
+        CompletableFuture.allOf(
+            FutureUtils.mapExceptionally(
+                runtime.scheduleWriteAllOperation(
+                    "maybe-cleanup-share-group-state",
+                    Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                    coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+                ),
+                exception -> {
+                    log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
                     return null;
                 }
             ).toArray(new CompletableFuture<?>[0])

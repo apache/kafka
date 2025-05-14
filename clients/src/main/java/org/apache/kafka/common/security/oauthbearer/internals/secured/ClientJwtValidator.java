@@ -33,7 +33,7 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 
 /**
- * LoginAccessTokenValidator is an implementation of {@link AccessTokenValidator} that is used
+ * {@code ClientJwtValidator} is an implementation of {@link JwtValidator} that is used
  * by the client to perform some rudimentary validation of the JWT access token that is received
  * as part of the response from posting the client credentials to the OAuth/OIDC provider's
  * token endpoint.
@@ -46,13 +46,13 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
  *         <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section 2.1</a>
  *     </li>
  *     <li>Basic conversion of the token into an in-memory map</li>
- *     <li>Presence of scope, <code>exp</code>, subject, and <code>iat</code> claims</li>
+ *     <li>Presence of <code>scope</code>, <code>exp</code>, <code>subject</code>, and <code>iat</code> claims</li>
  * </ol>
  */
 
-public class LoginAccessTokenValidator implements AccessTokenValidator {
+public class ClientJwtValidator implements JwtValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(LoginAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(ClientJwtValidator.class);
 
     public static final String EXPIRATION_CLAIM_NAME = "exp";
 
@@ -63,14 +63,14 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
     private final String subClaimName;
 
     /**
-     * Creates a new LoginAccessTokenValidator that will be used by the client for lightweight
+     * Creates a new {@code ClientJwtValidator} that will be used by the client for lightweight
      * validation of the JWT.
      *
      * @param scopeClaimName Name of the scope claim to use; must be non-<code>null</code>
      * @param subClaimName   Name of the subject claim to use; must be non-<code>null</code>
      */
 
-    public LoginAccessTokenValidator(String scopeClaimName, String subClaimName) {
+    public ClientJwtValidator(String scopeClaimName, String subClaimName) {
         this.scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, scopeClaimName);
         this.subClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, subClaimName);
     }
