@@ -84,13 +84,19 @@ public class KafkaRaftClientAutoJoinTest {
         context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
 
         // the next request should be an add voter request
-        pollAndDeliverAddVoter(context, newVoter);
+        pollAndSendAddVoter(context, newVoter);
 
-        // after sending an add voter the next request should be a fetch
+        // expire the add voter request, the next request should be a fetch
         context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
 
-        // the replica should send add voter again because the fetch did not update the voter set
-        pollAndDeliverAddVoter(context, newVoter);
+        // the replica should send add voter again because the completed fetch
+        // did not update the voter set, and its timer has expired
+        pollAndSendAddVoter(context, newVoter);
+
+        // verify the replica can perform a fetch to commit the new voter set while the add
+        // voter request is still in-flight
+        pollAndDeliverFetchToUpdateVoterSet(context, epoch,
+            VoterSetTest.voterSet(Stream.of(leader, newVoter)));
     }
 
     @Test
@@ -130,10 +136,10 @@ public class KafkaRaftClientAutoJoinTest {
         context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
 
         // the next request should be an add voter request
-        pollAndDeliverAddVoter(context, newFollowerKey);
+        pollAndSendAddVoter(context, newFollowerKey);
 
-        // after sending an add voter the next request should be a fetch
-        // this fetch will add the new follower to the voter set
+        // verify the replica can perform a fetch to commit the new voter set while the add
+        // voter request is still in-flight
         pollAndDeliverFetchToUpdateVoterSet(
             context,
             epoch,
@@ -249,19 +255,14 @@ public class KafkaRaftClientAutoJoinTest {
         );
     }
 
-    private void pollAndDeliverAddVoter(
+    private RaftRequest.Outbound pollAndSendAddVoter(
         RaftClientTestContext context,
         ReplicaKey newVoter
     ) throws Exception {
         context.pollUntilRequest();
-        final var addRequest = context.assertSentAddVoterRequest(
+        return context.assertSentAddVoterRequest(
             newVoter,
             context.client.quorum().localVoterNodeOrThrow().listeners()
-        );
-        context.deliverResponse(
-            addRequest.correlationId(),
-            addRequest.destination(),
-            RaftUtil.addVoterResponse(Errors.NONE, Errors.NONE.message())
         );
     }
 
