@@ -29,6 +29,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -41,18 +42,20 @@ import static org.mockito.Mockito.when;
 
 public class HttpJwtRetrieverTest extends OAuthBearerTest {
 
+    private static final Optional<Integer> EMPTY = Optional.empty();
+
     @Test
     public void test() throws IOException {
         String expectedResponse = "Hiya, buddy";
         HttpURLConnection mockedCon = createHttpURLConnection(expectedResponse);
-        String response = HttpJwtRetriever.post(mockedCon, null, null, null, null);
+        String response = HttpJwtRetriever.post(mockedCon, null, null, EMPTY, EMPTY);
         assertEquals(expectedResponse, response);
     }
 
     @Test
     public void testEmptyResponse() throws IOException {
         HttpURLConnection mockedCon = createHttpURLConnection("");
-        assertThrows(IOException.class, () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
+        assertThrows(IOException.class, () -> HttpJwtRetriever.post(mockedCon, null, null, EMPTY, EMPTY));
     }
 
     @Test
@@ -60,7 +63,7 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
         HttpURLConnection mockedCon = createHttpURLConnection("dummy");
         when(mockedCon.getInputStream()).thenThrow(new IOException("Can't read"));
 
-        assertThrows(IOException.class, () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
+        assertThrows(IOException.class, () -> HttpJwtRetriever.post(mockedCon, null, null, EMPTY, EMPTY));
     }
 
     @Test
@@ -72,7 +75,7 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
                 .getBytes(StandardCharsets.UTF_8)));
         when(mockedCon.getResponseCode()).thenReturn(HttpURLConnection.HTTP_BAD_REQUEST);
         UnretryableException ioe = assertThrows(UnretryableException.class,
-            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, EMPTY, EMPTY));
         assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
     }
 
@@ -85,7 +88,7 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
                 .getBytes(StandardCharsets.UTF_8)));
         when(mockedCon.getResponseCode()).thenReturn(HttpURLConnection.HTTP_INTERNAL_ERROR);
         IOException ioe = assertThrows(IOException.class,
-            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, EMPTY, EMPTY));
         assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
 
         // error response body has different keys
@@ -93,7 +96,7 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
             "{\"errorCode\":\"some_arg\", \"errorSummary\":\"some problem with arg\"}"
                 .getBytes(StandardCharsets.UTF_8)));
         ioe = assertThrows(IOException.class,
-            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, EMPTY, EMPTY));
         assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
 
         // error response is valid json but unknown keys
@@ -101,7 +104,7 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
             "{\"err\":\"some_arg\", \"err_des\":\"some problem with arg\"}"
                 .getBytes(StandardCharsets.UTF_8)));
         ioe = assertThrows(IOException.class,
-            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, EMPTY, EMPTY));
         assertTrue(ioe.getMessage().contains("{\"err\":\"some_arg\", \"err_des\":\"some problem with arg\"}"));
     }
 
@@ -113,7 +116,7 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
             "non json error output".getBytes(StandardCharsets.UTF_8)));
         when(mockedCon.getResponseCode()).thenReturn(HttpURLConnection.HTTP_INTERNAL_ERROR);
         IOException ioe = assertThrows(IOException.class,
-            () -> HttpJwtRetriever.post(mockedCon, null, null, null, null));
+            () -> HttpJwtRetriever.post(mockedCon, null, null, EMPTY, EMPTY));
         assertTrue(ioe.getMessage().contains("{non json error output}"));
     }
 
@@ -204,7 +207,7 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
     @Test
     public void testFormatRequestBody() {
         String expected = "grant_type=client_credentials&scope=scope";
-        String actual = HttpJwtRetriever.formatRequestBody("scope");
+        String actual = HttpJwtRetriever.formatRequestBody(Optional.of("scope"));
         assertEquals(expected, actual);
     }
 
@@ -214,24 +217,24 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
         String exclamationMark = "%21";
 
         String expected = String.format("grant_type=client_credentials&scope=earth+is+great%s", exclamationMark);
-        String actual = HttpJwtRetriever.formatRequestBody("earth is great!");
+        String actual = HttpJwtRetriever.formatRequestBody(Optional.of("earth is great!"));
         assertEquals(expected, actual);
 
         expected = String.format("grant_type=client_credentials&scope=what+on+earth%s%s%s%s%s", questionMark, exclamationMark, questionMark, exclamationMark, questionMark);
-        actual = HttpJwtRetriever.formatRequestBody("what on earth?!?!?");
+        actual = HttpJwtRetriever.formatRequestBody(Optional.of("what on earth?!?!?"));
         assertEquals(expected, actual);
     }
 
     @Test
     public void testFormatRequestBodyMissingValues() {
         String expected = "grant_type=client_credentials";
-        String actual = HttpJwtRetriever.formatRequestBody(null);
+        String actual = HttpJwtRetriever.formatRequestBody(Optional.empty());
         assertEquals(expected, actual);
 
-        actual = HttpJwtRetriever.formatRequestBody("");
+        actual = HttpJwtRetriever.formatRequestBody(Optional.of(""));
         assertEquals(expected, actual);
 
-        actual = HttpJwtRetriever.formatRequestBody("  ");
+        actual = HttpJwtRetriever.formatRequestBody(Optional.of("  "));
         assertEquals(expected, actual);
     }
 

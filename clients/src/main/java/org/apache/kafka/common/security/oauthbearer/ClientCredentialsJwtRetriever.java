@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
@@ -45,7 +46,32 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAu
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 
 /**
+ * <code>ClientCredentialsJwtRetriever</code> is a {@link JwtRetriever} that requests JWTs from
+ * an OAuth/OIDC provider using the OAuth 2.0 <code>client_credentials</code> grant type. This grant
+ * type is commonly used for non-interactive "service accounts" where there is no user available to
+ * interactively supply credentials.
  *
+ * <p/>
+ *
+ * The Kafka <code>sasl.jaas.config</code> (JAAS configuration) options for this {@code JwtRetriever}
+ * includes the following options:
+ *
+ * <ul>
+ *     <li><code>clientId</code>OAuth client ID (required)</li>
+ *     <li><code>clientSecret</code>OAuth client secret (required)</li>
+ *     <li><code>scope</code>OAuth scope (optional)</li>
+ * </ul>
+ *
+ * <p/>
+ *
+ * Here's an example of the JAAS configuration for this {@code JwtRetriever}:
+ *
+ * <code>
+ * sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+ *   clientId="foo" \
+ *   clientSecret="bar" \
+ *   scope="baz" ;
+ * </code>
  */
 public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
@@ -56,27 +82,26 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
         OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries);
-
         URL tokenEndpointUrl = validateUrl(config, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
-
         String clientId = jaasConfig.getString(CLIENT_ID_CONFIG);
         String clientSecret = jaasConfig.getString(CLIENT_SECRET_CONFIG);
-        String scope = jaasConfig.containsKey(SCOPE_CONFIG) ? jaasConfig.getString(SCOPE_CONFIG) : null;
-
+        Optional<String> scope = jaasConfig.maybeGetString(SCOPE_CONFIG);
         sslResource = OAuthBearerUtils.maybeCreateSslResource(tokenEndpointUrl, jaasConfig);
-
+        Optional<SSLSocketFactory> sslSocketFactory = sslResource.map(r -> r.sslContext().getSocketFactory());
         boolean urlencodeHeader = urlencodeHeader(config);
 
-        delegate = new HttpJwtRetriever(clientId,
+        delegate = new HttpJwtRetriever(
+            clientId,
             clientSecret,
             scope,
-            sslResource.map(r -> r.sslContext().getSocketFactory()).orElse(null),
+            sslSocketFactory,
             tokenEndpointUrl.toString(),
             config.getLong(SASL_LOGIN_RETRY_BACKOFF_MS),
             config.getLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
-            config.containsKey(SASL_LOGIN_CONNECT_TIMEOUT_MS) ? config.getInt(SASL_LOGIN_CONNECT_TIMEOUT_MS) : null,
-            config.containsKey(SASL_LOGIN_READ_TIMEOUT_MS) ? config.getInt(SASL_LOGIN_READ_TIMEOUT_MS) : null,
-            urlencodeHeader);
+            config.maybeGetInt(SASL_LOGIN_CONNECT_TIMEOUT_MS),
+            config.maybeGetInt(SASL_LOGIN_READ_TIMEOUT_MS),
+            urlencodeHeader
+        );
     }
 
     @Override

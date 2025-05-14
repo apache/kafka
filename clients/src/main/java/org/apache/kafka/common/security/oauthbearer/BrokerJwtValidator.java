@@ -24,17 +24,18 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBeare
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerJwtClaims;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
+import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jwt.ReservedClaimNames;
 import org.jose4j.jwt.consumer.InvalidJwtException;
 import org.jose4j.jwt.consumer.JwtConsumer;
 import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.jose4j.jwt.consumer.JwtContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -61,10 +62,12 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *         Basic structural validation of the <code>b64token</code> value as defined in
  *         <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section 2.1</a>
  *     </li>
- *     <li>Basic conversion of the token into an in-memory data structure</li>
  *     <li>
- *         Presence of scope, <code>exp</code>, subject, <code>iss</code>, and
- *         <code>iat</code> claims
+ *         Basic conversion of the token into an in-memory data structure
+ *     </li>
+ *     <li>
+ *         Presence of <code>scope</code>, <code>exp</code>, <code>subject</code>, <code>iss</code>,
+ *         and <code>iat</code> claims
  *     </li>
  *     <li>
  *         Signature matching validation against the <code>kid</code> and those provided by
@@ -72,10 +75,7 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *     </li>
  * </ol>
  */
-
 public class BrokerJwtValidator implements JwtValidator {
-
-    private static final Logger log = LoggerFactory.getLogger(BrokerJwtValidator.class);
 
     private final Supplier<CloseableVerificationKeyResolver> verificationKeyResolverSupplier;
 
@@ -91,7 +91,10 @@ public class BrokerJwtValidator implements JwtValidator {
         this.verificationKeyResolverSupplier = DefaultVerificationKeyResolver::new;
     }
 
-    public BrokerJwtValidator(CloseableVerificationKeyResolver verificationKeyResolverSupplier) {
+    /*
+     * Package-visible for testing.
+     */
+    BrokerJwtValidator(CloseableVerificationKeyResolver verificationKeyResolverSupplier) {
         this.verificationKeyResolverSupplier = () -> verificationKeyResolverSupplier;
     }
 
@@ -99,26 +102,16 @@ public class BrokerJwtValidator implements JwtValidator {
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
 
-        List<String> expectedAudiencesList = config.containsKey(SASL_OAUTHBEARER_EXPECTED_AUDIENCE) ? config.getList(SASL_OAUTHBEARER_EXPECTED_AUDIENCE) : null;
-        Set<String> expectedAudiences = expectedAudiencesList != null ? Set.copyOf(expectedAudiencesList) : null;
-        Integer clockSkew = config.containsKey(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS) ? config.getInt(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS) : null;
-        String expectedIssuer = config.containsKey(SASL_OAUTHBEARER_EXPECTED_ISSUER) ? config.getString(SASL_OAUTHBEARER_EXPECTED_ISSUER) : null;
         scopeClaimName = config.getString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
         subClaimName = config.getString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
 
         verificationKeyResolver = verificationKeyResolverSupplier.get();
         verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
 
-        final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
-
-        if (clockSkew != null)
-            jwtConsumerBuilder.setAllowedClockSkewInSeconds(clockSkew);
-
-        if (expectedAudiences != null && !expectedAudiences.isEmpty())
-            jwtConsumerBuilder.setExpectedAudience(expectedAudiences.toArray(new String[0]));
-
-        if (expectedIssuer != null)
-            jwtConsumerBuilder.setExpectedIssuer(expectedIssuer);
+        JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
+        config.maybeGetInt(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS).ifPresent(jwtConsumerBuilder::setAllowedClockSkewInSeconds);
+        config.maybeGetString(SASL_OAUTHBEARER_EXPECTED_ISSUER).ifPresent(jwtConsumerBuilder::setExpectedIssuer);
+        maybeGetExpectedAudiences(config).ifPresent(jwtConsumerBuilder::setExpectedAudience);
 
         jwtConsumer = jwtConsumerBuilder
             .setJwsAlgorithmConstraints(DISALLOW_NONE)
@@ -136,8 +129,6 @@ public class BrokerJwtValidator implements JwtValidator {
      * @return {@link OAuthBearerToken}
      * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
-
-    @SuppressWarnings("unchecked")
     public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
         OAuthBearerUtils.requireConfigured(jwtConsumer, () -> "JWT consumer", getClass());
 
@@ -164,5 +155,23 @@ public class BrokerJwtValidator implements JwtValidator {
             subject,
             issuedAt
         );
+    }
+
+    @Override
+    public void close() throws IOException {
+        Utils.closeQuietly(verificationKeyResolver, "Verification key resolver");
+    }
+
+    private Optional<String[]> maybeGetExpectedAudiences(OAuthBearerConfig config) {
+        if (!config.containsKey(SASL_OAUTHBEARER_EXPECTED_AUDIENCE))
+            return Optional.empty();
+
+        List<String> expectedAudiencesList = config.getList(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
+        Set<String> expectedAudiences = Set.copyOf(expectedAudiencesList);
+
+        if (!expectedAudiences.isEmpty())
+            return Optional.of(expectedAudiences.toArray(new String[0]));
+        else
+            return Optional.empty();
     }
 }

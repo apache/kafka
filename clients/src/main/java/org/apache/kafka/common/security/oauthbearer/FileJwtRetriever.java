@@ -34,10 +34,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAu
 /**
  * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
  * of a file, interpreting them as a JWT access key in the serialized form.
- *
- * @see JwtRetriever
  */
-
 public class FileJwtRetriever implements JwtRetriever {
 
     private String jwt;
@@ -48,10 +45,9 @@ public class FileJwtRetriever implements JwtRetriever {
         String fileName = validateFileUrl(config, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).getPath();
 
         try {
-            this.jwt = Utils.readFileAsString(fileName);
-
-            // always non-null; to remove any newline chars or backend will report err
-            this.jwt = this.jwt.trim();
+            // The result of Utils.readFileAsString is always non-null. Remove any newline chars or the
+            // JwtValidator in use may report an error.
+            jwt = Utils.readFileAsString(fileName).trim();
         } catch (IOException e) {
             throw new ConfigException(
                 String.format(
@@ -68,5 +64,4 @@ public class FileJwtRetriever implements JwtRetriever {
     public String retrieve() throws JwtRetrieverException {
         return requireConfigured(jwt, () -> "JWT", getClass());
     }
-
 }

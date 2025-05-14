@@ -43,6 +43,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -94,9 +95,9 @@ public class HttpJwtRetriever {
 
     private final String clientSecret;
 
-    private final String scope;
+    private final Optional<String> scope;
 
-    private final SSLSocketFactory sslSocketFactory;
+    private final Optional<SSLSocketFactory> sslSocketFactory;
 
     private final String tokenEndpointUrl;
 
@@ -104,21 +105,21 @@ public class HttpJwtRetriever {
 
     private final long loginRetryBackoffMaxMs;
 
-    private final Integer loginConnectTimeoutMs;
+    private final Optional<Integer> loginConnectTimeoutMs;
 
-    private final Integer loginReadTimeoutMs;
+    private final Optional<Integer> loginReadTimeoutMs;
 
     private final boolean urlencodeHeader;
 
     public HttpJwtRetriever(String clientId,
                             String clientSecret,
-                            String scope,
-                            SSLSocketFactory sslSocketFactory,
+                            Optional<String> scope,
+                            Optional<SSLSocketFactory> sslSocketFactory,
                             String tokenEndpointUrl,
                             long loginRetryBackoffMs,
                             long loginRetryBackoffMaxMs,
-                            Integer loginConnectTimeoutMs,
-                            Integer loginReadTimeoutMs,
+                            Optional<Integer> loginConnectTimeoutMs,
+                            Optional<Integer> loginReadTimeoutMs,
                             boolean urlencodeHeader) {
         this.clientId = Objects.requireNonNull(clientId);
         this.clientSecret = Objects.requireNonNull(clientSecret);
@@ -162,8 +163,8 @@ public class HttpJwtRetriever {
                 try {
                     con = (HttpURLConnection) new URL(tokenEndpointUrl).openConnection();
 
-                    if (sslSocketFactory != null && con instanceof HttpsURLConnection)
-                        ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory);
+                    if (sslSocketFactory.isPresent() && con instanceof HttpsURLConnection)
+                        ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory.get());
 
                     return post(con, headers, requestBody, loginConnectTimeoutMs, loginReadTimeoutMs);
                 } catch (IOException e) {
@@ -186,8 +187,8 @@ public class HttpJwtRetriever {
     public static String post(HttpURLConnection con,
         Map<String, String> headers,
         String requestBody,
-        Integer connectTimeoutMs,
-        Integer readTimeoutMs)
+        Optional<Integer> connectTimeoutMs,
+        Optional<Integer> readTimeoutMs)
         throws IOException, UnretryableException {
         handleInput(con, headers, requestBody, connectTimeoutMs, readTimeoutMs);
         return handleOutput(con);
@@ -196,8 +197,8 @@ public class HttpJwtRetriever {
     private static void handleInput(HttpURLConnection con,
         Map<String, String> headers,
         String requestBody,
-        Integer connectTimeoutMs,
-        Integer readTimeoutMs)
+        Optional<Integer> connectTimeoutMs,
+        Optional<Integer> readTimeoutMs)
         throws IOException, UnretryableException {
         log.debug("handleInput - starting post for {}", con.getURL());
         con.setRequestMethod("POST");
@@ -217,11 +218,8 @@ public class HttpJwtRetriever {
 
         con.setUseCaches(false);
 
-        if (connectTimeoutMs != null)
-            con.setConnectTimeout(connectTimeoutMs);
-
-        if (readTimeoutMs != null)
-            con.setReadTimeout(readTimeoutMs);
+        connectTimeoutMs.ifPresent(con::setConnectTimeout);
+        readTimeoutMs.ifPresent(con::setReadTimeout);
 
         log.debug("handleInput - preparing to connect to {}", con.getURL());
         con.connect();
@@ -361,13 +359,12 @@ public class HttpJwtRetriever {
         return String.format("Basic %s", encoded);
     }
 
-    static String formatRequestBody(String scope) {
+    static String formatRequestBody(Optional<String> scope) {
         StringBuilder requestParameters = new StringBuilder();
         requestParameters.append("grant_type=client_credentials");
 
-        if (scope != null && !scope.trim().isEmpty()) {
-            scope = scope.trim();
-            String encodedScope = URLEncoder.encode(scope, StandardCharsets.UTF_8);
+        if (scope.isPresent() && !Utils.isBlank(scope.get())) {
+            String encodedScope = URLEncoder.encode(scope.get().trim(), StandardCharsets.UTF_8);
             requestParameters.append("&scope=").append(encodedScope);
         }
 

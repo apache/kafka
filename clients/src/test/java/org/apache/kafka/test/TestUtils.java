@@ -237,7 +237,6 @@ public class TestUtils {
     public static File tempFile(final String contents) throws IOException {
         final File file = tempFile();
         Files.write(file.toPath(), contents.getBytes(StandardCharsets.UTF_8));
-        assertTrue(file.exists());
         return file;
     }
 
