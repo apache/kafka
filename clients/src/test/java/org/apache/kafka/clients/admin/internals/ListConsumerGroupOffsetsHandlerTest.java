@@ -24,12 +24,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
-import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopics;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
-import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.junit.jupiter.api.Test;
@@ -41,7 +43,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -58,11 +59,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ListConsumerGroupOffsetsHandlerTest {
 
     private final LogContext logContext = new LogContext();
-    private final int throttleMs = 10;
-    private final String groupZero = "group0";
-    private final String groupOne = "group1";
-    private final String groupTwo = "group2";
-    private final List<String> groups = Arrays.asList(groupZero, groupOne, groupTwo);
+    private final String group0 = "group0";
+    private final String group1 = "group1";
+    private final String group2 = "group2";
+    private final String group3 = "group3";
+    private final List<String> groups = List.of(group0, group1, group2);
     private final TopicPartition t0p0 = new TopicPartition("t0", 0);
     private final TopicPartition t0p1 = new TopicPartition("t0", 1);
     private final TopicPartition t1p0 = new TopicPartition("t1", 0);
@@ -70,84 +71,129 @@ public class ListConsumerGroupOffsetsHandlerTest {
     private final TopicPartition t2p0 = new TopicPartition("t2", 0);
     private final TopicPartition t2p1 = new TopicPartition("t2", 1);
     private final TopicPartition t2p2 = new TopicPartition("t2", 2);
-    private final Map<String, ListConsumerGroupOffsetsSpec> singleRequestMap = Collections.singletonMap(groupZero,
-            new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t0p1, t1p0, t1p1)));
-    private final Map<String, ListConsumerGroupOffsetsSpec> batchedRequestMap =
-            new HashMap<String, ListConsumerGroupOffsetsSpec>() {{
-                put(groupZero, new ListConsumerGroupOffsetsSpec().topicPartitions(singletonList(t0p0)));
-                put(groupOne, new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t1p0, t1p1)));
-                put(groupTwo, new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t1p0, t1p1, t2p0, t2p1, t2p2)));
-            }};
+    private final TopicPartition t3p0 = new TopicPartition("t3", 0);
+    private final TopicPartition t3p1 = new TopicPartition("t3", 1);
+
+    private final Map<String, ListConsumerGroupOffsetsSpec> singleGroupSpec = Map.of(
+        group0, new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t0p1, t1p0, t1p1))
+    );
+    private final Map<String, ListConsumerGroupOffsetsSpec> multiGroupSpecs = Map.of(
+        group0, new ListConsumerGroupOffsetsSpec().topicPartitions(singletonList(t0p0)),
+        group1, new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t1p0, t1p1)),
+        group2, new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t1p0, t1p1, t2p0, t2p1, t2p2))
+    );
 
     @Test
     public void testBuildRequest() {
-        ListConsumerGroupOffsetsHandler handler =
-            new ListConsumerGroupOffsetsHandler(singleRequestMap, false, logContext);
-        OffsetFetchRequest request = handler.buildBatchedRequest(coordinatorKeys(groupZero)).build();
-        assertEquals(groupZero, request.data().groups().get(0).groupId());
-        assertEquals(2, request.data().groups().get(0).topics().size());
-        assertEquals(2, request.data().groups().get(0).topics().get(0).partitionIndexes().size());
-        assertEquals(2, request.data().groups().get(0).topics().get(1).partitionIndexes().size());
+        var handler = new ListConsumerGroupOffsetsHandler(
+            singleGroupSpec,
+            false,
+            logContext
+        );
+
+        assertEquals(
+            new OffsetFetchRequestData()
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId(group0)
+                        .setTopics(List.of(
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName(t0p0.topic())
+                                .setPartitionIndexes(List.of(t0p0.partition(), t0p1.partition())),
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName(t1p0.topic())
+                                .setPartitionIndexes(List.of(t1p0.partition(), t1p1.partition()))
+                        ))
+                )),
+            handler.buildBatchedRequest(coordinatorKeys(group0)).build().data()
+        );
     }
 
     @Test
     public void testBuildRequestWithMultipleGroups() {
-        Map<String, ListConsumerGroupOffsetsSpec> requestMap = new HashMap<>(this.batchedRequestMap);
-        String groupThree = "group3";
-        requestMap.put(groupThree, new ListConsumerGroupOffsetsSpec()
-                .topicPartitions(Arrays.asList(new TopicPartition("t3", 0), new TopicPartition("t3", 1))));
+        var groupSpecs = new HashMap<>(multiGroupSpecs);
+        groupSpecs.put(
+            group3,
+            new ListConsumerGroupOffsetsSpec().topicPartitions(List.of(t3p0, t3p1))
+        );
 
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(requestMap, false, logContext);
-        OffsetFetchRequest request1 = handler.buildBatchedRequest(coordinatorKeys(groupZero, groupOne, groupTwo)).build();
-        assertEquals(Set.of(groupZero, groupOne, groupTwo), requestGroups(request1));
+        var handler = new ListConsumerGroupOffsetsHandler(
+            groupSpecs,
+            false,
+            logContext
+        );
 
-        OffsetFetchRequest request2 = handler.buildBatchedRequest(coordinatorKeys(groupThree)).build();
-        assertEquals(Set.of(groupThree), requestGroups(request2));
+        var request1 = handler.buildBatchedRequest(coordinatorKeys(group0, group1, group2)).build();
 
-        Map<String, ListConsumerGroupOffsetsSpec> builtRequests = new HashMap<>();
-        request1.groupIdsToPartitions().forEach((group, partitions) ->
-                builtRequests.put(group, new ListConsumerGroupOffsetsSpec().topicPartitions(partitions)));
-        request2.groupIdsToPartitions().forEach((group, partitions) ->
-                builtRequests.put(group, new ListConsumerGroupOffsetsSpec().topicPartitions(partitions)));
+        assertEquals(
+            Set.of(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(group0)
+                    .setTopics(List.of(
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName(t0p0.topic())
+                            .setPartitionIndexes(List.of(t0p0.partition()))
+                    )),
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(group1)
+                    .setTopics(List.of(
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName(t0p0.topic())
+                            .setPartitionIndexes(List.of(t0p0.partition())),
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName(t1p0.topic())
+                            .setPartitionIndexes(List.of(t1p0.partition(), t1p1.partition()))
+                    )),
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(group2)
+                    .setTopics(List.of(
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName(t0p0.topic())
+                            .setPartitionIndexes(List.of(t0p0.partition())),
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName(t1p0.topic())
+                            .setPartitionIndexes(List.of(t1p0.partition(), t1p1.partition())),
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName(t2p0.topic())
+                            .setPartitionIndexes(List.of(t2p0.partition(), t2p1.partition(), t2p2.partition()))
+                    ))
+            ),
+            Set.copyOf(request1.data().groups())
+        );
 
-        assertEquals(requestMap, builtRequests);
-        Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics = request1.groupIdsToTopics();
+        var request2 = handler.buildBatchedRequest(coordinatorKeys(group3)).build();
 
-        assertEquals(3, groupIdsToTopics.size());
-        assertEquals(1, groupIdsToTopics.get(groupZero).size());
-        assertEquals(2, groupIdsToTopics.get(groupOne).size());
-        assertEquals(3, groupIdsToTopics.get(groupTwo).size());
-
-        assertEquals(1, groupIdsToTopics.get(groupZero).get(0).partitionIndexes().size());
-        assertEquals(1, groupIdsToTopics.get(groupOne).get(0).partitionIndexes().size());
-        assertEquals(2, groupIdsToTopics.get(groupOne).get(1).partitionIndexes().size());
-        assertEquals(1, groupIdsToTopics.get(groupTwo).get(0).partitionIndexes().size());
-        assertEquals(2, groupIdsToTopics.get(groupTwo).get(1).partitionIndexes().size());
-        assertEquals(3, groupIdsToTopics.get(groupTwo).get(2).partitionIndexes().size());
-
-        groupIdsToTopics = request2.groupIdsToTopics();
-        assertEquals(1, groupIdsToTopics.size());
-        assertEquals(1, groupIdsToTopics.get(groupThree).size());
-        assertEquals(2, groupIdsToTopics.get(groupThree).get(0).partitionIndexes().size());
+        assertEquals(
+            Set.of(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(group3)
+                    .setTopics(List.of(
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName(t3p0.topic())
+                            .setPartitionIndexes(List.of(t3p0.partition(), t3p1.partition()))
+                    ))
+            ),
+            Set.copyOf(request2.data().groups())
+        );
     }
 
     @Test
     public void testBuildRequestBatchGroups() {
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(batchedRequestMap, false, logContext);
-        Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo));
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(multiGroupSpecs, false, logContext);
+        Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(group0, group1, group2));
         assertEquals(1, requests.size());
-        assertEquals(Set.of(groupZero, groupOne, groupTwo), requestGroups((OffsetFetchRequest) requests.iterator().next().request.build()));
+        assertEquals(Set.of(group0, group1, group2), requestGroups((OffsetFetchRequest) requests.iterator().next().request.build()));
     }
 
     @Test
     public void testBuildRequestDoesNotBatchGroup() {
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(batchedRequestMap, false, logContext);
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(multiGroupSpecs, false, logContext);
         // Disable batching.
         ((CoordinatorStrategy) handler.lookupStrategy()).disableBatch();
-        Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo));
+        Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(group0, group1, group2));
         assertEquals(3, requests.size());
         assertEquals(
-            Set.of(Set.of(groupZero), Set.of(groupOne), Set.of(groupTwo)),
+            Set.of(Set.of(group0), Set.of(group1), Set.of(group2)),
             requests.stream().map(requestAndKey -> requestGroups((OffsetFetchRequest) requestAndKey.request.build())).collect(Collectors.toSet())
         );
     }
@@ -170,32 +216,31 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
     @Test
     public void testSuccessfulHandleResponseWithOnePartitionErrorWithMultipleGroups() {
-        Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMapZero =
-            Collections.singletonMap(t0p0, new OffsetAndMetadata(10L));
-        Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMapOne =
-            Collections.singletonMap(t1p1, new OffsetAndMetadata(10L));
-        Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMapTwo =
-            Collections.singletonMap(t2p2, new OffsetAndMetadata(10L));
-        Map<String, Map<TopicPartition, OffsetAndMetadata>> expectedResult =
-            new HashMap<>() {{
-                    put(groupZero, offsetAndMetadataMapZero);
-                    put(groupOne, offsetAndMetadataMapOne);
-                    put(groupTwo, offsetAndMetadataMapTwo);
-                }};
+        var expectedResult = Map.of(
+            group0, Map.of(t0p0, new OffsetAndMetadata(10L)),
+            group1, Map.of(t1p1, new OffsetAndMetadata(10L)),
+            group2, Map.of(t2p2, new OffsetAndMetadata(10L))
+        );
 
         assertCompletedForMultipleGroups(
-            handleWithPartitionErrorMultipleGroups(Errors.UNKNOWN_TOPIC_OR_PARTITION), expectedResult);
+            handleWithPartitionErrorMultipleGroups(Errors.UNKNOWN_TOPIC_OR_PARTITION),
+            expectedResult
+        );
         assertCompletedForMultipleGroups(
-            handleWithPartitionErrorMultipleGroups(Errors.TOPIC_AUTHORIZATION_FAILED), expectedResult);
+            handleWithPartitionErrorMultipleGroups(Errors.TOPIC_AUTHORIZATION_FAILED),
+            expectedResult
+        );
         assertCompletedForMultipleGroups(
-            handleWithPartitionErrorMultipleGroups(Errors.UNSTABLE_OFFSET_COMMIT), expectedResult);
+            handleWithPartitionErrorMultipleGroups(Errors.UNSTABLE_OFFSET_COMMIT),
+            expectedResult
+        );
     }
 
     @Test
     public void testSuccessfulHandleResponseWithMultipleGroups() {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> expected = new HashMap<>();
         Map<String, Errors> errorMap = errorMap(groups, Errors.NONE);
-        assertCompletedForMultipleGroups(handleWithErrorWithMultipleGroups(errorMap, batchedRequestMap), expected);
+        assertCompletedForMultipleGroups(handleWithErrorWithMultipleGroups(errorMap, multiGroupSpecs), expected);
     }
 
     @Test
@@ -206,11 +251,12 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
     @Test
     public void testUnmappedHandleResponseWithMultipleGroups() {
-        Map<String, Errors> errorMap = new HashMap<>();
-        errorMap.put(groupZero, Errors.NOT_COORDINATOR);
-        errorMap.put(groupOne, Errors.COORDINATOR_NOT_AVAILABLE);
-        errorMap.put(groupTwo, Errors.NOT_COORDINATOR);
-        assertUnmappedWithMultipleGroups(handleWithErrorWithMultipleGroups(errorMap, batchedRequestMap));
+        var errorMap = Map.of(
+            group0, Errors.NOT_COORDINATOR,
+            group1, Errors.COORDINATOR_NOT_AVAILABLE,
+            group2, Errors.NOT_COORDINATOR
+        );
+        assertUnmappedWithMultipleGroups(handleWithErrorWithMultipleGroups(errorMap, multiGroupSpecs));
     }
 
     @Test
@@ -221,7 +267,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     @Test
     public void testRetriableHandleResponseWithMultipleGroups() {
         Map<String, Errors> errorMap = errorMap(groups, Errors.COORDINATOR_LOAD_IN_PROGRESS);
-        assertRetriable(handleWithErrorWithMultipleGroups(errorMap, batchedRequestMap));
+        assertRetriable(handleWithErrorWithMultipleGroups(errorMap, multiGroupSpecs));
     }
 
     @Test
@@ -233,117 +279,226 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
     @Test
     public void testFailedHandleResponseWithMultipleGroups() {
-        Map<String, Errors> errorMap = new HashMap<>();
-        errorMap.put(groupZero, Errors.GROUP_AUTHORIZATION_FAILED);
-        errorMap.put(groupOne, Errors.GROUP_ID_NOT_FOUND);
-        errorMap.put(groupTwo, Errors.INVALID_GROUP_ID);
-        Map<String, Class<? extends Throwable>> groupToExceptionMap = new HashMap<>();
-        groupToExceptionMap.put(groupZero, GroupAuthorizationException.class);
-        groupToExceptionMap.put(groupOne, GroupIdNotFoundException.class);
-        groupToExceptionMap.put(groupTwo, InvalidGroupIdException.class);
-        assertFailedForMultipleGroups(groupToExceptionMap,
-            handleWithErrorWithMultipleGroups(errorMap, batchedRequestMap));
+        var errorMap = Map.of(
+            group0, Errors.GROUP_AUTHORIZATION_FAILED,
+            group1, Errors.GROUP_ID_NOT_FOUND,
+            group2, Errors.INVALID_GROUP_ID
+        );
+        var groupToExceptionMap = Map.of(
+            group0, (Class<? extends Throwable>) GroupAuthorizationException.class,
+            group1, (Class<? extends Throwable>) GroupIdNotFoundException.class,
+            group2, (Class<? extends Throwable>) InvalidGroupIdException.class
+        );
+        assertFailedForMultipleGroups(
+            groupToExceptionMap,
+            handleWithErrorWithMultipleGroups(errorMap, multiGroupSpecs)
+        );
     }
 
     private OffsetFetchResponse buildResponse(Errors error) {
         return new OffsetFetchResponse(
-            throttleMs,
-            Collections.singletonMap(groupZero, error),
-            Collections.singletonMap(groupZero, new HashMap<>()));
-    }
-
-    private OffsetFetchResponse buildResponseWithMultipleGroups(
-        Map<String, Errors> errorMap,
-        Map<String, Map<TopicPartition, PartitionData>> responseData
-    ) {
-        return new OffsetFetchResponse(throttleMs, errorMap, responseData);
+            new OffsetFetchResponseData()
+                .setGroups(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                        .setGroupId(group0)
+                        .setErrorCode(error.code())
+                )),
+            ApiKeys.OFFSET_FETCH.latestVersion()
+        );
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithErrorWithMultipleGroups(
         Map<String, Errors> errorMap,
         Map<String, ListConsumerGroupOffsetsSpec> groupSpecs
     ) {
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupSpecs, false, logContext);
-        Map<String, Map<TopicPartition, PartitionData>> responseData = new HashMap<>();
-        for (String group : errorMap.keySet()) {
-            responseData.put(group, new HashMap<>());
-        }
-        OffsetFetchResponse response = buildResponseWithMultipleGroups(errorMap, responseData);
+        var handler = new ListConsumerGroupOffsetsHandler(
+            groupSpecs,
+            false,
+            logContext
+        );
+        var response = new OffsetFetchResponse(
+            new OffsetFetchResponseData()
+                .setGroups(errorMap.entrySet().stream().map(entry ->
+                    new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                        .setGroupId(entry.getKey())
+                        .setErrorCode(entry.getValue().code())
+                ).collect(Collectors.toList())),
+            ApiKeys.OFFSET_FETCH.latestVersion()
+        );
         return handler.handleResponse(new Node(1, "host", 1234),
-                errorMap.keySet()
-                        .stream()
-                        .map(CoordinatorKey::byGroupId)
-                        .collect(Collectors.toSet()),
-                response);
+            errorMap.keySet()
+                    .stream()
+                    .map(CoordinatorKey::byGroupId)
+                    .collect(Collectors.toSet()),
+            response
+        );
     }
 
     private OffsetFetchResponse buildResponseWithPartitionError(Errors error) {
-
-        Map<TopicPartition, PartitionData> responseData = new HashMap<>();
-        responseData.put(t0p0, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", Errors.NONE));
-        responseData.put(t0p1, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", error));
-
-        return new OffsetFetchResponse(Errors.NONE, responseData);
+        return new OffsetFetchResponse(
+            new OffsetFetchResponseData()
+                .setGroups(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                        .setGroupId(group0)
+                        .setTopics(List.of(
+                            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                                .setName(t0p0.topic())
+                                .setPartitions(List.of(
+                                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                        .setPartitionIndex(t0p0.partition())
+                                        .setCommittedOffset(10),
+                                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                        .setPartitionIndex(t0p1.partition())
+                                        .setCommittedOffset(10)
+                                        .setErrorCode(error.code())
+                                ))
+                        ))
+                )),
+            ApiKeys.OFFSET_FETCH.latestVersion()
+        );
     }
 
     private OffsetFetchResponse buildResponseWithPartitionErrorWithMultipleGroups(Errors error) {
-        Map<TopicPartition, PartitionData> responseDataZero = new HashMap<>();
-        responseDataZero.put(t0p0, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", Errors.NONE));
+        var data = new OffsetFetchResponseData()
+            .setGroups(List.of(
+                new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId(group0)
+                    .setTopics(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                            .setName(t0p0.topic())
+                            .setPartitions(List.of(
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t0p0.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(Errors.NONE.code())
+                            ))
+                    )),
+                new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId(group1)
+                    .setTopics(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                            .setName(t0p0.topic())
+                            .setPartitions(List.of(
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t0p0.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(error.code())
+                            )),
+                        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                            .setName(t1p0.topic())
+                            .setPartitions(List.of(
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t1p0.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(error.code()),
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t1p1.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(Errors.NONE.code())
+                            ))
+                        )),
+                new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId(group2)
+                    .setTopics(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                            .setName(t0p0.topic())
+                            .setPartitions(List.of(
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t0p0.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(error.code())
+                            )),
+                        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                            .setName(t1p0.topic())
+                            .setPartitions(List.of(
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t1p0.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(error.code()),
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t1p1.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(error.code())
+                            )),
+                        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                            .setName(t2p0.topic())
+                            .setPartitions(List.of(
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t2p0.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(error.code()),
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t2p1.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(error.code()),
+                                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                    .setPartitionIndex(t2p2.partition())
+                                    .setCommittedOffset(10)
+                                    .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setErrorCode(Errors.NONE.code())
+                            ))
+                    ))
+            ));
 
-        Map<TopicPartition, PartitionData> responseDataOne = new HashMap<>();
-        responseDataOne.put(t0p0, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", error));
-        responseDataOne.put(t1p0, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", error));
-        responseDataOne.put(t1p1, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", Errors.NONE));
-
-        Map<TopicPartition, PartitionData> responseDataTwo = new HashMap<>();
-        responseDataTwo.put(t0p0, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", error));
-        responseDataTwo.put(t1p0, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", error));
-        responseDataTwo.put(t1p1, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", error));
-        responseDataTwo.put(t2p0, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", error));
-        responseDataTwo.put(t2p1, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", error));
-        responseDataTwo.put(t2p2, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", Errors.NONE));
-
-        Map<String, Map<TopicPartition, PartitionData>> responseData =
-            new HashMap<>() {{
-                    put(groupZero, responseDataZero);
-                    put(groupOne, responseDataOne);
-                    put(groupTwo, responseDataTwo);
-                }};
-
-        Map<String, Errors> errorMap = errorMap(groups, Errors.NONE);
-        return new OffsetFetchResponse(0, errorMap, responseData);
+        return new OffsetFetchResponse(data, ApiKeys.OFFSET_FETCH.latestVersion());
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithPartitionError(
         Errors error
     ) {
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(singleRequestMap,
-            false, logContext);
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(
+            singleGroupSpec,
+            false,
+            logContext
+        );
         OffsetFetchResponse response = buildResponseWithPartitionError(error);
         return handler.handleResponse(new Node(1, "host", 1234),
-            singleton(CoordinatorKey.byGroupId(groupZero)), response);
+            singleton(CoordinatorKey.byGroupId(group0)), response);
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithPartitionErrorMultipleGroups(
         Errors error
     ) {
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(
-                batchedRequestMap, false, logContext);
+            multiGroupSpecs,
+            false,
+            logContext
+        );
         OffsetFetchResponse response = buildResponseWithPartitionErrorWithMultipleGroups(error);
         return handler.handleResponse(
             new Node(1, "host", 1234),
-            coordinatorKeys(groupZero, groupOne, groupTwo),
-            response);
+            coordinatorKeys(group0, group1, group2),
+            response
+        );
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithError(
         Errors error
     ) {
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(
-            singleRequestMap, false, logContext);
+            singleGroupSpec, false, logContext);
         OffsetFetchResponse response = buildResponse(error);
         return handler.handleResponse(new Node(1, "host", 1234),
-            singleton(CoordinatorKey.byGroupId(groupZero)),
+            singleton(CoordinatorKey.byGroupId(group0)),
             response);
     }
 
@@ -352,7 +507,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     ) {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptySet(), result.failedKeys.keySet());
-        assertEquals(singletonList(CoordinatorKey.byGroupId(groupZero)), result.unmappedKeys);
+        assertEquals(singletonList(CoordinatorKey.byGroupId(group0)), result.unmappedKeys);
     }
 
     private void assertUnmappedWithMultipleGroups(
@@ -360,7 +515,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     ) {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptySet(), result.failedKeys.keySet());
-        assertEquals(coordinatorKeys(groupZero, groupOne, groupTwo), new HashSet<>(result.unmappedKeys));
+        assertEquals(coordinatorKeys(group0, group1, group2), new HashSet<>(result.unmappedKeys));
     }
 
     private void assertRetriable(
@@ -375,7 +530,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result,
         Map<TopicPartition, OffsetAndMetadata> expected
     ) {
-        CoordinatorKey key = CoordinatorKey.byGroupId(groupZero);
+        CoordinatorKey key = CoordinatorKey.byGroupId(group0);
         assertEquals(emptySet(), result.failedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.completedKeys.keySet());
@@ -399,7 +554,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         Class<? extends Throwable> expectedExceptionType,
         AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result
     ) {
-        CoordinatorKey key = CoordinatorKey.byGroupId(groupZero);
+        CoordinatorKey key = CoordinatorKey.byGroupId(group0);
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.failedKeys.keySet());

@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -55,6 +56,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 
@@ -67,8 +69,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -271,7 +275,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private void setupRecordPruning() {
-        log.info("Scheduling share-group state topic prune job.");
+        log.debug("Scheduling share-group state topic prune job.");
         timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
             @Override
             public void run() {
@@ -291,7 +295,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private CompletableFuture<Void> performRecordPruning(TopicPartition tp) {
-        // This future will always be completed normally, exception or not.
         CompletableFuture<Void> fut = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(
@@ -322,11 +325,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     return;
                 }
 
-                log.info("Pruning records in {} till offset {}.", tp, off);
+                log.debug("Pruning records in {} till offset {}.", tp, off);
                 writer.deleteRecords(tp, off)
                     .whenComplete((res, exp) -> {
                         if (exp != null) {
-                            log.debug("Exception while deleting records in {} till offset {}.", tp, off, exp);
+                            log.error("Exception while deleting records in {} till offset {}.", tp, off, exp);
                             fut.completeExceptionally(exp);
                             return;
                         }
@@ -347,7 +350,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private void setupSnapshotColdPartitions() {
-        log.info("Scheduling cold share-partition snapshotting.");
+        log.debug("Scheduling cold share-partition snapshotting.");
         timer.add(new TimerTask(config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
             @Override
             public void run() {
@@ -1045,6 +1048,27 @@ public class ShareCoordinatorService implements ShareCoordinator {
             tp,
             partitionLeaderEpoch
         );
+    }
+
+    @Override
+    public void onTopicsDeleted(Set<Uuid> deletedTopicIds, BufferSupplier bufferSupplier) throws ExecutionException, InterruptedException {
+        throwIfNotActive();
+        if (deletedTopicIds.isEmpty()) {
+            return;
+        }
+        CompletableFuture.allOf(
+            FutureUtils.mapExceptionally(
+                runtime.scheduleWriteAllOperation(
+                    "on-topics-deleted",
+                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
+                    coordinator -> coordinator.maybeCleanupShareState(deletedTopicIds)
+                ),
+                exception -> {
+                    log.error("Received error while trying to cleanup deleted topics.", exception);
+                    return null;
+                }
+            ).toArray(new CompletableFuture<?>[0])
+        ).get();
     }
 
     @Override

@@ -200,6 +200,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
@@ -1124,7 +1125,7 @@ public class RequestResponseTest {
             case ALTER_CLIENT_QUOTAS: return createAlterClientQuotasResponse();
             case DESCRIBE_USER_SCRAM_CREDENTIALS: return createDescribeUserScramCredentialsResponse();
             case ALTER_USER_SCRAM_CREDENTIALS: return createAlterUserScramCredentialsResponse();
-            case VOTE: return createVoteResponse(version);
+            case VOTE: return createVoteResponse();
             case BEGIN_QUORUM_EPOCH: return createBeginQuorumEpochResponse();
             case END_QUORUM_EPOCH: return createEndQuorumEpochResponse();
             case DESCRIBE_QUORUM: return createDescribeQuorumResponse();
@@ -1187,7 +1188,7 @@ public class RequestResponseTest {
                     .setGroupEpoch(0)
                     .setAssignmentEpoch(0)
                     .setAssignorName("range")
-                    .setMembers(new ArrayList<ConsumerGroupDescribeResponseData.Member>(0))
+                    .setMembers(new ArrayList<>(0))
             ))
             .setThrottleTimeMs(1000);
         return new ConsumerGroupDescribeResponse(data);
@@ -1660,7 +1661,7 @@ public class RequestResponseTest {
         return new VoteRequest.Builder(data).build(version);
     }
 
-    private VoteResponse createVoteResponse(short version) {
+    private VoteResponse createVoteResponse() {
         VoteResponseData.PartitionData partitionData = new VoteResponseData.PartitionData()
             .setErrorCode(Errors.NONE.code())
             .setLeaderEpoch(0)
@@ -2403,7 +2404,7 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(short version, boolean requireStable) {
-        return new OffsetFetchRequest.Builder(
+        return OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setRequireStable(requireStable)
                 .setGroups(List.of(
@@ -2413,16 +2414,18 @@ public class RequestResponseTest {
                         .setMemberEpoch(version >= 9 ? 10 : -1)
                         .setTopics(List.of(
                             new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                                .setName("test11")
+                                .setName(version < 10 ? "test11" : "")
+                                .setTopicId(version >= 10 ? TOPIC_ID : Uuid.ZERO_UUID)
                                 .setPartitionIndexes(List.of(1))
                         ))
                 )),
-            false
+            false,
+            true
         ).build(version);
     }
 
     private OffsetFetchRequest createOffsetFetchRequestWithMultipleGroups(short version, boolean requireStable) {
-        return new OffsetFetchRequest.Builder(
+        return OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setRequireStable(requireStable)
                 .setGroups(List.of(
@@ -2463,12 +2466,13 @@ public class RequestResponseTest {
                         .setGroupId("group5")
                         .setTopics(null)
                 )),
-            false
+            false,
+            true
         ).build(version);
     }
 
     private OffsetFetchRequest createOffsetFetchRequestForAllPartition(short version, boolean requireStable) {
-        return new OffsetFetchRequest.Builder(
+        return OffsetFetchRequest.Builder.forTopicIdsOrNames(
             new OffsetFetchRequestData()
                 .setRequireStable(requireStable)
                 .setGroups(List.of(
@@ -2478,22 +2482,29 @@ public class RequestResponseTest {
                         .setMemberEpoch(version >= 9 ? 10 : -1)
                         .setTopics(null)
                 )),
-            false
+            false,
+            true
         ).build(version);
     }
 
     private OffsetFetchResponse createOffsetFetchResponse(short version) {
-        Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(
-            100L, Optional.empty(), "", Errors.NONE));
-        responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(
-            100L, Optional.of(10), null, Errors.NONE));
-        if (version < 8) {
-            return new OffsetFetchResponse(Errors.NONE, responseData);
-        }
-        int throttleMs = 10;
-        return new OffsetFetchResponse(throttleMs, Collections.singletonMap("group1", Errors.NONE),
-            Collections.singletonMap("group1", responseData));
+        var group = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("group1")
+            .setTopics(List.of(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setName("test")
+                    .setPartitions(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(0)
+                            .setCommittedOffset(100),
+                        new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(1)
+                            .setCommittedOffset(100)
+                            .setCommittedLeaderEpoch(10)
+                            .setMetadata(null)
+                    ))
+            ));
+        return new OffsetFetchResponse.Builder(group).build(version);
     }
 
     private ProduceRequest createProduceRequest(short version) {

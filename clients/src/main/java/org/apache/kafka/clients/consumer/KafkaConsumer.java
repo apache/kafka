@@ -1563,8 +1563,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timestampsToSearch the mapping from partition to the timestamp to look up.
      *
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
-     *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
-     *         such message.
+     *         than or equal to the target timestamp. If the timestamp and offset for a specific partition cannot be found within 
+     *         the default timeout, and no corresponding message exists, the entry in the returned map will be {@code null}
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative
@@ -1590,8 +1590,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timeout The maximum amount of time to await retrieval of the offsets
      *
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
-     *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
-     *         such message.
+     *         than or equal to the target timestamp. If the timestamp and offset for a specific partition cannot be found within 
+     *         timeout, and no corresponding message exists, the entry in the returned map will be {@code null}
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative
@@ -1634,7 +1634,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the earliest offsets
      * @param timeout The maximum amount of time to await retrieval of the beginning offsets
      *
-     * @return The earliest available offsets for the given partitions
+     * @return The earliest available offsets for the given partitions, and it will return empty map if zero timeout is provided
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
@@ -1684,7 +1684,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the end offsets.
      * @param timeout The maximum amount of time to await retrieval of the end offsets
      *
-     * @return The end offsets for the given partitions.
+     * @return The end offsets for the given partitions, and it will return empty map if zero timeout is provided
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before

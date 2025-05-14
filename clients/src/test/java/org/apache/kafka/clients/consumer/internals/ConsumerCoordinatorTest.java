@@ -52,6 +52,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -73,7 +74,6 @@ import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
-import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
@@ -163,7 +163,7 @@ public abstract class ConsumerCoordinatorTest {
     private final String consumerId2 = "consumer2";
 
     private MockClient client;
-    private final MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+    private final MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<>() {
         {
             put(topic1, 1);
             put(topic2, 1);
@@ -367,7 +367,7 @@ public abstract class ConsumerCoordinatorTest {
 
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : memberSubscriptions.entrySet()) {
-            ByteBuffer buf = null;
+            ByteBuffer buf;
             if (subscriptionEntry.getKey().equals(consumerId)) {
                 buf = ConsumerProtocol.serializeSubscription(subscriptionConsumer1);
             } else {
@@ -614,9 +614,7 @@ public abstract class ConsumerCoordinatorTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(tp, new OffsetAndMetadata(123));
 
         final AtomicBoolean committed = new AtomicBoolean();
-        coordinator.commitOffsetsAsync(offsets, (committedOffsets, exception) -> {
-            committed.set(true);
-        });
+        coordinator.commitOffsetsAsync(offsets, (committedOffsets, exception) -> committed.set(true));
 
         assertFalse(coordinator.commitOffsetsSync(Collections.emptyMap(), time.timer(100L)), "expected sync commit to fail");
         assertFalse(committed.get());
@@ -683,7 +681,7 @@ public abstract class ConsumerCoordinatorTest {
                 );
 
         consumerClient.send(coordinator.checkAndGetCoordinator(), OffsetCommitRequest.Builder.forTopicNames(offsetCommitRequestData))
-                .compose(new RequestFutureAdapter<ClientResponse, Object>() {
+                .compose(new RequestFutureAdapter<>() {
                     @Override
                     public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
 
@@ -1294,7 +1292,7 @@ public abstract class ConsumerCoordinatorTest {
     public void testForceMetadataDeleteForPatternSubscriptionDuringRebalance() {
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
             subscriptions.subscribe(Pattern.compile("test.*"), Optional.of(rebalanceListener));
-            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<>() {
                 {
                     put(topic1, 1);
                     put(topic2, 1);
@@ -1306,11 +1304,7 @@ public abstract class ConsumerCoordinatorTest {
             client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
             coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
-            MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
-                {
-                    put(topic1, 1);
-                }
-            });
+            MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, Map.of(topic1, 1));
             // Instrument the test so that metadata will contain only one topic after next refresh.
             client.prepareMetadataUpdate(deletedMetadataResponse);
 
@@ -2697,12 +2691,7 @@ public abstract class ConsumerCoordinatorTest {
         final OffsetAndMetadata firstOffset = new OffsetAndMetadata(0L);
         final OffsetAndMetadata secondOffset = new OffsetAndMetadata(1L);
 
-        coordinator.commitOffsetsAsync(singletonMap(t1p, firstOffset), new OffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                committedOffsets.add(firstOffset);
-            }
-        });
+        coordinator.commitOffsetsAsync(singletonMap(t1p, firstOffset), (offsets, exception) -> committedOffsets.add(firstOffset));
 
         // Do a synchronous commit in the background so that we can send both responses at the same time
         Thread thread = new Thread() {
@@ -3122,10 +3111,19 @@ public abstract class ConsumerCoordinatorTest {
         long offset = 500L;
         String metadata = "blahblah";
         Optional<Integer> leaderEpoch = Optional.of(15);
-        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset, leaderEpoch,
-                metadata, Errors.NONE);
 
-        client.prepareResponse(offsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
+        client.prepareResponse(offsetFetchResponse(Errors.NONE, List.of(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName(t1p.topic())
+                .setPartitions(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(t1p.partition())
+                        .setCommittedOffset(offset)
+                        .setCommittedLeaderEpoch(leaderEpoch.get())
+                        .setMetadata(metadata)
+                ))
+        )));
+
         Map<TopicPartition, OffsetAndMetadata> fetchedOffsets = coordinator.fetchCommittedOffsets(singleton(t1p),
                 time.timer(Long.MAX_VALUE));
 
@@ -3138,10 +3136,17 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
-        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(-1, Optional.empty(),
-                "", Errors.TOPIC_AUTHORIZATION_FAILED);
+        client.prepareResponse(offsetFetchResponse(Errors.NONE, List.of(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName(t1p.topic())
+                .setPartitions(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(t1p.partition())
+                        .setCommittedOffset(-1)
+                        .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code())
+                ))
+        )));
 
-        client.prepareResponse(offsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
         TopicAuthorizationException exception = assertThrows(TopicAuthorizationException.class, () ->
                 coordinator.fetchCommittedOffsets(singleton(t1p), time.timer(Long.MAX_VALUE)));
 
@@ -3154,7 +3159,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         subscriptions.assignFromUser(singleton(t1p));
-        client.prepareResponse(offsetFetchResponse(Errors.GROUP_AUTHORIZATION_FAILED, Collections.emptyMap()));
+        client.prepareResponse(offsetFetchResponse(Errors.GROUP_AUTHORIZATION_FAILED, List.of()));
         try {
             coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
             fail("Expected group authorization error");
@@ -3203,7 +3208,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         subscriptions.assignFromUser(singleton(t1p));
-        client.prepareResponse(offsetFetchResponse(error, Collections.emptyMap()));
+        client.prepareResponse(offsetFetchResponse(error, List.of()));
         if (expectCoordinatorRelookup) {
             client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         }
@@ -3703,14 +3708,19 @@ public abstract class ConsumerCoordinatorTest {
         long offset = 500L;
         String metadata = "blahblah";
         Optional<Integer> leaderEpoch = Optional.of(15);
-        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset, leaderEpoch,
-            metadata, Errors.NONE);
 
-        if (upperVersion < 8) {
-            client.prepareResponse(new OffsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
-        } else {
-            client.prepareResponse(offsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
-        }
+        client.prepareResponse(offsetFetchResponse(Errors.NONE, List.of(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName(t1p.topic())
+                .setPartitions(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(t1p.partition())
+                        .setCommittedOffset(offset)
+                        .setCommittedLeaderEpoch(leaderEpoch.get())
+                        .setMetadata(metadata)
+                ))
+        )));
+
         if (expectThrows) {
             assertThrows(UnsupportedVersionException.class,
                 () -> coordinator.fetchCommittedOffsets(singleton(t1p), time.timer(Long.MAX_VALUE)));
@@ -3975,10 +3985,20 @@ public abstract class ConsumerCoordinatorTest {
         return new OffsetCommitResponse(responseData);
     }
 
-    private OffsetFetchResponse offsetFetchResponse(Errors error, Map<TopicPartition, PartitionData> responseData) {
-        return new OffsetFetchResponse(throttleMs,
-                                       singletonMap(groupId, error),
-                                       singletonMap(groupId, responseData));
+    private OffsetFetchResponse offsetFetchResponse(
+        Errors errors,
+        List<OffsetFetchResponseData.OffsetFetchResponseTopics> topics
+    ) {
+        return new OffsetFetchResponse(
+            new OffsetFetchResponseData()
+                .setGroups(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                        .setGroupId(groupId)
+                        .setErrorCode(errors.code())
+                        .setTopics(topics)
+                )),
+            ApiKeys.OFFSET_FETCH.latestVersion()
+        );
     }
 
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset) {
@@ -3986,9 +4006,18 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset, Optional<Integer> epoch) {
-        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset,
-                epoch, metadata, partitionLevelError);
-        return offsetFetchResponse(Errors.NONE, singletonMap(tp, data));
+        return offsetFetchResponse(Errors.NONE, List.of(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName(tp.topic())
+                .setPartitions(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(tp.partition())
+                        .setCommittedOffset(offset)
+                        .setCommittedLeaderEpoch(epoch.orElse(-1))
+                        .setMetadata(metadata)
+                        .setErrorCode(partitionLevelError.code())
+                ))
+        ));
     }
 
     private OffsetCommitCallback callback(final AtomicBoolean success) {

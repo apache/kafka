@@ -25,8 +25,7 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -39,9 +38,8 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
   val tp0 = new TopicPartition(topic, 0)
   val tp1 = new TopicPartition(topic, 1)
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDescribeLogDirsRequest(quorum: String): Unit = {
+  @Test
+  def testDescribeLogDirsRequest(): Unit = {
     val onlineDir = new File(brokers.head.config.logDirs.head).getAbsolutePath
     val offlineDir = new File(brokers.head.config.logDirs.tail.head).getAbsolutePath
     brokers.head.replicaManager.handleLogDirFailure(offlineDir)
