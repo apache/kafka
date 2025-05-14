@@ -177,6 +177,11 @@ public class UtilsTest {
     }
 
     @Test
+    void testComputeGroupHashWithEmptyMap() {
+        assertEquals(0, Utils.computeGroupHash(Map.of()));
+    }
+
+    @Test
     void testComputeGroupHashWithDifferentOrder() {
         Map<String, Long> ascendTopicHashes = new LinkedHashMap<>();
         ascendTopicHashes.put(BAR_TOPIC_NAME, 123L);

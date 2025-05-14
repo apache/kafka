@@ -340,6 +340,7 @@ public class Utils {
      * <p>
      * The computed hash value is stored as the metadata hash in the *GroupMetadataValue.
      * <p>
+     * If there is no topic, the hash value is set to 0.
      * The hashing process involves the following steps:
      * 1. Sort the topic hashes by topic name.
      * 2. Write each topic hash in order.
@@ -348,6 +349,10 @@ public class Utils {
      * @return The hash of the group.
      */
     static long computeGroupHash(Map<String, Long> topicHashes) {
+        if (topicHashes.isEmpty()) {
+            return 0;
+        }
+
         // Sort entries by topic name
         List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>(topicHashes.entrySet());
         sortedEntries.sort(Map.Entry.comparingByKey());
