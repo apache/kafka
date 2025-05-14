@@ -236,7 +236,7 @@ class BrokerMetadataPublisherTest {
       .setTopicId(topicId)
     )
 
-    metadataPublisher.onMetadataUpdate(delta, image,
+    metadataPublisher.onMetadataUpdate(delta, delta.apply(MetadataProvenance.EMPTY),
       LogDeltaManifest.newBuilder()
         .provenance(MetadataProvenance.EMPTY)
         .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
