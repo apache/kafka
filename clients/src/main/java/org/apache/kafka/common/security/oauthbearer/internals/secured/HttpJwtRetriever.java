@@ -49,22 +49,14 @@ import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
- * <code>HttpAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will
- * communicate with an OAuth/OIDC provider directly via HTTP to post client credentials
+ * <code>HttpJwtRetriever</code> is a {@link JwtRetriever} that will communicate with an OAuth/OIDC
+ * provider directly via HTTP to post client credentials
  * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/{@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
- * to a publicized token endpoint URL
- * ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
- *
- * @see AccessTokenRetriever
- * @see OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG
- * @see OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG
- * @see OAuthBearerLoginCallbackHandler#SCOPE_CONFIG
- * @see SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+ * to a publicized token endpoint URL ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  */
+public class HttpJwtRetriever implements JwtRetriever {
 
-public class HttpAccessTokenRetriever implements AccessTokenRetriever {
-
-    private static final Logger log = LoggerFactory.getLogger(HttpAccessTokenRetriever.class);
+    private static final Logger log = LoggerFactory.getLogger(HttpJwtRetriever.class);
 
     private static final Set<Integer> UNRETRYABLE_HTTP_CODES;
 
@@ -117,16 +109,16 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     private final boolean urlencodeHeader;
 
-    public HttpAccessTokenRetriever(String clientId,
-        String clientSecret,
-        String scope,
-        SSLSocketFactory sslSocketFactory,
-        String tokenEndpointUrl,
-        long loginRetryBackoffMs,
-        long loginRetryBackoffMaxMs,
-        Integer loginConnectTimeoutMs,
-        Integer loginReadTimeoutMs,
-        boolean urlencodeHeader) {
+    public HttpJwtRetriever(String clientId,
+                            String clientSecret,
+                            String scope,
+                            SSLSocketFactory sslSocketFactory,
+                            String tokenEndpointUrl,
+                            long loginRetryBackoffMs,
+                            long loginRetryBackoffMaxMs,
+                            Integer loginConnectTimeoutMs,
+                            Integer loginReadTimeoutMs,
+                            boolean urlencodeHeader) {
         this.clientId = Objects.requireNonNull(clientId);
         this.clientSecret = Objects.requireNonNull(clientSecret);
         this.scope = scope;

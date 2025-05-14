@@ -19,13 +19,14 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwksVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
+import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwx.JsonWebStructure;
@@ -119,9 +120,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private CloseableVerificationKeyResolver verificationKeyResolver;
 
-    private AccessTokenValidator accessTokenValidator;
-
-    private boolean isInitialized = false;
+    private JwtValidator jwtValidator;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -135,37 +134,39 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
                 new RefCountingVerificationKeyResolver(VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions)));
         }
 
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism, verificationKeyResolver);
-        init(verificationKeyResolver, accessTokenValidator);
+        JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism, verificationKeyResolver);
+        init(verificationKeyResolver, jwtValidator);
     }
 
-    public void init(CloseableVerificationKeyResolver verificationKeyResolver, AccessTokenValidator accessTokenValidator) {
+    /*
+     * Package-visible for testing.
+     */
+    void init(CloseableVerificationKeyResolver verificationKeyResolver, JwtValidator jwtValidator) {
         this.verificationKeyResolver = verificationKeyResolver;
-        this.accessTokenValidator = accessTokenValidator;
+        this.jwtValidator = jwtValidator;
 
         try {
             verificationKeyResolver.init();
         } catch (Exception e) {
-            throw new KafkaException("The OAuth validator configuration encountered an error when initializing the VerificationKeyResolver", e);
+            throw new KafkaException("The OAuth validator callback encountered an error when initializing the VerificationKeyResolver", e);
         }
 
-        isInitialized = true;
+        try {
+            jwtValidator.init();
+        } catch (IOException e) {
+            throw new KafkaException("The OAuth validator callback encountered an error when initializing the JwtValidator", e);
+        }
     }
 
     @Override
     public void close() {
-        if (verificationKeyResolver != null) {
-            try {
-                verificationKeyResolver.close();
-            } catch (Exception e) {
-                log.error(e.getMessage(), e);
-            }
-        }
+        Utils.closeQuietly(jwtValidator, "JWT validator");
+        Utils.closeQuietly(verificationKeyResolver, "JWT verification key resolver");
     }
 
     @Override
     public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-        checkInitialized();
+        checkConfigured();
 
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerValidatorCallback) {
@@ -179,12 +180,12 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     private void handleValidatorCallback(OAuthBearerValidatorCallback callback) {
-        checkInitialized();
+        checkConfigured();
 
         OAuthBearerToken token;
 
         try {
-            token = accessTokenValidator.validate(callback.tokenValue());
+            token = jwtValidator.validate(callback.tokenValue());
             callback.token(token);
         } catch (ValidateException e) {
             log.warn(e.getMessage(), e);
@@ -193,14 +194,14 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     private void handleExtensionsValidatorCallback(OAuthBearerExtensionsValidatorCallback extensionsValidatorCallback) {
-        checkInitialized();
+        checkConfigured();
 
         extensionsValidatorCallback.inputExtensions().map().forEach((extensionName, v) -> extensionsValidatorCallback.valid(extensionName));
     }
 
-    private void checkInitialized() {
-        if (!isInitialized)
-            throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
+    private void checkConfigured() {
+        if (verificationKeyResolver == null || jwtValidator == null)
+            throw new IllegalStateException(String.format("To use %s, first call the configure method", getClass().getSimpleName()));
     }
 
     /**
