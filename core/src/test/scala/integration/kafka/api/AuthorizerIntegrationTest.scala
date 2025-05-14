@@ -358,7 +358,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def createOffsetFetchRequest: OffsetFetchRequest = {
-    new OffsetFetchRequest.Builder(
+    OffsetFetchRequest.Builder.forTopicNames(
       new OffsetFetchRequestData()
         .setRequireStable(false)
         .setGroups(List(
@@ -375,7 +375,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def createOffsetFetchRequestAllPartitions: OffsetFetchRequest = {
-    new OffsetFetchRequest.Builder(
+    OffsetFetchRequest.Builder.forTopicNames(
       new OffsetFetchRequestData()
         .setRequireStable(false)
         .setGroups(List(
@@ -388,7 +388,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def createOffsetFetchRequest(groupToPartitionMap: util.Map[String, util.List[TopicPartition]]): OffsetFetchRequest = {
-    new OffsetFetchRequest.Builder(
+    OffsetFetchRequest.Builder.forTopicNames(
       new OffsetFetchRequestData()
         .setGroups(groupToPartitionMap.asScala.map { case (groupId, partitions) =>
           new OffsetFetchRequestData.OffsetFetchRequestGroup()

@@ -20,6 +20,7 @@ package kafka.server.metadata
 import java.util.OptionalInt
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
+import kafka.server.share.SharePartitionManager
 import kafka.server.{KafkaConfig, ReplicaManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -32,7 +33,8 @@ import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
 import org.apache.kafka.metadata.publisher.AclPublisher
-import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
+import org.apache.kafka.server.common.{FinalizedFeatures, RequestLocal, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.storage.internals.log.{LogManager => JLogManager}
 
@@ -80,6 +82,7 @@ class BrokerMetadataPublisher(
   aclPublisher: AclPublisher,
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler,
+  sharePartitionManager: SharePartitionManager
 ) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${config.nodeId}] "
 
@@ -99,6 +102,11 @@ class BrokerMetadataPublisher(
    * A future that is completed when we first publish.
    */
   val firstPublishFuture = new CompletableFuture[Void]
+
+  /**
+   * The share version being used in the broker metadata.
+   */
+  private var finalizedShareVersion: Short = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION).finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
 
   override def name(): String = "BrokerMetadataPublisher"
 
@@ -193,6 +201,16 @@ class BrokerMetadataPublisher(
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
             s"coordinator with deleted partitions in $deltaName", t)
         }
+        try {
+          // Notify the share coordinator about deleted topics.
+          val deletedTopicIds = topicsDelta.deletedTopicIds()
+          if (!deletedTopicIds.isEmpty) {
+            shareCoordinator.onTopicsDeleted(topicsDelta.deletedTopicIds, RequestLocal.noCaching.bufferSupplier)
+          }
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
+            s"coordinator with deleted partitions in $deltaName", t)
+        }
       }
 
       // Apply configuration deltas.
@@ -232,6 +250,23 @@ class BrokerMetadataPublisher(
       if (_firstPublish) {
         finishInitializingReplicaManager()
       }
+
+      if (delta.featuresDelta != null) {
+        try {
+          val newFinalizedFeatures = new FinalizedFeatures(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
+          // Share version feature has been toggled.
+          if (newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort) != finalizedShareVersion) {
+            finalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
+            val shareVersion: ShareVersion = ShareVersion.fromFeatureLevel(finalizedShareVersion)
+            info(s"Feature share.version has been updated to version $finalizedShareVersion")
+            sharePartitionManager.onShareVersionToggle(shareVersion)
+          }
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share partition manager " +
+            s" with share version feature change in $delta", t)
+        }
+      }
+
     } catch {
       case t: Throwable => metadataPublishingFaultHandler.handleFault("Uncaught exception while " +
         s"publishing broker metadata from $deltaName", t)
