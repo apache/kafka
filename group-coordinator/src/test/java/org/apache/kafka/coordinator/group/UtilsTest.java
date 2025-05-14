@@ -44,8 +44,13 @@ public class UtilsTest {
         .build();
 
     @Test
+    void testNonExistingTopicName() {
+        assertEquals(0, Utils.computeTopicHash("unknown", FOO_METADATA_IMAGE));
+    }
+
+    @Test
     void testComputeTopicHash() {
-        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+        long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         long expected = Hashing.xxh3_64().hashStream()
             .putByte((byte) 0) // magic byte
@@ -68,7 +73,7 @@ public class UtilsTest {
 
     @Test
     void testComputeTopicHashWithDifferentMagicByte() {
-        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+        long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         long expected = Hashing.xxh3_64().hashStream()
             .putByte((byte) 1) // magic byte
@@ -91,7 +96,7 @@ public class UtilsTest {
 
     @Test
     void testComputeTopicHashWithDifferentPartitionOrder() {
-        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+        long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         long expected = Hashing.xxh3_64().hashStream()
             .putByte((byte) 1) // magic byte
@@ -114,7 +119,7 @@ public class UtilsTest {
 
     @Test
     void testComputeTopicHashWithDifferentRackOrder() {
-        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+        long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         long expected = Hashing.xxh3_64().hashStream()
             .putByte((byte) 0) // magic byte
@@ -137,44 +142,36 @@ public class UtilsTest {
 
     @ParameterizedTest
     @MethodSource("differentFieldGenerator")
-    void testComputeTopicHashWithDifferentField(MetadataImage differentImage, Uuid topicId) {
-        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+    void testComputeTopicHashWithDifferentField(MetadataImage differentImage) {
+        long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         assertNotEquals(
-            Utils.computeTopicHash(
-                differentImage.topics().getTopic(topicId),
-                differentImage.cluster()
-            ),
+            Utils.computeTopicHash(FOO_TOPIC_NAME, differentImage),
             result
         );
     }
 
     private static Stream<Arguments> differentFieldGenerator() {
-        Uuid differentTopicId = Uuid.randomUuid();
         return Stream.of(
             Arguments.of(
                 new MetadataImageBuilder() // different topic id
-                    .addTopic(differentTopicId, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
+                    .addTopic(Uuid.randomUuid(), FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
                     .addRacks()
-                    .build(),
-                differentTopicId
+                    .build()
             ),
             Arguments.of(new MetadataImageBuilder() // different topic name
                     .addTopic(FOO_TOPIC_ID, "bar", FOO_NUM_PARTITIONS)
                     .addRacks()
-                    .build(),
-                FOO_TOPIC_ID
+                    .build()
             ),
             Arguments.of(new MetadataImageBuilder() // different partitions
                     .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, 1)
                     .addRacks()
-                    .build(),
-                FOO_TOPIC_ID
+                    .build()
             ),
             Arguments.of(new MetadataImageBuilder() // different racks
                     .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
-                    .build(),
-                FOO_TOPIC_ID
+                    .build()
             )
         );
     }

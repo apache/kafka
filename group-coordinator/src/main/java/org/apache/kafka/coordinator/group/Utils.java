@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -337,7 +338,7 @@ public class Utils {
     /**
      * Computes the hash of the topics in a group.
      * <p>
-     * The computed hash value is stored as part of the metadata hash in the *GroupMetadataValue.
+     * The computed hash value is stored as the metadata hash in the *GroupMetadataValue.
      * <p>
      * The hashing process involves the following steps:
      * 1. Sort the topic hashes by topic name.
@@ -360,26 +361,32 @@ public class Utils {
     }
 
     /**
-     * Computes the hash of the topic id, name, number of partitions, and partition racks by XXHash64.
+     * Computes the hash of the topic id, name, number of partitions, and partition racks by streaming XXH3.
      * <p>
      * The computed hash value for the topic is utilized in conjunction with the {@link #computeGroupHash(Map)}
      * method and is stored as part of the metadata hash in the *GroupMetadataValue.
      * It is important to note that if the hash algorithm is changed, the magic byte must be updated to reflect the
      * new hash version.
      * <p>
-     * The hashing process involves the following steps:
+     * For non-existent topics, the hash value is set to 0.
+     * For existent topics, the hashing process involves the following steps:
      * 1. Write a magic byte to denote the version of the hash function.
      * 2. Write the hash code of the topic ID.
      * 3. Write the topic name.
      * 4. Write the number of partitions associated with the topic.
      * 5. For each partition, write the partition ID and a sorted list of rack identifiers.
-     *    - Rack identifiers are formatted as "<length1><value1><length2><value2>" to prevent issues with simple separators.
+     * - Rack identifiers are formatted as "<length1><value1><length2><value2>" to prevent issues with simple separators.
      *
-     * @param topicImage   The topic image.
-     * @param clusterImage The cluster image.
+     * @param topicName     The topic image.
+     * @param metadataImage The cluster image.
      * @return The hash of the topic.
      */
-    static long computeTopicHash(TopicImage topicImage, ClusterImage clusterImage) {
+    static long computeTopicHash(String topicName, MetadataImage metadataImage) {
+        TopicImage topicImage = metadataImage.topics().getTopic(topicName);
+        if (topicImage == null) {
+            return 0;
+        }
+
         HashStream64 hasher = Hashing.xxh3_64().hashStream();
         hasher = hasher
             .putByte(TOPIC_HASH_MAGIC_BYTE) // magic byte
@@ -387,6 +394,7 @@ public class Utils {
             .putString(topicImage.name()) // topic name
             .putInt(topicImage.partitions().size()); // number of partitions
 
+        ClusterImage clusterImage = metadataImage.cluster();
         List<String> racks = new ArrayList<>();
         for (int i = 0; i < topicImage.partitions().size(); i++) {
             hasher = hasher.putInt(i); // partition id
