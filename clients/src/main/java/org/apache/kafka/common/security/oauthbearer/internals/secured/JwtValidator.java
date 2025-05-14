@@ -19,8 +19,11 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
+import java.io.Closeable;
+import java.io.IOException;
+
 /**
- * An instance of <code>AccessTokenValidator</code> acts as a function object that, given an access
+ * An instance of <code>JwtValidator</code> acts as a function object that, given an access
  * token in base-64 encoded JWT format, can parse the data, perform validation, and construct an
  * {@link OAuthBearerToken} for use by the caller.
  *
@@ -40,13 +43,12 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
  *     <li><a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-access-token-jwt">RFC 6750, Section 2.1</a></li>
  * </ul>
  *
- * @see LoginAccessTokenValidator A basic AccessTokenValidator used by client-side login
- *                                authentication
- * @see ValidatorAccessTokenValidator A more robust AccessTokenValidator that is used on the broker
- *                                    to validate the token's contents and verify the signature
+ * @see ClientJwtValidator A basic JwtValidator used by client-side login authentication
+ * @see BrokerJwtValidator A more robust JwtValidator that is used on the broker to validate the token's
+ *                         contents and verify the signature
  */
 
-public interface AccessTokenValidator {
+public interface JwtValidator extends Initable, Closeable {
 
     /**
      * Accepts an OAuth JWT access token in base-64 encoded format, validates, and returns an
@@ -61,4 +63,10 @@ public interface AccessTokenValidator {
 
     OAuthBearerToken validate(String accessToken) throws ValidateException;
 
+    /**
+     * Closes any resources that were initialized by {@link #init()}.
+     */
+    default void close() throws IOException {
+        // Do nothing...
+    }
 }

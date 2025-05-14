@@ -28,11 +28,11 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest {
+public class BrokerJwtValidatorTest extends JwtValidatorTest {
 
     @Override
-    protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) {
-        return new ValidatorAccessTokenValidator(30,
+    protected JwtValidator createJwtValidator(AccessTokenBuilder builder) {
+        return new BrokerJwtValidator(30,
             Collections.emptySet(),
             null,
             (jws, nestingContext) -> builder.jwk().getKey(),
@@ -72,7 +72,7 @@ public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest 
             .addCustomClaim(subClaimName, subject)
             .subjectClaimName(subClaimName)
             .subject(null);
-        AccessTokenValidator validator = createAccessTokenValidator(tokenBuilder);
+        JwtValidator validator = createJwtValidator(tokenBuilder);
 
         // Validation should succeed (e.g. signature verification) even if sub claim is missing
         OAuthBearerToken token = validator.validate(tokenBuilder.build());
@@ -82,7 +82,7 @@ public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest 
 
     private void testEncryptionAlgorithm(PublicJsonWebKey jwk, String alg) throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg);
-        AccessTokenValidator validator = createAccessTokenValidator(builder);
+        JwtValidator validator = createJwtValidator(builder);
         String accessToken = builder.build();
         OAuthBearerToken token = validator.validate(accessToken);
 
