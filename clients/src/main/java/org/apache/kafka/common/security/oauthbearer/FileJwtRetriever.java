@@ -52,11 +52,11 @@ public class FileJwtRetriever implements JwtRetriever {
         } catch (IOException e) {
             throw new ConfigException(
                 String.format(
-                    "The OAuth configuration %s contains a file (%s) that could not be loaded",
+                    "The OAuth configuration %s contains a file (%s) that could not be loaded: %s",
                     SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL,
-                    fileName
-                ),
-                e
+                    fileName,
+                    e.getMessage()
+                )
             );
         }
     }

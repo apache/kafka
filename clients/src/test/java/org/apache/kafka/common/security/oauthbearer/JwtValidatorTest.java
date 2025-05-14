@@ -36,7 +36,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @TestInstance(Lifecycle.PER_CLASS)
 public abstract class JwtValidatorTest extends OAuthBearerTest {
 
-    protected abstract JwtValidator createJwtValidator() throws Exception;
+    protected abstract JwtValidator createJwtValidator(AccessTokenBuilder builder) throws Exception;
+
+    protected JwtValidator createJwtValidator() throws Exception {
+        AccessTokenBuilder builder = new AccessTokenBuilder();
+        return createJwtValidator(builder);
+    }
 
     @Test
     public void testNull() throws Exception {
@@ -70,8 +75,10 @@ public abstract class JwtValidatorTest extends OAuthBearerTest {
 
     @Test
     public void testMissingHeader() throws Exception {
+        Map<String, ?> saslConfigs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "http://www.example.com");
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "http://www.example.com");
         JwtValidator validator = createJwtValidator();
-        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, getJaasConfig());
+        validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfig());
 
         String header = "";
         String payload = createBase64JsonJwtSection(node -> { });
@@ -82,8 +89,10 @@ public abstract class JwtValidatorTest extends OAuthBearerTest {
 
     @Test
     public void testMissingPayload() throws Exception {
+        Map<String, ?> saslConfigs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "http://www.example.com");
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "http://www.example.com");
         JwtValidator validator = createJwtValidator();
-        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, getJaasConfig());
+        validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfig());
 
         String header = createBase64JsonJwtSection(node -> node.put(HeaderParameterNames.ALGORITHM, AlgorithmIdentifiers.NONE));
         String payload = "";
@@ -94,8 +103,10 @@ public abstract class JwtValidatorTest extends OAuthBearerTest {
 
     @Test
     public void testMissingSignature() throws Exception {
+        Map<String, ?> saslConfigs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "http://www.example.com");
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "http://www.example.com");
         JwtValidator validator = createJwtValidator();
-        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, getJaasConfig());
+        validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfig());
 
         String header = createBase64JsonJwtSection(node -> node.put(HeaderParameterNames.ALGORITHM, AlgorithmIdentifiers.NONE));
         String payload = createBase64JsonJwtSection(node -> { });

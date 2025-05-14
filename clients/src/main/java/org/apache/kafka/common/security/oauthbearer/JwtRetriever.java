@@ -17,11 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.Initable;
-
-import java.io.Closeable;
-import java.io.IOException;
-
 import javax.security.auth.spi.LoginModule;
 
 /**
@@ -36,7 +31,7 @@ import javax.security.auth.spi.LoginModule;
  * <code>JwtRetriever</code> implementations should not validate the integrity of the
  * token, but should rely on the companion {@link JwtValidator} for that task.
  */
-public interface JwtRetriever extends Initable, Closeable {
+public interface JwtRetriever extends OAuthBearerConfigurable {
 
     /**
      * Retrieves a JWT in its serialized three-part form. The implementation is free to
@@ -54,13 +49,4 @@ public interface JwtRetriever extends Initable, Closeable {
      * @throws JwtRetrieverException For errors related to I/O, parsing, etc. during retrieval
      */
     String retrieve() throws JwtRetrieverException;
-
-    /**
-     * Closes any resources used by this implementation. The default implementation of
-     * this method is a no op, for convenience to implementors.
-     */
-    @Override
-    default void close() throws IOException {
-        // Do nothing...
-    }
 }

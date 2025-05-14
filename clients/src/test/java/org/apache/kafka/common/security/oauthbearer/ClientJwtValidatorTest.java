@@ -17,10 +17,12 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+
 public class ClientJwtValidatorTest extends JwtValidatorTest {
 
     @Override
-    protected ClientJwtValidator createJwtValidator() {
+    protected ClientJwtValidator createJwtValidator(AccessTokenBuilder builder) {
         return new ClientJwtValidator();
     }
 }

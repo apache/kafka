@@ -17,14 +17,10 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfigurable;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler;
 
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
-
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 
 /**
  * The {@link OAuthBearerValidatorCallbackHandler} uses a {@link VerificationKeyResolver} as
@@ -32,23 +28,7 @@ import java.util.Map;
  * implementations use resources like threads, connections, etc. that should be properly closed
  * when no longer needed. Since the <code>VerificationKeyResolver</code> interface itself doesn't
  * define a <code>close</code> method, we provide a means to do that here.
- *
- * @see OAuthBearerValidatorCallbackHandler
- * @see VerificationKeyResolver
- * @see Closeable
  */
 
-public interface CloseableVerificationKeyResolver extends Initable, Closeable, VerificationKeyResolver {
-
-    /**
-     * Lifecycle method to perform a clean shutdown of the {@link VerificationKeyResolver}.
-     * This must be performed by the caller to ensure the correct state, freeing up
-     * and releasing any resources performed in {@link #configure(Map, String, List)}.
-     *
-     * @throws IOException Thrown on errors related to IO during closure
-     */
-
-    default void close() throws IOException {
-        // This method left intentionally blank.
-    }
+public interface CloseableVerificationKeyResolver extends OAuthBearerConfigurable, VerificationKeyResolver {
 }

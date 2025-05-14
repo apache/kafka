@@ -17,18 +17,14 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwksVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.utils.Utils;
 
-import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
 import org.jose4j.jwt.NumericDate;
@@ -37,21 +33,16 @@ import org.jose4j.jwt.consumer.InvalidJwtException;
 import org.jose4j.jwt.consumer.JwtConsumer;
 import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.jose4j.jwt.consumer.JwtContext;
-import org.jose4j.jwx.JsonWebStructure;
-import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.security.Key;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
@@ -89,16 +80,9 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 public class BrokerJwtValidator implements JwtValidator {
 
-    /**
-     * Because a {@link CloseableVerificationKeyResolver} instance can spawn threads and issue
-     * HTTP(S) calls ({@link RefreshingHttpsJwksVerificationKeyResolver}), we only want to create
-     * a new instance for each particular set of configuration. Because each set of configuration
-     * may have multiple instances, we want to reuse the single instance.
-     */
-
-    private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> VERIFICATION_KEY_RESOLVER_CACHE = new HashMap<>();
-
     private static final Logger log = LoggerFactory.getLogger(BrokerJwtValidator.class);
+
+    private final Supplier<CloseableVerificationKeyResolver> verificationKeyResolverSupplier;
 
     private JwtConsumer jwtConsumer;
 
@@ -107,6 +91,14 @@ public class BrokerJwtValidator implements JwtValidator {
     private String subClaimName;
 
     private CloseableVerificationKeyResolver verificationKeyResolver;
+
+    public BrokerJwtValidator() {
+        this.verificationKeyResolverSupplier = DefaultVerificationKeyResolver::new;
+    }
+
+    public BrokerJwtValidator(CloseableVerificationKeyResolver verificationKeyResolverSupplier) {
+        this.verificationKeyResolverSupplier = () -> verificationKeyResolverSupplier;
+    }
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -119,15 +111,9 @@ public class BrokerJwtValidator implements JwtValidator {
         scopeClaimName = cu.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
         subClaimName = cu.validateString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
 
-        VerificationKeyResolverKey key = new VerificationKeyResolverKey(configs, saslMechanism, jaasConfigEntries);
-
-        // Here's the logic which keeps our VerificationKeyResolvers down to a single instance.
-        synchronized (VERIFICATION_KEY_RESOLVER_CACHE) {
-            verificationKeyResolver = VERIFICATION_KEY_RESOLVER_CACHE.computeIfAbsent(key, k ->
-                new RefCountingVerificationKeyResolver(new DefaultVerificationKeyResolver()));
-        }
-
+        verificationKeyResolver = verificationKeyResolverSupplier.get();
         verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
+
         final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 
         if (clockSkew != null)
@@ -219,85 +205,6 @@ public class BrokerJwtValidator implements JwtValidator {
     public interface ClaimSupplier<T> {
 
         T get() throws MalformedClaimException;
-
-    }
-
-    /**
-     * <code>VerificationKeyResolverKey</code> is a simple structure which encapsulates the criteria for different
-     * sets of configuration. This will allow us to use this object as a key in a {@link Map}
-     * to keep a single instance per key.
-     */
-
-    private static class VerificationKeyResolverKey {
-
-        private final Map<String, ?> configs;
-
-        private final Map<String, Object> moduleOptions;
-
-        public VerificationKeyResolverKey(Map<String, ?> configs,
-                                          String saslMechanism,
-                                          List<AppConfigurationEntry> jaasConfigEntries) {
-            this.configs = configs;
-            this.moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-
-            VerificationKeyResolverKey that = (VerificationKeyResolverKey) o;
-            return configs.equals(that.configs) && moduleOptions.equals(that.moduleOptions);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(configs, moduleOptions);
-        }
-
-    }
-
-    /**
-     * <code>RefCountingVerificationKeyResolver</code> allows us to share a single
-     * {@link CloseableVerificationKeyResolver} instance between multiple
-     * {@link AuthenticateCallbackHandler} instances and perform the lifecycle methods the
-     * appropriate number of times.
-     */
-
-    private static class RefCountingVerificationKeyResolver implements CloseableVerificationKeyResolver {
-
-        private final CloseableVerificationKeyResolver delegate;
-
-        private final AtomicInteger count = new AtomicInteger(0);
-
-        public RefCountingVerificationKeyResolver(CloseableVerificationKeyResolver delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
-            if (delegate == null)
-                throw new IllegalStateException("Verifiable key resolver delegate is null; please call configure() first");
-
-            return delegate.resolveKey(jws, nestingContext);
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-            if (count.incrementAndGet() == 1)
-                delegate.configure(configs, saslMechanism, jaasConfigEntries);
-        }
-
-        @Override
-        public void close() throws IOException {
-            if (count.decrementAndGet() == 0)
-                delegate.close();
-        }
 
     }
 }

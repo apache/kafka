@@ -18,25 +18,33 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.lang.InvalidAlgorithmException;
 import org.junit.jupiter.api.Test;
 
+import java.security.Key;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class BrokerJwtValidatorTest extends JwtValidatorTest {
 
     @Override
-    protected JwtValidator createJwtValidator() {
-        return new BrokerJwtValidator();
+    protected JwtValidator createJwtValidator(AccessTokenBuilder builder) throws Exception {
+        Key key = builder.jwk() != null ? builder.jwk().getKey() : null;
+        CloseableVerificationKeyResolver keyResolver = mock(CloseableVerificationKeyResolver.class);
+        when(keyResolver.resolveKey(any(), any())).thenReturn(key);
+        return new BrokerJwtValidator(keyResolver);
     }
 
     @Test
@@ -71,8 +79,16 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
             .addCustomClaim(subClaimName, subject)
             .subjectClaimName(subClaimName)
             .subject(null);
-        JwtValidator validator = createJwtValidator();
-        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, getJaasConfig());
+
+        Map<String, ?> saslConfigs = getSaslConfigs(
+            Map.of(
+                SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "http://www.example.com",
+                SASL_OAUTHBEARER_SUB_CLAIM_NAME, tokenBuilder.subjectClaimName()
+            )
+        );
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "http://www.example.com");
+        JwtValidator validator = createJwtValidator(tokenBuilder);
+        validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfig());
 
         // Validation should succeed (e.g. signature verification) even if sub claim is missing
         OAuthBearerToken token = validator.validate(tokenBuilder.build());
@@ -86,7 +102,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
         Map<String, ?> saslConfigs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "http://www.example.com");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "http://www.example.com");
 
-        JwtValidator validator = createJwtValidator();
+        JwtValidator validator = createJwtValidator(builder);
         validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfig());
 
         String accessToken = builder.build();

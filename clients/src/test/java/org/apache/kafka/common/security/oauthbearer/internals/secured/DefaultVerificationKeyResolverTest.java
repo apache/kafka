@@ -74,7 +74,6 @@ public class DefaultVerificationKeyResolverTest extends OAuthBearerTest {
         File verificationKeyFile = new File(tmpDir, "this-file-does-not-exist.json");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile.toURI().toString());
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
-        Map<String, Object> jaasConfig = Collections.emptyMap();
 
         try (CloseableVerificationKeyResolver verificationKeyResolver = new DefaultVerificationKeyResolver()) {
             assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfig()), "that doesn't exist");
