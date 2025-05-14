@@ -31,14 +31,8 @@ class EmptyTestInfo extends TestInfo {
 }
 
 object TestInfoUtils {
-  
-  final val TestWithParameterizedQuorumAndGroupProtocolNames = "{displayName}.quorum={0}.groupProtocol={1}"
 
   final val TestWithParameterizedGroupProtocolNames = "{displayName}.groupProtocol={0}"
-
-  def isShareGroupTest(testInfo: TestInfo): Boolean = {
-    testInfo.getDisplayName.contains("kip932")
-  }
 
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
     if (testInfo.getDisplayName.contains("groupProtocol=classic"))

@@ -17,8 +17,6 @@
 
 package kafka.log
 
-import kafka.log.remote.RemoteLogManager
-
 import java.io.File
 import java.util.Properties
 import kafka.utils.TestUtils
@@ -32,14 +30,17 @@ import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.LogConfig.{DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG, DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG}
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex, UnifiedLog => JUnifiedLog}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex, VerificationGuard, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 object LogTestUtils {
   /**
@@ -65,7 +66,7 @@ object LogTestUtils {
                       localRetentionBytes: Long = LogConfig.DEFAULT_LOCAL_RETENTION_BYTES,
                       segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
                       cleanupPolicy: String = ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT,
-                      maxMessageBytes: Int = LogConfig.DEFAULT_MAX_MESSAGE_BYTES,
+                      maxMessageBytes: Int = ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT,
                       indexIntervalBytes: Int = ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT,
                       segmentIndexBytes: Int = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT,
                       fileDeleteDelayMs: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
@@ -107,23 +108,23 @@ object LogTestUtils {
                 remoteStorageSystemEnable: Boolean = false,
                 remoteLogManager: Option[RemoteLogManager] = None,
                 logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
-    UnifiedLog(
-      dir = dir,
-      config = config,
-      logStartOffset = logStartOffset,
-      recoveryPoint = recoveryPoint,
-      scheduler = scheduler,
-      brokerTopicStats = brokerTopicStats,
-      time = time,
-      maxTransactionTimeoutMs = maxTransactionTimeoutMs,
-      producerStateManagerConfig = producerStateManagerConfig,
-      producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10),
-      lastShutdownClean = lastShutdownClean,
-      topicId = topicId,
-      numRemainingSegments = numRemainingSegments,
-      remoteStorageSystemEnable = remoteStorageSystemEnable,
-      logOffsetsListener = logOffsetsListener
+    UnifiedLog.create(
+      dir,
+      config,
+      logStartOffset,
+      recoveryPoint,
+      scheduler,
+      brokerTopicStats,
+      time,
+      maxTransactionTimeoutMs,
+      producerStateManagerConfig,
+      producerIdExpirationCheckIntervalMs,
+      new LogDirFailureChannel(10),
+      lastShutdownClean,
+      topicId.toJava,
+      numRemainingSegments,
+      remoteStorageSystemEnable,
+      logOffsetsListener
     )
   }
 
@@ -209,8 +210,8 @@ object LogTestUtils {
     time.sleep(config.fileDeleteDelayMs + 1)
     for (file <- logDir.listFiles) {
       assertFalse(file.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX), "Unexpected .deleted file after recovery")
-      assertFalse(file.getName.endsWith(JUnifiedLog.CLEANED_FILE_SUFFIX), "Unexpected .cleaned file after recovery")
-      assertFalse(file.getName.endsWith(JUnifiedLog.SWAP_FILE_SUFFIX), "Unexpected .swap file after recovery")
+      assertFalse(file.getName.endsWith(UnifiedLog.CLEANED_FILE_SUFFIX), "Unexpected .cleaned file after recovery")
+      assertFalse(file.getName.endsWith(UnifiedLog.SWAP_FILE_SUFFIX), "Unexpected .swap file after recovery")
     }
     assertEquals(expectedKeys, keysInLog(recoveredLog))
     assertFalse(hasOffsetOverflow(recoveredLog))
@@ -226,7 +227,7 @@ object LogTestUtils {
                                  leaderEpoch: Int = 0): LogAppendInfo = {
     val records = endTxnRecords(controlType, producerId, producerEpoch,
       coordinatorEpoch = coordinatorEpoch, timestamp = timestamp)
-    log.appendAsLeader(records, origin = AppendOrigin.COORDINATOR, leaderEpoch = leaderEpoch)
+    log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL)
   }
 
   private def endTxnRecords(controlRecordType: ControlRecordType,
@@ -264,7 +265,7 @@ object LogTestUtils {
       new SimpleRecord(s"$seq".getBytes)
     }
     val records = MemoryRecords.withRecords(Compression.NONE, simpleRecords: _*)
-    log.appendAsLeader(records, leaderEpoch = 0)
+    log.appendAsLeader(records, 0)
   }
 
   def appendTransactionalAsLeader(log: UnifiedLog,
@@ -293,7 +294,7 @@ object LogTestUtils {
           producerEpoch, sequence, simpleRecords: _*)
       }
 
-      log.appendAsLeader(records, leaderEpoch = 0)
+      log.appendAsLeader(records, 0)
       sequence += numRecords
     }
   }

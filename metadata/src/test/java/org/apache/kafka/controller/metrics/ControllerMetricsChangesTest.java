@@ -24,13 +24,14 @@ import org.apache.kafka.image.TopicDelta;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NON_PREFERRED_LEADER;
@@ -131,7 +132,7 @@ public class ControllerMetricsChangesTest {
 
     static {
         ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.IBP_3_7_IV0).build(); // highest MV for PartitionRecord v0
-        TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Collections.emptyMap()));
+        TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Map.of()));
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
                 toRecord(FOO_ID, 0, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
@@ -170,5 +171,20 @@ public class ControllerMetricsChangesTest {
         assertEquals(1, changes.globalPartitionsChange());
         assertEquals(0, changes.offlinePartitionsChange());
         assertEquals(1, changes.partitionsWithoutPreferredLeaderChange());
+    }
+
+    @Test
+    public void testTopicElectionResult() {
+        ControllerMetricsChanges changes = new ControllerMetricsChanges();
+        TopicImage image = new TopicImage("foo", FOO_ID, Map.of());
+        TopicDelta delta = new TopicDelta(image);
+        delta.replay(new PartitionRecord().setPartitionId(0).setLeader(0).setIsr(List.of(0, 1)).setReplicas(List.of(0, 1, 2)));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(2).setIsr(List.of(2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+
+        delta.replay(new PartitionRecord().setPartitionId(1).setLeader(-1).setIsr(List.of()).setEligibleLeaderReplicas(List.of(0, 1)).setReplicas(List.of(0, 1, 2)));
+        delta.replay(new PartitionChangeRecord().setPartitionId(1).setLeader(1).setIsr(List.of(1)).setEligibleLeaderReplicas(List.of(0, 1)));
+        changes.handleTopicChange(image, delta);
+        assertEquals(1, changes.uncleanLeaderElection());
+        assertEquals(1, changes.electionFromElr());
     }
 }

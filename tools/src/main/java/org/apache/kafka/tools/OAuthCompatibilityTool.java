@@ -24,11 +24,12 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetrieverFactory;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
 import org.apache.kafka.common.utils.Exit;
 
@@ -139,16 +140,19 @@ public class OAuthCompatibilityTool {
 
             {
                 // Client side...
-                try (AccessTokenRetriever atr = AccessTokenRetrieverFactory.create(configs, jaasConfigs)) {
+                try (JwtRetriever atr = new DefaultJwtRetriever(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, jaasConfigs)) {
                     atr.init();
-                    AccessTokenValidator atv = AccessTokenValidatorFactory.create(configs);
-                    System.out.println("PASSED 1/5: client configuration");
 
-                    accessToken = atr.retrieve();
-                    System.out.println("PASSED 2/5: client JWT retrieval");
+                    try (JwtValidator atv = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM)) {
+                        atv.init();
+                        System.out.println("PASSED 1/5: client configuration");
 
-                    atv.validate(accessToken);
-                    System.out.println("PASSED 3/5: client JWT validation");
+                        accessToken = atr.retrieve();
+                        System.out.println("PASSED 2/5: client JWT retrieval");
+
+                        atv.validate(accessToken);
+                        System.out.println("PASSED 3/5: client JWT validation");
+                    }
                 }
             }
 
@@ -156,11 +160,14 @@ public class OAuthCompatibilityTool {
                 // Broker side...
                 try (CloseableVerificationKeyResolver vkr = VerificationKeyResolverFactory.create(configs, jaasConfigs)) {
                     vkr.init();
-                    AccessTokenValidator atv = AccessTokenValidatorFactory.create(configs, vkr);
-                    System.out.println("PASSED 4/5: broker configuration");
 
-                    atv.validate(accessToken);
-                    System.out.println("PASSED 5/5: broker JWT validation");
+                    try (JwtValidator atv = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, vkr)) {
+                        atv.init();
+                        System.out.println("PASSED 4/5: broker configuration");
+
+                        atv.validate(accessToken);
+                        System.out.println("PASSED 5/5: broker JWT validation");
+                    }
                 }
             }
 

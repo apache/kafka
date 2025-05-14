@@ -24,7 +24,6 @@ import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 import java.util.{Map => JMap}
 import java.util.{Collection => JCollection}
-import kafka.log.LogManager
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.Logging
@@ -41,14 +40,14 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{ExternalKRaftMetrics, Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog, TimingWheelExpirationService}
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, MetadataLogConfig, QuorumConfig, RaftClient, ReplicatedLog, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
-import org.apache.kafka.storage.internals.log.UnifiedLog
+import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
@@ -62,7 +61,7 @@ object KafkaRaftManager {
   }
 
   private def lockDataDir(dataDir: File): FileLock = {
-    val lock = new FileLock(new File(dataDir, LogManager.LockFileName))
+    val lock = new FileLock(new File(dataDir, LogManager.LOCK_FILE_NAME))
 
     if (!lock.tryLock()) {
       throw new KafkaException(
@@ -104,13 +103,15 @@ trait RaftManager[T] {
   def replicatedLog: ReplicatedLog
 
   def voterNode(id: Int, listener: ListenerName): Option[Node]
+
+  def recordSerde: RecordSerde[T]
 }
 
 class KafkaRaftManager[T](
   clusterId: String,
   config: KafkaConfig,
   metadataLogDirUuid: Uuid,
-  recordSerde: RecordSerde[T],
+  serde: RecordSerde[T],
   topicPartition: TopicPartition,
   topicId: Uuid,
   time: Time,
@@ -228,7 +229,8 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
+      config = new MetadataLogConfig(config),
+      config.nodeId
     )
   }
 
@@ -298,4 +300,6 @@ class KafkaRaftManager[T](
   override def voterNode(id: Int, listener: ListenerName): Option[Node] = {
     client.voterNode(id, listener).toScala
   }
+
+  override def recordSerde: RecordSerde[T] = serde
 }

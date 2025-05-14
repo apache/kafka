@@ -529,7 +529,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         }
 
         // the latest record has a timestamp > 60k. So, the +1 in actualFrom calculation in
-        // RocksDbWindowStore shouldn't have an implciation and all stores should return the same fetched counts.
+        // RocksDbWindowStore shouldn't have an implication and all stores should return the same fetched counts.
         assertEquals(1, fetchedCount);
         assertEquals(
                 Set.of(segments.segmentName(3L), segments.segmentName(5L)),

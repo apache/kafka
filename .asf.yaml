@@ -29,29 +29,22 @@ notifications:
 # Read more here: https://github.com/apache/infrastructure-asfyaml
 github:
   collaborators:
-    - FrankYang0529
-    - kirktrue
     - brandboat
-    - AndrewJSchofield
-    - OmniaGM
-    - nizhikov
-    - dongnuo123
-    - gaurav-narula
-    - apourchet
-    - apoorvmittal10
-
+    - FrankYang0529
+    - gongxuanzhang
+    - m1a2st
+    - mingyen066
+    - ShivsundarR
+    - smjn
+    - TaiJuWu
+    - xijiu
+    - Yunyung
   enabled_merge_buttons:
     squash: true
     squash_commit_message: PR_TITLE_AND_DESC
     merge: false
     rebase: false
 
-  protected_branches:
-    trunk: {}
-
-    # Disable force push on release branches
-    4.0: {}
-    3.9: {}
-    3.8: {}
-    3.7: {}
-    3.6: {}
+  # Disable legacy branch protections. We have manual rulesets which protect trunk
+  # and our release branches. See INFRA-26603
+  protected_branches: ~

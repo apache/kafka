@@ -37,6 +37,7 @@ import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -65,6 +66,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1458,7 +1460,7 @@ class ShareCoordinatorServiceTest {
                 any(),
                 any());
 
-        timer.advanceClock(30005L); // prune should be called
+        timer.advanceClock(30005L); // Prune should be called.
         verify(runtime, times(1))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1466,7 +1468,7 @@ class ShareCoordinatorServiceTest {
                 any(),
                 any());
 
-        timer.advanceClock(30005L); // prune should be called
+        timer.advanceClock(30005L); // Prune should be called.
         verify(runtime, times(2))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1872,6 +1874,113 @@ class ShareCoordinatorServiceTest {
     }
 
     @Test
+    public void testColdPartitionSnapshotTaskPeriodicityWithAllSuccess() throws Exception {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        MockTime time = new MockTime();
+        MockTimer timer = new MockTimer(time);
+        PartitionWriter writer = mock(PartitionWriter.class);
+
+        Metrics metrics = new Metrics();
+
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer
+        ));
+
+        when(runtime.scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any(),
+            any()
+        )).thenReturn(List.of(CompletableFuture.completedFuture(null)));
+
+        service.startup(() -> 1);
+        verify(runtime, times(0))
+            .scheduleWriteOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any(),
+                any());
+
+        timer.advanceClock(10005L); // Snapshotting should be called.
+        verify(runtime, times(1))
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        timer.advanceClock(10005L); // Snapshotting should be called.
+        verify(runtime, times(2))
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        checkMetrics(metrics);
+
+        service.shutdown();
+    }
+
+    @Test
+    public void testColdPartitionSnapshotTaskPeriodicityWithSomeFailures() throws Exception {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        MockTime time = new MockTime();
+        MockTimer timer = new MockTimer(time);
+        PartitionWriter writer = mock(PartitionWriter.class);
+
+        when(runtime.scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any(),
+            any()
+        )).thenReturn(
+            List.of(CompletableFuture.completedFuture(null), CompletableFuture.failedFuture(new Exception("bad stuff")))
+        ).thenReturn(
+            List.of(CompletableFuture.completedFuture(null), CompletableFuture.completedFuture(null))
+        );
+
+        Metrics metrics = new Metrics();
+
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer
+        ));
+
+        service.startup(() -> 2);
+        verify(runtime, times(0))
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        timer.advanceClock(10005L); // Snapshotting should be called.
+        verify(runtime, times(1))   // For 2 topic partitions.
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        timer.advanceClock(10005L); // Snapshotting should be called (despite previous partial failure).
+        verify(runtime, times(2))   // For 2 topic partitions.
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        checkMetrics(metrics);
+
+        service.shutdown();
+    }
+
+    @Test
     public void testShareStateTopicConfigs() {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         MockTime time = new MockTime();
@@ -1899,6 +2008,86 @@ class ShareCoordinatorServiceTest {
         propNames.forEach(actual::contains);
 
         service.shutdown();
+    }
+
+    @Test
+    public void testOnTopicsDeletedEmptyList() {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        MockTime time = new MockTime();
+        MockTimer timer = new MockTimer(time);
+        PartitionWriter writer = mock(PartitionWriter.class);
+
+        Metrics metrics = new Metrics();
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer
+        ));
+
+        service.startup(() -> 3);
+
+        when(runtime.scheduleWriteAllOperation(
+            eq("on-topics-deleted"),
+            any(),
+            any()
+        )).thenReturn(
+            List.of(
+                CompletableFuture.completedFuture(null),
+                CompletableFuture.completedFuture(null),
+                CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+            )
+        );
+
+        assertDoesNotThrow(() -> service.onTopicsDeleted(Set.of(), BufferSupplier.NO_CACHING));
+        verify(runtime, times(0)).scheduleWriteAllOperation(
+            eq("on-topics-deleted"),
+            any(),
+            any()
+        );
+    }
+
+    @Test
+    public void testOnTopicsDeletedDoesNotThrowExp() {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        MockTime time = new MockTime();
+        MockTimer timer = new MockTimer(time);
+        PartitionWriter writer = mock(PartitionWriter.class);
+
+        Metrics metrics = new Metrics();
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer
+        ));
+
+        service.startup(() -> 3);
+
+        when(runtime.scheduleWriteAllOperation(
+            eq("on-topics-deleted"),
+            any(),
+            any()
+        )).thenReturn(
+            List.of(
+                CompletableFuture.completedFuture(null),
+                CompletableFuture.completedFuture(null),
+                CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+            )
+        );
+
+        assertDoesNotThrow(() -> service.onTopicsDeleted(Set.of(Uuid.randomUuid()), BufferSupplier.NO_CACHING));
+        verify(runtime, times(1)).scheduleWriteAllOperation(
+            eq("on-topics-deleted"),
+            any(),
+            any()
+        );
     }
 
     private void checkMetrics(Metrics metrics) {

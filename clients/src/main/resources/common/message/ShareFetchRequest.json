@@ -18,12 +18,11 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "ShareFetchRequest",
-  "validVersions": "0",
+  // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apacke Kafka 4.1.
+  //
+  // Version 1 is the initial stable version (KIP-932).
+  "validVersions": "1",
   "flexibleVersions": "0+",
-  // The ShareFetchRequest API is added as part of KIP-932 and is still under
-  // development. Hence, the API is not exposed by default by brokers unless
-  // explicitly enabled.
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "groupId",
       "about": "The group identifier." },
@@ -36,8 +35,10 @@
     { "name": "MinBytes", "type": "int32", "versions": "0+",
       "about": "The minimum bytes to accumulate in the response." },
     { "name": "MaxBytes", "type": "int32", "versions": "0+", "default": "0x7fffffff",
-      "about": "The maximum bytes to fetch.  See KIP-74 for cases where this limit may not be honored." },
-    { "name": "BatchSize", "type": "int32", "versions": "0+",
+      "about": "The maximum bytes to fetch. See KIP-74 for cases where this limit may not be honored." },
+    { "name": "MaxRecords", "type": "int32", "versions": "1+",
+      "about": "The maximum number of records to fetch. This limit can be exceeded for alignment of batch boundaries." },
+    { "name": "BatchSize", "type": "int32", "versions": "1+",
       "about": "The optimal number of records for batches of acquired records and acknowledgements." },
     { "name": "Topics", "type": "[]FetchTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
@@ -46,8 +47,8 @@
         "about": "The partitions to fetch.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "PartitionMaxBytes", "type": "int32", "versions": "0+",
-          "about": "TO BE REMOVED. The maximum bytes to fetch from this partition. 0 when only acknowledgement with no fetching is required. See KIP-74 for cases where this limit may not be honored." },
+        { "name": "PartitionMaxBytes", "type": "int32", "versions": "0",
+          "about": "The maximum bytes to fetch from this partition. 0 when only acknowledgement with no fetching is required. See KIP-74 for cases where this limit may not be honored." },
         { "name": "AcknowledgementBatches", "type": "[]AcknowledgementBatch", "versions": "0+",
           "about": "Record batches to acknowledge.", "fields": [
           { "name": "FirstOffset", "type": "int64", "versions": "0+",

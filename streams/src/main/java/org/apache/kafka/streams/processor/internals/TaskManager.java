@@ -278,9 +278,11 @@ public class TaskManager {
                     // we do not need to take the returned offsets since we are not going to commit anyways;
                     // this call is only used for active tasks to flush the cache before suspending and
                     // closing the topology
-                    task.prepareCommit();
+                    task.prepareCommit(false);
                 } catch (final RuntimeException swallow) {
-                    log.error("Error flushing cache for corrupted task {} ", task.id(), swallow);
+                    log.warn("Error flushing cache for corrupted task {}. " +
+                        "Since the task is closing dirty, the following exception is swallowed: {}",
+                        task.id(), swallow.getMessage());
                 }
 
                 try {
@@ -291,7 +293,9 @@ public class TaskManager {
                         task.postCommit(true);
                     }
                 } catch (final RuntimeException swallow) {
-                    log.error("Error suspending corrupted task {} ", task.id(), swallow);
+                    log.warn("Error suspending corrupted task {}. " +
+                        "Since the task is closing dirty, the following exception is swallowed: {}",
+                        task.id(), swallow.getMessage());
                 }
                 task.closeDirty();
             }
@@ -808,7 +812,7 @@ public class TaskManager {
                 //    and their changelog positions should not change at all postCommit would not write the checkpoint again.
                 // 2) for standby tasks prepareCommit should always return empty, and then in postCommit we would probably
                 //    write the checkpoint file.
-                final Map<TopicPartition, OffsetAndMetadata> offsets = task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> offsets = task.prepareCommit(true);
                 if (!offsets.isEmpty()) {
                     log.error("Task {} should have been committed when it was suspended, but it reports non-empty " +
                                     "offsets {} to commit; this means it failed during last commit and hence should be closed dirty",
@@ -1131,12 +1135,16 @@ public class TaskManager {
         final Set<TaskId> lockedTaskIds = activeRunningTaskIterable().stream().map(Task::id).collect(Collectors.toSet());
         maybeLockTasks(lockedTaskIds);
 
+        boolean revokedTasksNeedCommit = false;
         for (final Task task : activeRunningTaskIterable()) {
             if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
                 // when the task input partitions are included in the revoked list,
                 // this is an active task and should be revoked
+
                 revokedActiveTasks.add(task);
                 remainingRevokedPartitions.removeAll(task.inputPartitions());
+
+                revokedTasksNeedCommit |= task.commitNeeded();
             } else if (task.commitNeeded()) {
                 commitNeededActiveTasks.add(task);
             }
@@ -1150,11 +1158,9 @@ public class TaskManager {
                          "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
         }
 
-        prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
-
-        // if we need to commit any revoking task then we just commit all of those needed committing together
-        final boolean shouldCommitAdditionalTasks = !consumedOffsetsPerTask.isEmpty();
-        if (shouldCommitAdditionalTasks) {
+        if (revokedTasksNeedCommit) {
+            prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
+            // if we need to commit any revoking task then we just commit all of those needed committing together
             prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
         }
 
@@ -1163,10 +1169,12 @@ public class TaskManager {
         // as such we just need to skip those dirty tasks in the checkpoint
         final Set<Task> dirtyTasks = new HashSet<>();
         try {
-            // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
-            // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
-            // offset commit because we are in a rebalance
-            taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
+            if (revokedTasksNeedCommit) {
+                // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
+                // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
+                // offset commit because we are in a rebalance
+                taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
+            }
         } catch (final TaskCorruptedException e) {
             log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
                      e.corruptedTasks());
@@ -1199,7 +1207,7 @@ public class TaskManager {
             }
         }
 
-        if (shouldCommitAdditionalTasks) {
+        if (revokedTasksNeedCommit) {
             for (final Task task : commitNeededActiveTasks) {
                 if (!dirtyTasks.contains(task)) {
                     try {
@@ -1256,7 +1264,7 @@ public class TaskManager {
                                                  final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask) {
         for (final Task task : tasksToPrepare) {
             try {
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit(true);
                 if (!committableOffsets.isEmpty()) {
                     consumedOffsetsPerTask.put(task, committableOffsets);
                 }
@@ -1471,15 +1479,19 @@ public class TaskManager {
         try {
             // we call this function only to flush the case if necessary
             // before suspending and closing the topology
-            task.prepareCommit();
+            task.prepareCommit(false);
         } catch (final RuntimeException swallow) {
-            log.error("Error flushing caches of dirty task {}", task.id(), swallow);
+            log.warn("Error flushing cache of dirty task {}. " +
+                "Since the task is closing dirty, the following exception is swallowed: {}",
+                task.id(), swallow.getMessage());
         }
 
         try {
             task.suspend();
         } catch (final RuntimeException swallow) {
-            log.error("Error suspending dirty task {}: {}", task.id(), swallow.getMessage());
+            log.warn("Error suspending dirty task {}. " +
+                "Since the task is closing dirty, the following exception is swallowed: {}",
+                task.id(), swallow.getMessage());
         }
 
         task.closeDirty();
@@ -1489,7 +1501,9 @@ public class TaskManager {
                 tasks.removeTask(task);
             }
         } catch (final RuntimeException swallow) {
-            log.error("Error removing dirty task {}: {}", task.id(), swallow.getMessage());
+            log.warn("Error removing dirty task {}. " +
+                "Since the task is closing dirty, the following exception is swallowed: {}",
+                task.id(), swallow);
         }
     }
 
@@ -1616,7 +1630,7 @@ public class TaskManager {
         // first committing all tasks and then suspend and close them clean
         for (final Task task : activeTasksToClose) {
             try {
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit(true);
                 tasksToCommit.add(task);
                 if (!committableOffsets.isEmpty()) {
                     consumedOffsetsAndMetadataPerTask.put(task, committableOffsets);
@@ -1705,7 +1719,7 @@ public class TaskManager {
         // first committing and then suspend / close clean
         for (final Task task : standbyTasksToClose) {
             try {
-                task.prepareCommit();
+                task.prepareCommit(true);
                 task.postCommit(true);
                 task.suspend();
                 closeTaskClean(task);

@@ -64,6 +64,7 @@ import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.collection.{Seq, mutable}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 @Timeout(120)
 @Tag("integration")
@@ -112,7 +113,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       val controller = cluster.controllers().values().iterator().asScala.filter(_.controller.isActive).next()
-      val port = controller.socketServer.boundPort(controller.config.controllerListeners.head.listenerName)
+      val port = controller.socketServer.boundPort(ListenerName.normalised(controller.config.controllerListeners.head.listener))
 
       // shutdown active controller
       controller.shutdown()
@@ -1188,9 +1189,9 @@ class KRaftClusterTest {
     def assertConfigValue(expected: Int): Unit = {
       TestUtils.retry(60000) {
         assertEquals(expected, cluster.controllers().values().iterator().next().
-          quotaManagers.clientQuotaCallback.get.asInstanceOf[DummyClientQuotaCallback].value)
+          quotaManagers.clientQuotaCallbackPlugin.get.get.asInstanceOf[DummyClientQuotaCallback].value)
         assertEquals(expected, cluster.brokers().values().iterator().next().
-          quotaManagers.clientQuotaCallback.get.asInstanceOf[DummyClientQuotaCallback].value)
+          quotaManagers.clientQuotaCallbackPlugin.get.get.asInstanceOf[DummyClientQuotaCallback].value)
       }
     }
 
@@ -1229,9 +1230,9 @@ class KRaftClusterTest {
     def assertFoobarValue(expected: Int): Unit = {
       TestUtils.retry(60000) {
         assertEquals(expected, cluster.controllers().values().iterator().next().
-          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+          authorizerPlugin.get.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
         assertEquals(expected, cluster.brokers().values().iterator().next().
-          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+          authorizerPlugin.get.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
       }
     }
 
@@ -1421,7 +1422,7 @@ class KRaftClusterTest {
         broker0.shutdown()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
@@ -1435,7 +1436,7 @@ class KRaftClusterTest {
         broker0.startup()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
         }
       } finally {
@@ -1476,7 +1477,7 @@ class KRaftClusterTest {
         broker0.shutdown()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
@@ -1484,13 +1485,13 @@ class KRaftClusterTest {
         // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
         // the main replica being offline
         val log = broker0.logManager.getLog(foo0).get
-        log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), false)
 
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
         }
@@ -1541,7 +1542,7 @@ class KRaftClusterTest {
         broker0.shutdown()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
@@ -1560,14 +1561,14 @@ class KRaftClusterTest {
         // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
         // the main replica being online
         val originalLogFile = log.dir
-        log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), false)
         assertFalse(originalLogFile.exists())
 
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
           assertFalse(targetDirFile.exists())
@@ -1616,6 +1617,51 @@ class KRaftClusterTest {
       }
     } finally {
       cluster.close()
+    }
+  }
+
+  /**
+   * Test that once a cluster is formatted, a bootstrap.metadata file that contains an unsupported
+   * MetadataVersion is not a problem. This is a regression test for KAFKA-19192.
+   */
+  @Test
+  def testOldBootstrapMetadataFile(): Unit = {
+    val baseDirectory = TestUtils.tempDir().toPath()
+    Using.resource(new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).
+        setBaseDirectory(baseDirectory).
+          build()).
+      setDeleteOnClose(false).
+        build()
+    ) { cluster =>
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+    }
+    val oldBootstrapMetadata = BootstrapMetadata.fromRecords(
+      util.Arrays.asList(
+        new ApiMessageAndVersion(
+          new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(1),
+          0.toShort)
+      ),
+      "oldBootstrapMetadata")
+    // Re-create the cluster using the same directory structure as above.
+    // Since we do not need to use the bootstrap metadata, the fact that
+    // it specifies an obsolete metadata.version should not be a problem.
+    Using.resource(new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).
+        setBaseDirectory(baseDirectory).
+        setBootstrapMetadata(oldBootstrapMetadata).
+          build()).build()
+    ) { cluster =>
+      cluster.startup()
+      cluster.waitForReadyBrokers()
     }
   }
 
