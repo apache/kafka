@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
@@ -29,6 +29,7 @@ import java.util.Map;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.requireConfigured;
 
 /**
  * This {@link JwtValidator} uses the delegation approach, instantiating and delegating calls to a
@@ -42,9 +43,9 @@ public class DefaultJwtValidator implements JwtValidator {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
 
-        if (cu.validateString(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, false) != null) {
+        if (config.containsKey(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL)) {
             delegate = new BrokerJwtValidator();
         } else {
             delegate = new ClientJwtValidator();
@@ -55,10 +56,7 @@ public class DefaultJwtValidator implements JwtValidator {
 
     @Override
     public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
-        if (delegate == null)
-            throw new IllegalStateException("JWT validator delegate is null; please call configure() first");
-
-        return delegate.validate(accessToken);
+        return requireConfigured(delegate, () -> "JWT validator delegate", getClass()).validate(accessToken);
     }
 
     @Override

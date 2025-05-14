@@ -19,7 +19,7 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
@@ -72,14 +72,14 @@ public class ClientJwtValidator implements JwtValidator {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
         scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(
             DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME,
-            cu.get(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME)
+            config.getString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME)
         );
         subClaimName = ClaimValidationUtils.validateClaimNameOverride(
             DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME,
-            cu.get(SASL_OAUTHBEARER_SUB_CLAIM_NAME)
+            config.getString(SASL_OAUTHBEARER_SUB_CLAIM_NAME)
         );
     }
 
@@ -124,11 +124,13 @@ public class ClientJwtValidator implements JwtValidator {
         Long issuedAt = ClaimValidationUtils.validateIssuedAt(ISSUED_AT_CLAIM_NAME,
             issuedAtRaw != null ? issuedAtRaw.longValue() * 1000L : null);
 
-        return new BasicOAuthBearerToken(accessToken,
+        return new BasicOAuthBearerToken(
+            accessToken,
             scopes,
             expiration,
             subject,
-            issuedAt);
+            issuedAt
+        );
     }
 
     private Object getClaim(Map<String, Object> payload, String claimName) {
@@ -136,5 +138,4 @@ public class ClientJwtValidator implements JwtValidator {
         log.debug("getClaim - {}: {}", claimName, value);
         return value;
     }
-
 }

@@ -37,14 +37,16 @@ import java.net.URL;
 import java.security.Key;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
-import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.requireConfigured;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 
 /**
  * <code>RefreshingHttpsJwksVerificationKeyResolver</code> is a
@@ -99,54 +101,58 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
 
+    private final Time time;
     private final VerificationJwkSelector verificationJwkSelector;
+    private Optional<SslResource> sslResource;
 
     private RefreshingHttpsJwks refreshingHttpsJwks;
-    private boolean isInitialized;
-
     public RefreshingHttpsJwksVerificationKeyResolver() {
+        this(Time.SYSTEM);
+    }
+
+    public RefreshingHttpsJwksVerificationKeyResolver(Time time) {
+        this.time = time;
         this.verificationJwkSelector = new VerificationJwkSelector();
     }
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
-        JaasOptionsUtils jou = new JaasOptionsUtils(JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries));
-        SSLSocketFactory sslSocketFactory = null;
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
+        long refreshIntervalMs = config.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS);
+        OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries);
 
-        URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
+        URL jwksEndpointUrl = validateUrl(config, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-        if (jou.shouldCreateSSLSocketFactory(jwksEndpointUrl))
-            sslSocketFactory = jou.createSSLSocketFactory();
+        sslResource = OAuthBearerUtils.maybeCreateSslResource(jwksEndpointUrl, jaasConfig);
 
         HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUrl.toString());
         httpsJwks.setDefaultCacheDuration(refreshIntervalMs);
 
-        if (sslSocketFactory != null) {
+        if (sslResource.isPresent()) {
             Get get = new Get();
-            get.setSslSocketFactory(sslSocketFactory);
+            get.setSslSocketFactory(sslResource.get().sslContext().getSocketFactory());
             httpsJwks.setSimpleHttpGet(get);
         }
 
-        refreshingHttpsJwks = new RefreshingHttpsJwks(Time.SYSTEM,
+        refreshingHttpsJwks = new RefreshingHttpsJwks(
+            time,
             httpsJwks,
             refreshIntervalMs,
-            cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS),
-            cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS));
+            config.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS),
+            config.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS)
+        );
         refreshingHttpsJwks.configure(configs, saslMechanism, jaasConfigEntries);
-        isInitialized = true;
     }
 
     @Override
     public void close() {
         Utils.closeQuietly(refreshingHttpsJwks, "HTTPS JWKS");
+        sslResource.ifPresent(r -> Utils.closeQuietly(r, "SSL resource"));
     }
 
     @Override
     public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
-        if (!isInitialized)
-            throw new IllegalStateException("Please call configure() first");
+        requireConfigured(refreshingHttpsJwks, () -> "HTTPS JWKS", getClass());
 
         try {
             List<JsonWebKey> jwks = refreshingHttpsJwks.getJsonWebKeys();

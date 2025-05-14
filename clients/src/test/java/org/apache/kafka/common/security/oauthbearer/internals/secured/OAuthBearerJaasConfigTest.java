@@ -22,16 +22,17 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.junit.jupiter.api.Test;
 
 import java.net.URL;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.getSslClientConfig;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.shouldCreateSSLSocketFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class JaasOptionsUtilsTest extends OAuthBearerTest {
+public class OAuthBearerJaasConfigTest extends OAuthBearerTest {
 
     @Test
     public void testSSLClientConfig() {
@@ -43,8 +44,8 @@ public class JaasOptionsUtilsTest extends OAuthBearerTest {
         options.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "$3cr3+");
         options.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslTruststore);
 
-        JaasOptionsUtils jou = new JaasOptionsUtils(options);
-        Map<String, ?> sslClientConfig = jou.getSslClientConfig();
+        OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(options);
+        Map<String, ?> sslClientConfig = getSslClientConfig(jaasConfig);
         assertNotNull(sslClientConfig);
         assertEquals(sslKeystore, sslClientConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
         assertEquals(sslTruststore, sslClientConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
@@ -53,10 +54,8 @@ public class JaasOptionsUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testShouldUseSslClientConfig() throws Exception {
-        JaasOptionsUtils jou = new JaasOptionsUtils(Collections.emptyMap());
-        assertFalse(jou.shouldCreateSSLSocketFactory(new URL("http://example.com")));
-        assertTrue(jou.shouldCreateSSLSocketFactory(new URL("https://example.com")));
-        assertFalse(jou.shouldCreateSSLSocketFactory(new URL("file:///tmp/test.txt")));
+        assertFalse(shouldCreateSSLSocketFactory(new URL("http://example.com")));
+        assertTrue(shouldCreateSSLSocketFactory(new URL("https://example.com")));
+        assertFalse(shouldCreateSSLSocketFactory(new URL("file:///tmp/test.txt")));
     }
-
 }

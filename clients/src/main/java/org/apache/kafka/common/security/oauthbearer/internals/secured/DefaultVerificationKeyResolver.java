@@ -27,12 +27,14 @@ import java.io.IOException;
 import java.net.URL;
 import java.security.Key;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.protocolMatches;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.requireConfigured;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 
 public class DefaultVerificationKeyResolver implements CloseableVerificationKeyResolver {
 
@@ -40,10 +42,10 @@ public class DefaultVerificationKeyResolver implements CloseableVerificationKeyR
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
+        URL jwksEndpointUrl = validateUrl(config, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-        if (jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
+        if (protocolMatches(jwksEndpointUrl, "file")) {
             delegate = new JwksFileVerificationKeyResolver();
         } else {
             delegate = new RefreshingHttpsJwksVerificationKeyResolver();
@@ -54,10 +56,7 @@ public class DefaultVerificationKeyResolver implements CloseableVerificationKeyR
 
     @Override
     public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
-        if (delegate == null)
-            throw new IllegalStateException("Verification key resolver delegate is null; please call configure() first");
-
-        return delegate.resolveKey(jws, nestingContext);
+        return requireConfigured(delegate, () -> "Verification key resolver delegate", getClass()).resolveKey(jws, nestingContext);
     }
 
     @Override

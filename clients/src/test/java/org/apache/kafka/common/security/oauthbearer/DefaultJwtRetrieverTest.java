@@ -18,7 +18,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.junit.jupiter.api.AfterEach;
@@ -42,6 +42,7 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.urlencodeHeader;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -153,8 +154,8 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
     @ParameterizedTest
     @MethodSource("urlencodeHeaderSupplier")
     public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
-        boolean actualValue = ClientCredentialsJwtRetriever.validateUrlencodeHeader(cu);
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, OAUTHBEARER_MECHANISM);
+        boolean actualValue = urlencodeHeader(config);
         assertEquals(expectedValue, actualValue);
     }
 

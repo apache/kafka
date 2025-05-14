@@ -43,6 +43,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.requireConfigured;
+
 /**
  * Implementation of {@link HttpsJwks} that will periodically refresh the JWKS cache to reduce or
  * even prevent HTTP/HTTPS traffic in the hot path of validation. It is assumed that it's
@@ -177,39 +179,36 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        log.debug("JWKS configuration started");
+
+        List<JsonWebKey> localJWKs;
+
         try {
-            log.debug("init started");
-
-            List<JsonWebKey> localJWKs;
-
-            try {
-                localJWKs = httpsJwks.getJsonWebKeys();
-            } catch (IOException | JoseException e) {
-                throw new ConfigException("Could not refresh JWKS", e);
-            }
-
-            try {
-                refreshLock.writeLock().lock();
-                jsonWebKeys = Collections.unmodifiableList(localJWKs);
-            } finally {
-                refreshLock.writeLock().unlock();
-            }
-
-            // Since we just grabbed the keys (which will have invoked a HttpsJwks.refresh()
-            // internally), we can delay our first invocation by refreshMs.
-            //
-            // Note: we refer to this as a _scheduled_ refresh.
-            executorService.scheduleAtFixedRate(this::refresh,
-                    refreshMs,
-                    refreshMs,
-                    TimeUnit.MILLISECONDS);
-
-            log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
-        } finally {
-            isInitialized = true;
-
-            log.debug("init completed");
+            localJWKs = httpsJwks.getJsonWebKeys();
+        } catch (IOException | JoseException e) {
+            throw new ConfigException("Could not refresh JWKS", e);
         }
+
+        try {
+            refreshLock.writeLock().lock();
+            jsonWebKeys = Collections.unmodifiableList(localJWKs);
+        } finally {
+            refreshLock.writeLock().unlock();
+        }
+
+        // Since we just grabbed the keys (which will have invoked a HttpsJwks.refresh()
+        // internally), we can delay our first invocation by refreshMs.
+        //
+        // Note: we refer to this as a _scheduled_ refresh.
+        executorService.scheduleAtFixedRate(
+            this::refresh,
+            refreshMs,
+            refreshMs,
+            TimeUnit.MILLISECONDS
+        );
+
+        log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
+        log.debug("JWKS configuration completed");
     }
 
     @Override
@@ -246,8 +245,7 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
      */
 
     public List<JsonWebKey> getJsonWebKeys() throws JoseException, IOException {
-        if (!isInitialized)
-            throw new IllegalStateException("Please call configure() first");
+        requireConfigured(jsonWebKeys, () -> "JSON web keys", getClass());
 
         try {
             refreshLock.readLock().lock();

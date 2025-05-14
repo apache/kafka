@@ -20,8 +20,9 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.utils.Utils;
 
@@ -102,14 +103,14 @@ public class BrokerJwtValidator implements JwtValidator {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
 
-        List<String> expectedAudiencesList = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
+        List<String> expectedAudiencesList = config.containsKey(SASL_OAUTHBEARER_EXPECTED_AUDIENCE) ? config.getList(SASL_OAUTHBEARER_EXPECTED_AUDIENCE) : null;
         Set<String> expectedAudiences = expectedAudiencesList != null ? Set.copyOf(expectedAudiencesList) : null;
-        Integer clockSkew = cu.validateInteger(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
-        String expectedIssuer = cu.validateString(SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
-        scopeClaimName = cu.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
-        subClaimName = cu.validateString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
+        Integer clockSkew = config.containsKey(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS) ? config.getInt(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS) : null;
+        String expectedIssuer = config.containsKey(SASL_OAUTHBEARER_EXPECTED_ISSUER) ? config.getString(SASL_OAUTHBEARER_EXPECTED_ISSUER) : null;
+        scopeClaimName = config.getString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
+        subClaimName = config.getString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
 
         verificationKeyResolver = verificationKeyResolverSupplier.get();
         verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
@@ -144,8 +145,7 @@ public class BrokerJwtValidator implements JwtValidator {
 
     @SuppressWarnings("unchecked")
     public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
-        if (jwtConsumer == null)
-            throw new IllegalStateException("JWT consumer is null; please call configure() first");
+        OAuthBearerUtils.requireConfigured(jwtConsumer, () -> "JWT consumer", getClass());
 
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
 

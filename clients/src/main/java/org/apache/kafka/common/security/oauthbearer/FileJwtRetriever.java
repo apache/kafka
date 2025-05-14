@@ -18,7 +18,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -28,6 +28,8 @@ import java.util.Map;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.requireConfigured;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateFileUrl;
 
 /**
  * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
@@ -38,17 +40,18 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 
 public class FileJwtRetriever implements JwtRetriever {
 
-    private String accessToken;
+    private String jwt;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        String fileName = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).toFile().getPath();
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
+        String fileName = validateFileUrl(config, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).getPath();
 
         try {
-            this.accessToken = Utils.readFileAsString(fileName);
+            this.jwt = Utils.readFileAsString(fileName);
+
             // always non-null; to remove any newline chars or backend will report err
-            this.accessToken = this.accessToken.trim();
+            this.jwt = this.jwt.trim();
         } catch (IOException e) {
             throw new ConfigException(
                 String.format(
@@ -63,10 +66,7 @@ public class FileJwtRetriever implements JwtRetriever {
 
     @Override
     public String retrieve() throws JwtRetrieverException {
-        if (accessToken == null)
-            throw new IllegalStateException("Access token is null; please call configure() first");
-
-        return accessToken;
+        return requireConfigured(jwt, () -> "JWT", getClass());
     }
 
 }

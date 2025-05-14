@@ -26,16 +26,19 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.throwIfURLIsNotAllowed;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateFileUrl;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
-public class ConfigurationUtilsTest extends OAuthBearerTest {
+public class OAuthBearerConfigTest extends OAuthBearerTest {
 
-    private static final String URL_CONFIG_NAME = "url";
-    private static final String FILE_CONFIG_NAME = "file";
+    private static final String URL_CONFIG_NAME = "url.config.name";
+    private static final String FILE_CONFIG_NAME = "file.config.name";
 
     @AfterEach
     public void tearDown() throws Exception {
@@ -79,24 +82,24 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testUrlNull() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl(null), "must be non-null");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl(null), "No value was found for the OAuth configuration " + URL_CONFIG_NAME);
     }
 
     @Test
     public void testUrlEmptyString() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl(""), "must not contain only whitespace");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl(""), "No value was found for the OAuth configuration " + URL_CONFIG_NAME);
     }
 
     @Test
     public void testUrlWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl("    "), "must not contain only whitespace");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl("    "), "No value was found for the OAuth configuration " + URL_CONFIG_NAME);
     }
 
     private void testUrl(String value) {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
         Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
-        cu.validateUrl(URL_CONFIG_NAME);
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, OAUTHBEARER_MECHANISM);
+        validateUrl(config, URL_CONFIG_NAME);
     }
 
     @Test
@@ -128,51 +131,46 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testFileNull() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(null), "must be non-null");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile(null), "No value was found for the OAuth configuration " + FILE_CONFIG_NAME);
     }
 
     @Test
     public void testFileEmptyString() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(""), "must not contain only whitespace");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile(""), "No value was found for the OAuth configuration " + FILE_CONFIG_NAME);
     }
 
     @Test
     public void testFileWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile("    "), "must not contain only whitespace");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile("    "), "No value was found for the OAuth configuration " + FILE_CONFIG_NAME);
     }
 
     @Test
     public void testThrowIfURLIsNotAllowed() {
         String url = "http://www.example.com";
         String fileUrl = "file:///etc/passwd";
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(URL_CONFIG_NAME, url);
-        configs.put(FILE_CONFIG_NAME, fileUrl);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
 
         // By default, no URL is allowed
-        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(url),
+        assertThrowsWithMessage(ConfigException.class, () -> throwIfURLIsNotAllowed(url),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
-        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(fileUrl),
+        assertThrowsWithMessage(ConfigException.class, () -> throwIfURLIsNotAllowed(fileUrl),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
 
         // add one url into allowed list
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url);
-        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(url));
-        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(fileUrl),
+        assertDoesNotThrow(() -> throwIfURLIsNotAllowed(url));
+        assertThrowsWithMessage(ConfigException.class, () -> throwIfURLIsNotAllowed(fileUrl),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
 
         // add all urls into allowed list
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url + "," + fileUrl);
-        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(url));
-        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(fileUrl));
+        assertDoesNotThrow(() -> throwIfURLIsNotAllowed(url));
+        assertDoesNotThrow(() -> throwIfURLIsNotAllowed(fileUrl));
     }
 
     protected void testFile(String value) {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
-        Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
-        cu.validateFile(URL_CONFIG_NAME);
+        Map<String, Object> configs = Collections.singletonMap(FILE_CONFIG_NAME, value);
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, OAUTHBEARER_MECHANISM);
+        validateFileUrl(config, FILE_CONFIG_NAME);
     }
-
 }

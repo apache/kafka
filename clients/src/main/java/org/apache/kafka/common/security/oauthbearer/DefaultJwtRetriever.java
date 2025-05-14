@@ -18,19 +18,21 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.net.URL;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.protocolMatches;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.requireConfigured;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 
 /**
  * {@code DefaultJwtRetriever} instantiates and delegates {@link JwtRetriever} API calls to an embedded implementation
@@ -44,10 +46,10 @@ public class DefaultJwtRetriever implements JwtRetriever {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
+        URL tokenEndpointUrl = validateUrl(config, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
+        if (protocolMatches(tokenEndpointUrl, "file")) {
             delegate = new FileJwtRetriever();
         } else {
             delegate = new ClientCredentialsJwtRetriever();
@@ -58,10 +60,7 @@ public class DefaultJwtRetriever implements JwtRetriever {
 
     @Override
     public String retrieve() throws JwtRetrieverException {
-        if (delegate == null)
-            throw new IllegalStateException("JWT retriever delegate is null; please call configure() first");
-
-        return delegate.retrieve();
+        return requireConfigured(delegate, () -> "JWT retriever delegate", getClass()).retrieve();
     }
 
     @Override

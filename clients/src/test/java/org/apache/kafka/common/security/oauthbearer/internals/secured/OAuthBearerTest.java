@@ -54,7 +54,6 @@ import java.util.function.Consumer;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -69,14 +68,21 @@ public abstract class OAuthBearerTest {
     protected void assertThrowsWithMessage(Class<? extends Exception> clazz,
         Executable executable,
         String substring) {
-        assertErrorMessageContains(assertThrows(clazz, executable).getMessage(), substring);
+        Exception exception = assertThrows(clazz, executable);
+        assertErrorMessageContains(exception, substring);
     }
 
-    protected void assertErrorMessageContains(String actual, String expectedSubstring) {
-        assertTrue(actual.contains(expectedSubstring),
-            String.format("Expected exception message (\"%s\") to contain substring (\"%s\")",
-                actual,
-                expectedSubstring));
+    protected void assertErrorMessageContains(Throwable error, String expectedSubstring) {
+        if (!error.getMessage().contains(expectedSubstring)) {
+            fail(
+                String.format(
+                    "Expected exception message (\"%s\") to contain substring (\"%s\")",
+                    error.getMessage(),
+                    expectedSubstring
+                ),
+                error
+            );
+        }
     }
 
     protected String createBase64JsonJwtSection(Consumer<ObjectNode> c) {

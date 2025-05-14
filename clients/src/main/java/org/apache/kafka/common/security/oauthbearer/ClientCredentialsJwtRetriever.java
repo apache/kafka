@@ -17,29 +17,32 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerJaasConfig;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.net.URL;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
-import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
-import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.requireConfigured;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.urlencodeHeader;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 
 /**
  *
@@ -47,64 +50,46 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
     private HttpJwtRetriever delegate;
+    private Optional<SslResource> sslResource;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        OAuthBearerConfig config = new OAuthBearerConfig(configs, saslMechanism);
+        OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries);
 
-        JaasOptionsUtils jou = new JaasOptionsUtils(JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries));
-        String clientId = jou.validateString(CLIENT_ID_CONFIG);
-        String clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
-        String scope = jou.validateString(SCOPE_CONFIG, false);
+        URL tokenEndpointUrl = validateUrl(config, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        SSLSocketFactory sslSocketFactory = null;
+        String clientId = jaasConfig.getString(CLIENT_ID_CONFIG);
+        String clientSecret = jaasConfig.getString(CLIENT_SECRET_CONFIG);
+        String scope = jaasConfig.containsKey(SCOPE_CONFIG) ? jaasConfig.getString(SCOPE_CONFIG) : null;
 
-        if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
-            sslSocketFactory = jou.createSSLSocketFactory();
+        sslResource = OAuthBearerUtils.maybeCreateSslResource(tokenEndpointUrl, jaasConfig);
 
-        boolean urlencodeHeader = validateUrlencodeHeader(cu);
+        boolean urlencodeHeader = urlencodeHeader(config);
 
         delegate = new HttpJwtRetriever(clientId,
             clientSecret,
             scope,
-            sslSocketFactory,
+            sslResource.map(r -> r.sslContext().getSocketFactory()).orElse(null),
             tokenEndpointUrl.toString(),
-            cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
-            cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
-            cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
-            cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false),
+            config.getLong(SASL_LOGIN_RETRY_BACKOFF_MS),
+            config.getLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
+            config.containsKey(SASL_LOGIN_CONNECT_TIMEOUT_MS) ? config.getInt(SASL_LOGIN_CONNECT_TIMEOUT_MS) : null,
+            config.containsKey(SASL_LOGIN_READ_TIMEOUT_MS) ? config.getInt(SASL_LOGIN_READ_TIMEOUT_MS) : null,
             urlencodeHeader);
     }
 
     @Override
     public String retrieve() throws JwtRetrieverException {
-        if (delegate == null)
-            throw new IllegalStateException("JWT retriever delegate is null; please call configure() first");
-
         try {
-            return delegate.retrieve();
+            return requireConfigured(delegate, () -> "JWT HTTP client", getClass()).retrieve();
         } catch (IOException e) {
             throw new JwtRetrieverException(e);
         }
     }
 
-    /**
-     * In some cases, the incoming {@link Map} doesn't contain a value for
-     * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
-     * will cause a {@link NullPointerException} when it is later unboxed.
-     *
-     * <p/>
-     *
-     * This utility method ensures that we have a non-{@code null} value to use in the
-     * {@link HttpJwtRetriever} constructor.
-     */
-    static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
-        Boolean urlencodeHeader = configurationUtils.get(SASL_OAUTHBEARER_HEADER_URLENCODE);
-
-        if (urlencodeHeader != null)
-            return urlencodeHeader;
-        else
-            return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
+    @Override
+    public void close() throws IOException {
+        sslResource.ifPresent(r -> Utils.closeQuietly(r, "SSL resource"));
     }
 }
