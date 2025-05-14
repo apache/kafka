@@ -77,9 +77,21 @@ public class ListConfigResourcesRequest extends AbstractRequest {
         return data.toString();
     }
 
+    /**
+     * Return the default supported config resource types in different request version.
+     * If there is a new config resource type, the ListConfigResourcesRequest should bump a new request version to include it.
+     * For v0, the default config resource types contain CLIENT_METRICS (16).
+     * For v1, the default config resource types contain TOPIC (2), BROKER (4), BROKER_LOGGER (8), CLIENT_METRICS (16), and GROUP (32).
+     */
     public List<Byte> defaultResourceTypes() {
         return version() == 0 ?
             List.of(ConfigResource.Type.CLIENT_METRICS.id()) :
-            Arrays.stream(ConfigResource.Type.values()).map(ConfigResource.Type::id).collect(Collectors.toList());
+            List.of(
+                ConfigResource.Type.TOPIC.id(),
+                ConfigResource.Type.BROKER.id(),
+                ConfigResource.Type.BROKER_LOGGER.id(),
+                ConfigResource.Type.CLIENT_METRICS.id(),
+                ConfigResource.Type.GROUP.id()
+            );
     }
 }

@@ -2926,6 +2926,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  /**
+   * Handle ListConfigResourcesRequest. If resourceTypes are not specified, it uses ListConfigResourcesRequest#defaultResourceTypes
+   * to retrieve config resources. If resourceTypes are specified, it returns matched config resources.
+   * An unknown config resource type is ignored.
+   */
   private def handleListConfigResources(request: RequestChannel.Request): Unit = {
     val listConfigResourcesRequest = request.body[ListConfigResourcesRequest]
 
