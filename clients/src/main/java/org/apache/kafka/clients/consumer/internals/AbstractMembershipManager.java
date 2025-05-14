@@ -67,12 +67,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     static final Utils.TopicPartitionComparator TOPIC_PARTITION_COMPARATOR = new Utils.TopicPartitionComparator();
 
     /**
-     * TopicIdPartition comparator based on topic name and partition (ignoring topic ID while sorting,
-     * as this is sorted mainly for logging purposes).
-     */
-    static final Utils.TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR = new Utils.TopicIdPartitionComparator();
-
-    /**
      * Group ID of the consumer group the member will be part of, provided when creating the current
      * membership manager.
      */
@@ -376,8 +370,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private void replaceTargetAssignmentWithNewAssignment(Map<Uuid, SortedSet<Integer>> assignment) {
         currentTargetAssignment.updateWith(assignment).ifPresent(updatedAssignment -> {
-            log.debug("Target assignment updated from {} to {}. Member will reconcile it on the next poll.",
-                currentTargetAssignment, updatedAssignment);
+            log.debug("Member {} updated its target assignment from {} to {}. Member will reconcile it on the next poll.",
+                memberId, currentTargetAssignment, updatedAssignment);
             currentTargetAssignment = updatedAssignment;
         });
     }
@@ -517,11 +511,10 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * @param assignedPartitions Full assignment, to update in the subscription state
      * @param addedPartitions    Newly added partitions
      */
-    private void updateSubscriptionAwaitingCallback(SortedSet<TopicIdPartition> assignedPartitions,
+    private void updateSubscriptionAwaitingCallback(TopicIdPartitionSet assignedPartitions,
                                                     SortedSet<TopicPartition> addedPartitions) {
-        Set<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
-        subscriptions.assignFromSubscribedAwaitingCallback(assignedTopicPartitions, addedPartitions);
-        notifyAssignmentChange(assignedTopicPartitions);
+        subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions.topicPartitions(), addedPartitions);
+        notifyAssignmentChange(assignedPartitions.topicPartitions());
     }
 
     /**
@@ -541,6 +534,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         }
         resetEpoch();
         transitionTo(MemberState.JOINING);
+        log.debug("Member {} will join the group on the next call to poll.", memberId);
         clearPendingAssignmentsAndLocalNamesCache();
     }
 
@@ -618,6 +612,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 clearAssignmentAndLeaveGroup();
             });
         } else {
+            log.debug("Member {} attempting to leave has no rebalance callbacks, " +
+                    "so it will clear assignments and transition to send heartbeat to leave group.", memberId);
             clearAssignmentAndLeaveGroup();
         }
 
@@ -708,8 +704,10 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 transitionTo(MemberState.STABLE);
             } else {
                 log.debug("Member {} with epoch {} transitioned to {} after a heartbeat was sent " +
-                        "to ack a previous reconciliation. New assignments are ready to " +
-                        "be reconciled.", memberId, memberEpoch, MemberState.RECONCILING);
+                        "to ack a previous reconciliation. \n" +
+                        "\t\tCurrent assignment: {} \n" +
+                        "\t\tTarget assignment: {}\n",
+                        memberId, memberEpoch, MemberState.RECONCILING, currentAssignment, currentTargetAssignment);
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
@@ -839,7 +837,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         // Find the subset of the target assignment that can be resolved to topic names, and trigger a metadata update
         // if some topic IDs are not resolvable.
-        SortedSet<TopicIdPartition> assignedTopicIdPartitions = findResolvableAssignmentAndTriggerMetadataUpdate();
+        TopicIdPartitionSet assignedTopicIdPartitions = findResolvableAssignmentAndTriggerMetadataUpdate();
         final LocalAssignment resolvedAssignment = new LocalAssignment(currentTargetAssignment.localEpoch, assignedTopicIdPartitions);
 
         if (!currentAssignment.isNone() && resolvedAssignment.partitions.equals(currentAssignment.partitions)) {
@@ -857,7 +855,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
         // being reconciled. Needed for interactions with the centralized subscription state that
         // does not support topic IDs yet, and for the callbacks.
-        SortedSet<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedTopicIdPartitions);
+        SortedSet<TopicPartition> assignedTopicPartitions = assignedTopicIdPartitions.toTopicNamePartitionSet();
         SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         ownedPartitions.addAll(subscriptions.assignedPartitions());
 
@@ -934,7 +932,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * transition. Note that if any of the 2 callbacks fails, the reconciliation should fail.
      */
     private void revokeAndAssign(LocalAssignment resolvedAssignment,
-                                 SortedSet<TopicIdPartition> assignedTopicIdPartitions,
+                                 TopicIdPartitionSet assignedTopicIdPartitions,
                                  SortedSet<TopicPartition> revokedPartitions,
                                  SortedSet<TopicPartition> addedPartitions) {
         CompletableFuture<Void> revocationResult;
@@ -1032,15 +1030,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     }
 
     /**
-     * Build set of {@link TopicPartition} from the given set of {@link TopicIdPartition}.
-     */
-    protected SortedSet<TopicPartition> toTopicPartitionSet(SortedSet<TopicIdPartition> topicIdPartitions) {
-        SortedSet<TopicPartition> result = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-        topicIdPartitions.forEach(topicIdPartition -> result.add(topicIdPartition.topicPartition()));
-        return result;
-    }
-
-    /**
      *  Visible for testing.
      */
     void markReconciliationInProgress() {
@@ -1073,8 +1062,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *     </li>
      * </ol>
      */
-    private SortedSet<TopicIdPartition> findResolvableAssignmentAndTriggerMetadataUpdate() {
-        final SortedSet<TopicIdPartition> assignmentReadyToReconcile = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
+    private TopicIdPartitionSet findResolvableAssignmentAndTriggerMetadataUpdate() {
+        final TopicIdPartitionSet assignmentReadyToReconcile = new TopicIdPartitionSet();
         final HashMap<Uuid, SortedSet<Integer>> unresolved = new HashMap<>(currentTargetAssignment.partitions);
 
         // Try to resolve topic names from metadata cache or subscription cache, and move
@@ -1200,7 +1189,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * @return Future that will complete when the callback execution completes.
      */
     private CompletableFuture<Void> assignPartitions(
-            SortedSet<TopicIdPartition> assignedPartitions,
+            TopicIdPartitionSet assignedPartitions,
             SortedSet<TopicPartition> addedPartitions) {
 
         // Update assignment in the subscription state, and ensure that no fetching or positions
@@ -1218,7 +1207,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 // returning no records, as no topic partitions are marked as fetchable. In contrast, with the classic consumer,
                 // if the first callback fails but the next one succeeds, polling can still retrieve data. To align with
                 // this behavior, we rely on assignedPartitions to avoid such scenarios.
-                subscriptions.enablePartitionsAwaitingCallback(toTopicPartitionSet(assignedPartitions));
+                subscriptions.enablePartitionsAwaitingCallback(assignedPartitions.topicPartitions());
             } else {
                 // Keeping newly added partitions as non-fetchable after the callback failure.
                 // They will be retried on the next reconciliation loop, until it succeeds or the
@@ -1232,7 +1221,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         });
 
         // Clear topic names cache, removing topics that are not assigned to the member anymore.
-        Set<String> assignedTopics = assignedPartitions.stream().map(TopicIdPartition::topic).collect(Collectors.toSet());
+        Set<String> assignedTopics = assignedPartitions.topicNames();
         assignedTopicNamesCache.values().retainAll(assignedTopics);
 
         return result;
@@ -1450,16 +1439,13 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             }
         }
 
-        public LocalAssignment(long localEpoch, SortedSet<TopicIdPartition> topicIdPartitions) {
+        public LocalAssignment(long localEpoch, TopicIdPartitionSet topicIdPartitions) {
+            Objects.requireNonNull(topicIdPartitions);
             this.localEpoch = localEpoch;
-            this.partitions = new HashMap<>();
             if (localEpoch == NONE_EPOCH && !topicIdPartitions.isEmpty()) {
                 throw new IllegalArgumentException("Local epoch must be set if there are partitions");
             }
-            topicIdPartitions.forEach(topicIdPartition -> {
-                Uuid topicId = topicIdPartition.topicId();
-                partitions.computeIfAbsent(topicId, k -> new TreeSet<>()).add(topicIdPartition.partition());
-            });
+            this.partitions = topicIdPartitions.toTopicIdPartitionMap();
         }
 
         public String toString() {
