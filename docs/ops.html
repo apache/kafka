@@ -4104,7 +4104,7 @@ foo
   <p>In order to migrate from ZooKeeper to KRaft you need to use a bridge release. The last bridge release is Kafka 3.9.
     See the <a href="/39/documentation/#kraft_zk_migration">ZooKeeper to KRaft Migration steps</a> in the 3.9 documentation.</p>
 
-<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.9 Tiered Storage</a></h3>
+<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#tiered_storage">6.9 Tiered Storage</a></h3>
 
 <h4 class="anchor-heading"><a id="tiered_storage_overview" class="anchor-link"></a><a href="#tiered_storage_overview">Tiered Storage Overview</a></h4>
 
@@ -4121,12 +4121,12 @@ foo
 
 <h5 class="anchor-heading"><a id="tiered_storage_config_broker" class="anchor-link"></a><a href="#tiered_storage_config_broker">Broker Configurations</a></h5>
 
-<p>By default, Kafka server will not enable tiered storage feature. <code>remote.log.storage.system.enable</code>
+<p>By default, the Kafka server will not enable the tiered storage feature. <code>remote.log.storage.system.enable</code>
   is the property to control whether to enable tiered storage functionality in a broker or not. Setting it to "true" enables this feature.
 </p>
 
 <p><code>RemoteStorageManager</code> is an interface to provide the lifecycle of remote log segments and indexes. Kafka server
-  doesn't provide out-of-the-box implementation of RemoteStorageManager. Configuring <code>remote.log.storage.manager.class.name</code>
+  doesn't provide out-of-the-box implementation of RemoteStorageManager. Users must configure <code>remote.log.storage.manager.class.name</code>
   and <code>remote.log.storage.manager.class.path</code> to specify the implementation of RemoteStorageManager.
 </p>
 
@@ -4261,9 +4261,10 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 <p>While the Tiered Storage works for most use cases, it is still important to be aware of the following limitations:
 <ul>
   <li>No support for compacted topics</li>
-  <li>Deleting tiered storage enabled topics is required before disabling tiered storage at the broker level</li>
+  <li>Disabling tiered storage on all topics where it is enabled is required before disabling tiered storage at the broker level</li>
   <li>Admin actions related to tiered storage feature are only supported on clients from version 3.0 onwards</li>
   <li>No support for log segments missing producer snapshot file. It can happen when topic is created before v2.8.0.</li>
+  <li>Only one partition per fetch request is served from the remote store. This limitation can become a bottleneck for consumer client throughput - consider configuring <code>max.partition.fetch.bytes</code> appropriately.</li>
 </ul>
 
 <p>For more information, please check <a href="https://cwiki.apache.org/confluence/x/9xDOEg">Kafka Tiered Storage GA Release Notes</a>.

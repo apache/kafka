@@ -193,6 +193,39 @@ public class FormatterTest {
     }
 
     @Test
+    public void testStandaloneWithIgnoreFormatted() throws Exception {
+        try (TestEnv testEnv = new TestEnv(1)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            String originalDirectoryId = Uuid.randomUuid().toString();
+            String newDirectoryId = Uuid.randomUuid().toString();
+            formatter1.formatter
+                .setInitialControllers(DynamicVoters.parse("1@localhost:8020:" + originalDirectoryId))
+                .run();
+            assertEquals("Formatting dynamic metadata voter directory " + testEnv.directory(0) +
+                    " with metadata.version " + MetadataVersion.latestProduction() + ".",
+                formatter1.output().trim());
+            assertMetadataDirectoryId(testEnv, Uuid.fromString(originalDirectoryId));
+
+            FormatterContext formatter2 = testEnv.newFormatter();
+            formatter2.formatter
+                .setIgnoreFormatted(true)
+                .setInitialControllers(DynamicVoters.parse("1@localhost:8020:" + newDirectoryId))
+                .run();
+            assertEquals("All of the log directories are already formatted.",
+                formatter2.output().trim());
+            assertMetadataDirectoryId(testEnv, Uuid.fromString(originalDirectoryId));
+        }
+    }
+
+    private void assertMetadataDirectoryId(TestEnv testEnv, Uuid expectedDirectoryId) throws Exception {
+        MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
+            addLogDirs(testEnv.directories).
+            load();
+        MetaProperties logDirProps0 = ensemble.logDirProps().get(testEnv.directory(0));
+        assertEquals(expectedDirectoryId, logDirProps0.directoryId().get());
+    }
+
+    @Test
     public void testOneDirectoryFormattedAndOthersNotFormatted() throws Exception {
         try (TestEnv testEnv = new TestEnv(2)) {
             testEnv.newFormatter().formatter.setDirectories(List.of(testEnv.directory(0))).run();
@@ -368,7 +401,7 @@ public class FormatterTest {
             formatter1.formatter.setFeatureLevel("nonexistent.feature", (short) 1);
             assertEquals("Unsupported feature: nonexistent.feature. Supported features " +
                     "are: eligible.leader.replicas.version, group.version, kraft.version, " +
-                    "share.version, test.feature.version, transaction.version",
+                    "share.version, streams.version, test.feature.version, transaction.version",
                 assertThrows(FormatterException.class,
                     () -> formatter1.formatter.run()).
                         getMessage());

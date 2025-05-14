@@ -57,7 +57,7 @@ import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 public class StandbyTaskCreationIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
-    public static final EmbeddedKafkaCluster CLUSTER = EmbeddedKafkaCluster.withStreamsRebalanceProtocol(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private String safeTestName;
 
