@@ -54,6 +54,7 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
@@ -91,6 +92,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     private final Timer timer;
     private final PartitionWriter writer;
     private final Map<TopicPartition, Long> lastPrunedOffsets;
+    private final AtomicBoolean shouldRunPeriodJob = new AtomicBoolean(true);
 
     public static class Builder {
         private final int nodeId;
@@ -276,6 +278,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     private void setupRecordPruning() {
         log.debug("Scheduling share-group state topic prune job.");
+        if (!shouldRunPeriodJob.get()) {
+            return;
+        }
         timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
             @Override
             public void run() {
@@ -287,7 +292,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                         if (exp != null) {
                             log.error("Received error in share-group state topic prune.", exp);
                         }
-                        // Perpetual recursion, failure or not.
+                        // Perpetual recursion if share groups enabled, failure or not.
                         setupRecordPruning();
                     });
             }
@@ -350,6 +355,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private void setupSnapshotColdPartitions() {
+        if (!shouldRunPeriodJob.get()) {
+            return;
+        }
         log.debug("Scheduling cold share-partition snapshotting.");
         timer.add(new TimerTask(config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
             @Override
@@ -1075,6 +1083,19 @@ public class ShareCoordinatorService implements ShareCoordinator {
     public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
         throwIfNotActive();
         this.runtime.onNewMetadataImage(newImage, delta);
+        boolean enabled = isShareGroupsEnabled(newImage);
+        // enabled    shouldRunFlag         result (XOR)
+        // 0            0               no op on flag, do not call jobs
+        // 0            1               disable flag, do not call jobs                      => action
+        // 1            0               enable flag, call jobs as they are not recursing    => action
+        // 1            1               no op on flag, do not call jobs
+
+        if (enabled ^ shouldRunPeriodJob.get()) {
+            shouldRunPeriodJob.set(enabled);
+            if (enabled) {
+                setupPeriodicJobs();
+            }
+        }
     }
 
     TopicPartition topicPartitionFor(SharePartitionKey key) {
@@ -1089,5 +1110,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
         if (!isActive.get()) {
             throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
         }
+    }
+
+    private boolean isShareGroupsEnabled(MetadataImage image) {
+        return ShareVersion.fromFeatureLevel(
+            image.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
+        ).supportsShareGroups();
     }
 }
