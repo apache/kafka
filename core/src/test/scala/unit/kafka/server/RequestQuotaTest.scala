@@ -284,7 +284,7 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder(
+          OffsetFetchRequest.Builder.forTopicNames(
             new OffsetFetchRequestData()
               .setGroups(List(
                 new OffsetFetchRequestData.OffsetFetchRequestGroup()

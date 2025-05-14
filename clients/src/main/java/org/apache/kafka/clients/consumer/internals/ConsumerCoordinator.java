@@ -1494,7 +1494,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     .collect(Collectors.toList())))
             .collect(Collectors.toList());
 
-        OffsetFetchRequest.Builder requestBuilder = new OffsetFetchRequest.Builder(
+        OffsetFetchRequest.Builder requestBuilder = OffsetFetchRequest.Builder.forTopicNames(
             new OffsetFetchRequestData()
                 .setRequireStable(true)
                 .setGroups(List.of(
