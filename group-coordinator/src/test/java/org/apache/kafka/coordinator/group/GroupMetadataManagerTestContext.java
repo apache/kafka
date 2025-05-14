@@ -1453,7 +1453,7 @@ public class GroupMetadataManagerTestContext {
                 fail("Unexpected exception: " + e.getMessage());
             }
             return null;
-        }).collect(Collectors.toList());
+        }).toList();
 
         // Second join requests
         List<CompletableFuture<JoinGroupResponseData>> secondJoinFutures = IntStream.range(0, numMembers).mapToObj(i -> {
@@ -1463,7 +1463,7 @@ public class GroupMetadataManagerTestContext {
             assertFalse(joinResult.joinFuture.isDone());
 
             return joinResult.joinFuture;
-        }).collect(Collectors.toList());
+        }).toList();
 
         // Advance clock by initial rebalance delay.
         assertNoOrEmptyResult(sleep(classicGroupInitialRebalanceDelayMs));
@@ -1798,8 +1798,6 @@ public class GroupMetadataManagerTestContext {
             .setRackId(null)
             .setInstanceId(null)
             .setRebalanceTimeoutMs(1500)
-            .setAssignedTasks(TasksTuple.EMPTY)
-            .setTasksPendingRevocation(TasksTuple.EMPTY)
             .setTopologyEpoch(0)
             .setClientTags(Map.of())
             .setProcessId(DEFAULT_PROCESS_ID)

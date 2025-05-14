@@ -477,8 +477,8 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
-    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(final String groupId, final Set<TopicPartition> partitions, final DeleteShareGroupOffsetsOptions options) {
-        return adminDelegate.deleteShareGroupOffsets(groupId, partitions, options);
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(final String groupId, final Set<String> topics, final DeleteShareGroupOffsetsOptions options) {
+        return adminDelegate.deleteShareGroupOffsets(groupId, topics, options);
     }
 
     @Override

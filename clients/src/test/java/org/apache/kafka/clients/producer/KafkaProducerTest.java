@@ -38,6 +38,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
@@ -75,6 +76,7 @@ import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -87,7 +89,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -104,6 +105,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -236,14 +238,7 @@ public class KafkaProducerTest {
 
     @Test
     public void testAcksAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(
-                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(
-                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(
-                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
+        Properties baseProps = baseProperties();
 
         Properties validProps = new Properties() {{
                 putAll(baseProps);
@@ -346,11 +341,7 @@ public class KafkaProducerTest {
 
     @Test
     public void testRetriesAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
+        Properties baseProps = baseProperties();
 
         Properties validProps = new Properties() {{
                 putAll(baseProps);
@@ -412,13 +403,17 @@ public class KafkaProducerTest {
             "Must set retries to non-zero when using the transactional producer.");
     }
 
+    private Properties baseProperties() {
+        Properties baseProps = new Properties();
+        baseProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        baseProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        baseProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        return baseProps;
+    }
+
     @Test
     public void testInflightRequestsAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
+        Properties baseProps = baseProperties();
 
         Properties validProps = new Properties() {{
                 putAll(baseProps);
@@ -1316,7 +1311,7 @@ public class KafkaProducerTest {
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
-            Future<?> future = executor.submit(producer::initTransactions);
+            Future<?> future = executor.submit(() -> producer.initTransactions());
             TestUtils.waitForCondition(client::hasInFlightRequests,
                 "Timed out while waiting for expected `InitProducerId` request to be sent");
 
@@ -1391,6 +1386,59 @@ public class KafkaProducerTest {
         }
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "true, false",
+        "true, true",
+        "false, true"
+    })
+    public void testInitTransactionsWithKeepPreparedTxnAndTwoPhaseCommit(boolean keepPreparedTxn, boolean enable2PC) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-txn-id");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        if (enable2PC) {
+            configs.put(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG, true);
+        }
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        // Capture flags from the InitProducerIdRequest
+        boolean[] requestFlags = new boolean[2]; // [keepPreparedTxn, enable2Pc]
+        
+        client.prepareResponse(
+            request -> request instanceof FindCoordinatorRequest &&
+                ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
+            FindCoordinatorResponse.prepareResponse(Errors.NONE, "test-txn-id", NODE));
+            
+        client.prepareResponse(
+            request -> {
+                if (request instanceof InitProducerIdRequest) {
+                    InitProducerIdRequest initRequest = (InitProducerIdRequest) request;
+                    requestFlags[0] = initRequest.data().keepPreparedTxn();
+                    requestFlags[1] = initRequest.data().enable2Pc();
+                    return true;
+                }
+                return false;
+            },
+            initProducerIdResponse(1L, (short) 5, Errors.NONE));
+            
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions(keepPreparedTxn);
+            
+            // Verify request flags match expected values
+            assertEquals(keepPreparedTxn, requestFlags[0], 
+                "keepPreparedTxn flag should match input parameter");
+            assertEquals(enable2PC, requestFlags[1], 
+                "enable2Pc flag should match producer configuration");
+        }
+    }
+    
     @Test
     public void testClusterAuthorizationFailure() throws Exception {
         int maxBlockMs = 500;
@@ -1451,7 +1499,7 @@ public class KafkaProducerTest {
         KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
 
         String topic = "foo";
-        TopicPartition topicPartition = new TopicPartition(topic, 0);
+        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, topic);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
 
         when(ctx.sender.isRunning()).thenReturn(true);
@@ -1490,8 +1538,8 @@ public class KafkaProducerTest {
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some-txn", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
-        client.prepareResponse(produceResponse(topicPartition, 1L, Errors.CONCURRENT_TRANSACTIONS, 0, 1));
-        client.prepareResponse(produceResponse(topicPartition, 1L, Errors.NONE, 0, 1));
+        client.prepareResponse(produceResponse(topicIdPartition, 1L, Errors.CONCURRENT_TRANSACTIONS, 0, 1));
+        client.prepareResponse(produceResponse(topicIdPartition, 1L, Errors.NONE, 0, 1));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(
@@ -1535,7 +1583,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCommitTransactionWithRecordTooLargeException() throws Exception {
+    public void testCommitTransactionWithRecordTooLargeException() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -1565,7 +1613,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCommitTransactionWithMetadataTimeoutForMissingTopic() throws Exception {
+    public void testCommitTransactionWithMetadataTimeoutForMissingTopic() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -1602,7 +1650,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCommitTransactionWithMetadataTimeoutForPartitionOutOfRange() throws Exception {
+    public void testCommitTransactionWithMetadataTimeoutForPartitionOutOfRange() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -1639,7 +1687,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCommitTransactionWithSendToInvalidTopic() throws Exception {
+    public void testCommitTransactionWithSendToInvalidTopic() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -1777,6 +1825,7 @@ public class KafkaProducerTest {
         KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
 
         String topic = "foo";
+        Uuid topicId = Uuid.fromString("klZ9sa2rSvig6QpgGXzALT");
         TopicPartition topicPartition = new TopicPartition(topic, 0);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
 
@@ -1816,7 +1865,7 @@ public class KafkaProducerTest {
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some-txn", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
-        client.prepareResponse(produceResponse(topicPartition, 1L, Errors.NONE, 0, 1));
+        client.prepareResponse(produceResponse(new TopicIdPartition(topicId, topicPartition), 1L, Errors.NONE, 0, 1));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(
@@ -2075,7 +2124,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testSendToInvalidTopic() throws Exception {
+    public void testSendToInvalidTopic() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
@@ -2592,7 +2641,7 @@ public class KafkaProducerTest {
         private final Map<String, Object> configs;
         private final Serializer<T> serializer;
         private final Partitioner partitioner = mock(Partitioner.class);
-        private final KafkaThread ioThread = mock(KafkaThread.class);
+        private final Sender.SenderThread senderThread = mock(Sender.SenderThread.class);
         private final List<ProducerInterceptor<T, T>> interceptors = new ArrayList<>();
         private ProducerMetadata metadata = mock(ProducerMetadata.class);
         private RecordAccumulator accumulator = mock(RecordAccumulator.class);
@@ -2673,7 +2722,7 @@ public class KafkaProducerTest {
                 interceptors,
                 partitioner,
                 time,
-                ioThread,
+                senderThread,
                 Optional.empty()
             );
         }
@@ -2699,9 +2748,9 @@ public class KafkaProducerTest {
     }
 
     @SuppressWarnings("deprecation")
-    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, int logStartOffset) {
+    private ProduceResponse produceResponse(TopicIdPartition topicIdPartition, long offset, Errors error, int throttleTimeMs, int logStartOffset) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(tp, resp);
+        Map<TopicIdPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(topicIdPartition, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
@@ -2881,8 +2930,12 @@ public class KafkaProducerTest {
 
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
-    private static final Map<String, String> TAGS = Collections.singletonMap("k", "v");
+    private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>();
     private static final double VALUE = 123.0;
+
+    static {
+        TAGS.put("t1", "v1");
+    }
 
     public static class MonitorableSerializer extends MockSerializer implements Monitorable {
 

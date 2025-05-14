@@ -62,7 +62,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -96,12 +95,7 @@ import static org.mockito.Mockito.when;
 public class InternalTopicManagerTest {
     private final Node broker1 = new Node(0, "dummyHost-1", 1234);
     private final Node broker2 = new Node(1, "dummyHost-2", 1234);
-    private final List<Node> cluster = new ArrayList<Node>(2) {
-        {
-            add(broker1);
-            add(broker2);
-        }
-    };
+    private final List<Node> cluster = List.of(broker1, broker2);
     private final String topic1 = "test_topic";
     private final String topic2 = "test_topic_2";
     private final String topic3 = "test_topic_3";
@@ -115,16 +109,14 @@ public class InternalTopicManagerTest {
     private InternalTopicManager internalTopicManager;
     private final MockTime time = new MockTime(0);
 
-    private final Map<String, Object> config = new HashMap<String, Object>() {
-        {
-            put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");
-            put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker1.host() + ":" + broker1.port());
-            put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1);
-            put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 16384);
-            put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), 100);
-            put(StreamsConfig.RETRY_BACKOFF_MS_CONFIG, 10);
-        }
-    };
+    private final Map<String, Object> config = Map.of(
+        StreamsConfig.APPLICATION_ID_CONFIG, "app-id",
+        StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker1.host() + ":" + broker1.port(),
+        StreamsConfig.REPLICATION_FACTOR_CONFIG, 1,
+        StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 16384,
+        StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), 100,
+        StreamsConfig.RETRY_BACKOFF_MS_CONFIG, 10
+    );
 
     @BeforeEach
     public void init() {
@@ -361,8 +353,8 @@ public class InternalTopicManagerTest {
         final InternalTopicManager internalTopicManager =
                 new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
         try {
-            final Set<String> topic1set = new HashSet<String>(Collections.singletonList(topic1));
-            final Set<String> topic2set = new HashSet<String>(Collections.singletonList(topic2));
+            final Set<String> topic1set = new HashSet<>(Collections.singletonList(topic1));
+            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
 
             internalTopicManager.getNumPartitions(topic1set, topic2set);
 
@@ -373,8 +365,8 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(1);
 
         try {
-            final Set<String> topic1set = new HashSet<String>(Collections.singletonList(topic1));
-            final Set<String> topic2set = new HashSet<String>(Collections.singletonList(topic2));
+            final Set<String> topic1set = new HashSet<>(Collections.singletonList(topic1));
+            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
 
             internalTopicManager.getNumPartitions(topic1set, topic2set);
 
@@ -710,26 +702,38 @@ public class InternalTopicManagerTest {
         internalTopicManager.makeReady(Collections.singletonMap(topic4, topicConfig4));
 
         assertEquals(Set.of(topic1, topic2, topic3, topic4), mockAdminClient.listTopics().names().get());
-        assertEquals(new TopicDescription(topic1, false, new ArrayList<TopicPartitionInfo>() {
-            {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
-            }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic1)).topicNameValues().get(topic1).get());
-        assertEquals(new TopicDescription(topic2, false, new ArrayList<TopicPartitionInfo>() {
-            {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
-            }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic2)).topicNameValues().get(topic2).get());
-        assertEquals(new TopicDescription(topic3, false, new ArrayList<TopicPartitionInfo>() {
-            {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
-            }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic3)).topicNameValues().get(topic3).get());
-        assertEquals(new TopicDescription(topic4, false, new ArrayList<TopicPartitionInfo>() {
-            {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
-            }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic4)).topicNameValues().get(topic4).get());
+        assertEquals(
+            new TopicDescription(
+                topic1,
+                false,
+                List.of(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()))
+            ),
+            mockAdminClient.describeTopics(Collections.singleton(topic1)).topicNameValues().get(topic1).get()
+        );
+        assertEquals(
+            new TopicDescription(
+                topic2,
+                false,
+                List.of(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()))
+            ),
+            mockAdminClient.describeTopics(Collections.singleton(topic2)).topicNameValues().get(topic2).get()
+        );
+        assertEquals(
+            new TopicDescription(
+                topic3,
+                false,
+                List.of(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()))
+            ),
+            mockAdminClient.describeTopics(Collections.singleton(topic3)).topicNameValues().get(topic3).get()
+        );
+        assertEquals(
+            new TopicDescription(
+                topic4,
+                false,
+                List.of(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()))
+            ),
+            mockAdminClient.describeTopics(Collections.singleton(topic4)).topicNameValues().get(topic4).get()
+        );
 
         final ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic1);
         final ConfigResource resource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
@@ -804,13 +808,12 @@ public class InternalTopicManagerTest {
         mockAdminClient.addTopic(
             false,
             topic1,
-            new ArrayList<TopicPartitionInfo>() {
-                {
-                    add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
-                    add(new TopicPartitionInfo(1, broker1, singleReplica, Collections.emptyList()));
-                }
-            },
-            null);
+            List.of(
+                new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()),
+                new TopicPartitionInfo(1, broker1, singleReplica, Collections.emptyList())
+            ),
+            null
+        );
 
         try {
             final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());

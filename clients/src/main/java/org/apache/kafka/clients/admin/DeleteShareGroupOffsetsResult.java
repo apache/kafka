@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -33,27 +32,27 @@ import java.util.Set;
 @InterfaceStability.Evolving
 public class DeleteShareGroupOffsetsResult {
 
-    private final KafkaFuture<Map<TopicPartition, ApiException>> future;
-    private final Set<TopicPartition> partitions;
+    private final KafkaFuture<Map<String, ApiException>> future;
+    private final Set<String> topics;
 
-    DeleteShareGroupOffsetsResult(KafkaFuture<Map<TopicPartition, ApiException>> future, Set<TopicPartition> partitions) {
+    DeleteShareGroupOffsetsResult(KafkaFuture<Map<String, ApiException>> future, Set<String> topics) {
         this.future = future;
-        this.partitions = partitions;
+        this.topics = topics;
     }
 
     /**
      * Return a future which succeeds only if all the deletions succeed.
-     * If not, the first partition error shall be returned.
+     * If not, the first topic error shall be returned.
      */
     public KafkaFuture<Void> all() {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
-        this.future.whenComplete((topicPartitions, throwable) -> {
+        this.future.whenComplete((topicResults, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
             } else {
-                for (TopicPartition partition : partitions) {
-                    if (maybeCompleteExceptionally(topicPartitions, partition, result)) {
+                for (String topic : topics) {
+                    if (maybeCompleteExceptionally(topicResults, topic, result)) {
                         return;
                     }
                 }
@@ -64,32 +63,32 @@ public class DeleteShareGroupOffsetsResult {
     }
 
     /**
-     * Return a future which can be used to check the result for a given partition.
+     * Return a future which can be used to check the result for a given topic.
      */
-    public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
-        if (!partitions.contains(partition)) {
-            throw new IllegalArgumentException("Partition " + partition + " was not included in the original request");
+    public KafkaFuture<Void> topicResult(final String topic) {
+        if (!topics.contains(topic)) {
+            throw new IllegalArgumentException("Topic " + topic + " was not included in the original request");
         }
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
-        this.future.whenComplete((topicPartitions, throwable) -> {
+        this.future.whenComplete((topicResults, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
-            } else if (!maybeCompleteExceptionally(topicPartitions, partition, result)) {
+            } else if (!maybeCompleteExceptionally(topicResults, topic, result)) {
                 result.complete(null);
             }
         });
         return result;
     }
 
-    private boolean maybeCompleteExceptionally(Map<TopicPartition, ApiException> partitionLevelErrors,
-                                               TopicPartition partition,
+    private boolean maybeCompleteExceptionally(Map<String, ApiException> topicLevelErrors,
+                                               String topic,
                                                KafkaFutureImpl<Void> result) {
         Throwable exception;
-        if (!partitionLevelErrors.containsKey(partition)) {
-            exception = new IllegalArgumentException("Offset deletion result for partition \"" + partition + "\" was not included in the response");
+        if (!topicLevelErrors.containsKey(topic)) {
+            exception = new IllegalArgumentException("Offset deletion result for topic \"" + topic + "\" was not included in the response");
         } else {
-            exception = partitionLevelErrors.get(partition);
+            exception = topicLevelErrors.get(topic);
         }
 
         if (exception != null) {

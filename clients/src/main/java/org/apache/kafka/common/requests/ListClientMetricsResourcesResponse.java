@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.clients.admin.ClientMetricsResourceListing;
 import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -48,9 +47,9 @@ public class ListClientMetricsResourcesResponse extends AbstractResponse {
         return errorCounts(Errors.forCode(data.errorCode()));
     }
 
-    public static ListClientMetricsResourcesResponse parse(ByteBuffer buffer, short version) {
+    public static ListClientMetricsResourcesResponse parse(Readable readable, short version) {
         return new ListClientMetricsResourcesResponse(new ListClientMetricsResourcesResponseData(
-            new ByteBufferAccessor(buffer), version));
+            readable, version));
     }
 
     @Override

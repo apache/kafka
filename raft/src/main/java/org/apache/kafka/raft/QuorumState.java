@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.slf4j.Logger;
 
@@ -716,7 +717,7 @@ public class QuorumState {
 
         LeaderState<T> state = new LeaderState<>(
             time,
-            ReplicaKey.of(localIdOrThrow(), localDirectoryId),
+            localVoterNodeOrThrow(),
             epoch(),
             epochStartOffset,
             partitionState.lastVoterSet(),
@@ -724,7 +725,6 @@ public class QuorumState {
             partitionState.lastKraftVersion(),
             candidateState.epochElection().grantingVoters(),
             accumulator,
-            localListeners,
             fetchTimeoutMs,
             logContext,
             kafkaRaftMetrics

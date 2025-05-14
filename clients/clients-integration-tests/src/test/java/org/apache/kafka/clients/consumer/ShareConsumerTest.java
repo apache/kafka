@@ -36,6 +36,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
@@ -55,7 +56,6 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
@@ -113,8 +113,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 @ClusterTestDefaults(
     serverProperties = {
         @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
-        @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-        @ClusterConfigProperty(key = "group.share.enable", value = "true"),
         @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
         @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
@@ -122,10 +120,8 @@ import static org.junit.jupiter.api.Assertions.fail;
         @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
         @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
-        @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
-        @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
-    },
-    types = {Type.KRAFT}
+        @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1")
+    }
 )
 public class ShareConsumerTest {
     private final ClusterInstance cluster;
@@ -1713,11 +1709,9 @@ public class ShareConsumerTest {
     public void testShareAutoOffsetResetEarliestAfterLsoMovement() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (
-            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
             Producer<byte[], byte[]> producer = createProducer();
             Admin adminClient = createAdminClient()
         ) {
-            shareConsumer.subscribe(Set.of(tp.topic()));
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
@@ -1815,8 +1809,7 @@ public class ShareConsumerTest {
         // Set the auto offset reset to 3 hours before current time
         // so the consumer should consume all messages (3 records)
         alterShareAutoOffsetReset("group2", "by_duration:PT3H");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group2");
-             Producer<byte[], byte[]> producer = createProducer()) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group2")) {
 
             shareConsumer.subscribe(Set.of(tp.topic()));
             List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 3);
@@ -1826,7 +1819,7 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testShareAutoOffsetResetByDurationInvalidFormat() throws Exception {
+    public void testShareAutoOffsetResetByDurationInvalidFormat() {
         // Test invalid duration format
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
@@ -1852,15 +1845,12 @@ public class ShareConsumerTest {
         brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
-            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
             @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
-            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
-            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3")
         }
     )
     @Timeout(90)
@@ -1975,10 +1965,7 @@ public class ShareConsumerTest {
         );
 
         // top the producer after some time (but after coordinator shutdown)
-        service.schedule(() -> {
-                prodState.done().set(true);
-            }, 10L, TimeUnit.SECONDS
-        );
+        service.schedule(() -> prodState.done().set(true), 10L, TimeUnit.SECONDS);
 
         // wait for both producer and consumer to finish
         TestUtils.waitForCondition(
@@ -2000,19 +1987,114 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
+    @ClusterTest
+    public void testDeliveryCountNotIncreaseAfterSessionClose() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
+            for (int i = 0; i < 10; i++) {
+                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
+            }
+        }
+
+        // Perform the fetch, close in a loop.
+        for (int count = 0; count < ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT; count++) {
+            consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, false);
+        }
+
+        // If the delivery count is increased, consumer will get nothing.
+        int consumedMessageCount = consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, true);
+        // The records returned belong to offsets 0-9.
+        assertEquals(10, consumedMessageCount);
+        verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    @ClusterTest
+    public void testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null,
+                "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
+            assertEquals(2, records.count());
+            // Acknowledge the first record with AcknowledgeType.RELEASE
+            shareConsumer.acknowledge(records.records(tp).get(0), AcknowledgeType.RELEASE);
+            Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+            assertEquals(1, result.size());
+        }
+
+        // Test delivery count
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of())) {
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
+            assertEquals(2, records.count());
+            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
+            assertEquals((short) 1, records.records(tp).get(1).deliveryCount().get());
+        }
+    }
+
+    @ClusterTest(
+        serverProperties = {
+            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "2"),
+        }
+    )
+    public void testBehaviorOnDeliveryCountBoundary() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null,
+                "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals((short) 1, records.records(tp).get(0).deliveryCount().get());
+            // Acknowledge the record with AcknowledgeType.RELEASE.
+            shareConsumer.acknowledge(records.records(tp).get(0), AcknowledgeType.RELEASE);
+            Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+            assertEquals(1, result.size());
+
+            // Consume again, the delivery count should be 2.
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
+
+        }
+
+        // Start again and same record should be delivered
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of())) {
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
+        }
+    }
+
     @ClusterTest(
         brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
-            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
             @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
-            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
-            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3")
         }
     )
     @Timeout(150)
@@ -2053,19 +2135,68 @@ public class ShareConsumerTest {
         );
 
         // let the complex consumer read the messages
-        service.schedule(() -> {
-                prodState.done().set(true);
-            }, 10L, TimeUnit.SECONDS
-        );
+        service.schedule(() -> prodState.done().set(true), 10L, TimeUnit.SECONDS);
 
         // all messages which can be read are read, some would be redelivered
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
 
-        assertTrue(prodState.count().get() < complexCons1.recordsRead());
+        assertTrue(prodState.count().get() < complexCons1.recordsRead(),
+            String.format("Producer (%d) and share consumer (%d) record count mismatch.", prodState.count().get(), complexCons1.recordsRead()));
 
         shutdownExecutorService(service);
 
         verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "group.share.max.size", value = "3") // Setting max group size to 3
+        }
+    )
+    public void testShareGroupMaxSizeConfigExceeded() throws Exception {
+        // creating 3 consumers in the group1
+        ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+        ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1");
+        ShareConsumer<byte[], byte[]> shareConsumer3 = createShareConsumer("group1");
+
+        shareConsumer1.subscribe(Set.of(tp.topic()));
+        shareConsumer2.subscribe(Set.of(tp.topic()));
+        shareConsumer3.subscribe(Set.of(tp.topic()));
+
+        shareConsumer1.poll(Duration.ofMillis(5000));
+        shareConsumer2.poll(Duration.ofMillis(5000));
+        shareConsumer3.poll(Duration.ofMillis(5000));
+
+        ShareConsumer<byte[], byte[]> shareConsumer4 = createShareConsumer("group1");
+        shareConsumer4.subscribe(Set.of(tp.topic()));
+
+        TestUtils.waitForCondition(() -> {
+            try {
+                shareConsumer4.poll(Duration.ofMillis(5000));
+            } catch (GroupMaxSizeReachedException e) {
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+            return false;
+        }, 30000, 200L, () -> "The 4th consumer was not kicked out of the group");
+
+        shareConsumer1.close();
+        shareConsumer2.close();
+        shareConsumer3.close();
+        shareConsumer4.close();
     }
 
     @ClusterTest
@@ -2498,8 +2629,7 @@ public class ShareConsumerTest {
                                 int maxPolls,
                                 boolean commit) {
         return assertDoesNotThrow(() -> {
-            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
-                groupId)) {
+            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
                 shareConsumer.subscribe(Set.of(tp.topic()));
                 return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
             }
@@ -2764,10 +2894,6 @@ public class ShareConsumerTest {
             this.configs.putAll(additionalProperties);
             this.configs.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
             this.configs.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-        }
-
-        void stop() {
-            state.done().set(true);
         }
 
         @Override
