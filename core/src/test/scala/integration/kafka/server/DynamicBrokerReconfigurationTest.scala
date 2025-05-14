@@ -59,6 +59,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.MetadataLogConfig
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
+import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, UnifiedLog}
@@ -935,7 +936,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
         assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
         val thread = fetcherThreads.head._2
         assertEquals(Some(truncationOffset), thread.fetchState(tp).map(_.fetchOffset))
-        assertEquals(Some(Truncating), thread.fetchState(tp).map(_.state))
+        assertEquals(Some(ReplicaState.TRUNCATING), thread.fetchState(tp).map(_.state))
       }
     }
   }

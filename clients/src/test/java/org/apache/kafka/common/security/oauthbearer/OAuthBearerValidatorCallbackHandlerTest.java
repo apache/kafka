@@ -17,27 +17,30 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
@@ -53,7 +56,10 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         String accessToken = builder.build();
 
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, allAudiences);
-        OAuthBearerValidatorCallbackHandler handler = createHandler(configs, builder);
+        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
+        JwtValidator jwtValidator = createJwtValidator(configs, verificationKeyResolver);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        handler.init(verificationKeyResolver, jwtValidator);
 
         try {
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
@@ -81,9 +87,68 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         assertInvalidAccessTokenFails(createAccessKey("{}", "{}", "{}"), substring);
     }
 
+    @Test
+    public void testHandlerInitThrowsException() throws IOException {
+        IOException initError = new IOException("init() error");
+
+        AccessTokenBuilder builder = new AccessTokenBuilder()
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
+        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
+        JwtValidator jwtValidator = new JwtValidator() {
+            @Override
+            public void init() throws IOException {
+                throw initError;
+            }
+
+            @Override
+            public OAuthBearerToken validate(String accessToken) throws ValidateException {
+                return null;
+            }
+        };
+
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+
+        // An error initializing the JwtValidator should cause OAuthBearerValidatorCallbackHandler.init() to fail.
+        KafkaException root = assertThrows(
+            KafkaException.class,
+            () -> handler.init(verificationKeyResolver, jwtValidator)
+        );
+        assertNotNull(root.getCause());
+        assertEquals(initError, root.getCause());
+    }
+
+    @Test
+    public void testHandlerCloseDoesNotThrowException() throws IOException {
+        AccessTokenBuilder builder = new AccessTokenBuilder()
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
+        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
+        JwtValidator jwtValidator = new JwtValidator() {
+            @Override
+            public void close() throws IOException {
+                throw new IOException("close() error");
+            }
+
+            @Override
+            public OAuthBearerToken validate(String accessToken) throws ValidateException {
+                return null;
+            }
+        };
+
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        handler.init(verificationKeyResolver, jwtValidator);
+
+        // An error closings the JwtValidator should *not* cause OAuthBearerValidatorCallbackHandler.close() to fail.
+        assertDoesNotThrow(handler::close);
+    }
+
     private void assertInvalidAccessTokenFails(String accessToken, String expectedMessageSubstring) throws Exception {
+        AccessTokenBuilder builder = new AccessTokenBuilder()
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         Map<String, ?> configs = getSaslConfigs();
-        OAuthBearerValidatorCallbackHandler handler = createHandler(configs, new AccessTokenBuilder());
+        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
+        JwtValidator jwtValidator = createJwtValidator(configs, verificationKeyResolver);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        handler.init(verificationKeyResolver, jwtValidator);
 
         try {
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
@@ -98,22 +163,11 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         }
     }
 
-    private OAuthBearerValidatorCallbackHandler createHandler(Map<String, ?> options,
-        AccessTokenBuilder builder) {
-        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-        CloseableVerificationKeyResolver verificationKeyResolver = (jws, nestingContext) ->
-                builder.jwk().getPublicKey();
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(options, verificationKeyResolver);
-        handler.init(verificationKeyResolver, accessTokenValidator);
-        return handler;
+    private JwtValidator createJwtValidator(Map<String, ?> configs, CloseableVerificationKeyResolver verificationKeyResolver) {
+        return new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, verificationKeyResolver);
     }
 
-    private String createAccessKey(String header, String payload, String signature) {
-        Base64.Encoder enc = Base64.getEncoder();
-        header = enc.encodeToString(Utils.utf8(header));
-        payload = enc.encodeToString(Utils.utf8(payload));
-        signature = enc.encodeToString(Utils.utf8(signature));
-        return String.format("%s.%s.%s", header, payload, signature);
+    private CloseableVerificationKeyResolver createVerificationKeyResolver(AccessTokenBuilder builder) {
+        return (jws, nestingContext) -> builder.jwk().getPublicKey();
     }
-
 }
