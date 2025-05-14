@@ -20,6 +20,7 @@ package kafka.server
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.DirectoryEventHandler
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
@@ -35,7 +36,7 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaAlterLogDirsThread = {
     val threadName = s"ReplicaAlterLogDirsThread-$fetcherId"
-    val leader = new LocalLeaderEndPoint(sourceBroker, brokerConfig, replicaManager, quotaManager)
+    val leader: LeaderEndPoint = new LocalLeaderEndPoint(sourceBroker, brokerConfig, replicaManager, quotaManager)
     new ReplicaAlterLogDirsThread(threadName, leader, failedPartitions, replicaManager,
       quotaManager, brokerTopicStats, brokerConfig.replicaFetchBackoffMs, directoryEventHandler)
   }

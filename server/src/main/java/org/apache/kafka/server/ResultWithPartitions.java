@@ -15,20 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.server;
 
-import java.io.IOException;
+import org.apache.kafka.common.TopicPartition;
 
-public interface Initable {
+import java.util.Set;
 
-    /**
-     * Lifecycle method to perform any one-time initialization of a given resource. This must
-     * be invoked by the caller to ensure the correct state before methods are invoked.
-     *
-     * @throws IOException Thrown on errors related to IO during initialization
-     */
-
-    default void init() throws IOException {
-        // This method left intentionally blank.
-    }
-}
+public record ResultWithPartitions<R>(
+        R result,
+        Set<TopicPartition> partitionsWithError
+) { }

@@ -1044,6 +1044,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     offsetFetchRequest: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    val useTopicIds = OffsetFetchRequest.useTopicIds(requestContext.apiVersion)
+
     groupCoordinator.fetchAllOffsets(
       requestContext,
       offsetFetchRequest,
@@ -1057,13 +1059,33 @@ class KafkaApis(val requestChannel: RequestChannel,
         offsetFetchResponse
       } else {
         // Clients are not allowed to see offsets for topics that are not authorized for Describe.
-        val (authorizedOffsets, _) = authHelper.partitionSeqByAuthorized(
+        val authorizedNames = authHelper.filterByAuthorized(
           requestContext,
           DESCRIBE,
           TOPIC,
           offsetFetchResponse.topics.asScala
         )(_.name)
-        offsetFetchResponse.setTopics(authorizedOffsets.asJava)
+
+        val topics = new mutable.ArrayBuffer[OffsetFetchResponseData.OffsetFetchResponseTopics]
+        offsetFetchResponse.topics.forEach { topic =>
+          if (authorizedNames.contains(topic.name)) {
+            if (useTopicIds) {
+              // If the topic is not provided by the group coordinator, we set it
+              // using the metadata cache.
+              if (topic.topicId == Uuid.ZERO_UUID) {
+                topic.setTopicId(metadataCache.getTopicId(topic.name))
+              }
+              // If we don't have the topic id at all, we skip the topic because
+              // we can not serialize it without it.
+              if (topic.topicId != Uuid.ZERO_UUID) {
+                topics += topic
+              }
+            } else {
+              topics += topic
+            }
+          }
+        }
+        offsetFetchResponse.setTopics(topics.asJava)
       }
     }
   }
@@ -1073,13 +1095,52 @@ class KafkaApis(val requestChannel: RequestChannel,
     offsetFetchRequest: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    val useTopicIds = OffsetFetchRequest.useTopicIds(requestContext.apiVersion)
+
+    if (useTopicIds) {
+      offsetFetchRequest.topics.forEach { topic =>
+        if (topic.topicId != Uuid.ZERO_UUID) {
+          metadataCache.getTopicName(topic.topicId).ifPresent(name => topic.setName(name))
+        }
+      }
+    }
+
     // Clients are not allowed to see offsets for topics that are not authorized for Describe.
-    val (authorizedTopics, unauthorizedTopics) = authHelper.partitionSeqByAuthorized(
+    val authorizedTopicNames = authHelper.filterByAuthorized(
       requestContext,
       DESCRIBE,
       TOPIC,
       offsetFetchRequest.topics.asScala
     )(_.name)
+
+    val authorizedTopics = new mutable.ArrayBuffer[OffsetFetchRequestData.OffsetFetchRequestTopics]
+    val errorTopics = new mutable.ArrayBuffer[OffsetFetchResponseData.OffsetFetchResponseTopics]
+
+    def buildErrorResponse(
+      topic: OffsetFetchRequestData.OffsetFetchRequestTopics,
+      error: Errors
+    ): OffsetFetchResponseData.OffsetFetchResponseTopics = {
+      val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics()
+        .setTopicId(topic.topicId)
+        .setName(topic.name)
+      topic.partitionIndexes.forEach { partitionIndex =>
+        topicResponse.partitions.add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+          .setPartitionIndex(partitionIndex)
+          .setCommittedOffset(-1)
+          .setErrorCode(error.code))
+      }
+      topicResponse
+    }
+
+    offsetFetchRequest.topics.forEach { topic =>
+      if (useTopicIds && topic.name.isEmpty) {
+        errorTopics += buildErrorResponse(topic, Errors.UNKNOWN_TOPIC_ID)
+      } else if (!authorizedTopicNames.contains(topic.name)) {
+        errorTopics += buildErrorResponse(topic, Errors.TOPIC_AUTHORIZATION_FAILED)
+      } else {
+        authorizedTopics += topic
+      }
+    }
 
     groupCoordinator.fetchOffsets(
       requestContext,
@@ -1098,19 +1159,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         offsetFetchResponse
       } else {
         val topics = new util.ArrayList[OffsetFetchResponseData.OffsetFetchResponseTopics](
-          offsetFetchResponse.topics.size + unauthorizedTopics.size
+          offsetFetchResponse.topics.size + errorTopics.size
         )
         topics.addAll(offsetFetchResponse.topics)
-        unauthorizedTopics.foreach { topic =>
-          val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name)
-          topic.partitionIndexes.forEach { partitionIndex =>
-            topicResponse.partitions.add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-              .setPartitionIndex(partitionIndex)
-              .setCommittedOffset(-1)
-              .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code))
-          }
-          topics.add(topicResponse)
-        }
+        topics.addAll(errorTopics.asJava)
         offsetFetchResponse.setTopics(topics)
       }
     }

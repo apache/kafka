@@ -17,31 +17,11 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.KafkaException;
+public class ClientJwtValidatorTest extends JwtValidatorTest {
 
-import javax.security.auth.callback.Callback;
-
-/**
- * ValidateException is thrown in cases where a JWT access token cannot be determined to be
- * valid for one reason or another. It is intended to be used when errors arise within the
- * processing of a {@link javax.security.auth.callback.CallbackHandler#handle(Callback[])}.
- * This error, however, is not thrown from that method directly.
- *
- * @see JwtValidator#validate(String)
- */
-
-public class ValidateException extends KafkaException {
-
-    public ValidateException(String message) {
-        super(message);
-    }
-
-    public ValidateException(Throwable cause) {
-        super(cause);
-    }
-
-    public ValidateException(String message, Throwable cause) {
-        super(message, cause);
+    @Override
+    protected JwtValidator createJwtValidator(AccessTokenBuilder builder) {
+        return new ClientJwtValidator(builder.scopeClaimName(), builder.subjectClaimName());
     }
 
 }
