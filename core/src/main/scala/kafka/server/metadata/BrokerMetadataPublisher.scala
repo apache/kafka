@@ -287,7 +287,7 @@ class BrokerMetadataPublisher(
    * Update the coordinator of local replica changes: election and resignation.
    *
    * When the topic is deleted or a partition of the topic is deleted, {@param resignation}
-   * callback must be called with {None}. The coordinator expects the leader epoch to be
+   * callback must be called with {@code None}. The coordinator expects the leader epoch to be
    * incremented when the {@param resignation} callback is called but the leader epoch
    * is not incremented when a topic is deleted.
    *
