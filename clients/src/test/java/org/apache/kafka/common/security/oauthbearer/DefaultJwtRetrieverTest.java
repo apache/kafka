@@ -41,6 +41,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -61,10 +62,9 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
 
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
-        Map<String, Object> jaasConfig = Collections.emptyMap();
 
-        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, jaasConfig)) {
-            jwtRetriever.init();
+        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
             assertEquals(expected, jwtRetriever.retrieve());
         }
     }
@@ -75,10 +75,13 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
         String file = new File("/tmp/this-directory-does-not-exist/foo.json").toURI().toString();
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, file);
-        Map<String, Object> jaasConfig = Collections.emptyMap();
 
-        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, jaasConfig)) {
-            assertThrowsWithMessage(ConfigException.class, jwtRetriever::init, "that doesn't exist");
+        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            assertThrowsWithMessage(
+                ConfigException.class,
+                () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()),
+                "that doesn't exist"
+            );
         }
     }
 
@@ -89,10 +92,13 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
         File accessTokenFile = new File(tmpDir, "this-file-does-not-exist.json");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
-        Map<String, Object> jaasConfig = Collections.emptyMap();
 
-        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, jaasConfig)) {
-            assertThrowsWithMessage(ConfigException.class, jwtRetriever::init, "that doesn't exist");
+        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            assertThrowsWithMessage(
+                ConfigException.class,
+                () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()),
+                "that doesn't exist"
+            );
         }
     }
 
@@ -103,8 +109,12 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
         File accessTokenFile = new File(tmpDir, "not_allowed.json");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
 
-        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, Collections.emptyMap())) {
-            assertThrowsWithMessage(ConfigException.class, jwtRetriever::init, ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            assertThrowsWithMessage(
+                ConfigException.class,
+                () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()),
+                ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG
+            );
         }
     }
 
@@ -118,12 +128,8 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
 
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
 
-        DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever(
-            configs,
-            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-            Map.of()
-        );
-        assertDoesNotThrow(jwtRetriever::init);
+        DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever();
+        assertDoesNotThrow(() -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
         assertInstanceOf(FileJwtRetriever.class, jwtRetriever.delegate());
     }
 
@@ -135,12 +141,8 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
         jaasConfigs.put(CLIENT_ID_CONFIG, "an ID");
         jaasConfigs.put(CLIENT_SECRET_CONFIG, "a secret");
 
-        DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever(
-            configs,
-            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-            jaasConfigs
-        );
-        assertDoesNotThrow(jwtRetriever::init);
+        DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever();
+        assertDoesNotThrow(() -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(jaasConfigs)));
         assertInstanceOf(HttpJwtRetriever.class, jwtRetriever.delegate());
     }
 

@@ -23,7 +23,7 @@ public class ClientJwtValidatorTest extends JwtValidatorTest {
 
     @Override
     protected JwtValidator createJwtValidator(AccessTokenBuilder builder) {
-        return new ClientJwtValidator(builder.scopeClaimName(), builder.subjectClaimName());
+        return new ClientJwtValidator();
     }
 
 }

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
@@ -26,13 +26,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+import javax.security.auth.login.AppConfigurationEntry;
 
 /**
  * This {@link JwtValidator} uses the delegation approach, instantiating and delegating calls to a
@@ -42,57 +37,33 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
  */
 public class DefaultJwtValidator implements JwtValidator {
 
-    private final Map<String, ?> configs;
-    private final String saslMechanism;
-    private final Optional<VerificationKeyResolver> verificationKeyResolver;
+    private final Optional<CloseableVerificationKeyResolver> verificationKeyResolver;
 
     private JwtValidator delegate;
 
-    public DefaultJwtValidator(Map<String, ?> configs, String saslMechanism) {
-        this.configs = configs;
-        this.saslMechanism = saslMechanism;
+    public DefaultJwtValidator() {
         this.verificationKeyResolver = Optional.empty();
     }
 
-    public DefaultJwtValidator(Map<String, ?> configs,
-                               String saslMechanism,
-                               VerificationKeyResolver verificationKeyResolver) {
-        this.configs = configs;
-        this.saslMechanism = saslMechanism;
+    public DefaultJwtValidator(CloseableVerificationKeyResolver verificationKeyResolver) {
         this.verificationKeyResolver = Optional.of(verificationKeyResolver);
     }
 
     @Override
-    public void init() throws IOException {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         if (verificationKeyResolver.isPresent()) {
-            List<String> expectedAudiencesList = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
-            Set<String> expectedAudiences = expectedAudiencesList != null ? Set.copyOf(expectedAudiencesList) : null;
-            Integer clockSkew = cu.validateInteger(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
-            String expectedIssuer = cu.validateString(SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
-            String scopeClaimName = cu.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
-            String subClaimName = cu.validateString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
-
-            delegate = new BrokerJwtValidator(clockSkew,
-                expectedAudiences,
-                expectedIssuer,
-                verificationKeyResolver.get(),
-                scopeClaimName,
-                subClaimName);
+            delegate = new BrokerJwtValidator(verificationKeyResolver.get());
         } else {
-            String scopeClaimName = cu.get(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
-            String subClaimName = cu.get(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
-            delegate = new ClientJwtValidator(scopeClaimName, subClaimName);
+            delegate = new ClientJwtValidator();
         }
 
-        delegate.init();
+        delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     @Override
     public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
         if (delegate == null)
-            throw new IllegalStateException("JWT validator delegate is null; please call init() first");
+            throw new IllegalStateException("JWT validator delegate is null; please call configure() first");
 
         return delegate.validate(accessToken);
     }

@@ -17,10 +17,18 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
+import javax.security.auth.login.AppConfigurationEntry;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 /**
  * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
@@ -31,25 +39,26 @@ import java.nio.file.Path;
 
 public class FileJwtRetriever implements JwtRetriever {
 
-    private final Path accessTokenFile;
-
     private String accessToken;
 
-    public FileJwtRetriever(Path accessTokenFile) {
-        this.accessTokenFile = accessTokenFile;
-    }
-
     @Override
-    public void init() throws IOException {
-        this.accessToken = Utils.readFileAsString(accessTokenFile.toFile().getPath());
-        // always non-null; to remove any newline chars or backend will report err
-        this.accessToken = this.accessToken.trim();
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        Path accessTokenFile = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+
+        try {
+            this.accessToken = Utils.readFileAsString(accessTokenFile.toFile().getPath());
+            // always non-null; to remove any newline chars or backend will report err
+            this.accessToken = this.accessToken.trim();
+        } catch (IOException e) {
+            throw new KafkaException(e);
+        }
     }
 
     @Override
     public String retrieve() throws JwtRetrieverException {
         if (accessToken == null)
-            throw new IllegalStateException("Access token is null; please call init() first");
+            throw new IllegalStateException("Access token is null; please call configure() first");
 
         return accessToken;
     }

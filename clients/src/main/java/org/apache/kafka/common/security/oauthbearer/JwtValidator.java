@@ -17,10 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.Initable;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfigurable;
 
-import java.io.Closeable;
-import java.io.IOException;
 
 /**
  * An instance of <code>JwtValidator</code> acts as a function object that, given an access
@@ -48,7 +46,7 @@ import java.io.IOException;
  *                         contents and verify the signature
  */
 
-public interface JwtValidator extends Initable, Closeable {
+public interface JwtValidator extends OAuthBearerConfigurable {
 
     /**
      * Accepts an OAuth JWT access token in base-64 encoded format, validates, and returns an
@@ -62,11 +60,4 @@ public interface JwtValidator extends Initable, Closeable {
      */
 
     OAuthBearerToken validate(String accessToken) throws JwtValidatorException;
-
-    /**
-     * Closes any resources that were initialized by {@link #init()}.
-     */
-    default void close() throws IOException {
-        // Do nothing...
-    }
 }

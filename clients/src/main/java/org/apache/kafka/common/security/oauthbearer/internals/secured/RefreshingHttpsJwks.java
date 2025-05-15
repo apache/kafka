@@ -26,7 +26,6 @@ import org.jose4j.lang.JoseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -39,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 
 /**
  * Implementation of {@link HttpsJwks} that will periodically refresh the JWKS cache to reduce or
@@ -58,7 +58,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @see BrokerJwtValidator
  */
 
-public final class RefreshingHttpsJwks implements Initable, Closeable {
+public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
@@ -172,7 +172,6 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
         this(time, httpsJwks, refreshMs, refreshRetryBackoffMs, refreshRetryBackoffMaxMs, Executors.newSingleThreadScheduledExecutor());
     }
 
-    @Override
     public void init() throws IOException {
         try {
             log.debug("init started");
