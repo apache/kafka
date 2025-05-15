@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -55,7 +56,6 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
-import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.config.KRaftConfigs;
@@ -67,12 +67,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -84,11 +86,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 //        @ClusterConfigProperty(key = ServerConfigs.BROKER_ID_CONFIG, value = "0"),
 //        @ClusterConfigProperty(key = KRaftConfigs.NODE_ID_CONFIG, value = "0"),
         @ClusterConfigProperty(key = StandardAuthorizer.SUPER_USERS_CONFIG, value = "Group:broker"),
-        @ClusterConfigProperty(key = "inter.broker.listener.name", value = "BROKER"),
-        @ClusterConfigProperty(key = SocketServerConfigs.LISTENERS_CONFIG, value = "BROKER://localhost:0,CLIENT://localhost:0,CONTROLLER://localhost:0"),
-        @ClusterConfigProperty(key = SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, value = "BROKER:PLAINTEXT,CLIENT:PLAINTEXT,CONTROLLER:PLAINTEXT"),
-        @ClusterConfigProperty(key = KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, value = "CONTROLLER"),
-        @ClusterConfigProperty(key = SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, value = "BROKER://localhost:0,CLIENT://localhost:0,CONTROLLER://localhost:0"),
+//        @ClusterConfigProperty(key = "inter.broker.listener.name", value = "BROKER"),
+//        @ClusterConfigProperty(key = SocketServerConfigs.LISTENERS_CONFIG, value = "BROKER://localhost:0,CLIENT://localhost:0,CONTROLLER://localhost:0"),
+//        @ClusterConfigProperty(key = SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, value = "BROKER:PLAINTEXT,CLIENT:PLAINTEXT,CONTROLLER:PLAINTEXT"),
+//        @ClusterConfigProperty(key = KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, value = "CONTROLLER"),
+//        @ClusterConfigProperty(key = SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, value = "BROKER://localhost:0,CLIENT://localhost:0,CONTROLLER://localhost:0"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
         @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
@@ -128,6 +130,12 @@ public class GroupAuthorizerIntegrationTest {
                 clusterInstance
         );
 
+        addAndVerifyAcls(
+                Collections.singleton(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                new ResourcePattern(ResourceType.TOPIC, Topic.GROUP_METADATA_TOPIC_NAME, PatternType.LITERAL),
+                clusterInstance
+        );
+
         KafkaBroker broker = clusterInstance.brokers().values().stream().toList().get(0);
 
         int partitions = broker.config().getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG);
@@ -139,6 +147,7 @@ public class GroupAuthorizerIntegrationTest {
         configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
         try (Admin admin = clusterInstance.admin(configs)) {
             admin.createTopics(Collections.singleton(offsetTopic));
+            clusterInstance.waitForTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1);
         }
     }
 
@@ -150,7 +159,6 @@ public class GroupAuthorizerIntegrationTest {
         @Override
         public KafkaPrincipal build(AuthenticationContext context) {
             String listenerName = context.listenerName();
-            System.out.println("Building principal for listener: " + listenerName);
             KafkaPrincipal principal;
             switch (listenerName) {
                 case BROKER_LISTENER_NAME:
@@ -166,8 +174,6 @@ public class GroupAuthorizerIntegrationTest {
                     System.out.println("No principal mapped to listener: " + listenerName);
                     throw new IllegalArgumentException("No principal mapped to listener " + listenerName);
             }
-
-            System.out.println("Built principal: " + principal);
             return principal;
         }
     }
@@ -198,9 +204,9 @@ public class GroupAuthorizerIntegrationTest {
         clusterInstance.waitAcls(aclBindingFilter, acls);
 
     }
-
-    private void removeAndVerifyAcls(Set<AccessControlEntry> acls, ResourcePattern resource, Authorizer authorizer) throws InterruptedException {
-        List<AclBindingFilter> collect = acls.stream().map(acl -> new AclBindingFilter(resource.toFilter(), acl.toFilter())).collect(Collectors.toList());
+    
+    private void removeAndVerifyAcls(Set<AccessControlEntry> deleteAcls, ResourcePattern resource, Authorizer authorizer) throws InterruptedException {
+        List<AclBindingFilter> collect = deleteAcls.stream().map(acl -> new AclBindingFilter(resource.toFilter(), acl.toFilter())).collect(Collectors.toList());
         authorizer.deleteAcls(ANONYMOUS_CONTEXT, collect)
                 .forEach(future -> {
                     try {
@@ -210,14 +216,22 @@ public class GroupAuthorizerIntegrationTest {
                     }
                 });
 
+//        AclBindingFilter aclBindingFilter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
+//        clusterInstance.waitAcls(aclBindingFilter, expectedAcls);
         AclBindingFilter aclBindingFilter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
-        Set<AccessControlEntry> deletedAcls = StreamSupport.stream(
-                        authorizer.acls(aclBindingFilter).spliterator(), false)
-                .map(AclBinding::entry)
-                .collect(Collectors.toSet());
+//        Set<AccessControlEntry> deletedAcls = StreamSupport.stream(
+//                        authorizer.acls(aclBindingFilter).spliterator(), false)
+//                .map(AclBinding::entry)
+//                .collect(Collectors.toSet());
 
-        TestUtils.waitForCondition(() -> deletedAcls.containsAll(acls), "Failed to verify ACLs delete");
-
+        TestUtils.waitForCondition(() -> {
+            Iterable<AclBinding> acls = authorizer.acls(aclBindingFilter);
+            Set<AclBinding> aclSet = new HashSet<>();
+            acls.forEach(aclSet::add);
+            return aclSet.isEmpty();
+        }, "Failed to verify ACLs delete");
+//        TestUtils.waitForCondition(() -> !deletedAcls.contains(acls), "Failed to verify ACLs delete");
+//        , Set<AccessControlEntry> expectedAcls, ClusterInstance clusterInstance
     }
 
     static final AuthorizableRequestContext ANONYMOUS_CONTEXT = new AuthorizableRequestContext() {
@@ -265,73 +279,95 @@ public class GroupAuthorizerIntegrationTest {
     @ClusterTest(
         brokerListener = "CLIENT"
     )
-    public void testUnauthorizedProduceAndConsume(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testUnauthorizedProduceAndConsumeWithClassicConsumer(ClusterInstance clusterInstance) throws InterruptedException {
+        testUnauthorizedProduceAndConsume(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest(
+            brokerListener = "CLIENT"
+    )
+    public void testUnauthorizedProduceAndConsumeWithAsyncConsumer(ClusterInstance clusterInstance) throws InterruptedException {
+        testUnauthorizedProduceAndConsume(clusterInstance, GroupProtocol.CONSUMER);
+    }
+//todo
+    public void testUnauthorizedProduceAndConsume(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException {
         setup(clusterInstance);
+
         String topic = "topic";
         TopicPartition topicPartition = new TopicPartition(topic, 0);
 
-        final Admin admin = clusterInstance.admin();
-        final Producer<byte[], byte[]> producer = clusterInstance.producer();
-        final Consumer<byte[], byte[]> consumer = clusterInstance.consumer();
+        Admin admin = clusterInstance.admin();
+        Producer<byte[], byte[]> producer = clusterInstance.producer();
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
+            GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)
+        ));
+        
+        try {
+            NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
+            admin.createTopics(Collections.singleton(newTopic));
 
-        NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-        admin.createTopics(Collections.singleton(newTopic));
-
-        // Test unauthorized produce
-        ExecutionException produceException = assertThrows(
+            ExecutionException produceException = assertThrows(
                 ExecutionException.class,
                 () -> producer.send(new ProducerRecord<>(topic, "message".getBytes())).get()
-        );
+            );
 
-        Throwable cause = produceException.getCause();
-        assertInstanceOf(TopicAuthorizationException.class, cause);
-        TopicAuthorizationException topicAuthException = (TopicAuthorizationException) cause;
-        assertEquals(Set.of(topic), topicAuthException.unauthorizedTopics());
+            Throwable cause = produceException.getCause();
+            assertInstanceOf(TopicAuthorizationException.class, cause);
+            TopicAuthorizationException topicAuthException = (TopicAuthorizationException) cause;
+            assertEquals(Set.of(topic), topicAuthException.unauthorizedTopics());
 
-        // Test unauthorized consume
-        consumer.assign(Collections.singletonList(topicPartition));
-        TopicAuthorizationException consumeException = assertThrows(
+            consumer.assign(Collections.singletonList(topicPartition));
+            TopicAuthorizationException consumeException = assertThrows(
                 TopicAuthorizationException.class,
                 () -> consumer.poll(Duration.ofSeconds(10))
-        );
-        assertEquals(consumeException.unauthorizedTopics(), topicAuthException.unauthorizedTopics());
+            );
 
-        producer.close(Duration.ZERO);
-        consumer.close();
-        admin.close();
-
+            assertEquals(consumeException.unauthorizedTopics(), topicAuthException.unauthorizedTopics());
+        } finally {
+            producer.close(Duration.ZERO);
+            consumer.close();
+            admin.close();
+        }
     }
 
-//    todo
+
     @ClusterTest(
         brokerListener = "CLIENT"
     )
-    public void testConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+    public void testClassicConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        testConsumeUnsubscribeWithoutGroupPermission(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest(
+            brokerListener = "CLIENT"
+    )
+//    fail
+    public void testAsyncConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        testConsumeUnsubscribeWithoutGroupPermission(clusterInstance, GroupProtocol.CONSUMER);
+    }
+//todo1
+    private void testConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
         setup(clusterInstance);
         
         String topic = "topic";
+
+        // allow topic read/write permission to poll/send record
+        Set<AccessControlEntry> acls = new HashSet<>();
+        acls.add(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
+        acls.add(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
+        acls.add(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
+        addAndVerifyAcls(
+            acls,
+            new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
+            clusterInstance
+        );
+
         Admin admin = clusterInstance.admin();
         NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
         admin.createTopics(Collections.singleton(newTopic));
+        clusterInstance.waitForTopic(topic, 1);
+        admin.close();
 
-        // allow topic read/write permission to poll/send record
-        AccessControlEntry acl = createAcl(AclOperation.WRITE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL);
-        AccessControlEntry acl1 = createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL);
-        Set<AccessControlEntry> acls = new HashSet<>();
-        acls.add(acl);
-        acls.add(acl1);
-
-        ResourcePattern resource = new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL);
-
-        addAndVerifyAcls(
-                acls,
-                resource,
-                clusterInstance
-        );
-        Set<AccessControlEntry> aclsAfter = getTopicAcls(topic, getAuthorizer(clusterInstance));
-        System.out.println("ACLs after: " + aclsAfter);
-
-//        Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.PLAINTEXT.name));
         Producer<byte[], byte[]> producer = clusterInstance.producer();
         // Send a message
         producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
@@ -341,12 +377,13 @@ public class GroupAuthorizerIntegrationTest {
         addAndVerifyAcls(
             Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
             new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                clusterInstance
+            clusterInstance
         );
 
         Map<String, Object> consumerConfigs = new HashMap<>();
         consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, group);
         consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerConfigs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT));
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(consumerConfigs);
         consumer.subscribe(Collections.singletonList(topic));
 
@@ -355,41 +392,57 @@ public class GroupAuthorizerIntegrationTest {
             return records.count() == 1;
         }, "poll message");
 
+//        here
         removeAndVerifyAcls(
-            Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-            new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-            getAuthorizer(clusterInstance)
+                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+                getAuthorizer(clusterInstance)
         );
 
-        // Test unsubscribe
-        consumer.unsubscribe();
-        assertDoesNotThrow(() -> consumer.close());
-        admin.close();
+        // Test unsubscribe fail
+//        consumer.unsubscribe();
+        assertDoesNotThrow(() -> consumer.unsubscribe());
+        consumer.close();
     }
 
     @ClusterTest(
+        brokerListener = "CLIENT"
+    )
+    public void testClassicConsumeCloseWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        testConsumeCloseWithoutGroupPermission(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+//    slow
+    @ClusterTest(
             brokerListener = "CLIENT"
     )
-    public void testConsumeCloseWithoutGroupPermission(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
-        String topic = "topic";
-        Admin admin = clusterInstance.admin();
-        NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-        admin.createTopics(Collections.singleton(newTopic));
+    public void testAsyncConsumeCloseWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        testConsumeCloseWithoutGroupPermission(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+//    todo2
+    private void testConsumeCloseWithoutGroupPermission(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
+        String topic = "topic-1";
 
         // allow topic read/write permission to poll/send record
-        AccessControlEntry acl = createAcl(AclOperation.WRITE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL);
-        AccessControlEntry acl1 = createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL);
         Set<AccessControlEntry> acls = new HashSet<>();
-        acls.add(acl);
-        acls.add(acl1);
+        acls.add(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
+        acls.add(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
+        acls.add(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
 
         addAndVerifyAcls(
                 acls,
                 new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
                 clusterInstance
         );
+
+        Admin admin = clusterInstance.admin();
+        NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
+        admin.createTopics(Collections.singleton(newTopic));
+
         Producer<Object, Object> producer = clusterInstance.producer();
         producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
+        producer.close();
 
         // allow group read permission to join group
         String group = "group";
@@ -402,13 +455,15 @@ public class GroupAuthorizerIntegrationTest {
         Map<String, Object> consumerConfigs = new HashMap<>();
         consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, group);
         consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerConfigs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT));
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(consumerConfigs);
         consumer.subscribe(Collections.singletonList(topic));
         TestUtils.waitForCondition(() -> {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(1000));
             return records.count() == 1;
         }, "poll message");
 
+//        here
         removeAndVerifyAcls(
                 Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
                 new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
@@ -416,49 +471,72 @@ public class GroupAuthorizerIntegrationTest {
         );
 
         assertDoesNotThrow(() -> consumer.close());
+        admin.close();
     }
 
     @ClusterTest(
         brokerListener = "CLIENT"
     )
-    public void testAuthorizedProduceAndConsume(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+    public void testAuthorizedProduceAndConsumeWithClassic(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        testAuthorizedProduceAndConsume(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest(
+            brokerListener = "CLIENT"
+    )
+    public void testAuthorizedProduceAndConsumeWithAsync(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        testAuthorizedProduceAndConsume(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+//    todo3
+    private void testAuthorizedProduceAndConsume(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
+        setup(clusterInstance);
         String topic = "topic";
         TopicPartition topicPartition = new TopicPartition("topic", 0);
+
+        AccessControlEntry acl = createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL);
+        AccessControlEntry acl1 = createAcl(AclOperation.WRITE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL);
+        AccessControlEntry acl2 = createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL);
+        Set<AccessControlEntry> aclList = new HashSet<>();
+        aclList.add(acl);
+        aclList.add(acl1);
+        aclList.add(acl2);
+
+        addAndVerifyAcls(
+                aclList,
+                new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
+                clusterInstance
+        );
 
         Admin admin = clusterInstance.admin();
         NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
         admin.createTopics(Collections.singleton(newTopic));
+        clusterInstance.waitForTopic(topic, 1);
 
-        addAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
-                clusterInstance
-        );
         Producer<Object, Object> producer = clusterInstance.producer();
         producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
+        producer.close();
 
+        String group = "group";
         addAndVerifyAcls(
                 Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
+                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
                 clusterInstance
         );
+
         Map<String, Object> consumerConfigs = new HashMap<>();
+        consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, group);
         consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerConfigs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT));
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(consumerConfigs);
         consumer.assign(List.of(topicPartition));
         TestUtils.waitForCondition(() -> {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
             return records.count() == 1;
-        }, "poll message");
+        }, "Failed to receive message");
+        admin.close();
+        consumer.close();
 
     }
 
-
-    public Set<AccessControlEntry> getTopicAcls(String topic, Authorizer authorizer) {
-        ResourcePattern resourcePattern = new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL);
-        AclBindingFilter filter = new AclBindingFilter(resourcePattern.toFilter(), AccessControlEntryFilter.ANY);
-        Set<AccessControlEntry> set = new HashSet<>();
-        authorizer.acls(filter).forEach(t -> set.add(t.entry()));
-        return set;
-    }
 }
