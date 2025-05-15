@@ -21,8 +21,6 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-      "about": "The ID of the broker." },
     { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+", "nullableVersions": "0+",
       "about": "The topic partitions to query the log info.",
       "fields": [

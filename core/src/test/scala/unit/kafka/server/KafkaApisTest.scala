@@ -13358,7 +13358,7 @@ class KafkaApisTest extends Logging {
   }
 
   def verifyGetReplicaLogInfoRequest(builder: GetReplicaLogInfoRequest.Builder, withResponse: (GetReplicaLogInfoResponse => Unit)): Unit = {
-    val request = buildRequest(builder.build(0))
+    val request = buildRequest(builder.build())
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
     val clusterActions = Collections.singletonList(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
@@ -13433,7 +13433,7 @@ class KafkaApisTest extends Logging {
 
 
     val builder = new GetReplicaLogInfoRequest.Builder(
-      new GetReplicaLogInfoRequestData().setBrokerId(brokerId).setTopicPartitions(tps asJava)
+      new GetReplicaLogInfoRequestData().setTopicPartitions(tps asJava)
     )
     verifyGetReplicaLogInfoRequest(builder, { response =>
       assertEquals(expected, response.data())
@@ -13497,11 +13497,9 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testGetReplicaLogInfoUnknownTopic(): Unit = {
-    val expectedBrokerId = 1
     val expectedPartition = 1
     val expectedUuid = Uuid.randomUuid()
     val builder = new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData()
-      .setBrokerId(expectedBrokerId)
       .setTopicPartitions(
         Collections.singletonList(new GetReplicaLogInfoRequestData.TopicPartitions()
           .setTopicId(expectedUuid)
@@ -13528,7 +13526,6 @@ class KafkaApisTest extends Logging {
   @Test
   def testGetReplicaLogInfoRequestTooManyTopics(): Unit = {
     // 100 topics, 20 partitions per topic = 2k topic-partitions
-    val expectedBrokerId = 1
     val numberUuids = 100
     val numberPartitions = 20
     val uuids: List[Uuid] = (1 to numberUuids).map(_ => Uuid.randomUuid()).toList
@@ -13536,7 +13533,7 @@ class KafkaApisTest extends Logging {
       .setTopicId(_)
       .setPartitions((1 to numberPartitions).map(new Integer(_)).asJava))
     val builder = new GetReplicaLogInfoRequest.Builder(
-      new GetReplicaLogInfoRequestData().setBrokerId(expectedBrokerId).setTopicPartitions(tps asJava))
+      new GetReplicaLogInfoRequestData().setTopicPartitions(tps asJava))
     val expectedLogEndOffset = 100L
     val expectedLeaderEpoch = 1
     val expectedLatestEpoch = 1
