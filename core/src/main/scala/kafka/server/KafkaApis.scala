@@ -2928,9 +2928,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   /**
-   * Handle ListConfigResourcesRequest. If resourceTypes are not specified, it uses ListConfigResourcesRequest#defaultResourceTypes
+   * Handle ListConfigResourcesRequest. If resourceTypes are not specified, it uses ListConfigResourcesRequest#supportedResourceTypes
    * to retrieve config resources. If resourceTypes are specified, it returns matched config resources.
-   * An unknown config resource type is ignored.
+   * If a config resource type is not supported, the handler returns UNSUPPORTED_VERSION.
    */
   private def handleListConfigResources(request: RequestChannel.Request): Unit = {
     val listConfigResourcesRequest = request.body[ListConfigResourcesRequest]
@@ -2940,10 +2940,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val data = new ListConfigResourcesResponseData()
 
+      val supportedResourceTypes = listConfigResourcesRequest.supportedResourceTypes()
       var resourceTypes = listConfigResourcesRequest.data().resourceTypes()
       if (resourceTypes.isEmpty) {
-        resourceTypes = listConfigResourcesRequest.defaultResourceTypes()
+        resourceTypes = supportedResourceTypes.stream().toList
       }
+
+      resourceTypes.forEach(resourceType =>
+        if (!supportedResourceTypes.contains(resourceType)) {
+          requestHelper.sendMaybeThrottle(request, new ListConfigResourcesResponse(data.setErrorCode(Errors.UNSUPPORTED_VERSION.code())))
+          return
+        }
+      )
 
       val result = new util.ArrayList[ListConfigResourcesResponseData.ConfigResource]()
       if (resourceTypes.contains(ConfigResource.Type.GROUP.id)) {

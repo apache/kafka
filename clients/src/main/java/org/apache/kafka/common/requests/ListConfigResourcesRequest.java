@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.List;
+import java.util.Set;
 
 public class ListConfigResourcesRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListConfigResourcesRequest> {
@@ -76,15 +76,15 @@ public class ListConfigResourcesRequest extends AbstractRequest {
     }
 
     /**
-     * Return the default supported config resource types in different request version.
+     * Return the supported config resource types in different request version.
      * If there is a new config resource type, the ListConfigResourcesRequest should bump a new request version to include it.
-     * For v0, the default config resource types contain CLIENT_METRICS (16).
-     * For v1, the default config resource types contain TOPIC (2), BROKER (4), BROKER_LOGGER (8), CLIENT_METRICS (16), and GROUP (32).
+     * For v0, the supported config resource types contain CLIENT_METRICS (16).
+     * For v1, the supported config resource types contain TOPIC (2), BROKER (4), BROKER_LOGGER (8), CLIENT_METRICS (16), and GROUP (32).
      */
-    public List<Byte> defaultResourceTypes() {
+    public Set<Byte> supportedResourceTypes() {
         return version() == 0 ?
-            List.of(ConfigResource.Type.CLIENT_METRICS.id()) :
-            List.of(
+            Set.of(ConfigResource.Type.CLIENT_METRICS.id()) :
+            Set.of(
                 ConfigResource.Type.TOPIC.id(),
                 ConfigResource.Type.BROKER.id(),
                 ConfigResource.Type.BROKER_LOGGER.id(),

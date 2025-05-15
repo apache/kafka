@@ -11383,7 +11383,7 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    assertEquals(new ListConfigResourcesResponseData(), response.data)
+    assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode())
 
     verify(metadataCache, never).getAllTopics
     verify(groupConfigManager, never).groupIds
