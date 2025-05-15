@@ -16,7 +16,7 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Typ
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, ConsumerGroupDescription}
 import org.apache.kafka.clients.consumer.{Consumer, GroupProtocol, OffsetAndMetadata}
-import org.apache.kafka.common.errors.GroupIdNotFoundException
+import org.apache.kafka.common.errors.{GroupIdNotFoundException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.{ConsumerGroupState, GroupType, KafkaFuture, TopicCollection, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 
@@ -27,11 +27,13 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.storage.internals.log.UnifiedLog
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Timeout
 
 import java.time.Duration
 import java.util.Collections
 import java.util.concurrent.TimeUnit
+import scala.concurrent.ExecutionException
 
 @Timeout(120)
 class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
@@ -305,6 +307,20 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         .deleteTopics(TopicCollection.ofTopicNames(List(Topic.GROUP_METADATA_TOPIC_NAME).asJava))
         .all()
         .get()
+
+      TestUtils.waitUntilTrue(() => {
+        try {
+          admin
+            .describeTopics(TopicCollection.ofTopicNames(List(Topic.GROUP_METADATA_TOPIC_NAME).asJava))
+            .topicNameValues()
+            .get(Topic.GROUP_METADATA_TOPIC_NAME)
+            .get(JTestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS)
+          false
+        } catch {
+          case e: ExecutionException =>
+            e.getCause.isInstanceOf[UnknownTopicOrPartitionException]
+        }
+      }, msg = s"${Topic.GROUP_METADATA_TOPIC_NAME} was not deleted")
 
       withConsumer(groupId = "group", groupProtocol = GroupProtocol.CONSUMER) { consumer =>
         consumer.subscribe(List("foo").asJava)
