@@ -77,6 +77,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
@@ -92,6 +93,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     private final Timer timer;
     private final PartitionWriter writer;
     private final Map<TopicPartition, Long> lastPrunedOffsets;
+    private Supplier<Boolean> isShareGroupConfigEnabled = () -> true;
     private final AtomicBoolean shouldRunPeriodJob = new AtomicBoolean(true);
 
     public static class Builder {
@@ -101,7 +103,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         private CoordinatorLoader<CoordinatorRecord> loader;
         private Time time;
         private Timer timer;
-
+        private Supplier<Boolean> isShareGroupConfigEnabled;
         private ShareCoordinatorMetrics coordinatorMetrics;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
 
@@ -140,6 +142,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
             return this;
         }
 
+        public Builder withShareGroupEnabled(Supplier<Boolean> isEnabled) {
+            this.isShareGroupConfigEnabled = isEnabled;
+            return this;
+        }
+
         public ShareCoordinatorService build() {
             if (config == null) {
                 throw new IllegalArgumentException("Config must be set.");
@@ -161,6 +168,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
             }
             if (coordinatorRuntimeMetrics == null) {
                 throw new IllegalArgumentException("Coordinator runtime metrics must be set.");
+            }
+            if (isShareGroupConfigEnabled == null) {
+                throw new IllegalArgumentException("Share group enabled config supplier must be set.");
             }
 
             String logPrefix = String.format("ShareCoordinator id=%d", nodeId);
@@ -204,7 +214,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 coordinatorMetrics,
                 time,
                 timer,
-                writer
+                writer,
+                isShareGroupConfigEnabled
             );
         }
     }
@@ -216,7 +227,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
         ShareCoordinatorMetrics shareCoordinatorMetrics,
         Time time,
         Timer timer,
-        PartitionWriter writer
+        PartitionWriter writer,
+        Supplier<Boolean> isShareGroupConfigEnabled
     ) {
         this.log = logContext.logger(ShareCoordinatorService.class);
         this.config = config;
@@ -226,6 +238,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         this.timer = timer;
         this.writer = writer;
         this.lastPrunedOffsets = new ConcurrentHashMap<>();
+        this.isShareGroupConfigEnabled = isShareGroupConfigEnabled;
     }
 
     @Override
@@ -1091,7 +1104,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
         // 0            1               disable flag, do not call jobs                      => action
         // 1            0               enable flag, call jobs as they are not recursing    => action
         // 1            1               no op on flag, do not call jobs
-
         if (enabled ^ shouldRunPeriodJob.get()) {
             shouldRunPeriodJob.set(enabled);
             if (enabled) {
@@ -1115,7 +1127,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private boolean isShareGroupsEnabled(MetadataImage image) {
-        return ShareVersion.fromFeatureLevel(
+        return isShareGroupConfigEnabled.get() || ShareVersion.fromFeatureLevel(
             image.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
         ).supportsShareGroups();
     }

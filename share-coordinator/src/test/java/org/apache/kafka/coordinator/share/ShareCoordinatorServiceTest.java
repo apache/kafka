@@ -107,7 +107,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             new MockTimer(),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -130,7 +131,8 @@ class ShareCoordinatorServiceTest {
             coordinatorMetrics,
             time,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -240,7 +242,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -342,7 +345,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -426,7 +430,8 @@ class ShareCoordinatorServiceTest {
             coordinatorMetrics,
             time,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -508,7 +513,8 @@ class ShareCoordinatorServiceTest {
             coordinatorMetrics,
             time,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -590,7 +596,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -637,7 +644,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -684,7 +692,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -731,7 +740,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -778,7 +788,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -825,7 +836,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         String groupId = "group1";
@@ -904,7 +916,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         String groupId = "group1";
@@ -967,7 +980,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         String groupId = "group1";
@@ -1030,7 +1044,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         String groupId = "group1";
@@ -1091,7 +1106,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         String groupId = "group1";
@@ -1151,7 +1167,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -1201,7 +1218,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -1244,7 +1262,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -1287,7 +1306,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -1329,7 +1349,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -1370,7 +1391,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         service.startup(() -> 1);
@@ -1399,7 +1421,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class)
+            mock(PartitionWriter.class),
+            () -> true
         );
 
         String groupId = "group1";
@@ -1457,7 +1480,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 1);
@@ -1550,7 +1574,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 2);
@@ -1610,7 +1635,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 1);
@@ -1661,7 +1687,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 1);
@@ -1710,7 +1737,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 1);
@@ -1771,7 +1799,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 1);
@@ -1845,7 +1874,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 1);
@@ -1897,7 +1927,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         when(runtime.scheduleWriteAllOperation(
@@ -1959,7 +1990,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 2);
@@ -2004,7 +2036,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> false // So that the feature config is used.
         ));
 
         MetadataImage mockedImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
@@ -2117,7 +2150,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         List<String> propNames = List.of(
@@ -2147,7 +2181,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 3);
@@ -2187,7 +2222,8 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer
+            writer,
+            () -> true
         ));
 
         service.startup(() -> 3);
