@@ -1176,9 +1176,8 @@ public class RequestResponseTest {
 
     private GetReplicaLogInfoRequest createGetReplicaLogInfoRequest(short version) {
         GetReplicaLogInfoRequestData data = new GetReplicaLogInfoRequestData()
-                .setBrokerId(0)
                 .setTopicPartitions(singletonList(new GetReplicaLogInfoRequestData.TopicPartitions()
-                        .setPartitions(singletonList(0))));
+                .setPartitions(singletonList(0))));
         return new GetReplicaLogInfoRequest.Builder(data).build(version);
     }
 
