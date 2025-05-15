@@ -911,6 +911,7 @@ project(':server') {
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':storage:storage-api').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1417,6 +1418,7 @@ project(':group-coordinator') {
     implementation libs.hdrHistogram
     implementation libs.re2j
     implementation libs.slf4jApi
+    implementation libs.hash4j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output

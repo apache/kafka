@@ -985,7 +985,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 .collect(Collectors.toList());
 
             OffsetFetchRequest.Builder builder = memberInfo.memberEpoch
-                .map(epoch -> new OffsetFetchRequest.Builder(
+                .map(epoch -> OffsetFetchRequest.Builder.forTopicNames(
                     new OffsetFetchRequestData()
                         .setRequireStable(true)
                         .setGroups(List.of(
@@ -997,7 +997,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                             throwOnFetchStableOffsetUnsupported))
                 // Building request without passing member ID/epoch to leave the logic to choose
                 // default values when not present on the request builder.
-                .orElseGet(() -> new OffsetFetchRequest.Builder(
+                .orElseGet(() -> OffsetFetchRequest.Builder.forTopicNames(
                     new OffsetFetchRequestData()
                         .setRequireStable(true)
                         .setGroups(List.of(

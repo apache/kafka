@@ -27,7 +27,7 @@ import javax.security.auth.callback.Callback;
  * processing of a {@link javax.security.auth.callback.CallbackHandler#handle(Callback[])}.
  * This error, however, is not thrown from that method directly.
  *
- * @see AccessTokenValidator#validate(String)
+ * @see JwtValidator#validate(String)
  */
 
 public class ValidateException extends KafkaException {
