@@ -20,7 +20,6 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;

@@ -20,7 +20,6 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -29,19 +28,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
-import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 
 /**
  * {@code DefaultJwtRetriever} instantiates and delegates {@link JwtRetriever} API calls to an embedded implementation
@@ -61,28 +50,7 @@ public class DefaultJwtRetriever implements JwtRetriever {
         if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
             delegate = new FileJwtRetriever();
         } else {
-            JaasOptionsUtils jou = new JaasOptionsUtils(JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries));
-            String clientId = jou.validateString(CLIENT_ID_CONFIG);
-            String clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
-            String scope = jou.validateString(SCOPE_CONFIG, false);
-
-            SSLSocketFactory sslSocketFactory = null;
-
-            if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
-                sslSocketFactory = jou.createSSLSocketFactory();
-
-            boolean urlencodeHeader = validateUrlencodeHeader(cu);
-
-            delegate = new HttpJwtRetriever(clientId,
-                clientSecret,
-                scope,
-                sslSocketFactory,
-                tokenEndpointUrl.toString(),
-                cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
-                cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
-                cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
-                cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false),
-                urlencodeHeader);
+            delegate = new ClientCredentialsJwtRetriever();
         }
 
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
@@ -99,25 +67,6 @@ public class DefaultJwtRetriever implements JwtRetriever {
     @Override
     public void close() throws IOException {
         Utils.closeQuietly(delegate, "JWT retriever delegate");
-    }
-
-    /**
-     * In some cases, the incoming {@link Map} doesn't contain a value for
-     * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
-     * will cause a {@link NullPointerException} when it is later unboxed.
-     *
-     * <p/>
-     *
-     * This utility method ensures that we have a non-{@code null} value to use in the
-     * {@link HttpJwtRetriever} constructor.
-     */
-    static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
-        Boolean urlencodeHeader = configurationUtils.get(SASL_OAUTHBEARER_HEADER_URLENCODE);
-
-        if (urlencodeHeader != null)
-            return urlencodeHeader;
-        else
-            return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
     }
 
     JwtRetriever delegate() {

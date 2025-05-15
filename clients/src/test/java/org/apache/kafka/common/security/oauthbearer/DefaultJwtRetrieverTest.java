@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.junit.jupiter.api.AfterEach;
@@ -143,14 +142,14 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
 
         DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever();
         assertDoesNotThrow(() -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(jaasConfigs)));
-        assertInstanceOf(HttpJwtRetriever.class, jwtRetriever.delegate());
+        assertInstanceOf(ClientCredentialsJwtRetriever.class, jwtRetriever.delegate());
     }
 
     @ParameterizedTest
     @MethodSource("urlencodeHeaderSupplier")
     public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
         ConfigurationUtils cu = new ConfigurationUtils(configs);
-        boolean actualValue = DefaultJwtRetriever.validateUrlencodeHeader(cu);
+        boolean actualValue = ClientCredentialsJwtRetriever.validateUrlencodeHeader(cu);
         assertEquals(expectedValue, actualValue);
     }
 
