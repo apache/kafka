@@ -2031,7 +2031,7 @@ class ShareCoordinatorServiceTest {
     }
 
     @Test
-    public void testPeriodicJobDoNotRunWhenShareGroupsDisabled() throws InterruptedException {
+    public void testPeriodicJobsDoNotRunWhenShareGroupsDisabled() throws InterruptedException {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         PartitionWriter writer = mock(PartitionWriter.class);
         MockTime time = new MockTime();
