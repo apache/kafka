@@ -993,7 +993,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addCommitIdMetric(streamsMetrics);
         ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
-        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
+        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state.name());
         ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, (metricsConfig, now) -> state.ordinal());
         ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, calculateMetricsRecordingLevel());
         threads = Collections.synchronizedList(new LinkedList<>());

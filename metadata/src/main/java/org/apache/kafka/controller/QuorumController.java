@@ -408,7 +408,7 @@ public final class QuorumController implements Controller {
                 logContext = new LogContext(String.format("[QuorumController id=%d] ", nodeId));
             }
             if (controllerMetrics == null) {
-                controllerMetrics = new QuorumControllerMetrics(Optional.empty(), time);
+                controllerMetrics = new QuorumControllerMetrics(Optional.empty(), time, 0);
             }
 
             KafkaEventQueue queue = null;
@@ -1537,6 +1537,7 @@ public final class QuorumController implements Controller {
             setFeatureControlManager(featureControl).
             setBrokerShutdownHandler(this::handleBrokerShutdown).
             setInterBrokerListenerName(interBrokerListenerName).
+            setMetrics(controllerMetrics).
             build();
         this.configurationControl = new ConfigurationControlManager.Builder().
             setLogContext(logContext).
@@ -1787,6 +1788,7 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         int brokerId
     ) {
+        controllerMetrics.removeTimeSinceLastHeartbeatMetric(brokerId);
         return appendWriteEvent("unregisterBroker", context.deadlineNs(),
             (accessor) -> replicationControl.unregisterBroker(brokerId),
                 EnumSet.noneOf(ControllerOperationFlag.class));
@@ -1934,6 +1936,7 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerHeartbeatRequestData request
     ) {
+        controllerMetrics.updateBrokerContactTime(request.brokerId());
         // We start by updating the broker heartbeat in a lockless data structure.
         // We do this first so that if the main controller thread is backlogged, the
         // last contact time update still gets through.
