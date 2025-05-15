@@ -39,6 +39,7 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartiti
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource, AlterConfigsResourceCollection => LAlterConfigsResourceCollection, AlterableConfig => LAlterableConfig, AlterableConfigCollection => LAlterableConfigCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData.{AlterShareGroupOffsetsRequestPartition, AlterShareGroupOffsetsRequestTopic, AlterShareGroupOffsetsRequestTopicCollection}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{DescribedGroup, TopicPartitions}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
@@ -12942,6 +12943,39 @@ class KafkaApisTest extends Logging {
     response.data.results.forEach(deleteResult => {
       assertEquals(1, deleteResult.partitions.size)
       assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED.code(), deleteResult.partitions.get(0).errorCode())
+    })
+  }
+
+  @Test
+  def testAlterShareGroupOffsetsReturnsUnsupportedVersion(): Unit = {
+    val alterShareGroupOffsetsRequest = new AlterShareGroupOffsetsRequestData()
+      .setGroupId("group")
+      .setTopics(
+        new AlterShareGroupOffsetsRequestTopicCollection(
+          util.List.of(
+            new AlterShareGroupOffsetsRequestTopic()
+              .setTopicName("topic-1")
+              .setPartitions(util.List.of(
+                new AlterShareGroupOffsetsRequestPartition().setPartitionIndex(0).setStartOffset(0),
+                new AlterShareGroupOffsetsRequestPartition().setPartitionIndex(1).setStartOffset(0))
+              ),
+            new AlterShareGroupOffsetsRequestTopic()
+              .setTopicName("topic-2")
+              .setPartitions(util.List.of(
+                new AlterShareGroupOffsetsRequestPartition().setPartitionIndex(0).setStartOffset(0))
+              )
+          ).iterator()
+        )
+      )
+
+    val requestChannelRequest = buildRequest(new AlterShareGroupOffsetsRequest.Builder(alterShareGroupOffsetsRequest).build())
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(enableShareGroups = false)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[AlterShareGroupOffsetsResponse](requestChannelRequest)
+    response.data.responses.forEach(topic => {
+      topic.partitions().forEach(partition => assertEquals(Errors.UNSUPPORTED_VERSION.code, partition.errorCode))
     })
   }
 
