@@ -19,7 +19,6 @@ package org.apache.kafka.streams.internals.metrics;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import org.slf4j.Logger;
@@ -118,7 +117,7 @@ public class ClientMetrics {
     }
 
     public static void addStateMetric(final StreamsMetricsImpl streamsMetrics,
-                                      final Gauge<State> stateProvider) {
+                                      final Gauge<String> stateProvider) {
         streamsMetrics.addClientLevelMutableMetric(
             STATE,
             STATE_DESCRIPTION,
