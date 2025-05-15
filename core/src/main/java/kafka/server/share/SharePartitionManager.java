@@ -533,6 +533,24 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     /**
+     * The handler for share version feature metadata changes.
+     * @param shareVersion the new share version feature
+     * @param isEnabledFromConfig whether the share version feature is enabled from config
+     */
+    public void onShareVersionToggle(ShareVersion shareVersion, boolean isEnabledFromConfig) {
+        // Clear the cache and remove all share partitions from the cache if the share version does
+        // not support share groups.
+        if (!shareVersion.supportsShareGroups() && !isEnabledFromConfig) {
+            cache.removeAllSessions();
+            Set<SharePartitionKey> sharePartitionKeys = partitionCache.cachedSharePartitionKeys();
+            // Remove all share partitions from partition cache.
+            sharePartitionKeys.forEach(sharePartitionKey ->
+                removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager)
+            );
+        }
+    }
+
+    /**
      * The cachedTopicIdPartitionsInShareSession method is used to get the cached topic-partitions in the share session.
      *
      * @param groupId The group id in the share fetch request.
@@ -746,27 +764,6 @@ public class SharePartitionManager implements AutoCloseable {
                 brokerTopicStats.topicStats(topic).failedShareAcknowledgementRequestRate().mark();
             });
         };
-    }
-
-    /**
-     * The handler for share version feature metadata changes.
-     * @param shareVersion the new share version feature
-     */
-    public void onShareVersionToggle(ShareVersion shareVersion) {
-        if (!shareVersion.supportsShareGroups()) {
-            cache.updateSupportsShareGroups(false);
-            // Remove all share sessions from share session cache.
-            synchronized (cache) {
-                cache.removeAllSessions();
-            }
-            Set<SharePartitionKey> sharePartitionKeys = partitionCache.cachedSharePartitionKeys();
-            // Remove all share partitions from partition cache.
-            sharePartitionKeys.forEach(sharePartitionKey ->
-                removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager)
-            );
-        } else {
-            cache.updateSupportsShareGroups(true);
-        }
     }
 
     /**
