@@ -93,8 +93,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
     private final Timer timer;
     private final PartitionWriter writer;
     private final Map<TopicPartition, Long> lastPrunedOffsets;
-    private Supplier<Boolean> isShareGroupConfigEnabled = () -> true;
-    private final AtomicBoolean shouldRunPeriodJob = new AtomicBoolean(true);
+    private final Supplier<Boolean> shareGroupConfigEnabledSupplier;
+    private volatile boolean shouldRunPeriodicJob;
 
     public static class Builder {
         private final int nodeId;
@@ -103,7 +103,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         private CoordinatorLoader<CoordinatorRecord> loader;
         private Time time;
         private Timer timer;
-        private Supplier<Boolean> isShareGroupConfigEnabled;
+        private Supplier<Boolean> shareGroupConfigEnabledSupplier;
         private ShareCoordinatorMetrics coordinatorMetrics;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
 
@@ -142,8 +142,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
             return this;
         }
 
-        public Builder withShareGroupEnabled(Supplier<Boolean> isEnabled) {
-            this.isShareGroupConfigEnabled = isEnabled;
+        public Builder withShareGroupEnabledConfigSupplier(Supplier<Boolean> isEnabled) {
+            this.shareGroupConfigEnabledSupplier = isEnabled;
             return this;
         }
 
@@ -169,7 +169,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
             if (coordinatorRuntimeMetrics == null) {
                 throw new IllegalArgumentException("Coordinator runtime metrics must be set.");
             }
-            if (isShareGroupConfigEnabled == null) {
+            if (shareGroupConfigEnabledSupplier == null) {
                 throw new IllegalArgumentException("Share group enabled config supplier must be set.");
             }
 
@@ -215,7 +215,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 time,
                 timer,
                 writer,
-                isShareGroupConfigEnabled
+                shareGroupConfigEnabledSupplier
             );
         }
     }
@@ -228,7 +228,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         Time time,
         Timer timer,
         PartitionWriter writer,
-        Supplier<Boolean> isShareGroupConfigEnabled
+        Supplier<Boolean> shareGroupConfigEnabledSupplier
     ) {
         this.log = logContext.logger(ShareCoordinatorService.class);
         this.config = config;
@@ -238,7 +238,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         this.timer = timer;
         this.writer = writer;
         this.lastPrunedOffsets = new ConcurrentHashMap<>();
-        this.isShareGroupConfigEnabled = isShareGroupConfigEnabled;
+        this.shareGroupConfigEnabledSupplier = shareGroupConfigEnabledSupplier;
     }
 
     @Override
@@ -280,7 +280,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         log.info("Starting up.");
         numPartitions = shareGroupTopicPartitionCount.getAsInt();
-        setupPeriodicJobs();
         log.info("Startup complete.");
     }
 
@@ -291,13 +290,13 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     // Visibility for tests
     void setupRecordPruning() {
-        if (!shouldRunPeriodJob.get()) {
-            return;
-        }
         log.debug("Scheduling share-group state topic prune job.");
         timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
             @Override
             public void run() {
+                if (!shouldRunPeriodicJob) {
+                    return;
+                }
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
                 runtime.activeTopicPartitions().forEach(tp -> futures.add(performRecordPruning(tp)));
 
@@ -306,7 +305,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                         if (exp != null) {
                             log.error("Received error in share-group state topic prune.", exp);
                         }
-                        // Perpetual recursion if share groups enabled, failure or not.
+                        // Perpetual recursion, failure or not.
                         setupRecordPruning();
                     });
             }
@@ -370,13 +369,13 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     // Visibility for tests
     void setupSnapshotColdPartitions() {
-        if (!shouldRunPeriodJob.get()) {
-            return;
-        }
         log.debug("Scheduling cold share-partition snapshotting.");
         timer.add(new TimerTask(config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
             @Override
             public void run() {
+                if (!shouldRunPeriodicJob) {
+                    return;
+                }
                 List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
                     "snapshot-cold-partitions",
                     Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
@@ -1099,13 +1098,13 @@ public class ShareCoordinatorService implements ShareCoordinator {
         throwIfNotActive();
         this.runtime.onNewMetadataImage(newImage, delta);
         boolean enabled = isShareGroupsEnabled(newImage);
-        // enabled    shouldRunFlag         result (XOR)
+        // enabled    shouldRunJob         result (XOR)
         // 0            0               no op on flag, do not call jobs
         // 0            1               disable flag, do not call jobs                      => action
         // 1            0               enable flag, call jobs as they are not recursing    => action
         // 1            1               no op on flag, do not call jobs
-        if (enabled ^ shouldRunPeriodJob.get()) {
-            shouldRunPeriodJob.set(enabled);
+        if (enabled ^ shouldRunPeriodicJob) {
+            shouldRunPeriodicJob = enabled;
             if (enabled) {
                 setupPeriodicJobs();
             }
@@ -1127,13 +1126,13 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private boolean isShareGroupsEnabled(MetadataImage image) {
-        return isShareGroupConfigEnabled.get() || ShareVersion.fromFeatureLevel(
+        return shareGroupConfigEnabledSupplier.get() || ShareVersion.fromFeatureLevel(
             image.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
         ).supportsShareGroups();
     }
 
     // Visibility for tests
-    boolean shouldRunPruneJob() {
-        return shouldRunPeriodJob.get();
+    boolean shouldRunPeriodicJob() {
+        return shouldRunPeriodicJob;
     }
 }

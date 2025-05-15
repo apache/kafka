@@ -1485,6 +1485,7 @@ class ShareCoordinatorServiceTest {
         ));
 
         service.startup(() -> 1);
+        service.onNewMetadataImage(mock(MetadataImage.class), mock(MetadataDelta.class));
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1579,6 +1580,7 @@ class ShareCoordinatorServiceTest {
         ));
 
         service.startup(() -> 2);
+        service.onNewMetadataImage(mock(MetadataImage.class), mock(MetadataDelta.class));
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1640,6 +1642,7 @@ class ShareCoordinatorServiceTest {
         ));
 
         service.startup(() -> 1);
+        service.onNewMetadataImage(mock(MetadataImage.class), mock(MetadataDelta.class));
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1692,6 +1695,7 @@ class ShareCoordinatorServiceTest {
         ));
 
         service.startup(() -> 1);
+        service.onNewMetadataImage(mock(MetadataImage.class), mock(MetadataDelta.class));
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1742,6 +1746,8 @@ class ShareCoordinatorServiceTest {
         ));
 
         service.startup(() -> 1);
+        service.onNewMetadataImage(mock(MetadataImage.class), mock(MetadataDelta.class));
+
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1804,6 +1810,7 @@ class ShareCoordinatorServiceTest {
         ));
 
         service.startup(() -> 1);
+        service.onNewMetadataImage(mock(MetadataImage.class), mock(MetadataDelta.class));
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1879,6 +1886,7 @@ class ShareCoordinatorServiceTest {
         ));
 
         service.startup(() -> 1);
+        service.onNewMetadataImage(mock(MetadataImage.class), mock(MetadataDelta.class));
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1938,6 +1946,7 @@ class ShareCoordinatorServiceTest {
         )).thenReturn(List.of(CompletableFuture.completedFuture(null)));
 
         service.startup(() -> 1);
+        service.onNewMetadataImage(mock(MetadataImage.class), mock(MetadataDelta.class));
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("snapshot-cold-partitions"),
@@ -1995,6 +2004,7 @@ class ShareCoordinatorServiceTest {
         ));
 
         service.startup(() -> 2);
+        service.onNewMetadataImage(mock(MetadataImage.class), mock(MetadataDelta.class));
         verify(runtime, times(0))
             .scheduleWriteAllOperation(
                 eq("snapshot-cold-partitions"),
@@ -2040,97 +2050,87 @@ class ShareCoordinatorServiceTest {
             () -> false // So that the feature config is used.
         ));
 
-        MetadataImage mockedImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
-        MetadataDelta delta = mock(MetadataDelta.class);
-        ShareVersion shareVersion = mock(ShareVersion.class);
-        when(shareVersion.supportsShareGroups()).thenReturn(false);
-        when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 0);
-
         // Prune job.
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
             any(),
             any()
-        )).thenAnswer(inv -> {
-            service.onNewMetadataImage(mockedImage, delta);
-            return CompletableFuture.completedFuture(Optional.empty());
-        });
+        )).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
 
         // Snapshot job.
         when(runtime.scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
             any(),
             any()
-        )).thenAnswer(inv -> {
-            service.onNewMetadataImage(mockedImage, delta);
-            return List.of();
-        });
+        )).thenReturn(List.of());
 
-        assertTrue(service.shouldRunPruneJob());
+        assertFalse(service.shouldRunPeriodicJob());
 
         service.startup(() -> 1);
-        verify(timer, times(2)).add(any()); // Timer task added twice (prune, snapshot).
-        timer.advanceClock(30001L); // Will cause task execution.
 
+        MetadataImage mockedImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
+
+        // Feature disabled on start.
+        when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 0);
+        service.onNewMetadataImage(mockedImage, mock(MetadataDelta.class));   // Jobs will not execute as feature is off in image.
+
+        verify(timer, times(0)).add(any()); // Timer task not added.
+        verify(runtime, times(0)).scheduleWriteOperation(
+            eq("write-state-record-prune"),
+            any(),
+            any(),
+            any()
+        );
+        verify(runtime, times(0)).scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any(),
+            any()
+        );
+        assertFalse(service.shouldRunPeriodicJob());
+
+        // Enable feature.
+        Mockito.reset(mockedImage);
+        when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 1);
+        service.onNewMetadataImage(mockedImage, mock(MetadataDelta.class));   // Jobs will execute as feature is on in image.
+
+        verify(timer, times(2)).add(any()); // Timer task added twice (prune, snapshot).
+        timer.advanceClock(30001L);
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
             any(),
             any()
         );
-
         verify(runtime, times(1)).scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
             any(),
             any()
         );
+        assertTrue(service.shouldRunPeriodicJob());
 
-        // New metadata image will have been served.
-        assertFalse(service.shouldRunPruneJob());
-        verify(timer, times(2)).add(any()); // Timer tasks no longer added.
-
-        // Explicit invocations
-        service.setupRecordPruning();
-        service.setupSnapshotColdPartitions();
+        // Disable feature
+        Mockito.reset(mockedImage);
+        when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 0);
+        service.onNewMetadataImage(mockedImage, mock(MetadataDelta.class));   // Jobs will not execute as feature is on in image.
         timer.advanceClock(30001L);
 
+        verify(timer, times(4)).add(any()); // Tasks added but will return immediately.
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
             any(),
             any()
         );
-
         verify(runtime, times(1)).scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
             any(),
             any()
         );
+        assertFalse(service.shouldRunPeriodicJob());
 
-        assertFalse(service.shouldRunPruneJob());
-        verify(timer, times(2)).add(any()); // Timer tasks no longer added.
-
-        // Re-enable
-        Mockito.reset(shareVersion, mockedImage);
-        when(shareVersion.supportsShareGroups()).thenReturn(true);
-        when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 1);
-
-        service.onNewMetadataImage(mockedImage, delta);
-        assertTrue(service.shouldRunPruneJob());
-        timer.advanceClock(30001);
-        verify(runtime, times(2)).scheduleWriteOperation(
-            eq("write-state-record-prune"),
-            any(),
-            any(),
-            any()
-        );
-
-        verify(runtime, times(2)).scheduleWriteAllOperation(
-            eq("snapshot-cold-partitions"),
-            any(),
-            any()
-        );
+        timer.advanceClock(30001L);
+        verify(timer, times(4)).add(any()); // Not new additions.
 
         service.shutdown();
     }
