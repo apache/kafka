@@ -229,9 +229,9 @@ class ControllerApis(
     // Check if topic deletion is enabled at all.
     if (!config.deleteTopicEnable) {
       if (apiVersion < 3) {
-        return CompletableFuture.failedFuture(new InvalidRequestException("Topic deletion is disabled."))
+        return CompletableFuture.failedFuture(new InvalidRequestException("This version does not support topic deletion."))
       } else {
-        return CompletableFuture.failedFuture(new TopicDeletionDisabledException("Topic deletion is disabled"))
+        return CompletableFuture.failedFuture(new TopicDeletionDisabledException())
       }
     }
     // The first step is to load up the names and IDs that have been provided by the
