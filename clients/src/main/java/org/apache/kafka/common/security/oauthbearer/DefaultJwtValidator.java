@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
@@ -90,7 +90,7 @@ public class DefaultJwtValidator implements JwtValidator {
     }
 
     @Override
-    public OAuthBearerToken validate(String accessToken) throws ValidateException {
+    public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
         if (delegate == null)
             throw new IllegalStateException("JWT validator delegate is null; please call init() first");
 

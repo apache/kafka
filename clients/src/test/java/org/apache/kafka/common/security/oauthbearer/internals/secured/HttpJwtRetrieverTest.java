@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -167,7 +169,7 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void testParseAccessTokenInvalidJson() {
-        assertThrows(IOException.class, () -> HttpJwtRetriever.parseAccessToken("not valid JSON"));
+        assertThrows(JwtRetrieverException.class, () -> HttpJwtRetriever.parseAccessToken("not valid JSON"));
     }
 
     @Test

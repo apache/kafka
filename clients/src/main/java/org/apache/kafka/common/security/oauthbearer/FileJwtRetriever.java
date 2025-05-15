@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.utils.Utils;
 
@@ -47,7 +47,7 @@ public class FileJwtRetriever implements JwtRetriever {
     }
 
     @Override
-    public String retrieve() throws IOException {
+    public String retrieve() throws JwtRetrieverException {
         if (accessToken == null)
             throw new IllegalStateException("Access token is null; please call init() first");
 

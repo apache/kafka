@@ -20,10 +20,7 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
@@ -101,7 +98,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
             }
 
             @Override
-            public OAuthBearerToken validate(String accessToken) throws ValidateException {
+            public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
                 return null;
             }
         };
@@ -129,7 +126,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
             }
 
             @Override
-            public OAuthBearerToken validate(String accessToken) throws ValidateException {
+            public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
                 return null;
             }
         };

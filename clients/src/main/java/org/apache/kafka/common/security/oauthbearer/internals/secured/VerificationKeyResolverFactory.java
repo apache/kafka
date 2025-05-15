@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
 import org.apache.kafka.common.utils.Time;
 
 import org.jose4j.http.Get;

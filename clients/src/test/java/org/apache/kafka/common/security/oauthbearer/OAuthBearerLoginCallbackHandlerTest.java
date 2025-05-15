@@ -21,11 +21,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.FileJwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
@@ -172,7 +167,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     public void testMissingAccessToken() {
         Map<String, ?> configs = getSaslConfigs();
         JwtRetriever jwtRetriever = () -> {
-            throw new IOException("The token endpoint response access_token value must be non-null");
+            throw new JwtRetrieverException("The token endpoint response access_token value must be non-null");
         };
         JwtValidator jwtValidator = createJwtValidator(configs);
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
@@ -180,7 +175,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
-            assertThrowsWithMessage(IOException.class,
+            assertThrowsWithMessage(JwtRetrieverException.class,
                 () -> handler.handle(new Callback[]{callback}),
                 "token endpoint response access_token value must be non-null");
         } finally {

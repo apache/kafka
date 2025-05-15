@@ -19,6 +19,8 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.utils.Utils;
 
@@ -143,11 +145,11 @@ public class HttpJwtRetriever implements JwtRetriever {
      *
      * @return Non-<code>null</code> JWT access token string
      *
-     * @throws IOException Thrown on errors related to IO during retrieval
+     * @throws JwtRetrieverException Thrown on errors related to IO, parsing, etc. during retrieval
      */
 
     @Override
-    public String retrieve() throws IOException {
+    public String retrieve() throws JwtRetrieverException {
         String authorizationHeader = formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader);
         String requestBody = formatRequestBody(scope);
         Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);
@@ -174,8 +176,8 @@ public class HttpJwtRetriever implements JwtRetriever {
                 }
             });
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof IOException)
-                throw (IOException) e.getCause();
+            if (e.getCause() instanceof JwtRetrieverException)
+                throw (JwtRetrieverException) e.getCause();
             else
                 throw new KafkaException(e.getCause());
         }
@@ -323,9 +325,16 @@ public class HttpJwtRetriever implements JwtRetriever {
         return String.format("{%s}", errorResponseBody);
     }
 
-    static String parseAccessToken(String responseBody) throws IOException {
+    static String parseAccessToken(String responseBody) throws JwtRetrieverException {
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode rootNode = mapper.readTree(responseBody);
+        JsonNode rootNode;
+
+        try {
+            rootNode = mapper.readTree(responseBody);
+        } catch (IOException e) {
+            throw new JwtRetrieverException(e);
+        }
+
         JsonNode accessTokenNode = rootNode.at("/access_token");
 
         if (accessTokenNode == null) {
@@ -339,7 +348,7 @@ public class HttpJwtRetriever implements JwtRetriever {
                 snippet = String.format("%s (trimmed to first %d characters out of %d total)", s, MAX_RESPONSE_BODY_LENGTH, actualLength);
             }
 
-            throw new IOException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", snippet));
+            throw new JwtRetrieverException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", snippet));
         }
 
         return sanitizeString("the token endpoint response's access_token JSON attribute", accessTokenNode.textValue());

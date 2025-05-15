@@ -15,9 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -94,7 +97,7 @@ public class DefaultJwtRetriever implements JwtRetriever {
     }
 
     @Override
-    public String retrieve() throws IOException {
+    public String retrieve() throws JwtRetrieverException {
         if (delegate == null)
             throw new IllegalStateException("JWT retriever delegate is null; please call init() first");
 

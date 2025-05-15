@@ -15,10 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

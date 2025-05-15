@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.Initable;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -58,10 +58,10 @@ public interface JwtValidator extends Initable, Closeable {
      *
      * @return {@link OAuthBearerToken}
      *
-     * @throws ValidateException Thrown on errors performing validation of given token
+     * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
 
-    OAuthBearerToken validate(String accessToken) throws ValidateException;
+    OAuthBearerToken validate(String accessToken) throws JwtValidatorException;
 
     /**
      * Closes any resources that were initialized by {@link #init()}.

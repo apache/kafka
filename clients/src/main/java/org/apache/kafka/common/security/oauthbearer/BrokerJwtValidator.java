@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
@@ -145,11 +147,11 @@ public class BrokerJwtValidator implements JwtValidator {
      *
      * @param accessToken Non-<code>null</code> JWT access token
      * @return {@link OAuthBearerToken}
-     * @throws ValidateException Thrown on errors performing validation of given token
+     * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
 
     @SuppressWarnings("unchecked")
-    public OAuthBearerToken validate(String accessToken) throws ValidateException {
+    public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
 
         JwtContext jwt;
@@ -157,7 +159,7 @@ public class BrokerJwtValidator implements JwtValidator {
         try {
             jwt = jwtConsumer.process(serializedJwt.getToken());
         } catch (InvalidJwtException e) {
-            throw new ValidateException(String.format("Could not validate the access token: %s", e.getMessage()), e);
+            throw new JwtValidatorException(String.format("Could not validate the access token: %s", e.getMessage()), e);
         }
 
         JwtClaims claims = jwt.getJwtClaims();
@@ -190,13 +192,13 @@ public class BrokerJwtValidator implements JwtValidator {
             issuedAt);
     }
 
-    private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws ValidateException {
+    private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws JwtValidatorException {
         try {
             T value = supplier.get();
             log.debug("getClaim - {}: {}", claimName, value);
             return value;
         } catch (MalformedClaimException e) {
-            throw new ValidateException(String.format("Could not extract the '%s' claim from the access token", claimName), e);
+            throw new JwtValidatorException(String.format("Could not extract the '%s' claim from the access token", claimName), e);
         }
     }
 

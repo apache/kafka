@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
+
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.Initable;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -48,10 +51,10 @@ public interface JwtRetriever extends Initable, Closeable {
      *
      * @return Non-<code>null</code> JWT access token string
      *
-     * @throws IOException Thrown on errors related to IO during retrieval
+     * @throws JwtRetrieverException Thrown on errors related to IO during retrieval
      */
 
-    String retrieve() throws IOException;
+    String retrieve() throws JwtRetrieverException;
 
     /**
      * Lifecycle method to perform a clean shutdown of the retriever. This must
