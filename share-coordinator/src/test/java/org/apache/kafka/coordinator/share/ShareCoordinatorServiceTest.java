@@ -2073,7 +2073,7 @@ class ShareCoordinatorServiceTest {
 
         // Feature disabled on start.
         when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 0);
-        service.onNewMetadataImage(mockedImage, mock(MetadataDelta.class));   // Jobs will not execute as feature is off in image.
+        service.onNewMetadataImage(mockedImage, mock(MetadataDelta.class));   // Jobs will not execute as feature is OFF in image.
 
         verify(timer, times(0)).add(any()); // Timer task not added.
         verify(runtime, times(0)).scheduleWriteOperation(
@@ -2092,7 +2092,7 @@ class ShareCoordinatorServiceTest {
         // Enable feature.
         Mockito.reset(mockedImage);
         when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 1);
-        service.onNewMetadataImage(mockedImage, mock(MetadataDelta.class));   // Jobs will execute as feature is on in image.
+        service.onNewMetadataImage(mockedImage, mock(MetadataDelta.class));   // Jobs will execute as feature is ON in image.
 
         verify(timer, times(2)).add(any()); // Timer task added twice (prune, snapshot).
         timer.advanceClock(30001L);
@@ -2130,7 +2130,7 @@ class ShareCoordinatorServiceTest {
         assertFalse(service.shouldRunPeriodicJob());
 
         timer.advanceClock(30001L);
-        verify(timer, times(4)).add(any()); // Not new additions.
+        verify(timer, times(4)).add(any()); // No new additions.
 
         service.shutdown();
     }
