@@ -511,7 +511,7 @@ public class LogConfig extends AbstractConfig {
         boolean isRemoteLogStorageEnabled = (Boolean) newConfigs.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
             validateRemoteStorageOnlyIfSystemEnabled(newConfigs, isRemoteLogStorageSystemEnabled, false);
-            validateNoRemoteStorageForCompactedTopic(newConfigs);
+            validateRemoteStorageRequiresDeleteCleanupPolicy(newConfigs);
             validateRemoteStorageRetentionSize(newConfigs);
             validateRemoteStorageRetentionTime(newConfigs);
             validateRetentionConfigsWhenRemoteCopyDisabled(newConfigs, isRemoteLogStorageEnabled);
@@ -561,10 +561,12 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    private static void validateNoRemoteStorageForCompactedTopic(Map<?, ?> props) {
-        String cleanupPolicy = props.get(TopicConfig.CLEANUP_POLICY_CONFIG).toString().toLowerCase(Locale.getDefault());
-        if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT)) {
-            throw new ConfigException("Remote log storage is unsupported for the compacted topics");
+    @SuppressWarnings("unchecked")
+    private static void validateRemoteStorageRequiresDeleteCleanupPolicy(Map<?, ?> props) {
+        List<String> cleanupPolicy = (List<String>) props.get(TopicConfig.CLEANUP_POLICY_CONFIG);
+        Set<String> policySet = cleanupPolicy.stream().map(policy -> policy.toLowerCase(Locale.getDefault())).collect(Collectors.toSet());
+        if (!Set.of(TopicConfig.CLEANUP_POLICY_DELETE).equals(policySet)) {
+            throw new ConfigException("Remote log storage only supports topics with cleanup.policy=delete");
         }
     }
 
