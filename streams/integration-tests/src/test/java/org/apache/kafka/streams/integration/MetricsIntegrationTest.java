@@ -272,7 +272,7 @@ public class MetricsIntegrationTest {
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
         verifyAliveStreamThreadsMetric();
-        verifyStateMetric(State.CREATED);
+        verifyStateMetric(State.CREATED.name());
         verifyTopologyDescriptionMetric(topology.describe().toString());
         verifyApplicationIdMetric();
 
@@ -283,7 +283,7 @@ public class MetricsIntegrationTest {
             () -> "Kafka Streams application did not reach state RUNNING in " + timeout + " ms");
 
         verifyAliveStreamThreadsMetric();
-        verifyStateMetric(State.RUNNING);
+        verifyStateMetric(State.RUNNING.name());
     }
 
     private void produceRecordsForTwoSegments(final Duration segmentInterval) {
@@ -357,7 +357,7 @@ public class MetricsIntegrationTest {
             .to(STREAM_OUTPUT_4);
         startApplication();
 
-        verifyStateMetric(State.RUNNING);
+        verifyStateMetric(State.RUNNING.name());
         checkClientLevelMetrics();
         checkThreadLevelMetrics();
         checkTaskLevelMetrics();
@@ -392,7 +392,7 @@ public class MetricsIntegrationTest {
         produceRecordsForClosingWindow(windowSize);
         startApplication();
 
-        verifyStateMetric(State.RUNNING);
+        verifyStateMetric(State.RUNNING.name());
 
         checkWindowStoreAndSuppressionBufferMetrics();
 
@@ -421,7 +421,7 @@ public class MetricsIntegrationTest {
 
         startApplication();
 
-        verifyStateMetric(State.RUNNING);
+        verifyStateMetric(State.RUNNING.name());
 
         checkSessionStoreMetrics();
 
@@ -439,14 +439,14 @@ public class MetricsIntegrationTest {
         assertThat(metricsList.get(0).metricValue(), is(NUM_THREADS));
     }
 
-    private void verifyStateMetric(final State state) {
+    private void verifyStateMetric(final String state) {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(STATE) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
         assertThat(metricsList.get(0).metricValue(), is(state));
-        assertThat(metricsList.get(0).metricValue().toString(), is(state.toString()));
+        assertThat(metricsList.get(0).metricValue().toString(), is(state));
     }
 
     private void verifyTopologyDescriptionMetric(final String topologyDescription) {

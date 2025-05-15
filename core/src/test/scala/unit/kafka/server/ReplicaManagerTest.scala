@@ -35,7 +35,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidPidMappingException
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.{DeleteRecordsResponseData, ShareFetchResponseData}
+import org.apache.kafka.common.message.{DeleteRecordsResponseData, FetchResponseData, ShareFetchResponseData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
@@ -63,6 +63,7 @@ import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets}
 import org.apache.kafka.server.share.SharePartitionKey
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchGroupKey, DelayedShareFetchKey, ShareFetch}
@@ -3369,9 +3370,9 @@ class ReplicaManagerTest {
 
                 val tp = new TopicPartition(topic, 0)
                 val leader = new MockLeaderEndPoint() {
-                  override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
-                    Map(tp -> new FetchData().setErrorCode(Errors.OFFSET_MOVED_TO_TIERED_STORAGE.code))
-                  }
+                  override def fetch(fetchRequest: FetchRequest.Builder): java.util.Map[TopicPartition, FetchResponseData.PartitionData]  = {
+                    Map(tp -> new FetchResponseData.PartitionData().setErrorCode(Errors.OFFSET_MOVED_TO_TIERED_STORAGE.code))
+                  }.asJava
                 }
                 leader.setLeaderState(tp, PartitionState(leaderEpoch = 0))
                 leader.setReplicaPartitionStateCallback(_ => PartitionState(leaderEpoch = 0))
