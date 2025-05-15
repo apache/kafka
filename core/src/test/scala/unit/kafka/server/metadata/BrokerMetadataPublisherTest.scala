@@ -200,6 +200,7 @@ class BrokerMetadataPublisherTest {
       groupCoordinator,
       mock(classOf[TransactionCoordinator]),
       mock(classOf[ShareCoordinator]),
+      mock(classOf[SharePartitionManager]),
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
       mock(classOf[DynamicTopicClusterQuotaPublisher]),
@@ -208,7 +209,6 @@ class BrokerMetadataPublisherTest {
       mock(classOf[AclPublisher]),
       faultHandler,
       faultHandler,
-      mock(classOf[SharePartitionManager])
     )
 
     val image = MetadataImage.EMPTY
@@ -241,6 +241,7 @@ class BrokerMetadataPublisherTest {
       mock(classOf[GroupCoordinator]),
       mock(classOf[TransactionCoordinator]),
       mock(classOf[ShareCoordinator]),
+      sharePartitionManager,
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
       mock(classOf[DynamicTopicClusterQuotaPublisher]),
@@ -248,8 +249,7 @@ class BrokerMetadataPublisherTest {
       mock(classOf[DelegationTokenPublisher]),
       mock(classOf[AclPublisher]),
       faultHandler,
-      faultHandler,
-      sharePartitionManager
+      faultHandler
     )
 
     val featuresImage = new FeaturesImage(
@@ -289,6 +289,6 @@ class BrokerMetadataPublisherTest {
     )
 
     // SharePartitionManager is receiving the latest changes.
-    verify(sharePartitionManager).onShareVersionToggle(any())
+    verify(sharePartitionManager).onShareVersionToggle(any(), any())
   }
 }

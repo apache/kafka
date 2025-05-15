@@ -74,6 +74,7 @@ class BrokerMetadataPublisher(
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
   shareCoordinator: ShareCoordinator,
+  sharePartitionManager: SharePartitionManager,
   var dynamicConfigPublisher: DynamicConfigPublisher,
   dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
   dynamicTopicClusterQuotaPublisher: DynamicTopicClusterQuotaPublisher,
@@ -81,8 +82,7 @@ class BrokerMetadataPublisher(
   delegationTokenPublisher: DelegationTokenPublisher,
   aclPublisher: AclPublisher,
   fatalFaultHandler: FaultHandler,
-  metadataPublishingFaultHandler: FaultHandler,
-  sharePartitionManager: SharePartitionManager
+  metadataPublishingFaultHandler: FaultHandler
 ) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${config.nodeId}] "
 
@@ -254,16 +254,17 @@ class BrokerMetadataPublisher(
       if (delta.featuresDelta != null) {
         try {
           val newFinalizedFeatures = new FinalizedFeatures(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
+          val newFinalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
           // Share version feature has been toggled.
-          if (newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort) != finalizedShareVersion) {
-            finalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
+          if (newFinalizedShareVersion != finalizedShareVersion) {
+            finalizedShareVersion = newFinalizedShareVersion
             val shareVersion: ShareVersion = ShareVersion.fromFeatureLevel(finalizedShareVersion)
             info(s"Feature share.version has been updated to version $finalizedShareVersion")
-            sharePartitionManager.onShareVersionToggle(shareVersion)
+            sharePartitionManager.onShareVersionToggle(shareVersion, config.shareGroupConfig.isShareGroupEnabled)
           }
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share partition manager " +
-            s" with share version feature change in $delta", t)
+            s" with share version feature change in $deltaName", t)
         }
       }
 
