@@ -45,6 +45,9 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.MockTime;
@@ -52,6 +55,7 @@ import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.Timer;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -68,17 +72,21 @@ import java.util.concurrent.TimeoutException;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("ClassFanOutComplexity")
 class ShareCoordinatorServiceTest {
 
     @SuppressWarnings("unchecked")
@@ -1976,6 +1984,120 @@ class ShareCoordinatorServiceTest {
                 any());
 
         checkMetrics(metrics);
+
+        service.shutdown();
+    }
+
+    @Test
+    public void testPeriodicJobDoNotRunWhenShareGroupsDisabled() throws InterruptedException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        PartitionWriter writer = mock(PartitionWriter.class);
+        MockTime time = new MockTime();
+        MockTimer timer = spy(new MockTimer(time));
+
+        Metrics metrics = new Metrics();
+
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer
+        ));
+
+        MetadataImage mockedImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
+        MetadataDelta delta = mock(MetadataDelta.class);
+        ShareVersion shareVersion = mock(ShareVersion.class);
+        when(shareVersion.supportsShareGroups()).thenReturn(false);
+        when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 0);
+
+        // Prune job.
+        when(runtime.scheduleWriteOperation(
+            eq("write-state-record-prune"),
+            any(),
+            any(),
+            any()
+        )).thenAnswer(inv -> {
+            service.onNewMetadataImage(mockedImage, delta);
+            return CompletableFuture.completedFuture(Optional.empty());
+        });
+
+        // Snapshot job.
+        when(runtime.scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any(),
+            any()
+        )).thenAnswer(inv -> {
+            service.onNewMetadataImage(mockedImage, delta);
+            return List.of();
+        });
+
+        assertTrue(service.shouldRunPruneJob());
+
+        service.startup(() -> 1);
+        verify(timer, times(2)).add(any()); // Timer task added twice (prune, snapshot).
+        timer.advanceClock(30001L); // Will cause task execution.
+
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("write-state-record-prune"),
+            any(),
+            any(),
+            any()
+        );
+
+        verify(runtime, times(1)).scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any(),
+            any()
+        );
+
+        // New metadata image will have been served.
+        assertFalse(service.shouldRunPruneJob());
+        verify(timer, times(2)).add(any()); // Timer tasks no longer added.
+
+        // Explicit invocations
+        service.setupRecordPruning();
+        service.setupSnapshotColdPartitions();
+        timer.advanceClock(30001L);
+
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("write-state-record-prune"),
+            any(),
+            any(),
+            any()
+        );
+
+        verify(runtime, times(1)).scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any(),
+            any()
+        );
+
+        assertFalse(service.shouldRunPruneJob());
+        verify(timer, times(2)).add(any()); // Timer tasks no longer added.
+
+        // Re-enable
+        Mockito.reset(shareVersion, mockedImage);
+        when(shareVersion.supportsShareGroups()).thenReturn(true);
+        when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 1);
+
+        service.onNewMetadataImage(mockedImage, delta);
+        assertTrue(service.shouldRunPruneJob());
+        timer.advanceClock(30001);
+        verify(runtime, times(2)).scheduleWriteOperation(
+            eq("write-state-record-prune"),
+            any(),
+            any(),
+            any()
+        );
+
+        verify(runtime, times(2)).scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any(),
+            any()
+        );
 
         service.shutdown();
     }

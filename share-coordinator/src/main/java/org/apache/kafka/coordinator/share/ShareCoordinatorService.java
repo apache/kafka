@@ -276,11 +276,12 @@ public class ShareCoordinatorService implements ShareCoordinator {
         setupSnapshotColdPartitions();
     }
 
-    private void setupRecordPruning() {
-        log.debug("Scheduling share-group state topic prune job.");
+    // Visibility for tests
+    void setupRecordPruning() {
         if (!shouldRunPeriodJob.get()) {
             return;
         }
+        log.debug("Scheduling share-group state topic prune job.");
         timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
             @Override
             public void run() {
@@ -354,7 +355,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
         return fut;
     }
 
-    private void setupSnapshotColdPartitions() {
+    // Visibility for tests
+    void setupSnapshotColdPartitions() {
         if (!shouldRunPeriodJob.get()) {
             return;
         }
@@ -1116,5 +1118,10 @@ public class ShareCoordinatorService implements ShareCoordinator {
         return ShareVersion.fromFeatureLevel(
             image.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
         ).supportsShareGroups();
+    }
+
+    // Visibility for tests
+    boolean shouldRunPruneJob() {
+        return shouldRunPeriodJob.get();
     }
 }
