@@ -136,9 +136,8 @@ public class StreamsGroupCommand {
 
         List<String> listStreamsGroups() {
             try {
-                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
-                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
-                    .withTypes(Set.of(GroupType.STREAMS)));
+                ListGroupsResult result = adminClient.listGroups(ListGroupsOptions.forStreamsGroups()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException | ExecutionException e) {
@@ -147,9 +146,8 @@ public class StreamsGroupCommand {
         }
 
         List<GroupListing> listStreamsGroupsInStates(Set<GroupState> states) throws ExecutionException, InterruptedException {
-            ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+            ListGroupsResult result = adminClient.listGroups(ListGroupsOptions.forStreamsGroups()
                 .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
-                .withTypes(Set.of(GroupType.STREAMS))
                 .inGroupStates(states));
             return new ArrayList<>(result.all().get());
         }
@@ -368,7 +366,9 @@ public class StreamsGroupCommand {
         private static Set<TopicPartition> getTopicPartitions(List<StreamsGroupMemberAssignment.TaskIds> taskIds, StreamsGroupDescription description) {
             Map<String, List<String>> allSourceTopics = new HashMap<>();
             for (StreamsGroupSubtopologyDescription subtopologyDescription : description.subtopologies()) {
-                allSourceTopics.put(subtopologyDescription.subtopologyId(), subtopologyDescription.sourceTopics());
+                List<String> topics = new ArrayList<>(subtopologyDescription.sourceTopics());
+                topics.addAll(subtopologyDescription.repartitionSourceTopics().keySet());
+                allSourceTopics.put(subtopologyDescription.subtopologyId(), topics);
             }
             Set<TopicPartition> topicPartitions = new HashSet<>();
 

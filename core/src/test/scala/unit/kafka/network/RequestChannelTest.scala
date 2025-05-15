@@ -131,11 +131,21 @@ class RequestChannelTest {
                      op: OpType,
                      entries: Map[String, String],
                      expectedValues: Map[String, String]): Unit = {
-      val alterConfigs = request(incrementalAlterConfigs(resource, entries, op))
-      val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[IncrementalAlterConfigsRequest]
+      val alterConfigs = incrementalAlterConfigs(resource, entries, op)
+      val alterConfigsString = alterConfigs.toString
+      entries.foreach { entry =>
+        if (!alterConfigsString.contains(entry._1)) {
+          fail("Config names should be in the request string")
+        }
+        if (entry._2 != null && alterConfigsString.contains(entry._2)) {
+          fail("Config values should not be in the request string")
+        }
+      }
+      val req = request(alterConfigs)
+      val loggableAlterConfigs = req.loggableRequest.asInstanceOf[IncrementalAlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.data.resources.find(resource.`type`.id, resource.name).configs
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog.toJava, alterConfigs.isForwarded).toString
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(req.header, req.requestLog.toJava, req.isForwarded).toString
       assertFalse(alterConfigsDesc.contains(sensitiveValue), s"Sensitive config logged $alterConfigsDesc")
     }
 

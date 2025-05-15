@@ -334,11 +334,11 @@ public class PartitionChangeBuilder {
                 targetIsr = List.of(electionResult.node);
                 targetElr = targetElr.stream().filter(replica -> replica != electionResult.node)
                     .collect(Collectors.toList());
-                log.trace("Setting new leader for topicId {}, partition {} to {} using ELR",
-                        topicId, partitionId, electionResult.node);
+                log.info("Setting new leader for topicId {}, partition {} to {} using ELR. Previous partition: {}, change record: {}",
+                        topicId, partitionId, electionResult.node, partition, record);
             } else if (electionResult.unclean) {
-                log.info("Setting new leader for topicId {}, partition {} to {} using an unclean election",
-                    topicId, partitionId, electionResult.node);
+                log.info("Setting new leader for topicId {}, partition {} to {} using an unclean election. Previous partition: {}, change record: {}",
+                    topicId, partitionId, electionResult.node, partition, record);
             } else {
                 log.trace("Setting new leader for topicId {}, partition {} to {} using a clean election",
                     topicId, partitionId, electionResult.node);

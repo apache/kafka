@@ -115,9 +115,7 @@ public interface ClusterInstance {
     /**
      * The listener for the kraft cluster controller configured by controller.listener.names.
      */
-    default Optional<ListenerName> controllerListenerName() {
-        return Optional.empty();
-    }
+    ListenerName controllerListenerName();
 
     /**
      * The broker connect string which can be used by clients for bootstrapping
@@ -287,6 +285,19 @@ public interface ClusterInstance {
         try (Admin admin = admin()) {
             admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
             waitForTopic(topicName, partitions);
+        }
+    }
+
+    /**
+     * Deletes a topic and waits for the deletion to complete.
+     *
+     * @param topicName The name of the topic to delete
+     * @throws InterruptedException If the operation is interrupted
+     */
+    default void deleteTopic(String topicName) throws InterruptedException {
+        try (Admin admin = admin()) {
+            admin.deleteTopics(List.of(topicName));
+            waitTopicDeletion(topicName);
         }
     }
 
