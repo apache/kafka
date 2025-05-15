@@ -142,8 +142,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
             return this;
         }
 
-        public Builder withShareGroupEnabledConfigSupplier(Supplier<Boolean> isEnabled) {
-            this.shareGroupConfigEnabledSupplier = isEnabled;
+        public Builder withShareGroupEnabledConfigSupplier(Supplier<Boolean> shareGroupConfigEnabledSupplier) {
+            this.shareGroupConfigEnabledSupplier = shareGroupConfigEnabledSupplier;
             return this;
         }
 
@@ -170,7 +170,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 throw new IllegalArgumentException("Coordinator runtime metrics must be set.");
             }
             if (shareGroupConfigEnabledSupplier == null) {
-                throw new IllegalArgumentException("Share group enabled config supplier must be set.");
+                throw new IllegalArgumentException("Share group enabled config enabled supplier must be set.");
             }
 
             String logPrefix = String.format("ShareCoordinator id=%d", nodeId);
