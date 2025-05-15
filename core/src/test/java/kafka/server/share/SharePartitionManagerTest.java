@@ -159,7 +159,7 @@ public class SharePartitionManagerTest {
 
     static final int DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL = 1000;
 
-    private Time time;
+    private MockTime time;
     private ReplicaManager mockReplicaManager;
     private BrokerTopicStats brokerTopicStats;
     private SharePartitionManager sharePartitionManager;
@@ -2809,7 +2809,7 @@ public class SharePartitionManagerTest {
     public void testCreateIdleShareFetchTask() throws Exception {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
-        MockTimer mockTimer = new MockTimer((MockTime) time);
+        MockTimer mockTimer = new MockTimer(time);
         long maxWaitMs = 1000L;
 
         // Set up the mock to capture and add the timer task
@@ -2832,7 +2832,7 @@ public class SharePartitionManagerTest {
         mockTimer.advanceClock(maxWaitMs / 2);
         assertFalse(future.isDone());
 
-        mockTimer.advanceClock(maxWaitMs);
+        mockTimer.advanceClock((maxWaitMs / 2) + 1);
         // Verify the future is completed after the wait time
         assertTrue(future.isDone());
         assertFalse(future.isCompletedExceptionally());

@@ -291,7 +291,8 @@ class ReplicaManager(val config: KafkaConfig,
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
   private val addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(config)
-  val delayedShareFetchTimer = new SystemTimer("ShareFetch")
+  private val shareFetchPurgatoryName = "ShareFetch"
+  private val delayedShareFetchTimer = new SystemTimer(shareFetchPurgatoryName)
 
   val delayedProducePurgatory = delayedProducePurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedProduce](
@@ -313,7 +314,7 @@ class ReplicaManager(val config: KafkaConfig,
       "RemoteListOffsets", config.brokerId))
   val delayedShareFetchPurgatory = delayedShareFetchPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedShareFetch](
-      "ShareFetch", delayedShareFetchTimer, config.brokerId,
+      shareFetchPurgatoryName, delayedShareFetchTimer, config.brokerId,
       config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests))
 
   /* epoch of the controller that last changed the leader */

@@ -849,7 +849,7 @@ public class SharePartitionManager implements AutoCloseable {
      * session when the share session cache is full. Such a request is delayed for maxWaitMs by passing the corresponding
      * IdleShareFetchTimerTask to {@link ReplicaManager#delayedShareFetchTimer}.
      */
-    public static class IdleShareFetchTimerTask extends TimerTask {
+    private static class IdleShareFetchTimerTask extends TimerTask {
 
         /**
          * This future is used to complete the share fetch request when the timer task is completed.

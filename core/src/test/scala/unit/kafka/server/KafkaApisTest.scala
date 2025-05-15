@@ -4830,22 +4830,11 @@ class KafkaApisTest extends Logging {
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache("foo", 1, topicId = topicId)
 
-    // A future to keep track of when the share fetch timer task expires
-    val delayedResponse = new CompletableFuture[Void]()
-
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any()))
       .thenThrow(Errors.SHARE_SESSION_LIMIT_REACHED.exception)
 
-    when(sharePartitionManager.createIdleShareFetchTimerTask(anyLong())).thenAnswer { _ =>
-      val future = new CompletableFuture[Void]()
-
-      CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS).execute(() => {
-        delayedResponse.complete(null)
-        future.complete(null)
-      })
-
-      future
-    }
+    when(sharePartitionManager.createIdleShareFetchTimerTask(anyLong()))
+      .thenReturn(CompletableFuture.completedFuture(null))
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
@@ -4861,16 +4850,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
-
-    // Since the share fetch response is delayed, sendResponse is called after some time
-    verify(requestChannel, timeout(100).times(0)).sendResponse(any(), any(), any())
-
-    // Waiting for the share fetch timer task to get expired
-    delayedResponse.join()
-    // Waiting for some more time to let the broker process the response and send it
-    Thread.sleep(1000)
-
-    // Now we can be certain that the response will be sent
     val response = verifyNoThrottling[ShareFetchResponse](request)
     val responseData = response.data()
 
