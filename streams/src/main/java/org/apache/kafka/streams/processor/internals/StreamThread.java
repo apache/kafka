@@ -554,13 +554,14 @@ public class StreamThread extends Thread implements ProcessingThread {
 
             return new MainConsumerSetup(
                 maybeWrapConsumer(
-                    config.originals(),
+                    consumerConfigs,
                     new AsyncKafkaConsumer<>(
                         new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(consumerConfigs, keyDeserializer, valueDeserializer)),
                         keyDeserializer,
                         valueDeserializer,
                         streamsRebalanceData
-                    )
+                    ),
+                    streamsRebalanceData
                 ),
                 streamsRebalanceData
             );
@@ -572,8 +573,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
-    private static Consumer<byte[], byte[]> maybeWrapConsumer(final Map<String, ?> config,
-                                                              final Consumer<byte[], byte[]> consumer) {
+    private static Consumer<byte[], byte[]> maybeWrapConsumer(final Map<String, Object> config,
+                                                              final AsyncKafkaConsumer<byte[], byte[]> consumer,
+                                                              final Optional<StreamsRebalanceData> streamsRebalanceData) {
         final Object o = config.get(InternalConfig.INTERNAL_CONSUMER_WRAPPER);
         if (o == null) {
             return consumer;
@@ -592,7 +594,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             throw new IllegalArgumentException("Internal config " + InternalConfig.INTERNAL_CONSUMER_WRAPPER + " must be a class or class name");
         }
 
-        wrapper.wrapConsumer(consumer);
+        wrapper.wrapConsumer(consumer, config, streamsRebalanceData);
 
         return wrapper;
     }
@@ -1135,7 +1137,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
             if (streamsRebalanceData.isPresent()) {
-                ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
+                final AsyncKafkaConsumer<byte[], byte[]> consumer = mainConsumer instanceof ConsumerWrapper
+                    ? ((ConsumerWrapper) mainConsumer).consumer()
+                    : (AsyncKafkaConsumer<byte[], byte[]>) mainConsumer;
+                consumer.subscribe(
                     topologyMetadata.allFullSourceTopicNames(),
                     new DefaultStreamsRebalanceListener(
                         log,
