@@ -62,7 +62,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .withRequiredArg()
                 .describedAs("consumer_prop")
                 .ofType(String.class);
-        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file. Note that " + consumerPropertyOpt + " takes precedence over this config.")
+        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer-config", "Consumer config properties file. Note that " + consumerPropertyOpt + " takes precedence over this config.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);

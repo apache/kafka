@@ -27,6 +27,8 @@ from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config
 """
 The console consumer is a tool that reads data from Kafka and outputs it to standard output.
 """
+
+
 class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService):
     # Root directory for persistent output
     PERSISTENT_ROOT = "/mnt/console_consumer"

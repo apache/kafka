@@ -20,8 +20,8 @@ from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
-from kafkatest.services.monitor.jmx import JmxMixin, JmxTool
-from kafkatest.version import DEV_BRANCH, LATEST_3_7, get_version, LATEST_4_0
+from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.version import DEV_BRANCH
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config_for_tools
 
 """
@@ -157,11 +157,10 @@ class ConsoleShareConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadSer
               "export KAFKA_OPTS=%(kafka_opts)s; " \
               "%(console_share_consumer)s " \
               "--topic %(topic)s " \
-              "--consumer.config %(config_file)s " % args
+              "--consumer-config %(config_file)s " % args
         cmd += " --bootstrap-server %(broker_list)s" % args
 
         if self.share_consumer_timeout_ms is not None:
-            # version 0.8.X and below do not support --timeout-ms option
             # This will be added in the properties file instead
             cmd += " --timeout-ms %s" % self.share_consumer_timeout_ms
 
@@ -174,7 +173,6 @@ class ConsoleShareConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadSer
         if self.print_partition:
             cmd += " --property print.partition=true"
 
-        # LoggingMessageFormatter was introduced after 0.9
         cmd += " --formatter org.apache.kafka.tools.consumer.LoggingMessageFormatter"
 
         if self.enable_systest_events:
@@ -228,7 +226,6 @@ class ConsoleShareConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadSer
         for line in share_consumer_output:
             msg = line.strip()
             if msg == "shutdown_complete":
-                # Note that we can only rely on shutdown_complete message if running 0.10.0 or greater
                 if node in self.clean_shutdown_nodes:
                     raise Exception("Unexpected shutdown event from share consumer, already shutdown. Share consumer index: %d" % idx)
                 self.clean_shutdown_nodes.add(node)
