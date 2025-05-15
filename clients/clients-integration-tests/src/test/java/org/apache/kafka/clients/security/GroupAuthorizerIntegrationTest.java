@@ -216,13 +216,7 @@ public class GroupAuthorizerIntegrationTest {
                     }
                 });
 
-//        AclBindingFilter aclBindingFilter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
-//        clusterInstance.waitAcls(aclBindingFilter, expectedAcls);
         AclBindingFilter aclBindingFilter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
-//        Set<AccessControlEntry> deletedAcls = StreamSupport.stream(
-//                        authorizer.acls(aclBindingFilter).spliterator(), false)
-//                .map(AclBinding::entry)
-//                .collect(Collectors.toSet());
 
         TestUtils.waitForCondition(() -> {
             Iterable<AclBinding> acls = authorizer.acls(aclBindingFilter);
@@ -230,8 +224,6 @@ public class GroupAuthorizerIntegrationTest {
             acls.forEach(aclSet::add);
             return aclSet.isEmpty();
         }, "Failed to verify ACLs delete");
-//        TestUtils.waitForCondition(() -> !deletedAcls.contains(acls), "Failed to verify ACLs delete");
-//        , Set<AccessControlEntry> expectedAcls, ClusterInstance clusterInstance
     }
 
     static final AuthorizableRequestContext ANONYMOUS_CONTEXT = new AuthorizableRequestContext() {
