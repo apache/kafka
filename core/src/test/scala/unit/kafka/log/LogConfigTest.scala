@@ -297,25 +297,27 @@ class LogConfigTest {
   }
 
   @Test
-  def testEnableRemoteLogStorageOnCompactedTopic(): Unit = {
+  def testEnableRemoteLogStorageCleanupPolicy(): Unit = {
     val kafkaProps = TestUtils.createDummyBrokerConfig()
     kafkaProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
-
     val logProps = new Properties()
+    def validateCleanupPolicy(): Unit = {
+      LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
+    }
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
     logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
-
+    validateCleanupPolicy()
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-    assertThrows(classOf[ConfigException],
-      () => LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled()))
+    assertThrows(classOf[ConfigException], () => validateCleanupPolicy())
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "delete,compact")
-    assertThrows(classOf[ConfigException],
-      () => LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled()))
+    assertThrows(classOf[ConfigException], () => validateCleanupPolicy())
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact,delete")
-    assertThrows(classOf[ConfigException],
-      () => LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled()))
+    assertThrows(classOf[ConfigException], () => validateCleanupPolicy())
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "delete,delete,delete")
+    validateCleanupPolicy()
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "")
+    assertThrows(classOf[ConfigException], () => validateCleanupPolicy())
   }
 
   @ParameterizedTest(name = "testEnableRemoteLogStorage with sysRemoteStorageEnabled: {0}")

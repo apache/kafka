@@ -115,9 +115,7 @@ public interface ClusterInstance {
     /**
      * The listener for the kraft cluster controller configured by controller.listener.names.
      */
-    default Optional<ListenerName> controllerListenerName() {
-        return Optional.empty();
-    }
+    ListenerName controllerListenerName();
 
     /**
      * The broker connect string which can be used by clients for bootstrapping
