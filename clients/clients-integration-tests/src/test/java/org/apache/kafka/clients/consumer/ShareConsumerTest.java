@@ -2127,6 +2127,7 @@ public class ShareConsumerTest {
             groupId,
             Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT)
         );
+        alterShareAutoOffsetReset(groupId, "earliest");
 
         service.schedule(
             complexCons1,
@@ -2135,9 +2136,9 @@ public class ShareConsumerTest {
         );
 
         // let the complex consumer read the messages
-        service.schedule(() -> prodState.done().set(true), 10L, TimeUnit.SECONDS);
+        service.schedule(() -> prodState.done().set(true), 5L, TimeUnit.SECONDS);
 
-        // all messages which can be read are read, some would be redelivered
+        // all messages which can be read are read, some would be redelivered (roughly 3 times the records produced)
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
 
         assertTrue(prodState.count().get() < complexCons1.recordsRead(),
