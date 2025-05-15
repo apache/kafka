@@ -68,7 +68,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid),
             metadataImage
         );
 
@@ -103,7 +102,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid),
             metadataImage
         );
 
@@ -165,7 +163,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic3Uuid),
             metadataImage
         );
 
@@ -226,7 +223,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic3Uuid),
             metadataImage
         );
 
@@ -266,7 +262,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            topicIds,
             metadataImage
         );
 
@@ -324,7 +319,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -384,7 +378,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -453,7 +446,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -514,7 +506,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -572,7 +563,6 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -587,12 +577,10 @@ public class OptimizedUniformAssignmentBuilderTest {
 
     @Test
     public void testReassignmentStickinessWhenAlreadyBalanced() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            5
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 5)
+            .addRacks()
+            .build();
 
         // A TreeMap ensures that memberA is first in the iteration order.
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -643,7 +631,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             HOMOGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,

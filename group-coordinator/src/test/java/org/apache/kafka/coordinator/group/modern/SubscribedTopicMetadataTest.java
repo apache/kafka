@@ -33,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SubscribedTopicMetadataTest {
 
-    private Set<Uuid> subscriptionTopicIdSet;
     private SubscribedTopicDescriberImpl subscribedTopicMetadata;
     private MetadataImage metadataImage;
     private final int numPartitions = 5;
@@ -49,18 +48,12 @@ public class SubscribedTopicMetadataTest {
         metadataImageBuilder.addRacks();
         metadataImage = metadataImageBuilder.addRacks().build();
 
-        subscriptionTopicIdSet = metadataImage.topics().topicsById().keySet();
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage);
-    }
-
-    @Test
-    public void testSubscriptionTopicIdSetCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(null, metadataImage));
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage);
     }
 
     @Test
     public void testMetadataImageCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, null));
+        assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(null));
     }
 
     @Test
@@ -71,7 +64,7 @@ public class SubscribedTopicMetadataTest {
         assertEquals(-1, subscribedTopicMetadata.numPartitions(topicId));
 
         // Test that the correct number of partitions are returned for a given topic ID.
-        subscriptionTopicIdSet.forEach(id ->
+        metadataImage.topics().topicsById().forEach((id, name) ->
             // Test that the correct number of partitions are returned for a given topic ID.
             assertEquals(numPartitions, subscribedTopicMetadata.numPartitions(id))
         );
@@ -83,7 +76,7 @@ public class SubscribedTopicMetadataTest {
 
         // Test empty set is returned when the topic ID doesn't exist.
         assertEquals(Set.of(), subscribedTopicMetadata.racksForPartition(topicId, 0));
-        subscriptionTopicIdSet.forEach(id -> {
+        metadataImage.topics().topicsById().forEach((id, name) -> {
             // Test empty set is returned when the partition ID doesn't exist.
             assertEquals(Set.of(), subscribedTopicMetadata.racksForPartition(id, 10));
 
@@ -94,15 +87,14 @@ public class SubscribedTopicMetadataTest {
 
     @Test
     public void testEquals() {
-        assertEquals(new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage), subscribedTopicMetadata);
+        assertEquals(new SubscribedTopicDescriberImpl(metadataImage), subscribedTopicMetadata);
 
         Uuid topicId = Uuid.randomUuid();
         MetadataImage metadataImage2 = new MetadataImageBuilder()
             .addTopic(topicId, "newTopic", 5)
             .addRacks()
             .build();
-        Set<Uuid> subscriptionTopicIdSet2 = Set.of(topicId);
-        assertNotEquals(new SubscribedTopicDescriberImpl(subscriptionTopicIdSet2, metadataImage2), subscribedTopicMetadata);
+        assertNotEquals(new SubscribedTopicDescriberImpl(metadataImage2), subscribedTopicMetadata);
     }
 
     @Test
@@ -110,18 +102,16 @@ public class SubscribedTopicMetadataTest {
         String t1Name = "t1";
         Uuid t1Id = Uuid.randomUuid();
         metadataImage = new MetadataImageBuilder().addTopic(t1Id, t1Name, numPartitions).addRacks().build();
-        subscriptionTopicIdSet = Set.of(t1Id);
         // null allow map (all partitions assignable)
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage, null);
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage, null);
         assertEquals(Set.of(0, 1, 2, 3, 4), subscribedTopicMetadata.assignablePartitions(t1Id));
 
         // empty allow map (nothing assignable)
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage, Map.of());
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage, Map.of());
         assertEquals(Set.of(), subscribedTopicMetadata.assignablePartitions(t1Id));
 
         // few assignable partitions
         subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            subscriptionTopicIdSet,
             metadataImage,
             Map.of(t1Id, Set.of(0, 5))
         );
@@ -129,7 +119,6 @@ public class SubscribedTopicMetadataTest {
 
         // all assignable partitions
         subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            subscriptionTopicIdSet,
             metadataImage,
             Map.of(t1Id, Set.of(0, 1, 2, 3, 4))
         );

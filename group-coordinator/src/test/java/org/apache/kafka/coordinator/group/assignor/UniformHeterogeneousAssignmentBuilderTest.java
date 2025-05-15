@@ -95,7 +95,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid),
             metadataImage
         );
 
@@ -134,7 +133,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid),
             metadataImage
         );
 
@@ -193,7 +191,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic3Uuid),
             metadataImage
         );
 
@@ -251,7 +248,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic3Uuid),
             metadataImage
         );
 
@@ -322,7 +318,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
             metadataImage
         );
 
@@ -388,7 +383,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid, topic3Uuid, topic4Uuid),
             metadataImage
         );
 
@@ -455,7 +449,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -517,7 +510,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
             metadataImage
         );
 
@@ -575,7 +567,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -636,7 +627,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
             metadataImage
         );
 
@@ -687,7 +677,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid),
             metadataImage
         );
 

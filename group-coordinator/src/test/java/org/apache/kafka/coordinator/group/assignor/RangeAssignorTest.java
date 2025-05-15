@@ -62,7 +62,6 @@ public class RangeAssignorTest {
     @Test
     public void testOneMemberNoTopic() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(),
             MetadataImage.EMPTY
         );
 
@@ -102,7 +101,6 @@ public class RangeAssignorTest {
             .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid),
             metadataImage
         );
 
@@ -156,7 +154,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic3Uuid),
             metadataImage
         );
 
@@ -216,7 +213,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
             metadataImage
         );
 
@@ -278,7 +274,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic3Uuid),
             metadataImage
         );
 
@@ -311,7 +306,6 @@ public class RangeAssignorTest {
             .addRacks()
             .build();
         SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid),
             metadataImage
         );
 
@@ -379,7 +373,6 @@ public class RangeAssignorTest {
             .addRacks()
             .build();
         SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid),
             metadataImage
         );
 
@@ -498,7 +491,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -559,7 +551,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -625,7 +616,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -696,7 +686,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -749,7 +738,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid),
             metadataImage
         );
 
@@ -815,7 +803,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
             metadataImage
         );
 

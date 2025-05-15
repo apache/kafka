@@ -92,8 +92,6 @@ public class TargetAssignmentBuilderBenchmark {
 
     private List<String> allTopicNames = Collections.emptyList();
 
-    private Set<Uuid> subscriptionTopicIdSet;
-
     private MetadataImage metadataImage;
 
     private TopicIds.TopicResolver topicResolver;
@@ -117,7 +115,6 @@ public class TargetAssignmentBuilderBenchmark {
 
         targetAssignmentBuilder = new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withMembers(members)
-            .withSubscriptionTopicIdSet(subscriptionTopicIdSet)
             .withSubscriptionType(subscriptionType)
             .withTargetAssignment(existingTargetAssignment)
             .withInvertedTargetAssignment(invertedTargetAssignment)
@@ -133,8 +130,7 @@ public class TargetAssignmentBuilderBenchmark {
         metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionsPerTopic);
         topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
 
-        subscriptionTopicIdSet = AssignorBenchmarkUtils.subscriptionTopicIdSet(metadataImage);
-        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage);
+        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }
 
     private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(

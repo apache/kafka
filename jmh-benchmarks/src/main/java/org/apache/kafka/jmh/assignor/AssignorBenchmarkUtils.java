@@ -87,16 +87,6 @@ public class AssignorBenchmarkUtils {
     }
 
     /**
-     * Get the subscription topic ID set from the given metadata image.
-     *
-     * @param metadataImage The metadata image.
-     * @return The set of topic id.
-     */
-    public static Set<Uuid> subscriptionTopicIdSet(MetadataImage metadataImage) {
-        return metadataImage.topics().topicsById().keySet();
-    }
-
-    /**
      * Creates a TopicsImage from the given topic names.
      *
      * @param allTopicNames      The topic names.

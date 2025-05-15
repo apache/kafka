@@ -152,8 +152,7 @@ public class ServerSideAssignorBenchmark {
         metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionsPerTopic);
         topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
 
-        Set<Uuid> subscriptionTopicIdSet = AssignorBenchmarkUtils.subscriptionTopicIdSet(metadataImage);
-        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage);
+        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }
 
     private Map<String, ConsumerGroupMember> createMembers() {

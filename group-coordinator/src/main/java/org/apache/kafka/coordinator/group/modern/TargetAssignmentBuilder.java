@@ -251,11 +251,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     private Map<String, T> members = Map.of();
 
     /**
-     * The subscription topic id set.
-     */
-    private Set<Uuid> subscriptionTopicIdSet = Set.of();
-
-    /**
      * The subscription type of the consumer group.
      */
     private SubscriptionType subscriptionType;
@@ -332,19 +327,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         Map<String, String> staticMembers
     ) {
         this.staticMembers = staticMembers;
-        return self();
-    }
-
-    /**
-     * Adds the set of topic id to use.
-     *
-     * @param subscriptionTopicIdSet  The set of topic id.
-     * @return This object.
-     */
-    public U withSubscriptionTopicIdSet(
-        Set<Uuid> subscriptionTopicIdSet
-    ) {
-        this.subscriptionTopicIdSet = subscriptionTopicIdSet;
         return self();
     }
 
@@ -486,7 +468,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
                 subscriptionType,
                 invertedTargetAssignment
             ),
-            new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage, topicAssignablePartitionsMap)
+            new SubscribedTopicDescriberImpl(metadataImage, topicAssignablePartitionsMap)
         );
 
         // Compute delta from previous to new target assignment and create the relevant records.

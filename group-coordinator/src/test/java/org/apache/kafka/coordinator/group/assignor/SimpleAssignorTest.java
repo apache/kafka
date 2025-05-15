@@ -75,7 +75,6 @@ public class SimpleAssignorTest {
     @Test
     public void testAssignWithEmptyMembers() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(),
             MetadataImage.EMPTY
         );
 
@@ -111,8 +110,10 @@ public class SimpleAssignorTest {
             .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(TOPIC_1_UUID),
-            metadataImage
+            metadataImage,
+            Map.of(
+                TOPIC_1_UUID, Set.of(0, 1, 2)
+            )
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
@@ -146,8 +147,10 @@ public class SimpleAssignorTest {
             .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(TOPIC_1_UUID),
-            metadataImage
+            metadataImage,
+            Map.of(
+                TOPIC_1_UUID, Set.of(0, 1, 2)
+            )
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
@@ -204,8 +207,11 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(TOPIC_1_UUID, TOPIC_3_UUID),
-            metadataImage
+            metadataImage,
+            Map.of(
+                TOPIC_1_UUID, Set.of(0, 1, 2),
+                TOPIC_3_UUID, Set.of(0, 1)
+            )
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -276,8 +282,12 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(TOPIC_1_UUID, TOPIC_2_UUID, TOPIC_3_UUID),
-            metadataImage
+            metadataImage,
+            Map.of(
+                TOPIC_1_UUID, Set.of(0, 1, 2),
+                TOPIC_2_UUID, Set.of(0, 1, 2),
+                TOPIC_3_UUID, Set.of(0, 1)
+            )
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -338,8 +348,11 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Set.of(TOPIC_1_UUID, TOPIC_2_UUID),
-            metadataImage
+            metadataImage,
+            Map.of(
+                TOPIC_1_UUID, Set.of(0, 1, 2),
+                TOPIC_2_UUID, Set.of(0, 1)
+            )
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -510,8 +523,11 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata1 = new SubscribedTopicDescriberImpl(
-            Set.of(TOPIC_1_UUID, TOPIC_2_UUID),
-            metadataImage1
+            metadataImage1,
+            Map.of(
+                TOPIC_1_UUID, Set.of(0, 1, 2),
+                TOPIC_2_UUID, Set.of(0, 1)
+            )
         );
 
         GroupAssignment computedAssignment1 = assignor.assign(
@@ -582,8 +598,11 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata2 = new SubscribedTopicDescriberImpl(
-            Set.of(TOPIC_2_UUID, TOPIC_3_UUID),
-            metadataImage2
+            metadataImage2,
+            Map.of(
+                TOPIC_2_UUID, Set.of(0, 1),
+                TOPIC_3_UUID, Set.of(0, 1, 2)
+            )
         );
 
         GroupAssignment computedAssignment2 = assignor.assign(
@@ -658,8 +677,12 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata1 = new SubscribedTopicDescriberImpl(
-            Set.of(TOPIC_1_UUID, TOPIC_2_UUID, TOPIC_3_UUID),
-            metadataImage1
+            metadataImage1,
+            Map.of(
+                TOPIC_1_UUID, Set.of(0, 1, 2),
+                TOPIC_2_UUID, Set.of(0, 1, 2),
+                TOPIC_3_UUID, Set.of(0, 1)
+            )
         );
 
         GroupAssignment computedAssignment1 = assignor.assign(
@@ -732,8 +755,13 @@ public class SimpleAssignorTest {
         );
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata2 = new SubscribedTopicDescriberImpl(
-            Set.of(TOPIC_1_UUID, TOPIC_2_UUID, TOPIC_3_UUID, TOPIC_4_UUID),
-            metadataImage2
+            metadataImage2,
+            Map.of(
+                TOPIC_1_UUID, Set.of(0, 1, 2),
+                TOPIC_2_UUID, Set.of(0, 1, 2),
+                TOPIC_3_UUID, Set.of(0, 1),
+                TOPIC_4_UUID, Set.of(0)
+            )
         );
 
         GroupAssignment computedAssignment2 = assignor.assign(

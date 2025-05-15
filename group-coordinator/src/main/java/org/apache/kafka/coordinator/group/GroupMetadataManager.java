@@ -277,16 +277,13 @@ public class GroupMetadataManager {
 
     private static class UpdateSubscriptionMetadataResult {
         private final int groupEpoch;
-        private final Set<Uuid> subscriptionTopicIdSet;
         private final SubscriptionType subscriptionType;
 
         UpdateSubscriptionMetadataResult(
             int groupEpoch,
-            Set<Uuid> subscriptionTopicIdSet,
             SubscriptionType subscriptionType
         ) {
             this.groupEpoch = groupEpoch;
-            this.subscriptionTopicIdSet = Objects.requireNonNull(subscriptionTopicIdSet);
             this.subscriptionType = Objects.requireNonNull(subscriptionType);
         }
     }
@@ -2224,7 +2221,6 @@ public class GroupMetadataManager {
 
         int groupEpoch = group.groupEpoch();
         SubscriptionType subscriptionType = group.subscriptionType();
-        Set<Uuid> subscriptionTopicIdSet = group.subscriptionMetadata().values().stream().map(TopicMetadata::id).collect(Collectors.toSet());
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
@@ -2239,7 +2235,6 @@ public class GroupMetadataManager {
             );
 
             groupEpoch = result.groupEpoch;
-            subscriptionTopicIdSet = result.subscriptionTopicIdSet;
             subscriptionType = result.subscriptionType;
         }
 
@@ -2254,7 +2249,6 @@ public class GroupMetadataManager {
                 groupEpoch,
                 member,
                 updatedMember,
-                subscriptionTopicIdSet,
                 subscriptionType,
                 records
             );
@@ -2365,7 +2359,6 @@ public class GroupMetadataManager {
         }
 
         int groupEpoch = group.groupEpoch();
-        Set<Uuid> subscriptionTopicIdSet = Set.of();
         SubscriptionType subscriptionType = group.subscriptionType();
         final ConsumerProtocolSubscription subscription = deserializeSubscription(protocols);
 
@@ -2408,7 +2401,6 @@ public class GroupMetadataManager {
             );
 
             groupEpoch = result.groupEpoch;
-            subscriptionTopicIdSet = result.subscriptionTopicIdSet;
             subscriptionType = result.subscriptionType;
         }
 
@@ -2423,7 +2415,6 @@ public class GroupMetadataManager {
                 groupEpoch,
                 member,
                 updatedMember,
-                subscriptionTopicIdSet,
                 subscriptionType,
                 records
             );
@@ -2597,7 +2588,6 @@ public class GroupMetadataManager {
                 group,
                 groupEpoch,
                 updatedMember,
-                subscriptionMetadata,
                 subscriptionType,
                 records
             );
@@ -3616,7 +3606,6 @@ public class GroupMetadataManager {
 
         return new UpdateSubscriptionMetadataResult(
             groupEpoch,
-            subscriptionMetadata.values().stream().map(TopicMetadata::id).collect(Collectors.toSet()),
             subscriptionType
         );
     }
@@ -3624,13 +3613,12 @@ public class GroupMetadataManager {
     /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
-     * @param group                  The ConsumerGroup.
-     * @param groupEpoch             The group epoch.
-     * @param member                 The existing member.
-     * @param updatedMember          The updated member.
-     * @param subscriptionTopicIdSet The subscription metadata.
-     * @param subscriptionType       The group subscription type.
-     * @param records                The list to accumulate any new records.
+     * @param group            The ConsumerGroup.
+     * @param groupEpoch       The group epoch.
+     * @param member           The existing member.
+     * @param updatedMember    The updated member.
+     * @param subscriptionType The group subscription type.
+     * @param records          The list to accumulate any new records.
      * @return The new target assignment.
      */
     private Assignment updateTargetAssignment(
@@ -3638,7 +3626,6 @@ public class GroupMetadataManager {
         int groupEpoch,
         ConsumerGroupMember member,
         ConsumerGroupMember updatedMember,
-        Set<Uuid> subscriptionTopicIdSet,
         SubscriptionType subscriptionType,
         List<CoordinatorRecord> records
     ) {
@@ -3651,7 +3638,6 @@ public class GroupMetadataManager {
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
-                    .withSubscriptionTopicIdSet(subscriptionTopicIdSet)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
@@ -3698,19 +3684,17 @@ public class GroupMetadataManager {
     /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
-     * @param group                 The ShareGroup.
-     * @param groupEpoch            The group epoch.
-     * @param updatedMember         The updated member.
-     * @param subscriptionMetadata  The subscription metadata.
-     * @param subscriptionType      The group subscription type.
-     * @param records               The list to accumulate any new records.
+     * @param group            The ShareGroup.
+     * @param groupEpoch       The group epoch.
+     * @param updatedMember    The updated member.
+     * @param subscriptionType The group subscription type.
+     * @param records          The list to accumulate any new records.
      * @return The new target assignment.
      */
     private Assignment updateTargetAssignment(
         ShareGroup group,
         int groupEpoch,
         ShareGroupMember updatedMember,
-        Map<String, TopicMetadata> subscriptionMetadata,
         SubscriptionType subscriptionType,
         List<CoordinatorRecord> records
     ) {
@@ -3722,7 +3706,6 @@ public class GroupMetadataManager {
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
                     .withMembers(group.members())
-                    .withSubscriptionTopicIdSet(subscriptionMetadata.values().stream().map(TopicMetadata::id).collect(Collectors.toSet()))
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
                     .withTopicAssignablePartitionsMap(initializedTopicPartitions)

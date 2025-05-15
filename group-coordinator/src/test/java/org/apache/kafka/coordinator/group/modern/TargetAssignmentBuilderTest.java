@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,7 +57,6 @@ public class TargetAssignmentBuilderTest {
         private final int groupEpoch;
         private final PartitionAssignor assignor = mock(PartitionAssignor.class);
         private final Map<String, ConsumerGroupMember> members = new HashMap<>();
-        private final Set<Uuid> subscriptionTopicIdSet = new HashSet<>();
         private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
         private final Map<String, Assignment> targetAssignment = new HashMap<>();
         private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
@@ -124,7 +122,6 @@ public class TargetAssignmentBuilderTest {
             int numPartitions
         ) {
             Uuid topicId = Uuid.randomUuid();
-            subscriptionTopicIdSet.add(topicId);
             metadataImageBuilder = metadataImageBuilder.addTopic(topicId, topicName, numPartitions);
 
             return topicId;
@@ -254,7 +251,7 @@ public class TargetAssignmentBuilderTest {
             });
 
             // Prepare the expected subscription topic metadata.
-            SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage);
+            SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage);
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the member assignments per topic partition.
@@ -278,7 +275,6 @@ public class TargetAssignmentBuilderTest {
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(groupId, groupEpoch, assignor)
                     .withMembers(members)
                     .withStaticMembers(staticMembers)
-                    .withSubscriptionTopicIdSet(subscriptionTopicIdSet)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(targetAssignment)
                     .withInvertedTargetAssignment(invertedTargetAssignment)
