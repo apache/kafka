@@ -17,8 +17,8 @@
 package kafka.server
 
 import com.yammer.metrics.core.Gauge
-import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.requests.FetchRequest
@@ -27,6 +27,11 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.ReplicaFetch
+import org.apache.kafka.server.ReplicaState
+import org.apache.kafka.server.ResultWithPartitions
+import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -36,6 +41,7 @@ import org.mockito.Mockito.{mock, verify, when}
 import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 class AbstractFetcherManagerTest {
 
@@ -61,9 +67,9 @@ class AbstractFetcherManagerTest {
     val fetchOffset = 10L
     val leaderEpoch = 15
     val tp = new TopicPartition("topic", 0)
-    val topicId = Some(Uuid.randomUuid())
+    val topicId = Uuid.randomUuid()
     val initialFetchState = InitialFetchState(
-      topicId = topicId,
+      topicId = Some(topicId),
       leader = new BrokerEndPoint(0, "localhost", 9092),
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)
@@ -73,7 +79,7 @@ class AbstractFetcherManagerTest {
     when(fetcher.addPartitions(Map(tp -> initialFetchState)))
       .thenReturn(Set(tp))
     when(fetcher.fetchState(tp))
-      .thenReturn(Some(PartitionFetchState(topicId, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.of(topicId), fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING, Optional.empty)))
       .thenReturn(None)
     when(fetcher.removePartitions(Set(tp))).thenReturn(Map.empty[TopicPartition, PartitionFetchState])
 
@@ -123,9 +129,9 @@ class AbstractFetcherManagerTest {
     val fetchOffset = 10L
     val leaderEpoch = 15
     val tp = new TopicPartition("topic", 0)
-    val topicId = Some(Uuid.randomUuid())
+    val topicId = Uuid.randomUuid()
     val initialFetchState = InitialFetchState(
-      topicId = topicId,
+      topicId = Some(topicId),
       leader = new BrokerEndPoint(0, "localhost", 9092),
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)
@@ -159,8 +165,8 @@ class AbstractFetcherManagerTest {
     val tp1 = new TopicPartition("topic1", 0)
     val tp2 = new TopicPartition("topic2", 0)
     val unknownTp = new TopicPartition("topic2", 1)
-    val topicId1 = Some(Uuid.randomUuid())
-    val topicId2 = Some(Uuid.randomUuid())
+    val topicId1 = Uuid.randomUuid()
+    val topicId2 = Uuid.randomUuid()
 
     // Start out with no topic ID.
     val initialFetchState1 = InitialFetchState(
@@ -185,13 +191,13 @@ class AbstractFetcherManagerTest {
       .thenReturn(Set(tp2))
 
     when(fetcher.fetchState(tp1))
-      .thenReturn(Some(PartitionFetchState(None, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
-      .thenReturn(Some(PartitionFetchState(topicId1, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.empty, fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING, Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.of(topicId1), fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING, Optional.empty)))
     when(fetcher.fetchState(tp2))
-      .thenReturn(Some(PartitionFetchState(None, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
-      .thenReturn(Some(PartitionFetchState(topicId2, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.empty, fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING,  Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.of(topicId2), fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING, Optional.empty)))
 
-    val topicIds = Map(tp1.topic -> topicId1, tp2.topic -> topicId2)
+    val topicIds = Map(tp1.topic -> Some(topicId1), tp2.topic -> Some(topicId2))
 
     // When targeting a fetcher that doesn't exist, we will not see fetcher.maybeUpdateTopicIds called.
     // We will see it for a topic partition that does not exist.
@@ -200,7 +206,7 @@ class AbstractFetcherManagerTest {
 
     def verifyFetchState(fetchState: Option[PartitionFetchState], expectedTopicId: Option[Uuid]): Unit = {
       assertTrue(fetchState.isDefined)
-      assertEquals(expectedTopicId, fetchState.get.topicId)
+      assertEquals(expectedTopicId, fetchState.get.topicId.toScala)
     }
 
     fetcherManager.addFetcherForPartitions(Map(tp1 -> initialFetchState1, tp2 -> initialFetchState2))
@@ -209,8 +215,8 @@ class AbstractFetcherManagerTest {
 
     val partitionsToUpdate = Map(tp1 -> initialFetchState1.leader.id, tp2 -> initialFetchState2.leader.id)
     fetcherManager.maybeUpdateTopicIds(partitionsToUpdate, topicIds)
-    verifyFetchState(fetcher.fetchState(tp1), topicId1)
-    verifyFetchState(fetcher.fetchState(tp2), topicId2)
+    verifyFetchState(fetcher.fetchState(tp1), Some(topicId1))
+    verifyFetchState(fetcher.fetchState(tp2), Some(topicId2))
 
     // Try an invalid fetcher and an invalid topic partition
     val invalidPartitionsToUpdate = Map(tp1 -> 2, unknownTp -> initialFetchState1.leader.id)
@@ -298,15 +304,15 @@ class AbstractFetcherManagerTest {
 
     override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
-    override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = Map.empty
+    override def fetch(fetchRequest: FetchRequest.Builder): java.util.Map[TopicPartition, FetchResponseData.PartitionData] = java.util.Map.of()
 
     override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
 
     override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
 
-    override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = Map.empty
+    override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = java.util.Map.of()
 
-    override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = ResultWithPartitions(None, Set.empty)
+    override def buildFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[java.util.Optional[ReplicaFetch]] = new ResultWithPartitions(java.util.Optional.empty[ReplicaFetch](), java.util.Set.of())
 
     override val isTruncationOnFetchSupported: Boolean = false
 
