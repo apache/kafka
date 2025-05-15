@@ -21,8 +21,6 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,12 +34,10 @@ public class MinInSyncReplicasConfigTest {
     }
 
     static List<ClusterConfig> generateConfig() {
-        Map<String, String> props = new HashMap<>();
-        props.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "5");
-
-        ClusterConfig config = ClusterConfig.defaultBuilder()
+        var props = Map.of(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "5");
+        var config = ClusterConfig.defaultBuilder()
                 .setServerProperties(props)
                 .build();
-        return Collections.singletonList(config);
+        return List.of(config);
     }
 }
