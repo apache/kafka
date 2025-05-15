@@ -176,7 +176,6 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     assertEquals(numMessages, records.count())
   }
 
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testMaxPollIntervalMsDelayInAssignment(groupProtocol: String): Unit = {
