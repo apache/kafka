@@ -93,8 +93,11 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
         if (delta.clusterDelta() != null) {
             for (Entry<Integer, Optional<BrokerRegistration>> entry :
                     delta.clusterDelta().changedBrokers().entrySet()) {
-                changes.handleBrokerChange(prevImage.cluster().brokers().get(entry.getKey()),
-                        entry.getValue().orElse(null));
+                changes.handleBrokerChange(
+                    prevImage.cluster().brokers().get(entry.getKey()),
+                    entry.getValue().orElse(null),
+                    metrics
+                );
             }
         }
         if (delta.topicsDelta() != null) {
@@ -117,15 +120,20 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
         metrics.setGlobalTopicCount(newImage.topics().topicsById().size());
         int fencedBrokers = 0;
         int activeBrokers = 0;
+        int controlledShutdownBrokers = 0;
         for (BrokerRegistration broker : newImage.cluster().brokers().values()) {
             if (broker.fenced()) {
                 fencedBrokers++;
             } else {
                 activeBrokers++;
             }
+            if (broker.inControlledShutdown()) {
+                controlledShutdownBrokers++;
+            }
         }
         metrics.setFencedBrokerCount(fencedBrokers);
         metrics.setActiveBrokerCount(activeBrokers);
+        metrics.setControlledShutdownBrokerCount(controlledShutdownBrokers);
 
         int totalPartitions = 0;
         int offlinePartitions = 0;
