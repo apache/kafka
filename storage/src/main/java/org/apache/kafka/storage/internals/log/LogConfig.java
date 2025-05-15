@@ -139,7 +139,8 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
 
-    public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
+    private static final String INTERNAL_PREFIX = "internal.";
+    public static final String INTERNAL_SEGMENT_BYTES_CONFIG = INTERNAL_PREFIX + "segment.bytes";
     public static final String INTERNAL_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
 
 
@@ -457,6 +458,10 @@ public class LogConfig extends AbstractConfig {
 
     public static List<String> configNames() {
         return CONFIG.names().stream().sorted().toList();
+    }
+
+    public static List<String> excludeInternalConfigNames() {
+        return CONFIG.names().stream().filter(name -> !name.contains(INTERNAL_PREFIX)).sorted().toList();
     }
 
     public static Optional<String> serverConfigName(String configName) {

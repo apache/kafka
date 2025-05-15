@@ -50,6 +50,7 @@ public final class ServerTopicConfigSynonyms {
     // Topic configs with no mapping to a server config can be found in `LogConfig.CONFIGS_WITH_NO_SERVER_DEFAULTS`
     public static final Map<String, List<ConfigSynonym>> ALL_TOPIC_CONFIG_SYNONYMS = Utils.mkMap(
         sameNameWithLogPrefix(TopicConfig.SEGMENT_BYTES_CONFIG),
+        sameName("internal.log." + TopicConfig.SEGMENT_BYTES_CONFIG),
         listWithLogPrefix(TopicConfig.SEGMENT_MS_CONFIG,
             new ConfigSynonym("roll.ms"),
             new ConfigSynonym("roll.hours", ConfigSynonym.HOURS_TO_MILLISECONDS)),

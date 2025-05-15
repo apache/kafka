@@ -18,9 +18,9 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.server.config.ServerLogConfigs;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -80,14 +80,13 @@ public class MetadataLogConfig {
             .define(METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG, LONG, METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES, atLeast(1), HIGH, METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_DOC)
             .define(METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, LONG, METADATA_SNAPSHOT_MAX_INTERVAL_MS_DEFAULT, atLeast(0), HIGH, METADATA_SNAPSHOT_MAX_INTERVAL_MS_DOC)
             .define(METADATA_LOG_DIR_CONFIG, STRING, null, null, HIGH, METADATA_LOG_DIR_DOC)
-            .define(METADATA_LOG_SEGMENT_BYTES_CONFIG, INT, METADATA_LOG_SEGMENT_BYTES_DEFAULT, atLeast(Records.LOG_OVERHEAD), HIGH, METADATA_LOG_SEGMENT_BYTES_DOC)
+            .define(METADATA_LOG_SEGMENT_BYTES_CONFIG, INT, METADATA_LOG_SEGMENT_BYTES_DEFAULT, atLeast(1024 * 1024), HIGH, METADATA_LOG_SEGMENT_BYTES_DOC)
             .define(METADATA_LOG_SEGMENT_MILLIS_CONFIG, LONG, METADATA_LOG_SEGMENT_MILLIS_DEFAULT, null, HIGH, METADATA_LOG_SEGMENT_MILLIS_DOC)
             .define(METADATA_MAX_RETENTION_BYTES_CONFIG, LONG, METADATA_MAX_RETENTION_BYTES_DEFAULT, null, HIGH, METADATA_MAX_RETENTION_BYTES_DOC)
             .define(METADATA_MAX_RETENTION_MILLIS_CONFIG, LONG, METADATA_MAX_RETENTION_MILLIS_DEFAULT, null, HIGH, METADATA_MAX_RETENTION_MILLIS_DOC)
             .define(METADATA_MAX_IDLE_INTERVAL_MS_CONFIG, INT, METADATA_MAX_IDLE_INTERVAL_MS_DEFAULT, atLeast(0), LOW, METADATA_MAX_IDLE_INTERVAL_MS_DOC);
 
     private final int logSegmentBytes;
-    private final Integer internalLogSegmentBytes;
     private final long logSegmentMillis;
     private final long retentionMaxBytes;
     private final long retentionMillis;
@@ -113,7 +112,6 @@ public class MetadataLogConfig {
                              int maxFetchSizeInBytes,
                              long deleteDelayMillis) {
         this.logSegmentBytes = internalLogSegmentBytes;
-        this.internalLogSegmentBytes = internalLogSegmentBytes;
         this.logSegmentMillis = logSegmentMillis;
         this.retentionMaxBytes = retentionMaxBytes;
         this.retentionMillis = retentionMillis;
@@ -123,8 +121,7 @@ public class MetadataLogConfig {
     }
 
     public MetadataLogConfig(AbstractConfig config) {
-        this.logSegmentBytes = config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG);
-        this.internalLogSegmentBytes = config.getInt(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG);
+        this.logSegmentBytes = Objects.requireNonNullElseGet(config.getInt(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG), () -> config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG));
         this.logSegmentMillis = config.getLong(METADATA_LOG_SEGMENT_MILLIS_CONFIG);
         this.retentionMaxBytes = config.getLong(METADATA_MAX_RETENTION_BYTES_CONFIG);
         this.retentionMillis = config.getLong(METADATA_MAX_RETENTION_MILLIS_CONFIG);
@@ -134,12 +131,7 @@ public class MetadataLogConfig {
     }
 
     public int logSegmentBytes() {
-        if (internalLogSegmentBytes == null) return logSegmentBytes;
-        return internalLogSegmentBytes;
-    }
-    
-    public Integer internalLogSegmentBytes() {
-        return internalLogSegmentBytes;
+        return logSegmentBytes;
     }
 
     public long logSegmentMillis() {
