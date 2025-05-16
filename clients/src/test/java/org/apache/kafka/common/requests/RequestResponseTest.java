@@ -175,8 +175,8 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
-import org.apache.kafka.common.message.ListClientMetricsResourcesRequestData;
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
+import org.apache.kafka.common.message.ListConfigResourcesRequestData;
+import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
@@ -1052,7 +1052,7 @@ public class RequestResponseTest {
             case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsRequest(version);
             case PUSH_TELEMETRY: return createPushTelemetryRequest(version);
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsRequest(version);
-            case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesRequest(version);
+            case LIST_CONFIG_RESOURCES: return createListConfigResourcesRequest(version);
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsRequest(version);
             case SHARE_GROUP_HEARTBEAT: return createShareGroupHeartbeatRequest(version);
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeRequest(version);
@@ -1147,7 +1147,7 @@ public class RequestResponseTest {
             case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
             case PUSH_TELEMETRY: return createPushTelemetryResponse();
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
-            case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
+            case LIST_CONFIG_RESOURCES: return createListConfigResourcesResponse();
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsResponse();
             case SHARE_GROUP_HEARTBEAT: return createShareGroupHeartbeatResponse();
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeResponse();
@@ -3636,15 +3636,15 @@ public class RequestResponseTest {
         return new PushTelemetryResponse(response);
     }
 
-    private ListClientMetricsResourcesRequest createListClientMetricsResourcesRequest(short version) {
-        return new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build(version);
+    private ListConfigResourcesRequest createListConfigResourcesRequest(short version) {
+        return new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()).build(version);
     }
 
-    private ListClientMetricsResourcesResponse createListClientMetricsResourcesResponse() {
-        ListClientMetricsResourcesResponseData response = new ListClientMetricsResourcesResponseData();
+    private ListConfigResourcesResponse createListConfigResourcesResponse() {
+        ListConfigResourcesResponseData response = new ListConfigResourcesResponseData();
         response.setErrorCode(Errors.NONE.code());
         response.setThrottleTimeMs(10);
-        return new ListClientMetricsResourcesResponse(response);
+        return new ListConfigResourcesResponse(response);
     }
 
     private InitializeShareGroupStateRequest createInitializeShareGroupStateRequest(short version) {

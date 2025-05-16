@@ -202,6 +202,7 @@ class BrokerMetadataPublisherTest {
       groupCoordinator,
       mock(classOf[TransactionCoordinator]),
       mock(classOf[ShareCoordinator]),
+      mock(classOf[SharePartitionManager]),
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
       mock(classOf[DynamicTopicClusterQuotaPublisher]),
@@ -209,8 +210,7 @@ class BrokerMetadataPublisherTest {
       mock(classOf[DelegationTokenPublisher]),
       mock(classOf[AclPublisher]),
       faultHandler,
-      faultHandler,
-      mock(classOf[SharePartitionManager])
+      faultHandler
     )
 
     val topicId = Uuid.randomUuid()

@@ -141,7 +141,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
+import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData.ListedGroup;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
@@ -225,8 +225,8 @@ import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
-import org.apache.kafka.common.requests.ListClientMetricsResourcesRequest;
-import org.apache.kafka.common.requests.ListClientMetricsResourcesResponse;
+import org.apache.kafka.common.requests.ListConfigResourcesRequest;
+import org.apache.kafka.common.requests.ListConfigResourcesResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -10672,17 +10672,25 @@ public class KafkaAdminClientTest {
                 new ClientMetricsResourceListing("two")
             );
 
-            ListClientMetricsResourcesResponseData responseData =
-                new ListClientMetricsResourcesResponseData().setErrorCode(Errors.NONE.code());
+            ListConfigResourcesResponseData responseData =
+                new ListConfigResourcesResponseData().setErrorCode(Errors.NONE.code());
 
-            responseData.clientMetricsResources()
-                .add(new ListClientMetricsResourcesResponseData.ClientMetricsResource().setName("one"));
-            responseData.clientMetricsResources()
-                .add((new ListClientMetricsResourcesResponseData.ClientMetricsResource()).setName("two"));
+            responseData.configResources()
+                .add(new ListConfigResourcesResponseData
+                    .ConfigResource()
+                    .setResourceName("one")
+                    .setResourceType(ConfigResource.Type.CLIENT_METRICS.id())
+                );
+            responseData.configResources()
+                .add(new ListConfigResourcesResponseData
+                    .ConfigResource()
+                    .setResourceName("two")
+                    .setResourceType(ConfigResource.Type.CLIENT_METRICS.id())
+                );
 
             env.kafkaClient().prepareResponse(
-                request -> request instanceof ListClientMetricsResourcesRequest,
-                new ListClientMetricsResourcesResponse(responseData));
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(responseData));
 
             ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
             assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
@@ -10694,12 +10702,12 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             List<ClientMetricsResourceListing> expected = Collections.emptyList();
 
-            ListClientMetricsResourcesResponseData responseData =
-                new ListClientMetricsResourcesResponseData().setErrorCode(Errors.NONE.code());
+            ListConfigResourcesResponseData responseData =
+                new ListConfigResourcesResponseData().setErrorCode(Errors.NONE.code());
 
             env.kafkaClient().prepareResponse(
-                request -> request instanceof ListClientMetricsResourcesRequest,
-                new ListClientMetricsResourcesResponse(responseData));
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(responseData));
 
             ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
             assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
@@ -10710,7 +10718,7 @@ public class KafkaAdminClientTest {
     public void testListClientMetricsResourcesNotSupported() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
-                request -> request instanceof ListClientMetricsResourcesRequest,
+                request -> request instanceof ListConfigResourcesRequest,
                 prepareListClientMetricsResourcesResponse(Errors.UNSUPPORTED_VERSION));
 
             ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
@@ -10776,8 +10784,8 @@ public class KafkaAdminClientTest {
         }
     }
 
-    private static ListClientMetricsResourcesResponse prepareListClientMetricsResourcesResponse(Errors error) {
-        return new ListClientMetricsResourcesResponse(new ListClientMetricsResourcesResponseData()
+    private static ListConfigResourcesResponse prepareListClientMetricsResourcesResponse(Errors error) {
+        return new ListConfigResourcesResponse(new ListConfigResourcesResponseData()
                 .setErrorCode(error.code()));
     }
 
