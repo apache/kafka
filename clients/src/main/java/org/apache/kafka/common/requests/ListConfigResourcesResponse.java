@@ -17,7 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.clients.admin.ClientMetricsResourceListing;
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
@@ -26,15 +27,15 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class ListClientMetricsResourcesResponse extends AbstractResponse {
-    private final ListClientMetricsResourcesResponseData data;
+public class ListConfigResourcesResponse extends AbstractResponse {
+    private final ListConfigResourcesResponseData data;
 
-    public ListClientMetricsResourcesResponse(ListClientMetricsResourcesResponseData data) {
-        super(ApiKeys.LIST_CLIENT_METRICS_RESOURCES);
+    public ListConfigResourcesResponse(ListConfigResourcesResponseData data) {
+        super(ApiKeys.LIST_CONFIG_RESOURCES);
         this.data = data;
     }
 
-    public ListClientMetricsResourcesResponseData data() {
+    public ListConfigResourcesResponseData data() {
         return data;
     }
 
@@ -47,8 +48,8 @@ public class ListClientMetricsResourcesResponse extends AbstractResponse {
         return errorCounts(Errors.forCode(data.errorCode()));
     }
 
-    public static ListClientMetricsResourcesResponse parse(Readable readable, short version) {
-        return new ListClientMetricsResourcesResponse(new ListClientMetricsResourcesResponseData(
+    public static ListConfigResourcesResponse parse(Readable readable, short version) {
+        return new ListConfigResourcesResponse(new ListConfigResourcesResponseData(
             readable, version));
     }
 
@@ -67,10 +68,22 @@ public class ListClientMetricsResourcesResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public Collection<ClientMetricsResourceListing> clientMetricsResources() {
-        return data.clientMetricsResources()
+    public Collection<ConfigResource> configResources() {
+        return data.configResources()
             .stream()
-            .map(entry -> new ClientMetricsResourceListing(entry.name()))
+            .map(entry ->
+                new ConfigResource(
+                    ConfigResource.Type.forId(entry.resourceType()),
+                    entry.resourceName()
+                )
+            ).collect(Collectors.toList());
+    }
+
+    public Collection<ClientMetricsResourceListing> clientMetricsResources() {
+        return data.configResources()
+            .stream()
+            .filter(entry -> entry.resourceType() == ConfigResource.Type.CLIENT_METRICS.id())
+            .map(entry -> new ClientMetricsResourceListing(entry.resourceName()))
             .collect(Collectors.toList());
     }
 }
