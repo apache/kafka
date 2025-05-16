@@ -30,7 +30,6 @@ public class CandidateState implements NomineeState {
     private final int localId;
     private final Uuid localDirectoryId;
     private final int epoch;
-    private final int retries;
     private final EpochElection epochElection;
     private final Optional<LogOffsetMetadata> highWatermark;
     private final int electionTimeoutMs;
@@ -54,7 +53,6 @@ public class CandidateState implements NomineeState {
         int epoch,
         VoterSet voters,
         Optional<LogOffsetMetadata> highWatermark,
-        int retries,
         int electionTimeoutMs,
         LogContext logContext
     ) {
@@ -73,8 +71,6 @@ public class CandidateState implements NomineeState {
         this.localDirectoryId = localDirectoryId;
         this.epoch = epoch;
         this.highWatermark = highWatermark;
-        this.retries = retries;
-        this.isBackingOff = false;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
         this.backoffTimer = time.timer(0);
@@ -85,14 +81,10 @@ public class CandidateState implements NomineeState {
     }
 
     /**
-     * Check if the candidate is backing off for the next election
+     * Check if the candidate is backing off before transitionint back to prospective state
      */
     public boolean isBackingOff() {
         return isBackingOff;
-    }
-
-    public int retries() {
-        return retries;
     }
 
     @Override
@@ -119,11 +111,9 @@ public class CandidateState implements NomineeState {
     }
 
     /**
-     * Record the current election has failed since we've either received sufficient rejecting voters or election timed out
+     * Record the current election has failed since we've received sufficient rejecting voters
      */
-    public void startBackingOff(long currentTimeMs, long backoffDurationMs) {
-        this.backoffTimer.update(currentTimeMs);
-        this.backoffTimer.reset(backoffDurationMs);
+    public void startBackingOff() {
         this.isBackingOff = true;
     }
 
@@ -131,19 +121,6 @@ public class CandidateState implements NomineeState {
     public boolean hasElectionTimeoutExpired(long currentTimeMs) {
         electionTimer.update(currentTimeMs);
         return electionTimer.isExpired();
-    }
-
-    public boolean isBackoffComplete(long currentTimeMs) {
-        backoffTimer.update(currentTimeMs);
-        return backoffTimer.isExpired();
-    }
-
-    public long remainingBackoffMs(long currentTimeMs) {
-        if (!isBackingOff) {
-            throw new IllegalStateException("Candidate is not currently backing off");
-        }
-        backoffTimer.update(currentTimeMs);
-        return backoffTimer.remainingMs();
     }
 
     @Override
@@ -201,12 +178,11 @@ public class CandidateState implements NomineeState {
     @Override
     public String toString() {
         return String.format(
-            "CandidateState(localId=%d, localDirectoryId=%s, epoch=%d, retries=%d, epochElection=%s, " +
+            "CandidateState(localId=%d, localDirectoryId=%s, epoch=%d, epochElection=%s, " +
             "highWatermark=%s, electionTimeoutMs=%d)",
             localId,
             localDirectoryId,
             epoch,
-            retries,
             epochElection(),
             highWatermark,
             electionTimeoutMs
