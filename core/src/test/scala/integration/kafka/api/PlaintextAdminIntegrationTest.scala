@@ -60,7 +60,7 @@ import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.{MethodSource}
 import org.slf4j.LoggerFactory
 
 import java.util.AbstractMap.SimpleImmutableEntry
@@ -894,11 +894,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Generate two mutually exclusive replicaAssignment
     val firstReplicaAssignment = brokers.map { server =>
-      val logDir = new File(server.config.logDirs(randomNums(server))).getAbsolutePath
+      val logDir = new File(server.config.logDirs.get(randomNums(server))).getAbsolutePath
       new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
     }.toMap
     val secondReplicaAssignment = brokers.map { server =>
-      val logDir = new File(server.config.logDirs(1 - randomNums(server))).getAbsolutePath
+      val logDir = new File(server.config.logDirs.get(1 - randomNums(server))).getAbsolutePath
       new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
     }.toMap
 
@@ -1520,7 +1520,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
 
     // we will create another dir just for one server
-    val futureLogDir = brokers(0).config.logDirs(1)
+    val futureLogDir = brokers(0).config.logDirs.get(1)
     val futureReplica = new TopicPartitionReplica(topic, 0, brokers(0).config.brokerId)
 
     // Verify that replica can be moved to the specified log directory
@@ -2511,9 +2511,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kip932"))
-  def testListGroups(unused: String): Unit = {
+  @Test
+  def testListGroups(): Unit = {
     val classicGroupId = "classic_group_id"
     val consumerGroupId = "consumer_group_id"
     val shareGroupId = "share_group_id"
@@ -2643,9 +2642,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kip932"))
-  def testShareGroups(unused: String): Unit = {
+  def testShareGroups(): Unit = {
     val testGroupId = "test_group_id"
     val testClientId = "test_client_id"
     val fakeGroupId = "fake_group_id"
@@ -3573,7 +3570,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFutureThrows(classOf[InvalidTopicException], results.get(invalidTopicName))
     assertFutureThrows(classOf[InvalidTopicException],
       client.alterReplicaLogDirs(
-        Map(new TopicPartitionReplica(longTopicName, 0, 0) -> brokers(0).config.logDirs(0)).asJava).all())
+        util.Map.of(new TopicPartitionReplica(longTopicName, 0, 0), brokers(0).config.logDirs.get(0))).all())
     client.close()
   }
 

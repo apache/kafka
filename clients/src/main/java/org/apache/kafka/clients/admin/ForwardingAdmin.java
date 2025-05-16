@@ -336,8 +336,8 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
-    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options) {
-        return delegate.deleteShareGroupOffsets(groupId, partitions, options);
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options) {
+        return delegate.deleteShareGroupOffsets(groupId, topics, options);
     }
 
     @Override

@@ -52,7 +52,15 @@
                     </li>
                 </ul>
             </li>
-            <li><b>Stream</b>
+            <li><b>Admin</b>
+                <ul>
+                    <li>
+                        The <code>listConsumerGroups()</code> and <code>listConsumerGroups(ListConsumerGroupsOptions)</code> methods in <code>Admin</code> are deprecated,
+                        and will be removed in the next major version. Use <code>Admin.listGroups(ListGroupsOptions.forConsumerGroups())</code> instead.
+                    </li>
+                </ul>
+            </li>
+            <li><b>Kafka Streams</b>
                 <ul>
                     <li>
                         The <code>window.size.ms</code> and <code>window.inner.serde.class</code> in <code>StreamsConfig</code> are deprecated.

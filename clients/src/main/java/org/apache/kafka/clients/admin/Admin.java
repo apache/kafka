@@ -250,9 +250,8 @@ public interface Admin extends AutoCloseable {
      * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
      * may continue to return information about the deleted topics.
      * <p>
-     * If delete.topic.enable is false on the brokers, deleteTopics will mark
-     * the topics for deletion, but not actually delete them. The futures will
-     * return successfully in this case.
+     * If delete.topic.enable is set to false on the brokers, an exception will be returned to the client indicating
+     * that topic deletion is disabled.
      * <p>
      * When using topic IDs, this operation is supported by brokers with inter-broker protocol 2.8 or higher.
      * When using topic names, this operation is supported by brokers with version 0.10.1.0 or higher.
@@ -1951,28 +1950,28 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Delete offsets for a set of partitions in a share group.
+     * Delete offsets for a set of topics in a share group.
      *
      * @param groupId The group for which to delete offsets.
-     * @param partitions The topic-partitions.
+     * @param topics The topics for which to delete offsets.
      * @param options The options to use when deleting offsets in a share group.
      * @return The DeleteShareGroupOffsetsResult.
      */
-    DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options);
+    DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options);
 
     /**
-     * Delete offsets for a set of partitions in a share group with the default options.
+     * Delete offsets for a set of topics in a share group with the default options.
      *
      * <p>
      * This is a convenience method for {@link #deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} with default options.
      * See the overload for more details.
      *
      * @param groupId The group for which to delete offsets.
-     * @param partitions The topic-partitions.
+     * @param topics The topics for which to delete offsets.
      * @return The DeleteShareGroupOffsetsResult.
      */
-    default DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions) {
-        return deleteShareGroupOffsets(groupId, partitions, new DeleteShareGroupOffsetsOptions());
+    default DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics) {
+        return deleteShareGroupOffsets(groupId, topics, new DeleteShareGroupOffsetsOptions());
     }
 
     /**

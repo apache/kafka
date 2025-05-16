@@ -159,7 +159,7 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.U
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
-import org.apache.kafka.common.message.ListClientMetricsResourcesRequestData;
+import org.apache.kafka.common.message.ListConfigResourcesRequestData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
@@ -233,8 +233,8 @@ import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.requests.ListClientMetricsResourcesRequest;
-import org.apache.kafka.common.requests.ListClientMetricsResourcesResponse;
+import org.apache.kafka.common.requests.ListConfigResourcesRequest;
+import org.apache.kafka.common.requests.ListConfigResourcesResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -822,36 +822,6 @@ public class KafkaAdminClient extends AdminClient {
         @Override
         public boolean supportsUseControllers() {
             return false;
-        }
-    }
-
-    /**
-     * Provides the least loaded broker, or the active kcontroller if we're using
-     * bootstrap.controllers.
-     */
-    private class ConstantBrokerOrActiveKController implements NodeProvider {
-        private final int nodeId;
-
-        ConstantBrokerOrActiveKController(int nodeId) {
-            this.nodeId = nodeId;
-        }
-
-        @Override
-        public Node provide() {
-            if (metadataManager.isReady()) {
-                if (metadataManager.usingBootstrapControllers()) {
-                    return metadataManager.controller();
-                } else if (metadataManager.nodeById(nodeId) != null) {
-                    return metadataManager.nodeById(nodeId);
-                }
-            }
-            metadataManager.requestUpdate();
-            return null;
-        }
-
-        @Override
-        public boolean supportsUseControllers() {
-            return true;
         }
     }
 
@@ -3541,27 +3511,29 @@ public class KafkaAdminClient extends AdminClient {
                         }
 
                         private void maybeAddGroup(ListGroupsResponseData.ListedGroup group) {
-                            final String groupId = group.groupId();
-                            final Optional<GroupType> type;
-                            if (group.groupType() == null || group.groupType().isEmpty()) {
-                                type = Optional.empty();
-                            } else {
-                                type = Optional.of(GroupType.parse(group.groupType()));
+                            String protocolType = group.protocolType();
+                            if (options.protocolTypes().isEmpty() || options.protocolTypes().contains(protocolType)) {
+                                final String groupId = group.groupId();
+                                final Optional<GroupType> type;
+                                if (group.groupType() == null || group.groupType().isEmpty()) {
+                                    type = Optional.empty();
+                                } else {
+                                    type = Optional.of(GroupType.parse(group.groupType()));
+                                }
+                                final Optional<GroupState> groupState;
+                                if (group.groupState() == null || group.groupState().isEmpty()) {
+                                    groupState = Optional.empty();
+                                } else {
+                                    groupState = Optional.of(GroupState.parse(group.groupState()));
+                                }
+                                final GroupListing groupListing = new GroupListing(
+                                    groupId,
+                                    type,
+                                    protocolType,
+                                    groupState
+                                );
+                                results.addListing(groupListing);
                             }
-                            final String protocolType = group.protocolType();
-                            final Optional<GroupState> groupState;
-                            if (group.groupState() == null || group.groupState().isEmpty()) {
-                                groupState = Optional.empty();
-                            } else {
-                                groupState = Optional.of(GroupState.parse(group.groupState()));
-                            }
-                            final GroupListing groupListing = new GroupListing(
-                                groupId,
-                                type,
-                                protocolType,
-                                groupState
-                            );
-                            results.addListing(groupListing);
                         }
 
                         @Override
@@ -3779,7 +3751,10 @@ public class KafkaAdminClient extends AdminClient {
                 Map.Entry::getKey,
                 entry -> new ListConsumerGroupOffsetsSpec().topicPartitions(entry.getValue().topicPartitions())
             ));
-        return new ListStreamsGroupOffsetsResult(listConsumerGroupOffsets(consumerGroupSpecs, new ListConsumerGroupOffsetsOptions()));
+        ListConsumerGroupOffsetsOptions consumerGroupOptions = new ListConsumerGroupOffsetsOptions()
+            .requireStable(options.requireStable())
+            .timeoutMs(options.timeoutMs());
+        return new ListStreamsGroupOffsetsResult(listConsumerGroupOffsets(consumerGroupSpecs, consumerGroupOptions));
     }
 
     @Override
@@ -3794,7 +3769,9 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options) {
-        return new DeleteStreamsGroupsResult(deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions()));
+        DeleteConsumerGroupsOptions consumerGroupOptions = new DeleteConsumerGroupsOptions()
+            .timeoutMs(options.timeoutMs());
+        return new DeleteStreamsGroupsResult(deleteConsumerGroups(groupIds, consumerGroupOptions));
     }
 
     @Override
@@ -3814,7 +3791,9 @@ public class KafkaAdminClient extends AdminClient {
         String groupId,
         Set<TopicPartition> partitions,
         DeleteStreamsGroupOffsetsOptions options) {
-        return new DeleteStreamsGroupOffsetsResult(deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions()));
+        DeleteConsumerGroupOffsetsOptions consumerGroupOptions = new DeleteConsumerGroupOffsetsOptions()
+            .timeoutMs(options.timeoutMs());
+        return new DeleteStreamsGroupOffsetsResult(deleteConsumerGroupOffsets(groupId, partitions, consumerGroupOptions));
     }
 
     @Override
@@ -3839,18 +3818,18 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs,
                                                              final ListShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Long>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
         ListShareGroupOffsetsHandler handler = new ListShareGroupOffsetsHandler(groupSpecs, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListShareGroupOffsetsResult(future.all());
     }
 
     @Override
-    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, ApiException>> future = DeleteShareGroupOffsetsHandler.newFuture(groupId);
-        DeleteShareGroupOffsetsHandler handler = new DeleteShareGroupOffsetsHandler(groupId, partitions, logContext);
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, Map<String, ApiException>> future = DeleteShareGroupOffsetsHandler.newFuture(groupId);
+        DeleteShareGroupOffsetsHandler handler = new DeleteShareGroupOffsetsHandler(groupId, topics, logContext);
         invokeDriver(handler, future, options.timeoutMs);
-        return new DeleteShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)), partitions);
+        return new DeleteShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)), topics);
     }
 
     @Override
@@ -4273,7 +4252,9 @@ public class KafkaAdminClient extends AdminClient {
         Map<TopicPartition, OffsetAndMetadata> offsets,
         AlterStreamsGroupOffsetsOptions options
     ) {
-        return new AlterStreamsGroupOffsetsResult(alterConsumerGroupOffsets(groupId, offsets, new AlterConsumerGroupOffsetsOptions()));
+        AlterConsumerGroupOffsetsOptions consumerGroupOptions = new AlterConsumerGroupOffsetsOptions()
+            .timeoutMs(options.timeoutMs());
+        return new AlterStreamsGroupOffsetsResult(alterConsumerGroupOffsets(groupId, offsets, consumerGroupOptions));
     }
 
     @Override
@@ -4487,8 +4468,8 @@ public class KafkaAdminClient extends AdminClient {
                  * Be sure to do this after the NOT_CONTROLLER error check above
                  * so that all errors are consistent in that case.
                  */
-                userIllegalAlterationExceptions.entrySet().stream().forEach(entry ->
-                    futures.get(entry.getKey()).completeExceptionally(entry.getValue())
+                userIllegalAlterationExceptions.forEach((key, value) ->
+                    futures.get(key).completeExceptionally(value)
                 );
                 response.data().results().forEach(result -> {
                     KafkaFutureImpl<Void> future = futures.get(result.user());
@@ -4906,13 +4887,16 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            ListClientMetricsResourcesRequest.Builder createRequest(int timeoutMs) {
-                return new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData());
+            ListConfigResourcesRequest.Builder createRequest(int timeoutMs) {
+                return new ListConfigResourcesRequest.Builder(
+                    new ListConfigResourcesRequestData()
+                        .setResourceTypes(List.of(ConfigResource.Type.CLIENT_METRICS.id()))
+                );
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
-                ListClientMetricsResourcesResponse response = (ListClientMetricsResourcesResponse) abstractResponse;
+                ListConfigResourcesResponse response = (ListConfigResourcesResponse) abstractResponse;
                 if (response.error().isFailure()) {
                     future.completeExceptionally(response.error().exception());
                 } else {
@@ -4948,7 +4932,7 @@ public class KafkaAdminClient extends AdminClient {
                     new AddRaftVoterRequestData.ListenerCollection();
                 endpoints.forEach(endpoint ->
                     listeners.add(new AddRaftVoterRequestData.Listener().
-                        setName(endpoint.name()).
+                        setName(endpoint.listener()).
                         setHost(endpoint.host()).
                         setPort(endpoint.port())));
                 return new AddRaftVoterRequest.Builder(

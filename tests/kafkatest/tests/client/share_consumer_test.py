@@ -168,11 +168,6 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         for event_handler in consumer.event_handlers.values():
             assert event_handler.total_consumed > 0
             assert event_handler.total_acknowledged_successfully > 0
-            for topic_partition in self.get_topic_partitions(self.TOPIC2):
-                assert topic_partition in event_handler.consumed_per_partition
-                assert event_handler.consumed_per_partition[topic_partition] > 0
-                assert topic_partition in event_handler.acknowledged_per_partition
-                assert event_handler.acknowledged_per_partition[topic_partition] > 0
 
         producer.stop()
         consumer.stop_all()
@@ -253,7 +248,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
         use_share_groups=[True]
     )
-    def test_share_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.zk, use_share_groups=True):
+    def test_share_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
         """
         Verify correct share consumer behavior when the share consumers in the group are consecutively restarted.
 
@@ -295,7 +290,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
         use_share_groups=[True]
     )
-    def test_share_consumer_failure(self, clean_shutdown, metadata_quorum=quorum.zk, num_failed_consumers=1, use_share_groups=True):
+    def test_share_consumer_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_consumers=1, use_share_groups=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
         consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")

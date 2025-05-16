@@ -176,18 +176,21 @@ public class GroupCoordinatorRecordHelpers {
      *
      * @param groupId       The consumer group id.
      * @param newGroupEpoch The consumer group epoch.
+     * @param metadataHash  The consumer group metadata hash.
      * @return The record.
      */
     public static CoordinatorRecord newConsumerGroupEpochRecord(
         String groupId,
-        int newGroupEpoch
+        int newGroupEpoch,
+        long metadataHash
     ) {
         return CoordinatorRecord.record(
             new ConsumerGroupMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
+                    .setEpoch(newGroupEpoch)
+                    .setMetadataHash(metadataHash),
                 (short) 0
             )
         );
@@ -514,7 +517,8 @@ public class GroupCoordinatorRecordHelpers {
                     .setMetadata(offsetAndMetadata.metadata)
                     .setCommitTimestamp(offsetAndMetadata.commitTimestampMs)
                     // Version 1 has a non-empty expireTimestamp field
-                    .setExpireTimestamp(offsetAndMetadata.expireTimestampMs.orElse(OffsetCommitRequest.DEFAULT_TIMESTAMP)),
+                    .setExpireTimestamp(offsetAndMetadata.expireTimestampMs.orElse(OffsetCommitRequest.DEFAULT_TIMESTAMP))
+                    .setTopicId(offsetAndMetadata.topicId),
                 version
             )
         );
@@ -524,9 +528,7 @@ public class GroupCoordinatorRecordHelpers {
         if (expireTimestampMs) {
             return 1;
         } else {
-            // Serialize with the highest supported non-flexible version
-            // until a tagged field is introduced or the version is bumped.
-            return  3;
+            return  4;
         }
     }
 
@@ -647,18 +649,21 @@ public class GroupCoordinatorRecordHelpers {
      *
      * @param groupId       The group id.
      * @param newGroupEpoch The group epoch.
+     * @param metadataHash  The group metadata hash.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupEpochRecord(
         String groupId,
-        int newGroupEpoch
+        int newGroupEpoch,
+        long metadataHash
     ) {
         return CoordinatorRecord.record(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ShareGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
+                    .setEpoch(newGroupEpoch)
+                    .setMetadataHash(metadataHash),
                 (short) 0
             )
         );

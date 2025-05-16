@@ -417,7 +417,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         timeCurrentIdlingStarted = Optional.empty();
     }
 
-
     public void flush() {
         stateMgr.flushCache();
         recordCollector.flush();
@@ -429,7 +428,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @return offsets that should be committed for this task
      */
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
         switch (state()) {
             case CREATED:
             case RESTORING:
@@ -444,6 +443,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     //
                     // TODO: this should be removed after we decouple caching with emitting
                     flush();
+                    if (!clean) {
+                        log.debug("Skipped preparing {} task with id {} for commit since the task is getting closed dirty.", state(), id);
+                        return null;
+                    }
                     hasPendingTxCommit = eosEnabled;
 
                     log.debug("Prepared {} task for committing", state());

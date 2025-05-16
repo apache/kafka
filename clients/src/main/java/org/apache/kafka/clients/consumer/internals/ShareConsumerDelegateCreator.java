@@ -45,7 +45,7 @@ public class ShareConsumerDelegateCreator {
         try {
             LogContext logContext = new LogContext();
             Logger log = logContext.logger(getClass());
-            log.warn("Share groups and KafkaShareConsumer are part of the early access of KIP-932 and MUST NOT be used in production.");
+            log.warn("Share groups and KafkaShareConsumer are part of a preview feature introduced by KIP-932, and are not recommended for use in production.");
             return new ShareConsumerImpl<>(config, keyDeserializer, valueDeserializer);
         } catch (KafkaException e) {
             throw e;
@@ -66,7 +66,7 @@ public class ShareConsumerDelegateCreator {
                                                      final ConsumerMetadata metadata) {
         try {
             Logger log = logContext.logger(getClass());
-            log.warn("Share groups and KafkaShareConsumer are part of the early access of KIP-932 and MUST NOT be used in production.");
+            log.warn("Share groups and KafkaShareConsumer are part of a preview feature introduced by KIP-932, and are not recommended for use in production.");
             return new ShareConsumerImpl<>(
                     logContext,
                     clientId,
