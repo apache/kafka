@@ -259,7 +259,9 @@ class BrokerServer(
         Optional.of(clientMetricsManager)
       )
 
-      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupConfig.shareGroupMaxShareSessions())
+      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
+        config.shareGroupConfig.shareGroupMaxShareSessions()
+      )
 
       val connectionDisconnectListeners = Seq(
         clientMetricsManager.connectionDisconnectListener(),
@@ -481,6 +483,7 @@ class BrokerServer(
         groupCoordinator,
         transactionCoordinator,
         shareCoordinator,
+        sharePartitionManager,
         new DynamicConfigPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
@@ -657,6 +660,7 @@ class BrokerServer(
       .withWriter(writer)
       .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
       .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
+      .withShareGroupEnabledConfigSupplier(() => config.shareGroupConfig.isShareGroupEnabled)
       .build()
   }
 
@@ -707,7 +711,7 @@ class BrokerServer(
         None
       }
 
-      val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
+      val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.get(0), clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).toJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>

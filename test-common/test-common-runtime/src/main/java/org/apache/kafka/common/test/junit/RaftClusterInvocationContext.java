@@ -55,7 +55,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.jdk.javaapi.OptionConverters;
 
 
 /**
@@ -133,11 +132,16 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public Optional<ListenerName> controllerListenerName() {
-            return controllers().values().stream()
-                    .findAny()
-                    .flatMap(s -> OptionConverters.toJava(s.config().controllerListenerNames().headOption()))
-                    .map(ListenerName::new);
+        public ListenerName controllerListenerName() {
+            return new ListenerName(
+                controllers()
+                    .values()
+                    .iterator()
+                    .next()
+                    .config()
+                    .controllerListenerNames()
+                    .head()
+            );
         }
 
         @Override
