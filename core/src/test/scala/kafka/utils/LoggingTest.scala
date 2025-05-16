@@ -42,7 +42,7 @@ class LoggingTest extends Logging {
     val log4jControllerName = ObjectName.getInstance("kafka:type=kafka.Log4jController")
     assertTrue(mbs.isRegistered(log4jControllerName), "kafka.utils.Log4jController is not registered")
     val log4jInstance = mbs.getObjectInstance(log4jControllerName)
-    assertEquals("kafka.utils.LoggingController", log4jInstance.getClassName)
+    assertEquals("org.apache.kafka.server.logging.LoggingController", log4jInstance.getClassName)
   }
 
   @Test
