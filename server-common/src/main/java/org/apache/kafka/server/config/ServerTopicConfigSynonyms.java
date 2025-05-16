@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.config;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Utils;
 
@@ -81,7 +80,6 @@ public final class ServerTopicConfigSynonyms {
         sameName(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG),
         sameName(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG),
         sameName(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG),
-        sameName(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.PREALLOCATE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG),
