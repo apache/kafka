@@ -576,7 +576,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     public static class TestConsumerWrapper extends ConsumerWrapper {
         @Override
         public void wrapConsumer(final AsyncKafkaConsumer<byte[], byte[]> delegate, final Map<String, Object> config, final Optional<StreamsRebalanceData> streamsRebalanceData) {
-            final TestingMetricsInterceptingAsynConsumer<byte[], byte[]> consumer = new TestingMetricsInterceptingAsynConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer(), streamsRebalanceData);
+            final TestingMetricsInterceptingAsyncConsumer<byte[], byte[]> consumer = new TestingMetricsInterceptingAsyncConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer(), streamsRebalanceData);
             INTERCEPTING_CONSUMERS.add(consumer);
 
             super.wrapConsumer(consumer, config, streamsRebalanceData);
@@ -613,10 +613,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
         }
     }
 
-    public static class TestingMetricsInterceptingAsynConsumer<K, V> extends AsyncKafkaConsumer<K, V> implements TestingMetricsInterceptor {
+    public static class TestingMetricsInterceptingAsyncConsumer<K, V> extends AsyncKafkaConsumer<K, V> implements TestingMetricsInterceptor {
         private final List<KafkaMetric> passedMetrics = new ArrayList<>();
 
-        public TestingMetricsInterceptingAsynConsumer(
+        public TestingMetricsInterceptingAsyncConsumer(
             final Map<String, Object> configs,
             final Deserializer<K> keyDeserializer,
             final Deserializer<V> valueDeserializer,

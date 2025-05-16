@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from time import sleep
 
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
@@ -39,7 +38,7 @@ class StreamsEosTest(BaseStreamsTest):
         self.driver = StreamsEosTestDriverService(test_context, self.kafka)
         self.test_context = test_context
 
-    @cluster(num_nodes=9)
+    @cluster(num_nodes=8)
     @matrix(metadata_quorum=[quorum.combined_kraft],
             group_protocol=["classic", "streams"])
     def test_rebalance_simple(self, metadata_quorum, group_protocol):
@@ -48,7 +47,7 @@ class StreamsEosTest(BaseStreamsTest):
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
                            StreamsEosTestVerifyRunnerService(self.test_context, self.kafka, group_protocol))
-    @cluster(num_nodes=9)
+    @cluster(num_nodes=8)
     @matrix(metadata_quorum=[quorum.combined_kraft],
             group_protocol=["classic", "streams"])
     def test_rebalance_complex(self, metadata_quorum, group_protocol):
@@ -84,7 +83,7 @@ class StreamsEosTest(BaseStreamsTest):
 
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
-    @cluster(num_nodes=9)
+    @cluster(num_nodes=8)
     @matrix(metadata_quorum=[quorum.combined_kraft],
             group_protocol=["classic", "streams"])
     def test_failure_and_recovery(self, metadata_quorum, group_protocol):
@@ -93,7 +92,7 @@ class StreamsEosTest(BaseStreamsTest):
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
                                       StreamsEosTestVerifyRunnerService(self.test_context, self.kafka, group_protocol))
-    @cluster(num_nodes=9)
+    @cluster(num_nodes=8)
     @matrix(metadata_quorum=[quorum.combined_kraft],
             group_protocol=["classic", "streams"])
     def test_failure_and_recovery_complex(self, metadata_quorum, group_protocol):
@@ -143,10 +142,8 @@ class StreamsEosTest(BaseStreamsTest):
 
     def add_streams3(self, running_processor1, running_processor2, processor_to_be_started):
         with running_processor1.node.account.monitor_log(running_processor1.STDOUT_FILE) as monitor:
-            with running_processor2.node.account.monitor_log(running_processor2.STDOUT_FILE) as monitor:
-                self.add_streams(processor_to_be_started)
-                self.wait_for_startup_in_classic(monitor, running_processor2)
-            self.wait_for_startup_in_classic(monitor, running_processor1)
+            self.add_streams2(running_processor2, processor_to_be_started)
+            self.wait_for_startup(monitor, running_processor1)
 
     def stop_streams(self, processor_to_be_stopped):
         with processor_to_be_stopped.node.account.monitor_log(processor_to_be_stopped.STDOUT_FILE) as monitor2:
@@ -160,32 +157,27 @@ class StreamsEosTest(BaseStreamsTest):
 
     def stop_streams3(self, keep_alive_processor1, keep_alive_processor2, processor_to_be_stopped):
         with keep_alive_processor1.node.account.monitor_log(keep_alive_processor1.STDOUT_FILE) as monitor:
-            with keep_alive_processor2.node.account.monitor_log(keep_alive_processor2.STDOUT_FILE) as monitor:
-                self.stop_streams(processor_to_be_stopped)
-                self.wait_for_startup_in_classic(monitor, keep_alive_processor2)
-            self.wait_for_startup_in_classic(monitor, keep_alive_processor1)
+            self.stop_streams2(keep_alive_processor2, processor_to_be_stopped)
+            self.wait_for_startup(monitor, keep_alive_processor1)
 
     def abort_streams(self, keep_alive_processor1, keep_alive_processor2, processor_to_be_aborted):
         with keep_alive_processor1.node.account.monitor_log(keep_alive_processor1.STDOUT_FILE) as monitor1:
             with keep_alive_processor2.node.account.monitor_log(keep_alive_processor2.STDOUT_FILE) as monitor2:
                 processor_to_be_aborted.stop_nodes(False)
-            self.wait_for_startup_in_classic(monitor2, keep_alive_processor2)
-        self.wait_for_startup_in_classic(monitor1, keep_alive_processor1)
+            self.wait_for_startup(monitor2, keep_alive_processor2)
+        self.wait_for_startup(monitor1, keep_alive_processor1)
 
-    def wait_for_startup_in_classic(self, monitor, processor):
+    def wait_for_startup(self, monitor, processor):
         if self.group_protocol == "classic":
             self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
         else:
-            # Above check is not valid for streams group protocol, since not all nodes take part in rebalances
-            # TODO: For streams rebalance protocol, we should could check if the member epoch is incremented. This is not
-            #       visible through the state, but could be implemented by wrapping the consumer using KAFKA-19271.
-            sleep(1)
-
-    def wait_for_startup(self, monitor, processor):
-        self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
+            # In the streams group protocol, not all members will take part in the rebalance.
+            # We can indirectly observe the progress of the group by seeing the member epoch being bumped.
+            self.wait_for(monitor, processor, "MemberEpochBump")
         self.wait_for(monitor, processor, "processed [0-9]* records from topic")
 
-    def wait_for(self, monitor, processor, output):
+    @staticmethod
+    def wait_for(monitor, processor, output):
         monitor.wait_until(output,
-                           timeout_sec=480,
+                           timeout_sec=60,
                            err_msg=("Never saw output '%s' on " % output) + str(processor.node.account))
