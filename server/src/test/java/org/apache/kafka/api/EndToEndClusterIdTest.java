@@ -44,7 +44,6 @@ import org.junit.jupiter.api.BeforeEach;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -60,17 +59,6 @@ public class EndToEndClusterIdTest {
     private static final int PARTITION = 0;
     private static final int NUM_RECORDS = 1;
     private static final TopicPartition TP = new TopicPartition(TOPIC, PARTITION);
-    private static final Map<String, Object> PRODUCER_CONFIG = Map.of(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName(),
-        "mock.interceptor.append", "mock",
-        ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockProducerMetricsReporter.class.getName(),
-        ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName(),
-        ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName());
-    private static final Map<String, Object> CONSUMER_CONFIG = Map.of(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName(),
-        ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockConsumerMetricsReporter.class.getName(),
-        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, MockDeserializer.class.getName(),
-        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, MockDeserializer.class.getName());
-
-
     private final ClusterInstance clusterInstance;
 
     EndToEndClusterIdTest(ClusterInstance clusterInstance) {
@@ -129,7 +117,12 @@ public class EndToEndClusterIdTest {
         isValidClusterId(MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
 
 
-        try (var producer = clusterInstance.<byte[], byte[]>producer(PRODUCER_CONFIG)) {
+        Map<String, Object> producerConfig = Map.of(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName(),
+            "mock.interceptor.append", "mock",
+            ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockProducerMetricsReporter.class.getName(),
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName());
+        try (var producer = clusterInstance.<byte[], byte[]>producer(producerConfig)) {
             // Send one record and make sure clusterId is set after send and before onAcknowledgement
             sendRecords(producer, NUM_RECORDS, TP);
         }
@@ -151,9 +144,12 @@ public class EndToEndClusterIdTest {
         Assertions.assertNotNull(MockProducerMetricsReporter.CLUSTER_META);
         isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
 
-        Map<String, Object> consumerConfigWithGroupProtocol = new HashMap<>(CONSUMER_CONFIG);
-        consumerConfigWithGroupProtocol.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
-        try (var consumer = clusterInstance.<byte[], byte[]>consumer(consumerConfigWithGroupProtocol)) {
+        Map<String, Object> consumerConfig = Map.of(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName(),
+            ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockConsumerMetricsReporter.class.getName(),
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, MockDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, MockDeserializer.class.getName(),
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+        try (var consumer = clusterInstance.<byte[], byte[]>consumer(consumerConfig)) {
             consumer.assign(Collections.singletonList(TP));
             consumer.seek(TP, 0);
             // Consume one record
