@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -28,11 +29,11 @@ import org.junit.jupiter.api.BeforeEach;
 import java.util.Locale;
 import java.util.Map;
 
+import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.testClusterResourceListener;
+import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.testCoordinatorFailover;
+import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.testSimpleConsumption;
 import static org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
-import static org.apache.kafka.clients.consumer.BaseConsumerTest.Testcase.testClusterResourceListener;
-import static org.apache.kafka.clients.consumer.BaseConsumerTest.Testcase.testCoordinatorFailover;
-import static org.apache.kafka.clients.consumer.BaseConsumerTest.Testcase.testSimpleConsumption;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
@@ -48,7 +49,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
-    brokers = BaseConsumerTest.BROKER_COUNT,
+    brokers = ClientsTestUtils.BaseConsumerTestcase.BROKER_COUNT,
     serverProperties = {
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
@@ -70,7 +71,7 @@ public class SaslPlainPlaintextConsumerTest {
 
     @BeforeEach
     public void setUp() throws InterruptedException {
-        cluster.createTopic(BaseConsumerTest.Testcase.TOPIC, 2, (short) BaseConsumerTest.BROKER_COUNT);
+        cluster.createTopic(ClientsTestUtils.BaseConsumerTestcase.TOPIC, 2, (short) ClientsTestUtils.BaseConsumerTestcase.BROKER_COUNT);
     }
 
     @ClusterTest(
