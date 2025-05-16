@@ -93,8 +93,8 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
             File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE).toFile();
             assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile, Optional.empty());
             List<AssertionJwtTemplate> templates = new ArrayList<>();
-            fileAssertionJwtTemplate(cu).ifPresent(templates::add);
             staticAssertionJwtTemplate(cu).ifPresent(templates::add);
+            fileAssertionJwtTemplate(cu).ifPresent(templates::add);
             templates.add(dynamicAssertionJwtTemplate(cu, time));
             assertionJwtTemplate = new LayeredAssertionJwtTemplate(templates);
         }

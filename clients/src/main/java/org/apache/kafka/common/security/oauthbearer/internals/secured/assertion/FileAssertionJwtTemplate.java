@@ -28,7 +28,7 @@ import java.util.Map;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.lastModifiedPolicy;
 
 /**
- * {@code AssertionJwtTemplateFile} is used by the user to specify a JSON file on disk that contains static values
+ * {@code FileAssertionJwtTemplate} is used by the user to specify a JSON file on disk that contains static values
  * that can be loaded and used to construct the assertion. The file structure is a JSON containing optionally a
  * header and/or payload top-level attribute.
  *
@@ -118,7 +118,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Cac
 public class FileAssertionJwtTemplate implements AssertionJwtTemplate {
 
     @SuppressWarnings("unchecked")
-    private static final CachedFile.Transformer<CachedTemplate> JSON_TRANSFORMER = (file, json) -> {
+    private static final CachedFile.Transformer<CachedJwtTemplate> JSON_TRANSFORMER = (file, json) -> {
         try {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> map = (Map<String, Object>) mapper.readValue(json, Map.class);
@@ -126,13 +126,13 @@ public class FileAssertionJwtTemplate implements AssertionJwtTemplate {
             Map<String, Object> header = (Map<String, Object>) map.computeIfAbsent("header", k -> Map.of());
             Map<String, Object> payload = (Map<String, Object>) map.computeIfAbsent("payload", k -> Map.of());
 
-            return new CachedTemplate(header, payload);
+            return new CachedJwtTemplate(header, payload);
         } catch (Exception e) {
             throw new KafkaException("An error occurred parsing the OAuth assertion template file from " + file.getPath(), e);
         }
     };
 
-    private final CachedFile<CachedTemplate> jsonFile;
+    private final CachedFile<CachedJwtTemplate> jsonFile;
 
     public FileAssertionJwtTemplate(File jsonFile) {
         this.jsonFile = new CachedFile<>(jsonFile, JSON_TRANSFORMER, lastModifiedPolicy());
@@ -148,13 +148,16 @@ public class FileAssertionJwtTemplate implements AssertionJwtTemplate {
         return jsonFile.transformed().payload;
     }
 
-    private static class CachedTemplate {
+    /**
+     * Internally, the cached file is represented by the two maps for the header and payload.
+     */
+    private static class CachedJwtTemplate {
 
         private final Map<String, Object> header;
 
         private final Map<String, Object> payload;
 
-        private CachedTemplate(Map<String, Object> header, Map<String, Object> payload) {
+        private CachedJwtTemplate(Map<String, Object> header, Map<String, Object> payload) {
             this.header = Collections.unmodifiableMap(header);
             this.payload = Collections.unmodifiableMap(payload);
         }

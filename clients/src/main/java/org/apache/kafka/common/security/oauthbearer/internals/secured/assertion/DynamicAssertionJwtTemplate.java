@@ -23,6 +23,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * A "dynamic" {@link AssertionJwtTemplate} is that which will dynamically add the following values
+ * at runtime:
+ *
+ * <ul>
+ *     <li>{@code alg} (Algorithm) header</li>
+ *     <li>{@code typ} (Type) header</li>
+ *     <li>{@code iat} (Issued at) timestamp claim (in seconds)</li>
+ *     <li>{@code exp} (Expiration) timestamp claim (in seconds)</li>
+ *     <li>{@code nbf} (Not before) timestamp claim (in seconds)</li>
+ *     <li>(Optionally) {@code jti} (JWT ID) claim</li>
+ * </ul>
+ */
 public class DynamicAssertionJwtTemplate implements AssertionJwtTemplate {
 
     private final Time time;

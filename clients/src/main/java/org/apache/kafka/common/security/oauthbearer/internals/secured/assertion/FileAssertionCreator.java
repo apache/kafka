@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion;
 
-
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
 
 import java.io.File;
@@ -26,6 +25,10 @@ import java.security.GeneralSecurityException;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.NOOP_TRANSFORMER;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.lastModifiedPolicy;
 
+/**
+ * An {@link AssertionCreator} which takes a file from which the pre-created assertion is loaded and returned.
+ * If the file changes on disk, it will be reloaded in memory without needing to restart the client/application.
+ */
 public class FileAssertionCreator implements AssertionCreator {
 
     private final CachedFile<String> assertionFile;
@@ -35,7 +38,7 @@ public class FileAssertionCreator implements AssertionCreator {
     }
 
     @Override
-    public String create(AssertionJwtTemplate template) throws GeneralSecurityException, IOException {
+    public String create(AssertionJwtTemplate ignored) throws GeneralSecurityException, IOException {
         return assertionFile.transformed();
     }
 }
