@@ -47,6 +47,24 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
     }
 
     /**
+     * Only share groups will be returned by listGroups().
+     * This operation sets a filter on group type which select share groups.
+     */
+    public static ListGroupsOptions forShareGroups() {
+        return new ListGroupsOptions()
+            .withTypes(Set.of(GroupType.SHARE));
+    }
+
+    /**
+     * Only streams groups will be returned by listGroups().
+     * This operation sets a filter on group type which select streams groups.
+     */
+    public static ListGroupsOptions forStreamsGroups() {
+        return new ListGroupsOptions()
+            .withTypes(Set.of(GroupType.STREAMS));
+    }
+
+    /**
      * If groupStates is set, only groups in these states will be returned by listGroups().
      * Otherwise, all groups are returned.
      * This operation is supported by brokers with version 2.6.0 or later.
@@ -56,6 +74,10 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
         return this;
     }
 
+    /**
+     * If protocol types is set, only groups of these protocol types will be returned by listGroups().
+     * Otherwise, all groups are returned.
+     */
     public ListGroupsOptions withProtocolTypes(Set<String> protocolTypes) {
         this.protocolTypes = (protocolTypes == null || protocolTypes.isEmpty()) ? Set.of() : Set.copyOf(protocolTypes);
         return this;

@@ -22,8 +22,8 @@ import java.io.IOException;
 public interface Initable {
 
     /**
-     * Lifecycle method to perform any one-time initialization of the retriever. This must
-     * be performed by the caller to ensure the correct state before methods are invoked.
+     * Lifecycle method to perform any one-time initialization of a given resource. This must
+     * be invoked by the caller to ensure the correct state before methods are invoked.
      *
      * @throws IOException Thrown on errors related to IO during initialization
      */
@@ -31,5 +31,4 @@ public interface Initable {
     default void init() throws IOException {
         // This method left intentionally blank.
     }
-
 }

@@ -57,6 +57,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -488,8 +489,14 @@ public class TaskManager {
 
     private void handleTasksPendingInitialization() {
         // All tasks pending initialization are not part of the usual bookkeeping
+
+        final Set<Task> tasksToCloseDirty = new HashSet<>();
+
         for (final Task task : tasks.drainPendingTasksToInit()) {
-            closeTaskClean(task, Collections.emptySet(), Collections.emptyMap());
+            closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
+        }
+        for (final Task task : tasksToCloseDirty) {
+            closeTaskDirty(task, false);
         }
     }
 
@@ -1169,6 +1176,15 @@ public class TaskManager {
     }
 
     private void removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit() {
+        if (stateUpdater != null) {
+            final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
+            final Set<Task> tasksToCloseClean = new HashSet<>(tasks.drainPendingActiveTasksToInit());
+            final Set<Task> tasksToCloseDirty = new HashSet<>();
+            for (final Task restoringTask : stateUpdater.tasks()) {
+                if (restoringTask.isActive()) {
+                    futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
+                }
+            }
         final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
         final Map<TaskId, RuntimeException> failedTasksDuringCleanClose = new HashMap<>();
         final Set<Task> tasksToCloseClean = new HashSet<>(tasks.drainPendingActiveTasksToInit());
@@ -1179,6 +1195,13 @@ public class TaskManager {
             }
         }
 
+            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
+            for (final Task task : tasksToCloseClean) {
+                closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
+            }
+            for (final Task task : tasksToCloseDirty) {
+                closeTaskDirty(task, false);
+            }
         addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
         for (final Task task : tasksToCloseClean) {
             closeTaskClean(task, tasksToCloseDirty, failedTasksDuringCleanClose);
