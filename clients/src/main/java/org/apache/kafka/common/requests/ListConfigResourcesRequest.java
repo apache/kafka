@@ -28,14 +28,25 @@ import java.util.Set;
 public class ListConfigResourcesRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListConfigResourcesRequest> {
         public final ListConfigResourcesRequestData data;
+        private final boolean fallbackToV0;
 
         public Builder(ListConfigResourcesRequestData data) {
             super(ApiKeys.LIST_CONFIG_RESOURCES);
             this.data = data;
+            this.fallbackToV0 = false;
+        }
+
+        public Builder(ListConfigResourcesRequestData data, boolean fallbackToV0) {
+            super(ApiKeys.LIST_CONFIG_RESOURCES);
+            this.data = data;
+            this.fallbackToV0 = fallbackToV0;
         }
 
         @Override
         public ListConfigResourcesRequest build(short version) {
+            if (fallbackToV0) {
+                return new ListConfigResourcesRequest(data, (short) 0);
+            }
             return new ListConfigResourcesRequest(data, version);
         }
 

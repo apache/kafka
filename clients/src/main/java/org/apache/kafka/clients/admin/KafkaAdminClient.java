@@ -4880,6 +4880,69 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+        final long now = time.milliseconds();
+        final long deadline = calcDeadlineMs(now, options.timeoutMs());
+        final KafkaFutureImpl<Collection<ConfigResource>> future = new KafkaFutureImpl<>();
+        final Call call = getListConfigResourcesCall(future, configResourceTypes, false, deadline);
+        runnable.call(call, now);
+        return new ListConfigResourcesResult(future);
+    }
+
+    private Call getListConfigResourcesCall(
+        final KafkaFutureImpl<Collection<ConfigResource>> future,
+        final Set<ConfigResource.Type> configResourceTypes,
+        final boolean fallbackToV0,
+        final long deadline) {
+        return new Call("listConfigResources", deadline, new LeastLoadedNodeProvider()) {
+
+            @Override
+            ListConfigResourcesRequest.Builder createRequest(int timeoutMs) {
+                if (fallbackToV0) {
+                    return new ListConfigResourcesRequest.Builder(
+                        new ListConfigResourcesRequestData(),
+                        true
+                    );
+                }
+                return new ListConfigResourcesRequest.Builder(
+                    new ListConfigResourcesRequestData()
+                        .setResourceTypes(
+                            configResourceTypes
+                                .stream()
+                                .map(ConfigResource.Type::id)
+                                .collect(Collectors.toList())
+                        )
+                );
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                ListConfigResourcesResponse response = (ListConfigResourcesResponse) abstractResponse;
+                if (response.error().isFailure()) {
+                    if (!fallbackToV0 &&
+                        configResourceTypes.equals(Set.of(ConfigResource.Type.CLIENT_METRICS)) &&
+                        response.error().is(Errors.UNSUPPORTED_VERSION)
+                    ) {
+                        final long now = time.milliseconds();
+                        final Call call = getListConfigResourcesCall(future, configResourceTypes, true, deadline);
+                        runnable.call(call, now);
+                    } else {
+                        future.completeExceptionally(response.error().exception());
+                    }
+                } else {
+                    future.complete(response.configResources());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
         final long now = time.milliseconds();
         final KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();

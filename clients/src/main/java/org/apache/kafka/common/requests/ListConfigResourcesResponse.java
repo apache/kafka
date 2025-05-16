@@ -79,6 +79,7 @@ public class ListConfigResourcesResponse extends AbstractResponse {
             ).collect(Collectors.toList());
     }
 
+    @SuppressWarnings("deprecation")
     public Collection<ClientMetricsResourceListing> clientMetricsResources() {
         return data.configResources()
             .stream()

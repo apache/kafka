@@ -10730,6 +10730,133 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testListConfigResources() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            List<ConfigResource> expected = List.of(
+                new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "client-metrics"),
+                new ConfigResource(ConfigResource.Type.BROKER, "1"),
+                new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "1"),
+                new ConfigResource(ConfigResource.Type.TOPIC, "topic"),
+                new ConfigResource(ConfigResource.Type.GROUP, "group")
+            );
+
+            ListConfigResourcesResponseData responseData =
+                new ListConfigResourcesResponseData().setErrorCode(Errors.NONE.code());
+
+            expected.forEach(c ->
+                responseData.configResources()
+                    .add(new ListConfigResourcesResponseData
+                        .ConfigResource()
+                        .setResourceName(c.name())
+                        .setResourceType(c.type().id())
+                    )
+            );
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(responseData));
+
+            ListConfigResourcesResult result = env.adminClient().listConfigResources();
+            assertEquals(expected.size(), result.all().get().size());
+            assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
+        }
+    }
+
+    @Test
+    public void testListConfigResourcesEmpty() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            ListConfigResourcesResponseData responseData =
+                new ListConfigResourcesResponseData().setErrorCode(Errors.NONE.code());
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(responseData));
+
+            ListConfigResourcesResult result = env.adminClient().listConfigResources();
+            assertTrue(result.all().get().isEmpty());
+        }
+    }
+
+    @Test
+    public void testListConfigResourcesNotSupported() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(new ListConfigResourcesResponseData()
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())));
+
+            ListConfigResourcesResult result = env.adminClient().listConfigResources(
+                Set.of(ConfigResource.Type.UNKNOWN), new ListConfigResourcesOptions());
+
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
+        }
+    }
+
+    @Test
+    public void testListConfigResourcesFallbackToV0() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            // simulate a broker doesn't support version 1 request
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(new ListConfigResourcesResponseData()
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())));
+
+            List<ConfigResource> expected = List.of(
+                new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "client-metrics")
+            );
+
+            ListConfigResourcesResponseData responseData =
+                new ListConfigResourcesResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setConfigResources(List.of(
+                        new ListConfigResourcesResponseData
+                            .ConfigResource()
+                            .setResourceName("client-metrics")
+                    ));
+
+            // fallback to v0 request
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(responseData));
+
+            ListConfigResourcesResult result = env.adminClient().listConfigResources(
+                Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions());
+
+            assertEquals(expected.size(), result.all().get().size());
+            assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
+            assertTrue(env.kafkaClient().futureResponses().isEmpty());
+        }
+    }
+
+    @Test
+    public void testListConfigResourcesDoesNotFallbackToV0() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(new ListConfigResourcesResponseData()
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())));
+
+            // Case 1: config resource type is not CLIENT_METRICS
+            ListConfigResourcesResult result = env.adminClient().listConfigResources(
+                Set.of(ConfigResource.Type.BROKER), new ListConfigResourcesOptions());
+
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
+
+            // Case 2: error is not UNSUPPORTED_VERSION
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(new ListConfigResourcesResponseData()
+                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
+            result = env.adminClient().listConfigResources(
+                Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions());
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
+        }
+    }
+
+    @Test
     public void testCallFailWithUnsupportedVersionExceptionDoesNotHaveConcurrentModificationException() throws InterruptedException {
         Cluster cluster = mockCluster(1, 0);
         try (MockClient mockClient = new MockClient(Time.SYSTEM, new MockClient.MockMetadataUpdater() {
