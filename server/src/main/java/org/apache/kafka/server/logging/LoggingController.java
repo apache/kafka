@@ -14,22 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server;
-
-import org.apache.kafka.common.utils.Utils;
+package org.apache.kafka.server.logging;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.core.LoggerContext;
-import org.apache.logging.log4j.core.config.Configurator;
-import org.apache.logging.log4j.core.config.LoggerConfig;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -108,104 +100,5 @@ public class LoggingController implements LoggingControllerMBean {
     @Override
     public boolean setLogLevel(String loggerName, String level) {
         return LoggingController.logLevel(loggerName, level);
-    }
-}
-
-interface LoggingControllerMBean {
-    List<String> getLoggers();
-    String getLogLevel(String logger);
-    boolean setLogLevel(String logger, String level);
-}
-
-abstract class LoggingControllerDelegate {
-    public abstract Map<String, String> loggers();
-    public abstract boolean logLevel(String loggerName, String logLevel);
-    public abstract boolean unsetLogLevel(String loggerName);
-    public boolean loggerExists(String loggerName) {
-        return loggers().containsKey(loggerName);
-    }
-}
-
-class NoOpController extends LoggingControllerDelegate {
-
-    @Override
-    public Map<String, String> loggers() {
-        return Collections.emptyMap();
-    }
-
-    @Override
-    public boolean logLevel(String loggerName, String logLevel) {
-        return false;
-    }
-
-    @Override
-    public boolean unsetLogLevel(String loggerName) {
-        return false;
-    }
-}
-
-class Log4jCoreController extends LoggingControllerDelegate {
-    private final LoggerContext logContext;
-
-    public Log4jCoreController() {
-        this.logContext = (LoggerContext) LogManager.getContext(false);
-    }
-
-    @Override
-    public Map<String, String> loggers() {
-        String rootLoggerLevel = logContext.getRootLogger().getLevel().toString();
-
-        Map<String, String> result = new HashMap<>();
-        // Loggers defined in the configuration
-        for (LoggerConfig logger : logContext.getConfiguration().getLoggers().values()) {
-            if (!logger.getName().equals(LogManager.ROOT_LOGGER_NAME)) {
-                result.put(logger.getName(), logger.getLevel().toString());
-            }
-        }
-        // Loggers actually running
-        for (Logger logger : logContext.getLoggers()) {
-            if (!logger.getName().equals(LogManager.ROOT_LOGGER_NAME)) {
-                result.put(logger.getName(), logger.getLevel().toString());
-            }
-        }
-        // Add root logger
-        result.put(LoggingController.ROOT_LOGGER, rootLoggerLevel);
-        return result;
-    }
-
-    @Override
-    public boolean logLevel(String loggerName, String logLevel) {
-        if (Utils.isBlank(loggerName) || Utils.isBlank(logLevel))
-            return false;
-
-        Level level = Level.toLevel(logLevel.toUpperCase(Locale.ROOT));
-
-        if (loggerName.equals(LoggingController.ROOT_LOGGER)) {
-            Configurator.setLevel(LogManager.ROOT_LOGGER_NAME, level);
-            return true;
-        } else {
-            if (loggerExists(loggerName) && level != null) {
-                Configurator.setLevel(loggerName, level);
-                return true;
-            } else {
-                return false;
-            }
-        }
-    }
-
-    @Override
-    public boolean unsetLogLevel(String loggerName) {
-        Level nullLevel = null;
-        if (loggerName.equals(LoggingController.ROOT_LOGGER)) {
-            Configurator.setLevel(LogManager.ROOT_LOGGER_NAME, nullLevel);
-            return true;
-        } else {
-            if (loggerExists(loggerName)) {
-                Configurator.setLevel(loggerName, nullLevel);
-                return true;
-            } else {
-                return false;
-            }
-        }
     }
 }

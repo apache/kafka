@@ -21,7 +21,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
-import org.apache.kafka.server.LoggingController;
+import org.apache.kafka.server.logging.LoggingController;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

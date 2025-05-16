@@ -17,13 +17,13 @@
 
 package kafka.utils
 
+import org.apache.kafka.server.logging.LoggingController
 import java.lang.management.ManagementFactory
 
 import javax.management.ObjectName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.slf4j.LoggerFactory
-import org.apache.kafka.server.LoggingController
 
 class LoggingTest extends Logging {
 
