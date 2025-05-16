@@ -859,6 +859,7 @@ public class OffsetMetadataManager {
      *
      * @return A List of OffsetFetchResponseTopics response.
      */
+    @SuppressWarnings("NPathComplexity")
     public OffsetFetchResponseData.OffsetFetchResponseGroup fetchOffsets(
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long lastCommittedOffset
@@ -906,7 +907,7 @@ public class OffsetMetadataManager {
                         .setCommittedOffset(INVALID_OFFSET)
                         .setCommittedLeaderEpoch(-1)
                         .setMetadata(""));
-                } else if (offsetAndMetadata == null) {
+                } else if (offsetAndMetadata == null || isMismatchedTopicId(offsetAndMetadata.topicId, topic.topicId())) {
                     topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                         .setPartitionIndex(partitionIndex)
                         .setCommittedOffset(INVALID_OFFSET)
@@ -925,6 +926,10 @@ public class OffsetMetadataManager {
         return new OffsetFetchResponseData.OffsetFetchResponseGroup()
             .setGroupId(request.groupId())
             .setTopics(topicResponses);
+    }
+
+    private boolean isMismatchedTopicId(Uuid actual, Uuid expected) {
+        return !actual.equals(Uuid.ZERO_UUID) && !actual.equals(expected);
     }
 
     /**
