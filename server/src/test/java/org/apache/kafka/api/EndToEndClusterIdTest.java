@@ -129,7 +129,6 @@ public class EndToEndClusterIdTest {
         isValidClusterId(MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
 
 
-        // --- PRODUCER CONFIGURATION ---
         try (var producer = clusterInstance.<byte[], byte[]>producer(PRODUCER_CONFIG)) {
             // Send one record and make sure clusterId is set after send and before onAcknowledgement
             sendRecords(producer, NUM_RECORDS, TP);
@@ -152,7 +151,6 @@ public class EndToEndClusterIdTest {
         Assertions.assertNotNull(MockProducerMetricsReporter.CLUSTER_META);
         isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
 
-        // --- CONSUMER CONFIGURATION ---
         Map<String, Object> consumerConfigWithGroupProtocol = new HashMap<>(CONSUMER_CONFIG);
         consumerConfigWithGroupProtocol.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         try (var consumer = clusterInstance.<byte[], byte[]>consumer(consumerConfigWithGroupProtocol)) {
