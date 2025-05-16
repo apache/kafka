@@ -34,6 +34,17 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Cac
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.privateKey;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.sign;
 
+/**
+ * This is the "default" {@link AssertionCreator} in that it is the common case of using a configured signing
+ * algorithm, private key file, and optional passphrase to sign a JWT to dynamically create an assertion.
+ *
+ * <p/>
+ *
+ * The provided private key file will be cached in memory but will be refreshed when the file changes.
+ * <em>Note</em>: there is not yet a facility to reload the configured passphrase. If using a private key
+ * passphrase, either use the same passphrase for each private key or else restart the client/application
+ * so that the new private key and passphrase will be used.
+ */
 public class DefaultAssertionCreator implements AssertionCreator {
 
     private static final Base64.Encoder BASE64_ENCODER = Base64.getUrlEncoder().withoutPadding();
@@ -43,16 +54,11 @@ public class DefaultAssertionCreator implements AssertionCreator {
     public DefaultAssertionCreator(String algorithm, File privateKeyFile, Optional<String> passphrase) {
         this.algorithm = algorithm;
 
-        CachedFile.Transformer<PrivateKey> privateKeyTransformer = (file, privateKeyContents) -> {
-            try {
-                return privateKey(privateKeyContents.getBytes(StandardCharsets.UTF_8), passphrase);
-            } catch (GeneralSecurityException | IOException e) {
-                throw new KafkaException("An error occurred generating the OAuth assertion private key from " + file.getPath(), e);
-            }
-        };
-
-        CachedFile.RefreshPolicy<PrivateKey> privateKeyRefreshPolicy = lastModifiedPolicy();
-        this.privateKeyFile = new CachedFile<>(privateKeyFile, privateKeyTransformer, privateKeyRefreshPolicy);
+        this.privateKeyFile = new CachedFile<>(
+            privateKeyFile,
+            new PrivateKeyTransformer(passphrase),
+            lastModifiedPolicy()
+        );
     }
 
     @Override
@@ -65,4 +71,23 @@ public class DefaultAssertionCreator implements AssertionCreator {
         String signedContent = sign(algorithm, privateKey, content);
         return content + "." + signedContent;
     }
+
+    private static class PrivateKeyTransformer implements CachedFile.Transformer<PrivateKey> {
+
+        private final Optional<String> passphrase;
+
+        public PrivateKeyTransformer(Optional<String> passphrase) {
+            this.passphrase = passphrase;
+        }
+
+        @Override
+        public PrivateKey transform(File file, String contents) {
+            try {
+                return privateKey(contents.getBytes(StandardCharsets.UTF_8), passphrase);
+            } catch (GeneralSecurityException | IOException e) {
+                throw new KafkaException("An error occurred generating the OAuth assertion private key from " + file.getPath(), e);
+            }
+        }
+    }
+
 }
