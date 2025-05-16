@@ -1332,13 +1332,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(
-            new OffsetCommitRequestData()
-                .setGroupId(this.rebalanceConfig.groupId)
-                .setGenerationIdOrMemberEpoch(generation.generationId)
-                .setMemberId(generation.memberId)
-                .setGroupInstanceId(groupInstanceId)
-                .setTopics(new ArrayList<>(requestTopicDataMap.values()))
+                new OffsetCommitRequestData()
+                        .setGroupId(this.rebalanceConfig.groupId)
+                        .setGenerationIdOrMemberEpoch(generation.generationId)
+                        .setMemberId(generation.memberId)
+                        .setGroupInstanceId(groupInstanceId)
+                        .setTopics(new ArrayList<>(requestTopicDataMap.values()))
         );
+
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 
         return client.send(coordinator, builder)
