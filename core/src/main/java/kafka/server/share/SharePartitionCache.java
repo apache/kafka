@@ -63,7 +63,7 @@ public class SharePartitionCache {
      * @return The set of topic-partitions for the group id.
      */
     public synchronized Set<TopicIdPartition> topicIdPartitionsForGroup(String groupId) {
-        return Set.copyOf(groups.get(groupId));
+        return groups.containsKey(groupId) ? Set.copyOf(groups.get(groupId)) : Set.of();
     }
 
     /**
