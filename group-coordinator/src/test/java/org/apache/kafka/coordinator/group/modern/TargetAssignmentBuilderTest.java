@@ -22,9 +22,11 @@ import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.image.TopicsImage;
 
 import org.junit.jupiter.api.Test;
@@ -933,5 +935,65 @@ public class TargetAssignmentBuilderTest {
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
+    }
+
+    @Test
+    public void testAssignablePartitionsNonShareGroup() {
+        PartitionAssignor assignor = mock(PartitionAssignor.class);
+        Uuid memberId = Uuid.randomUuid();
+        Uuid topicId = Uuid.randomUuid();
+        when(assignor.assign(any(), any())).thenAnswer(inv -> {
+            assertEquals(Set.of(0, 1, 2), ((SubscribedTopicDescriber) inv.getArgument(1)).assignablePartitions(topicId));
+            return new GroupAssignment(Map.of());
+        });
+
+        // The setter withTopicAssignablePartitionsMap is only available with share groups.
+        new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder("group", 0, assignor)
+            .withMembers(Map.of(memberId.toString(), mock(ConsumerGroupMember.class)))
+            .withSubscriptionMetadata(Map.of("topic", new TopicMetadata(topicId, "topic", 3)))
+            .withSubscriptionType(HOMOGENEOUS)
+            .build();
+
+        verify(assignor, times(1)).assign(any(), any());
+    }
+
+    @Test
+    public void testAssignablePartitionsShareGroupEmptyAssignablePartitions() {
+        PartitionAssignor assignor = mock(PartitionAssignor.class);
+        Uuid memberId = Uuid.randomUuid();
+        Uuid topicId = Uuid.randomUuid();
+        when(assignor.assign(any(), any())).thenAnswer(inv -> {
+            assertEquals(Set.of(), ((SubscribedTopicDescriber) inv.getArgument(1)).assignablePartitions(topicId));
+            return new GroupAssignment(Map.of());
+        });
+
+        new TargetAssignmentBuilder.ShareTargetAssignmentBuilder("group", 0, assignor)
+            .withMembers(Map.of(memberId.toString(), mock(ShareGroupMember.class)))
+            .withSubscriptionMetadata(Map.of("topic", new TopicMetadata(topicId, "topic", 3)))
+            .withSubscriptionType(HOMOGENEOUS)
+            .withTopicAssignablePartitionsMap(Map.of())
+            .build();
+
+        verify(assignor, times(1)).assign(any(), any());
+    }
+
+    @Test
+    public void testAssignablePartitionsShareGroupWithAssignablePartitions() {
+        PartitionAssignor assignor = mock(PartitionAssignor.class);
+        Uuid memberId = Uuid.randomUuid();
+        Uuid topicId = Uuid.randomUuid();
+        when(assignor.assign(any(), any())).thenAnswer(inv -> {
+            assertEquals(Set.of(2), ((SubscribedTopicDescriber) inv.getArgument(1)).assignablePartitions(topicId));
+            return new GroupAssignment(Map.of());
+        });
+
+        new TargetAssignmentBuilder.ShareTargetAssignmentBuilder("group", 0, assignor)
+            .withMembers(Map.of(memberId.toString(), mock(ShareGroupMember.class)))
+            .withSubscriptionMetadata(Map.of("topic", new TopicMetadata(topicId, "topic", 3)))
+            .withSubscriptionType(HOMOGENEOUS)
+            .withTopicAssignablePartitionsMap(Map.of(topicId, Set.of(2)))
+            .build();
+
+        verify(assignor, times(1)).assign(any(), any());
     }
 }
