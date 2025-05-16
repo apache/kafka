@@ -526,15 +526,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Reconcile initializing and initialized tps in share group state metadata records.
-     *
-     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
-     */
-    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
-        return groupMetadataManager.reconcileShareGroupStateInitializingState(offset);
-    }
-
-    /**
      * Returns the set of share-partitions whose share-group state has been initialized in the persister.
      *
      * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
