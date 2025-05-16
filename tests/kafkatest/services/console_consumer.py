@@ -313,3 +313,4 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             wait_until(lambda: self.has_log_message(node, message),
                        timeout_sec=60,
                        err_msg="Offset not reset for partition %s-%d" % (topic, partition))
+
