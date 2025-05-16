@@ -1088,7 +1088,7 @@ public class StreamsConfig extends AbstractConfig {
                     COMMIT_INTERVAL_MS_DOC)
             .define(CONFIG_PROVIDERS_CONFIG,
                     Type.LIST,
-                    Collections.emptyList(),
+                    List.of(),
                     Importance.LOW, 
                     CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,

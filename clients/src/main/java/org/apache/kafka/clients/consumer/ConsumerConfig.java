@@ -705,7 +705,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
-                                        Collections.emptyList(),
+                                        List.of(),
                                         ConfigDef.Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }

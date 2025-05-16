@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -551,8 +552,8 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG, 
-                                        ConfigDef.Type.LIST, 
-                                        Collections.emptyList(), 
+                                        ConfigDef.Type.LIST,
+                                        List.of(), 
                                         ConfigDef.Importance.LOW, 
                                         CONFIG_PROVIDERS_DOC);
     }

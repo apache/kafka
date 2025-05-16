@@ -65,7 +65,7 @@ public class AbstractConfig {
     public static final String AUTOMATIC_CONFIG_PROVIDERS_PROPERTY = "org.apache.kafka.automatic.config.providers";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
-    protected static final String CONFIG_PROVIDERS_DOC = 
+    public static final String CONFIG_PROVIDERS_DOC = 
             "Comma-separated names of <code>ConfigProvider</code> classes, loaded and used "
             + "in the order specified. Implementing the interface  "
             + "<code>ConfigProvider</code> allows you to replace variable references in configurations, "
