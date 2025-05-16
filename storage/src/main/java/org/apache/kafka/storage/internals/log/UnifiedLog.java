@@ -645,7 +645,8 @@ public class UnifiedLog implements AutoCloseable {
     private LogOffsetMetadata fetchLastStableOffsetMetadata() throws IOException {
         localLog.checkIfMemoryMappedBufferClosed();
 
-        // cache the current high watermark to avoid a concurrent update invalidating the range check
+        // cache the current high watermark and the first unstable offset metadata to avoid a concurrent update
+        // invalidating the range check breaking the isPresent check
         LogOffsetMetadata highWatermarkMetadata = fetchHighWatermarkMetadata();
         Optional<LogOffsetMetadata> firstUnstableOffsetMetadataCopy = firstUnstableOffsetMetadata;
         if (firstUnstableOffsetMetadataCopy.isPresent() && firstUnstableOffsetMetadataCopy.get().messageOffset < highWatermarkMetadata.messageOffset) {
@@ -672,6 +673,7 @@ public class UnifiedLog implements AutoCloseable {
      * beyond the high watermark.
      */
     public long lastStableOffset() {
+        // cache the first unstable offset metadata to avoid a concurrent update breaking the isPresent check
         Optional<LogOffsetMetadata> firstUnstableOffsetMetadataCopy = firstUnstableOffsetMetadata;
         if (firstUnstableOffsetMetadataCopy.isPresent() && firstUnstableOffsetMetadataCopy.get().messageOffset < highWatermark()) {
             return firstUnstableOffsetMetadataCopy.get().messageOffset;
