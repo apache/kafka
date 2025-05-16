@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
-import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.config.{ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 import org.junit.jupiter.params.ParameterizedTest
@@ -52,8 +52,13 @@ class LogConfigTest {
     assertTrue(LogConfig.configNames.asScala
       .filter(config => !LogConfig.CONFIGS_WITH_NO_SERVER_DEFAULTS.contains(config))
       .forall { config =>
-        val serverConfigOpt = LogConfig.serverConfigName(config)
-        serverConfigOpt.isPresent && (serverConfigOpt.get != null)
+        // this internal config naming pattern is not as same as a default pattern
+        if (config.equals(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG)) {
+          ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.containsKey(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG)
+        } else {
+          val serverConfigOpt = LogConfig.serverConfigName(config)
+          serverConfigOpt.isPresent && (serverConfigOpt.get != null)
+        }
       })
   }
 
