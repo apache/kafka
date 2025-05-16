@@ -51,7 +51,7 @@ import javax.net.ssl.SSLSocketFactory;
  * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/{@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
  * to a publicized token endpoint URL ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  */
-public class HttpJwtRetriever implements JwtRetriever {
+public class HttpJwtRetriever {
 
     private static final Logger log = LoggerFactory.getLogger(HttpJwtRetriever.class);
 
@@ -130,8 +130,6 @@ public class HttpJwtRetriever implements JwtRetriever {
      *
      * @throws JwtRetrieverException Thrown on errors related to IO, parsing, etc. during retrieval
      */
-
-    @Override
     public String retrieve() throws JwtRetrieverException {
         String requestBody = requestFormatter.formatBody();
         Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);

@@ -28,6 +28,8 @@ import java.util.Map;
 
 public class ClientCredentialsRequestFormatter implements HttpRequestFormatter {
 
+    public static final String GRANT_TYPE = "client_credentials";
+
     private final String clientId;
 
     private final String clientSecret;

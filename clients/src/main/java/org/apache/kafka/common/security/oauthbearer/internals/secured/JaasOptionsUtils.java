@@ -63,6 +63,10 @@ public class JaasOptionsUtils {
         return Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
     }
 
+    public boolean containsKey(String name) {
+        return options.containsKey(name);
+    }
+
     public boolean shouldCreateSSLSocketFactory(URL url) {
         return url.getProtocol().equalsIgnoreCase("https");
     }

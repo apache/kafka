@@ -23,9 +23,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.Configurat
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
-import org.apache.kafka.common.utils.Utils;
 
-import java.io.IOException;
 import java.net.URL;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +44,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 
 public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
-    private JwtRetriever delegate;
+    private HttpJwtRetriever delegate;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -81,8 +79,6 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
             cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
             cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false)
         );
-
-        delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     @Override
@@ -91,11 +87,6 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
             throw new IllegalStateException("JWT retriever delegate is null; please call configure() first");
 
         return delegate.retrieve();
-    }
-
-    @Override
-    public void close() throws IOException {
-        Utils.closeQuietly(delegate, "JWT retriever delegate");
     }
 
     /**

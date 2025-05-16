@@ -59,6 +59,10 @@ public class ConfigurationUtils {
             this.prefix = null;
     }
 
+    public boolean containsKey(String name) {
+        return get(name) != null;
+    }
+
     /**
      * Validates that, if a value is supplied, is a file that:
      *
