@@ -646,7 +646,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 timer.add(new TimerTask(0L) {
                     @Override
                     public void run() {
-                        persisterInitialize(result.getValue().get(), result.getKey());
+                        persisterInitialize(result.getValue().get(), result.getKey())
+                            .whenComplete((__, exp) -> {
+                                if (exp != null) {
+                                    log.error("Persister initialization failed", exp);
+                                }
+                            });
                     }
                 });
             }
@@ -755,30 +760,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Errors error = Errors.forException(exp);
             return uninitializeShareGroupState(error, groupId, topicPartitionMap);
         }).thenCompose(resp -> resp);
-    }
-
-    // Visibility for testing
-    CompletableFuture<Void> reconcileShareGroupStateInitializingState() {
-        List<CompletableFuture<List<InitializeShareGroupStateParameters>>> requestsStages = runtime.scheduleReadAllOperation(
-            "reconcile-share-group-initializing-state",
-            GroupCoordinatorShard::reconcileShareGroupStateInitializingState
-        );
-
-        if (requestsStages.isEmpty()) {
-            log.debug("Nothing to reconcile for share group initializing state.");
-            return CompletableFuture.completedFuture(null);
-        }
-
-        CompletableFuture<Void> allRequestsStage = CompletableFuture.allOf(requestsStages.toArray(new CompletableFuture<?>[0]));
-        final List<CompletableFuture<ShareGroupHeartbeatResponseData>> persisterResponses = new ArrayList<>();
-        allRequestsStage.thenApply(__ -> {
-            requestsStages.forEach(requestsStage -> requestsStage.join().forEach(request -> {
-                log.debug("Reconciling initializing state - {}", request);
-                persisterResponses.add(persisterInitialize(request, new ShareGroupHeartbeatResponseData()));
-            }));
-            return null;
-        });
-        return CompletableFuture.allOf(persisterResponses.toArray(new CompletableFuture<?>[0]));
     }
 
     /**
@@ -2035,6 +2016,26 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 }
             ).toArray(new CompletableFuture<?>[0])
         ).get();
+
+        // At this point the metadata will not have been updated
+        // with the deleted topics.
+        Set<Uuid> topicIds = topicPartitions.stream()
+            .map(tp -> metadataImage.topics().getTopic(tp.topic()).id())
+            .collect(Collectors.toSet());
+
+        CompletableFuture.allOf(
+            FutureUtils.mapExceptionally(
+                runtime.scheduleWriteAllOperation(
+                    "maybe-cleanup-share-group-state",
+                    Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                    coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+                ),
+                exception -> {
+                    log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
+                    return null;
+                }
+            ).toArray(new CompletableFuture<?>[0])
+        ).get();
     }
 
     /**
@@ -2050,13 +2051,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataPartitionIndex),
             groupMetadataPartitionLeaderEpoch
         );
-
-        // Wait for reconciliation to complete.
-        try {
-            reconcileShareGroupStateInitializingState().join();
-        } catch (Exception e) {
-            log.error("Share group reconciliation failed", e);
-        }
     }
 
     /**

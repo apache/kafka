@@ -63,6 +63,11 @@ public interface Producer<K, V> extends Closeable {
                                   ConsumerGroupMetadata groupMetadata) throws ProducerFencedException;
 
     /**
+     * See {@link KafkaProducer#prepareTransaction()}
+     */
+    PreparedTxnState prepareTransaction() throws ProducerFencedException;
+
+    /**
      * See {@link KafkaProducer#commitTransaction()}
      */
     void commitTransaction() throws ProducerFencedException;

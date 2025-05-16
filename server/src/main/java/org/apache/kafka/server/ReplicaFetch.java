@@ -15,13 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.server;
 
-public class LoginAccessTokenValidatorTest extends AccessTokenValidatorTest {
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.FetchRequest;
 
-    @Override
-    protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) {
-        return new LoginAccessTokenValidator(builder.scopeClaimName(), builder.subjectClaimName());
-    }
+import java.util.Map;
 
-}
+public record ReplicaFetch(
+        Map<TopicPartition, FetchRequest.PartitionData> partitionData,
+        FetchRequest.Builder fetchRequest
+) { }

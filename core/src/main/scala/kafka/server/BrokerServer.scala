@@ -259,7 +259,9 @@ class BrokerServer(
         Optional.of(clientMetricsManager)
       )
 
-      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupConfig.shareGroupMaxShareSessions())
+      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
+        config.shareGroupConfig.shareGroupMaxShareSessions()
+      )
 
       val connectionDisconnectListeners = Seq(
         clientMetricsManager.connectionDisconnectListener(),
@@ -481,6 +483,7 @@ class BrokerServer(
         groupCoordinator,
         transactionCoordinator,
         shareCoordinator,
+        sharePartitionManager,
         new DynamicConfigPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
@@ -657,6 +660,7 @@ class BrokerServer(
       .withWriter(writer)
       .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
       .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
+      .withShareGroupEnabledConfigSupplier(() => config.shareGroupConfig.isShareGroupEnabled)
       .build()
   }
 

@@ -45,6 +45,9 @@ public class ControllerMetricsTestUtils {
             bld.append(name.getGroup());
             bld.append(":type=").append(name.getType());
             bld.append(",name=").append(name.getName());
+            if (name.hasScope()) {
+                bld.append(",").append(name.getScope().replaceAll("\\.", "="));
+            }
             if (bld.toString().startsWith(expectedPrefix)) {
                 actual.add(bld.toString());
             }
