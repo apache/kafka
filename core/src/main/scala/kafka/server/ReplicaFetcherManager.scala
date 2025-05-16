@@ -22,6 +22,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.LeaderEndPoint
 
 class ReplicaFetcherManager(brokerConfig: KafkaConfig,
                             protected val replicaManager: ReplicaManager,
@@ -44,7 +45,7 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
     val endpoint = new BrokerBlockingSender(sourceBroker, brokerConfig, metrics, time, fetcherId,
       s"broker-${brokerConfig.brokerId}-fetcher-$fetcherId", logContext)
     val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
-    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, endpoint, fetchSessionHandler, brokerConfig,
+    val leader: LeaderEndPoint = new RemoteLeaderEndPoint(logContext.logPrefix, endpoint, fetchSessionHandler, brokerConfig,
       replicaManager, quotaManager, metadataVersionSupplier, brokerEpochSupplier)
     new ReplicaFetcherThread(threadName, leader, brokerConfig, failedPartitions, replicaManager,
       quotaManager, logContext.logPrefix)

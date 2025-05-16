@@ -22,8 +22,7 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, Record
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import java.nio.charset.StandardCharsets
 import java.util
@@ -50,9 +49,8 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the partition is included in the metadata.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSendWithTopicDeletionMidWay(quorum: String): Unit = {
+  @Test
+  def testSendWithTopicDeletionMidWay(): Unit = {
     val numRecords = 10
     val topic = "topic"
 
@@ -91,9 +89,8 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the metadata has been updated with new topic id.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSendWithRecreatedTopic(quorum: String): Unit = {
+  @Test
+  def testSendWithRecreatedTopic(): Unit = {
     val numRecords = 10
     val topic = "topic"
     createTopic(topic)
@@ -125,9 +122,8 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the metadata cache on the leader includes the partition topic id.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSendWithTopicReassignmentIsMidWay(quorum: String): Unit = {
+  @Test
+  def testSendWithTopicReassignmentIsMidWay(): Unit = {
     val numRecords = 10
     val topic = "topic"
     val partition0: TopicPartition = new TopicPartition(topic, 0)

@@ -345,7 +345,7 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, controllerListener = "FOO")
     public void testControllerListenerName(ClusterInstance cluster) throws ExecutionException, InterruptedException {
-        assertEquals("FOO", cluster.controllerListenerName().get().value());
+        assertEquals("FOO", cluster.controllerListenerName().value());
         try (Admin admin = cluster.admin(Map.of(), true)) {
             assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
         }

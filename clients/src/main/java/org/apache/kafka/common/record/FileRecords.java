@@ -54,33 +54,52 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
      * The constructor is visible for tests.
      */
-    FileRecords(File file,
-                FileChannel channel,
-                int start,
-                int end,
-                boolean isSlice) throws IOException {
+    FileRecords(
+        File file,
+        FileChannel channel,
+        int end
+    ) throws IOException {
+        this.file = file;
+        this.channel = channel;
+        this.start = 0;
+        this.end = end;
+        this.isSlice = false;
+
+        if (channel.size() > Integer.MAX_VALUE) {
+            throw new KafkaException(
+                "The size of segment " + file + " (" + channel.size() +
+                ") is larger than the maximum allowed segment size of " + Integer.MAX_VALUE
+            );
+        }
+
+        int limit = Math.min((int) channel.size(), end);
+        this.size = new AtomicInteger(limit - start);
+
+        // update the file position to the end of the file
+        channel.position(limit);
+
+        batches = batchesFrom(start);
+    }
+
+    /**
+     * Constructor for creating a slice.
+     *
+     * This overloaded constructor avoids having to declare a checked IO exception.
+     */
+    private FileRecords(
+        File file,
+        FileChannel channel,
+        int start,
+        int end
+    ) {
         this.file = file;
         this.channel = channel;
         this.start = start;
         this.end = end;
-        this.isSlice = isSlice;
-        this.size = new AtomicInteger();
+        this.isSlice = true;
 
-        if (isSlice) {
-            // don't check the file size if this is just a slice view
-            size.set(end - start);
-        } else {
-            if (channel.size() > Integer.MAX_VALUE)
-                throw new KafkaException("The size of segment " + file + " (" + channel.size() +
-                        ") is larger than the maximum allowed segment size of " + Integer.MAX_VALUE);
-
-            int limit = Math.min((int) channel.size(), end);
-            size.set(limit - start);
-
-            // if this is not a slice, update the file pointer to the end of the file
-            // set the file position to the last byte in the file
-            channel.position(limit);
-        }
+        // don't check the file size since this is just a slice view
+        this.size = new AtomicInteger(end - start);
 
         batches = batchesFrom(start);
     }
@@ -120,22 +139,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
         buffer.flip();
     }
 
-    /**
-     * Return a slice of records from this instance, which is a view into this set starting from the given position
-     * and with the given size limit.
-     *
-     * If the size is beyond the end of the file, the end will be based on the size of the file at the time of the read.
-     *
-     * If this message set is already sliced, the position will be taken relative to that slicing.
-     *
-     * @param position The start position to begin the read from
-     * @param size The number of bytes after the start position to include
-     * @return A sliced wrapper on this message set limited based on the given position and size
-     */
-    public FileRecords slice(int position, int size) throws IOException {
+    @Override
+    public FileRecords slice(int position, int size) {
         int availableBytes = availableBytes(position, size);
         int startPosition = this.start + position;
-        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
+
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes);
     }
 
     /**
@@ -299,7 +308,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public LogOffsetPosition searchForOffsetFromPosition(long targetOffset, int startingPosition) {
         FileChannelRecordBatch prevBatch = null;
-        // The following logic is intentionally designed to minimize memory usage by avoiding 
+        // The following logic is intentionally designed to minimize memory usage by avoiding
         // unnecessary calls to lastOffset() for every batch.
         // Instead, we use baseOffset() comparisons when possible, and only check lastOffset() when absolutely necessary.
         for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
@@ -307,14 +316,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
             if (batch.baseOffset() == targetOffset) {
                 return LogOffsetPosition.fromBatch(batch);
             }
-            
+
             // If we find the first batch with baseOffset greater than targetOffset
             if (batch.baseOffset() > targetOffset) {
                 // If the previous batch contains the target
                 if (prevBatch != null && prevBatch.lastOffset() >= targetOffset)
                     return LogOffsetPosition.fromBatch(prevBatch);
                 else {
-                    // If there's no previous batch or the previous batch doesn't contain the 
+                    // If there's no previous batch or the previous batch doesn't contain the
                     // target, return the current batch
                     return LogOffsetPosition.fromBatch(batch);
                 }
@@ -323,7 +332,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         }
         // Only one case would reach here: all batches have baseOffset less than targetOffset
         // Check if the last batch contains the target
-        if (prevBatch != null && prevBatch.lastOffset() >= targetOffset) 
+        if (prevBatch != null && prevBatch.lastOffset() >= targetOffset)
             return LogOffsetPosition.fromBatch(prevBatch);
 
         return null;
@@ -435,7 +444,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                    boolean preallocate) throws IOException {
         FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
-        return new FileRecords(file, channel, 0, end, false);
+        return new FileRecords(file, channel, end);
     }
 
     public static FileRecords open(File file,
@@ -486,7 +495,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         public final long offset;
         public final int position;
         public final int size;
-        
+
         public static LogOffsetPosition fromBatch(FileChannelRecordBatch batch) {
             return new LogOffsetPosition(batch.baseOffset(), batch.position(), batch.sizeInBytes());
         }
