@@ -18,8 +18,10 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -63,16 +65,22 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
         boolean urlencodeHeader = validateUrlencodeHeader(cu);
 
-        delegate = new HttpJwtRetriever(clientId,
+        HttpRequestFormatter requestFormatter = new ClientCredentialsRequestFormatter(
+            clientId,
             clientSecret,
             scope,
+            urlencodeHeader
+        );
+
+        delegate = new HttpJwtRetriever(
+            requestFormatter,
             sslSocketFactory,
             tokenEndpointUrl.toString(),
             cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
             cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
             cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
-            cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false),
-            urlencodeHeader);
+            cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false)
+        );
 
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
