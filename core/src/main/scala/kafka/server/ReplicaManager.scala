@@ -59,6 +59,7 @@ import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchKey, DelayedShareFetchPartitionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
+import org.apache.kafka.server.util.timer.{SystemTimer, TimerTask}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
 import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, common}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
@@ -290,6 +291,8 @@ class ReplicaManager(val config: KafkaConfig,
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
   private val addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(config)
+  private val shareFetchPurgatoryName = "ShareFetch"
+  private val delayedShareFetchTimer = new SystemTimer(shareFetchPurgatoryName)
 
   val delayedProducePurgatory = delayedProducePurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedProduce](
@@ -311,7 +314,7 @@ class ReplicaManager(val config: KafkaConfig,
       "RemoteListOffsets", config.brokerId))
   val delayedShareFetchPurgatory = delayedShareFetchPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedShareFetch](
-      "ShareFetch", config.brokerId,
+      shareFetchPurgatoryName, delayedShareFetchTimer, config.brokerId,
       config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests))
 
   /* epoch of the controller that last changed the leader */
@@ -446,6 +449,14 @@ class ReplicaManager(val config: KafkaConfig,
   private[server] def addDelayedShareFetchRequest(delayedShareFetch: DelayedShareFetch,
                                                   delayedShareFetchKeys : util.List[DelayedShareFetchKey]): Unit = {
     delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, delayedShareFetchKeys)
+  }
+
+  /**
+   * Add a timer task to the delayedShareFetchTimer.
+   * @param timerTask The timer task to be added to the delayedShareFetchTimer
+   */
+  private[server] def addShareFetchTimerRequest(timerTask: TimerTask): Unit = {
+    delayedShareFetchTimer.add(timerTask)
   }
 
   /**
