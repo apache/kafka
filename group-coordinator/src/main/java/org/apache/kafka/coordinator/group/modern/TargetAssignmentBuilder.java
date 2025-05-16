@@ -290,7 +290,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     /**
      * Topic partition assignable map.
      */
-    private Map<Uuid, Set<Integer>> topicAssignablePartitionsMap = new HashMap<>();
+    private Map<Uuid, Set<Integer>> topicAssignablePartitionsMap;
 
     /**
      * Constructs the object.
