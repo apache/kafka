@@ -135,7 +135,7 @@ public class ListOffsetsRequestTest {
         ListOffsetsRequest.Builder requireTieredStorageTimestampRequestBuilder = ListOffsetsRequest.Builder
             .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, true);
 
-        assertEquals((short) 0, consumerRequestBuilder.oldestAllowedVersion());
+        assertEquals((short) 1, consumerRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 1, requireTimestampRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 2, requestCommittedRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 7, maxTimestampRequestBuilder.oldestAllowedVersion());
