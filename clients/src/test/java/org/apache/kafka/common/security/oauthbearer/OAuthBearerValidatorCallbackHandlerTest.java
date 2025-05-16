@@ -88,8 +88,8 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         String substring = "invalid_token";
         assertInvalidAccessTokenFails("this isn't valid", substring);
         assertInvalidAccessTokenFails("this.isn't.valid", substring);
-        assertInvalidAccessTokenFails(createAccessKey("this", "isn't", "valid"), substring);
-        assertInvalidAccessTokenFails(createAccessKey("{}", "{}", "{}"), substring);
+        assertInvalidAccessTokenFails(createJwt("this", "isn't", "valid"), substring);
+        assertInvalidAccessTokenFails(createJwt("{}", "{}", "{}"), substring);
     }
 
     @Test

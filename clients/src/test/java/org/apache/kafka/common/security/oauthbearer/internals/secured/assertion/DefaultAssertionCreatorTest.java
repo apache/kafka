@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
-import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.consumer.InvalidJwtException;
 import org.jose4j.jwt.consumer.JwtConsumer;
 import org.jose4j.jwt.consumer.JwtConsumerBuilder;
@@ -75,9 +74,10 @@ public class DefaultAssertionCreatorTest {
             )
         );
 
-        AssertionCreator assertionCreator = builder.build();
-        String assertion = assertionCreator.create(jwtTemplate);
-        assertClaims(builder, keyPair.getPublic(), assertion);
+        try (AssertionCreator assertionCreator = builder.build()) {
+            String assertion = assertionCreator.create(jwtTemplate);
+            assertClaims(builder, keyPair.getPublic(), assertion);
+        }
     }
 
     @Test
@@ -97,14 +97,15 @@ public class DefaultAssertionCreatorTest {
             )
         );
 
-        AssertionCreator assertionCreator = builder.build();
-        String assertion = assertionCreator.create(jwtTemplate);
-        JwtContext context = assertContext(builder, keyPair.getPublic(), assertion);
-        List<JsonWebStructure> joseObjects = context.getJoseObjects();
-        assertNotNull(joseObjects);
-        assertEquals(1, joseObjects.size());
-        JsonWebStructure jsonWebStructure = joseObjects.get(0);
-        assertEquals("test-id", jsonWebStructure.getKeyIdHeaderValue());
+        try (AssertionCreator assertionCreator = builder.build()) {
+            String assertion = assertionCreator.create(jwtTemplate);
+            JwtContext context = assertContext(builder, keyPair.getPublic(), assertion);
+            List<JsonWebStructure> joseObjects = context.getJoseObjects();
+            assertNotNull(joseObjects);
+            assertEquals(1, joseObjects.size());
+            JsonWebStructure jsonWebStructure = joseObjects.get(0);
+            assertEquals("test-id", jsonWebStructure.getKeyIdHeaderValue());
+        }
     }
 
     @Test
@@ -123,11 +124,7 @@ public class DefaultAssertionCreatorTest {
 
         assertEquals(originalFileLength - bytesToTruncate, privateKeyFile.length());
 
-        AssertionJwtTemplate jwtTemplate = new StaticAssertionJwtTemplate();
-        AssertionCreator assertionCreator = new Builder()
-            .setPrivateKeyFile(privateKeyFile)
-            .build();
-        KafkaException e = assertThrows(KafkaException.class, () -> assertionCreator.create(jwtTemplate));
+        KafkaException e = assertThrows(KafkaException.class, () -> new Builder().setPrivateKeyFile(privateKeyFile).build());
         assertNotNull(e.getCause());
         assertInstanceOf(GeneralSecurityException.class, e.getCause());
     }
@@ -139,16 +136,19 @@ public class DefaultAssertionCreatorTest {
         Builder builder = new Builder()
             .setPrivateKeyFile(generatePrivateKey(keyPair.getPrivate()))
             .setAlgorithm(algorithm);
-        AssertionCreator assertionCreator = builder.build();
 
-        AssertionJwtTemplate jwtTemplate = new DynamicAssertionJwtTemplate(
-            new MockTime(),
-            algorithm,
-            3600,
-            60,
-            false
-        );
-        String assertion = assertionCreator.create(jwtTemplate);
+        String assertion;
+
+        try (AssertionCreator assertionCreator = builder.build()) {
+            AssertionJwtTemplate jwtTemplate = new DynamicAssertionJwtTemplate(
+                new MockTime(),
+                algorithm,
+                3600,
+                60,
+                false
+            );
+            assertion = assertionCreator.create(jwtTemplate);
+        }
 
         assertClaims(builder, keyPair.getPublic(), assertion);
 
@@ -172,9 +172,9 @@ public class DefaultAssertionCreatorTest {
             () -> sign(builder.algorithm, privateKey, "dummy content"));
     }
 
-    private JwtClaims assertClaims(Builder builder, PublicKey publicKey, String assertion) throws InvalidJwtException {
+    private void assertClaims(Builder builder, PublicKey publicKey, String assertion) throws InvalidJwtException {
         JwtConsumer jwtConsumer = jwtConsumer(builder, publicKey);
-        return jwtConsumer.processToClaims(assertion);
+        jwtConsumer.processToClaims(assertion);
     }
 
     private JwtContext assertContext(Builder builder, PublicKey publicKey, String assertion) throws InvalidJwtException {

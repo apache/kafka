@@ -41,6 +41,7 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -54,13 +55,10 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void testConfigureRefreshingFileJwtRetriever() throws Exception {
-        String expected = "{}";
-
-        File tmpDir = createTempDir("access-token");
-        File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", expected);
-
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
-        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
+        String expected = createJwt("jdoe");
+        String file = tempFile(expected).toURI().toString();
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
+        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, file);
 
         try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
             jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
@@ -85,28 +83,10 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testConfigureRefreshingFileJwtRetrieverWithInvalidFile() throws Exception {
-        // Should fail because while the parent path exists, the file itself doesn't.
-        File tmpDir = createTempDir("this-directory-does-exist");
-        File accessTokenFile = new File(tmpDir, "this-file-does-not-exist.json");
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
-
-        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
-            assertThrowsWithMessage(
-                ConfigException.class,
-                () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()),
-                "that doesn't exist"
-            );
-        }
-    }
-
-    @Test
     public void testSaslOauthbearerTokenEndpointUrlIsNotAllowed() throws Exception {
-        // Should fail if the URL is not allowed
-        File tmpDir = createTempDir("not_allowed");
-        File accessTokenFile = new File(tmpDir, "not_allowed.json");
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
+        // Should fail because the URL was not allowed
+        String file = tempFile("test data").toURI().toString();
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, file);
 
         try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
             assertThrowsWithMessage(
@@ -119,30 +99,29 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void testConfigureWithAccessTokenFile() throws Exception {
-        String expected = "{}";
+        String expected = createJwt("jdoe");
+        String file = tempFile(expected).toURI().toString();
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, file);
 
-        File tmpDir = createTempDir("access-token");
-        File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", expected);
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
-
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
-
-        DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever();
-        assertDoesNotThrow(() -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
-        assertInstanceOf(FileJwtRetriever.class, jwtRetriever.delegate());
+        try (DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            assertDoesNotThrow(() -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
+            assertInstanceOf(FileJwtRetriever.class, jwtRetriever.delegate());
+        }
     }
 
     @Test
-    public void testConfigureWithAccessClientCredentials() {
+    public void testConfigureWithAccessClientCredentials() throws Exception {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, "http://www.example.com");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "http://www.example.com");
         Map<String, Object> jaasConfigs = new HashMap<>();
         jaasConfigs.put(CLIENT_ID_CONFIG, "an ID");
         jaasConfigs.put(CLIENT_SECRET_CONFIG, "a secret");
 
-        DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever();
-        assertDoesNotThrow(() -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(jaasConfigs)));
-        assertInstanceOf(ClientCredentialsJwtRetriever.class, jwtRetriever.delegate());
+        try (DefaultJwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            assertDoesNotThrow(() -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(jaasConfigs)));
+            assertInstanceOf(ClientCredentialsJwtRetriever.class, jwtRetriever.delegate());
+        }
     }
 
     @ParameterizedTest
@@ -161,5 +140,4 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
             Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, false), false)
         );
     }
-
 }

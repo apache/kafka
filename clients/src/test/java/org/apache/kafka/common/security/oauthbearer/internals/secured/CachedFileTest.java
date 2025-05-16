@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 
+import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,7 +42,7 @@ public class CachedFileTest extends OAuthBearerTest {
 
     @Test
     public void testStaticPolicy() throws Exception {
-        File tmpFile = createTempFile(createTempDir("tmp"), "data-", ".txt", "  foo  ");
+        File tmpFile = tempFile("  foo  ");
 
         CachedFile.Transformer<String> transformer = (file, contents) -> contents.trim();
         CachedFile.RefreshPolicy<String> refreshPolicy = CachedFile.RefreshPolicy.staticPolicy();
@@ -65,7 +66,7 @@ public class CachedFileTest extends OAuthBearerTest {
 
     @Test
     public void testLastModifiedPolicy() throws Exception {
-        File tmpFile = createTempFile(createTempDir("tmp"), "data-", ".txt", "  foo  ");
+        File tmpFile = tempFile("  foo  ");
 
         CachedFile.Transformer<String> transformer = (file, contents) -> contents.trim();
         CachedFile.RefreshPolicy<String> refreshPolicy = CachedFile.RefreshPolicy.lastModifiedPolicy();
@@ -87,10 +88,10 @@ public class CachedFileTest extends OAuthBearerTest {
 
     @Test
     public void testFileDoesNotExist() throws IOException {
-        File tmpFile = createTempFile(createTempDir("tmp"), "data-", ".txt", "  foo  ");
+        File tmpFile = tempFile("  foo  ");
 
         CachedFile.RefreshPolicy<String> refreshPolicy = CachedFile.RefreshPolicy.lastModifiedPolicy();
-        CachedFile<String> cachedFile = new CachedFile<>(tmpFile, CachedFile.NOOP_TRANSFORMER, refreshPolicy);
+        CachedFile<String> cachedFile = new CachedFile<>(tmpFile, CachedFile.STRING_NOOP_TRANSFORMER, refreshPolicy);
 
         // All is well...
         assertTrue(tmpFile.exists());
@@ -124,12 +125,7 @@ public class CachedFileTest extends OAuthBearerTest {
 
     @Test
     public void testTransformerError() throws Exception {
-        File tmpFile = createTempFile(
-            createTempDir("tmp"),
-            "data-",
-            ".txt",
-            "[\"foo\"]"
-        );
+        File tmpFile = tempFile("[\"foo\"]");
 
         @SuppressWarnings("unchecked")
         CachedFile.Transformer<List<String>> jsonTransformer = (file, json) -> {

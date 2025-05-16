@@ -22,8 +22,8 @@ import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.NOOP_TRANSFORMER;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.lastModifiedPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.STRING_JSON_VALIDATING_TRANSFORMER;
 
 /**
  * An {@link AssertionCreator} which takes a file from which the pre-created assertion is loaded and returned.
@@ -34,7 +34,7 @@ public class FileAssertionCreator implements AssertionCreator {
     private final CachedFile<String> assertionFile;
 
     public FileAssertionCreator(File assertionFile) {
-        this.assertionFile = new CachedFile<>(assertionFile, NOOP_TRANSFORMER, lastModifiedPolicy());
+        this.assertionFile = new CachedFile<>(assertionFile, STRING_JSON_VALIDATING_TRANSFORMER, lastModifiedPolicy());
     }
 
     @Override

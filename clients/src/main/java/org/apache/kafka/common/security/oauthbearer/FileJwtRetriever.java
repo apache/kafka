@@ -28,6 +28,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.lastModifiedPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.STRING_JSON_VALIDATING_TRANSFORMER;
 
 /**
  * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
@@ -35,25 +36,22 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Cac
  */
 public class FileJwtRetriever implements JwtRetriever {
 
-    private CachedFile<String> jwt;
+    private CachedFile<String> jwtFile;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        File jwtFile = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).toFile();
-
-        // always non-null; to remove any newline chars or backend will report err
-        CachedFile.Transformer<String> transformer = (file, contents) -> contents.trim();
-        jwt = new CachedFile<>(jwtFile, transformer, lastModifiedPolicy());
+        File file = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).toFile();
+        jwtFile = new CachedFile<>(file, STRING_JSON_VALIDATING_TRANSFORMER, lastModifiedPolicy());
     }
 
     @Override
     public String retrieve() throws JwtRetrieverException {
-        if (jwt == null)
+        if (jwtFile == null)
             throw new IllegalStateException("JWT is null; please call configure() first");
 
         try {
-            return jwt.transformed();
+            return jwtFile.transformed();
         } catch (Exception e) {
             throw new JwtRetrieverException(e);
         }

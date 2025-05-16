@@ -27,12 +27,9 @@ import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.TimeZone;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
@@ -42,6 +39,7 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -160,8 +158,8 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     public void testInvalidAccessToken() throws Exception {
         testInvalidAccessToken("this isn't valid", "Malformed JWT provided");
         testInvalidAccessToken("this.isn't.valid", "malformed Base64 URL encoded value");
-        testInvalidAccessToken(createAccessKey("this", "isn't", "valid"), "malformed JSON");
-        testInvalidAccessToken(createAccessKey("{}", "{}", "{}"), "exp value must be non-null");
+        testInvalidAccessToken(createJwt("this", "isn't", "valid"), "malformed JSON");
+        testInvalidAccessToken(createJwt("{}", "{}", "{}"), "exp value must be non-null");
     }
 
     @Test
@@ -186,16 +184,10 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
 
     @Test
     public void testFileTokenRetrieverHandlesNewline() throws IOException {
-        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-        long cur = cal.getTimeInMillis() / 1000;
-        String exp = "" + (cur + 60 * 60);  // 1 hour in future
-        String iat = "" + cur;
-
-        String expected = createAccessKey("{}", String.format("{\"exp\":%s, \"iat\":%s, \"sub\":\"subj\"}", exp, iat), "sign");
+        String expected = createJwt("jdoe");
         String withNewline = expected + "\n";
 
-        File tmpDir = createTempDir("access-token");
-        String accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", withNewline).toURI().toString();
+        String accessTokenFile = tempFile(withNewline).toURI().toString();
 
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile);
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile);

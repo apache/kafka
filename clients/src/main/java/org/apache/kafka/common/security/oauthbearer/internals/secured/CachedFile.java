@@ -17,6 +17,9 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
+import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
+import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,6 +39,12 @@ public class CachedFile<T> {
      */
     public interface Transformer<T> {
 
+        /**
+         * Transforms the raw contents into a (possibly) different representation.
+         *
+         * @param file     File containing the source data
+         * @param contents Data from file; could be zero length but not {@code null}
+         */
         T transform(File file, String contents);
     }
 
@@ -71,9 +80,21 @@ public class CachedFile<T> {
     }
 
     /**
-     * No-op transformer that retains the basic file contents as a string.
+     * No-op transformer that retains the exact file contents as a string.
      */
-    public static final Transformer<String> NOOP_TRANSFORMER = (file, contents) -> contents;
+    public static final Transformer<String> STRING_NOOP_TRANSFORMER = (file, contents) -> contents;
+
+    /**
+     * This transformer really only validates that the given file contents represent a properly-formed JWT.
+     * If not, a {@link OAuthBearerIllegalTokenException} or {@link JwtValidatorException} is thrown.
+     */
+    public static final Transformer<String> STRING_JSON_VALIDATING_TRANSFORMER = (file, contents) -> {
+        contents = contents.trim();
+        SerializedJwt serializedJwt = new SerializedJwt(contents);
+        OAuthBearerUnsecuredJws.toMap(serializedJwt.getHeader());
+        OAuthBearerUnsecuredJws.toMap(serializedJwt.getPayload());
+        return contents;
+    };
 
     private final File file;
     private final Transformer<T> transformer;
@@ -84,25 +105,26 @@ public class CachedFile<T> {
         this.file = file;
         this.transformer = transformer;
         this.cacheRefreshPolicy = cacheRefreshPolicy;
+        this.snapshot = snapshot();
     }
 
     public long size() {
-        return cachedFileInfo().size();
+        return snapshot().size();
     }
 
     public long lastModified() {
-        return cachedFileInfo().lastModified();
+        return snapshot().lastModified();
     }
 
     public String contents() {
-        return cachedFileInfo().contents();
+        return snapshot().contents();
     }
 
     public T transformed() {
-        return cachedFileInfo().transformed();
+        return snapshot().transformed();
     }
 
-    private Snapshot<T> cachedFileInfo() {
+    private Snapshot<T> snapshot() {
         if (cacheRefreshPolicy.shouldRefresh(file, snapshot)) {
             long size = file.length();
             long lastModified = file.lastModified();

@@ -29,6 +29,7 @@ import java.util.Map;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.test.TestUtils.tempFile;
 
 public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
 
@@ -39,10 +40,9 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
 
     @Test
     public void testConfigureRefreshingFileVerificationKeyResolver() throws Exception {
-        File tmpDir = createTempDir("access-token");
-        String verificationKeyFile = createTempFile(tmpDir, "access-token-", ".json", "{}").toURI().toString();
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile);
-        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile);
+        String file = tempFile("{}").toURI().toString();
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
+        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
         assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()), "The JSON JWKS content does not include the keys member");
     }
 
@@ -56,21 +56,10 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testConfigureRefreshingFileVerificationKeyResolverWithInvalidFile() throws Exception {
-        // Should fail because while the parent path exists, the file itself doesn't.
-        File tmpDir = createTempDir("this-directory-does-exist");
-        File verificationKeyFile = new File(tmpDir, "this-file-does-not-exist.json");
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile.toURI().toString());
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
-        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()), "that doesn't exist");
-    }
-
-    @Test
     public void testSaslOauthbearerTokenEndpointUrlIsNotAllowed() throws Exception {
         // Should fail if the URL is not allowed
-        File tmpDir = createTempDir("not_allowed");
-        File verificationKeyFile = new File(tmpDir, "not_allowed.json");
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
+        String file = tempFile("{}").toURI().toString();
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
         assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
     }
