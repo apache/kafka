@@ -174,7 +174,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ParameterizedTest
     @MethodSource("recordingLevelParameters")
     public void shouldPushGlobalThreadMetricsToBroker(final String recordingLevel, final String groupProtocol) throws Exception {
-        streamsApplicationProperties = props(true, groupProtocol);
+        streamsApplicationProperties = props(groupProtocol);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology(true);
         subscribeForStreamsMetrics();
@@ -213,7 +213,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @MethodSource("recordingLevelParameters")
     public void shouldPushMetricsToBroker(final String recordingLevel, final String groupProtocol) throws Exception {
         // End-to-end test validating metrics pushed to broker
-        streamsApplicationProperties  = props(true, groupProtocol);
+        streamsApplicationProperties  = props(groupProtocol);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology(false);
         subscribeForStreamsMetrics();
@@ -275,9 +275,9 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("singleAndMultiTaskParameters")
-    public void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled, final String groupProtocol) throws Exception {
+    public void shouldPassMetrics(final String topologyType, final String groupProtocol) throws Exception {
         // Streams metrics should get passed to Admin and Consumer
-        streamsApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
+        streamsApplicationProperties = props(groupProtocol);
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
        
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -304,15 +304,15 @@ public class KafkaStreamsTelemetryIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("multiTaskParameters")
-    public void shouldPassCorrectMetricsDynamicInstances(final boolean stateUpdaterEnabled, final String groupProtocol) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldPassCorrectMetricsDynamicInstances(final String groupProtocol) throws Exception {
         // Correct streams metrics should get passed with dynamic membership
-        streamsApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
+        streamsApplicationProperties = props(groupProtocol);
         streamsApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
         streamsApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
 
 
-        streamsSecondApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
+        streamsSecondApplicationProperties = props(groupProtocol);
         streamsSecondApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
         streamsSecondApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
         
@@ -407,7 +407,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ValueSource(strings = {"classic", "streams"})
     public void passedMetricsShouldNotLeakIntoClientMetrics(final String groupProtocol) throws Exception {
         // Streams metrics should not be visible in client metrics
-        streamsApplicationProperties = props(true, groupProtocol);
+        streamsApplicationProperties = props(groupProtocol);
         final Topology topology =  complexTopology();
 
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -446,29 +446,15 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     private static Stream<Arguments> singleAndMultiTaskParameters() {
         return Stream.of(
-            Arguments.of("simple", true, "classic"),
-            Arguments.of("simple", false, "classic"),
-            Arguments.of("complex", true, "classic"),
-            Arguments.of("complex", false, "classic"),
-            Arguments.of("simple", true, "streams"),
-            Arguments.of("simple", false, "streams"),
-            Arguments.of("complex", true, "streams"),
-            Arguments.of("complex", false, "streams")
+            Arguments.of("simple", "classic"),
+            Arguments.of("complex", "classic"),
+            Arguments.of("simple", "streams"),
+            Arguments.of("complex", "streams")
         );
     }
 
-    private static Stream<Arguments> multiTaskParameters() {
-        return Stream.of(
-            Arguments.of(true, "classic"),
-            Arguments.of(false, "classic"),
-            Arguments.of(true, "streams"),
-            Arguments.of(false, "streams")
-        );
-    }
-
-    private Properties props(final boolean stateUpdaterEnabled, final String groupProtocol) {
+    private Properties props(final String groupProtocol) {
         return props(mkObjectProperties(mkMap(
-            mkEntry(StreamsConfig.InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled),
             mkEntry(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
         )));
     }

@@ -57,7 +57,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -729,7 +728,7 @@ public class TaskManager {
             final Map.Entry<TaskId, Set<TopicPartition>> entry = iter.next();
             final TaskId taskId = entry.getKey();
             final boolean taskIsOwned = tasks.allTaskIds().contains(taskId)
-                || (stateUpdater != null && stateUpdater.tasks().stream().anyMatch(task -> task.id() == taskId));
+                || stateUpdater.tasks().stream().anyMatch(task -> task.id() == taskId);
             if (taskId.topologyName() != null && !taskIsOwned && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
                 log.info("Cannot create the assigned task {} since it's topology name cannot be recognized, will put it " +
                         "aside as pending for now and create later when topology metadata gets refreshed", taskId);
@@ -1176,15 +1175,6 @@ public class TaskManager {
     }
 
     private void removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit() {
-        if (stateUpdater != null) {
-            final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
-            final Set<Task> tasksToCloseClean = new HashSet<>(tasks.drainPendingActiveTasksToInit());
-            final Set<Task> tasksToCloseDirty = new HashSet<>();
-            for (final Task restoringTask : stateUpdater.tasks()) {
-                if (restoringTask.isActive()) {
-                    futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
-                }
-            }
         final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
         final Map<TaskId, RuntimeException> failedTasksDuringCleanClose = new HashMap<>();
         final Set<Task> tasksToCloseClean = new HashSet<>(tasks.drainPendingActiveTasksToInit());
@@ -1195,13 +1185,6 @@ public class TaskManager {
             }
         }
 
-            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
-            for (final Task task : tasksToCloseClean) {
-                closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
-            }
-            for (final Task task : tasksToCloseDirty) {
-                closeTaskDirty(task, false);
-            }
         addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
         for (final Task task : tasksToCloseClean) {
             closeTaskClean(task, tasksToCloseDirty, failedTasksDuringCleanClose);

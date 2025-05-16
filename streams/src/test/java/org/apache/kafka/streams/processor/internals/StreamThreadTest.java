@@ -3654,9 +3654,9 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void shouldWrapMainConsumerFromClassConfig(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+    @ValueSource(booleans = {true, false})
+    public void shouldWrapMainConsumerFromClassConfig(final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         streamsConfigProps.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
         streamsConfigProps.put(InternalConfig.INTERNAL_CONSUMER_WRAPPER, TestWrapper.class);
 
@@ -3669,9 +3669,9 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void shouldWrapMainConsumerFromStringConfig(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+    @ValueSource(booleans = {true, false})
+    public void shouldWrapMainConsumerFromStringConfig(final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         streamsConfigProps.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
         streamsConfigProps.put(InternalConfig.INTERNAL_CONSUMER_WRAPPER, TestWrapper.class.getName());
 
