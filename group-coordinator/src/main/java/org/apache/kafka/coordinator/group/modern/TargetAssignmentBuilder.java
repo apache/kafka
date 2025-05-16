@@ -285,7 +285,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     /**
      * Topic partition assignable map.
      */
-    private Map<Uuid, Set<Integer>> topicAssignablePartitionsMap = new HashMap<>();
+    private Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = Optional.empty();
 
     /**
      * Constructs the object.
@@ -385,7 +385,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     public U withTopicAssignablePartitionsMap(
         Map<Uuid, Set<Integer>> topicAssignablePartitionsMap
     ) {
-        this.topicAssignablePartitionsMap = topicAssignablePartitionsMap;
+        this.topicAssignablePartitionsMap = Optional.of(topicAssignablePartitionsMap);
         return self();
     }
 

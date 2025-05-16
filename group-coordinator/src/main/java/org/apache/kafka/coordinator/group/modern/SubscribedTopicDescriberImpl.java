@@ -26,6 +26,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -33,7 +34,11 @@ import java.util.Set;
  * topic and partition metadata for the topics that the modern group is subscribed to.
  */
 public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
-    private final Map<Uuid, Set<Integer>> topicPartitionAllowedMap;
+    /**
+     * The map of topic Ids to the set of allowed partitions for each topic.
+     * If this is empty, all partitions are allowed.
+     */
+    private final Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap;
 
     /**
      * The metadata image that contains the latest metadata information.
@@ -41,10 +46,13 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     private final MetadataImage metadataImage;
 
     public SubscribedTopicDescriberImpl(MetadataImage metadataImage) {
-        this(metadataImage, Map.of());
+        this(metadataImage, Optional.empty());
     }
 
-    public SubscribedTopicDescriberImpl(MetadataImage metadataImage, Map<Uuid, Set<Integer>> topicPartitionAllowedMap) {
+    public SubscribedTopicDescriberImpl(
+        MetadataImage metadataImage,
+        Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
+    ) {
         this.metadataImage = Objects.requireNonNull(metadataImage);
         this.topicPartitionAllowedMap = topicPartitionAllowedMap;
     }
@@ -88,8 +96,8 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     }
 
     /**
-     * Returns a set of assignable partitions from the topic metadata.
-     * If the allowed partition map is null, all the partitions in the corresponding
+     * Returns a set of assignable partitions from the metadata image.
+     * If the allowed partition map is Optional.empty(), all the partitions in the corresponding
      * topic image are returned for the argument topic id. If allowed map is empty,
      * empty set is returned.
      *
@@ -103,11 +111,11 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
             return Set.of();
         }
 
-        if (topicPartitionAllowedMap == null) {
+        if (topicPartitionAllowedMap.isEmpty()) {
             return Set.copyOf(topic.partitions().keySet());
         }
 
-        return topicPartitionAllowedMap.getOrDefault(topicId, Set.of());
+        return topicPartitionAllowedMap.get().getOrDefault(topicId, Set.of());
     }
 
     @Override
