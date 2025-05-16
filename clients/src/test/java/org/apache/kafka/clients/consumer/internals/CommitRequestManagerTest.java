@@ -473,8 +473,9 @@ public class CommitRequestManagerTest {
     public void testCommitSyncShouldSuccessWithTopicHasId() {
         subscriptionState = mock(SubscriptionState.class);
         TopicPartition tp = new TopicPartition("topic", 1);
+        Uuid topicId = Uuid.randomUuid();
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-        when(metadata.topicIds()).thenReturn(Map.of("topic", Uuid.randomUuid()));
+        when(metadata.topicIds()).thenReturn(Map.of("topic", topicId));
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0, Optional.of(1), "");
         Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(tp, offsetAndMetadata);
 
@@ -483,10 +484,11 @@ public class CommitRequestManagerTest {
             offsets, time.milliseconds() + defaultApiTimeoutMs);
         assertEquals(1, commitRequestManager.unsentOffsetCommitRequests().size());
         List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManager);
-        pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponse(
+        pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponseWithTopicId(
             "topic",
+            topicId,
             1,
-            (short) 1,
+            (short) 10,
             Errors.NONE)));
 
         verify(subscriptionState, never()).allConsumed();
@@ -1294,6 +1296,7 @@ public class CommitRequestManagerTest {
         long commitReceivedTimeMs = time.milliseconds();
         res.unsentRequests.get(0).future().complete(mockOffsetCommitResponse(
                 topic,
+                Uuid.ZERO_UUID,
                 partition,
                 (short) 1,
                 commitCreationTimeMs,
@@ -1363,6 +1366,7 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, TimeoutException.class),
             Arguments.of(Errors.REQUEST_TIMED_OUT, TimeoutException.class),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, TimeoutException.class),
+            Arguments.of(Errors.UNKNOWN_TOPIC_ID, TimeoutException.class),
 
             // Non-retriable errors should result in their specific exceptions
             Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, GroupAuthorizationException.class),
@@ -1649,15 +1653,23 @@ public class CommitRequestManagerTest {
         );
     }
 
+    private ClientResponse mockOffsetCommitResponseWithTopicId(String topic,
+                                                              Uuid topicId,
+                                                              int partition,
+                                                              short apiKeyVersion,
+                                                              Errors error) {
+        return mockOffsetCommitResponse(topic, topicId, partition, apiKeyVersion, time.milliseconds(), time.milliseconds(), error);
+    }
 
     private ClientResponse mockOffsetCommitResponse(String topic,
                                                    int partition,
                                                    short apiKeyVersion,
                                                    Errors error) {
-        return mockOffsetCommitResponse(topic, partition, apiKeyVersion, time.milliseconds(), time.milliseconds(), error);
+        return mockOffsetCommitResponse(topic, Uuid.ZERO_UUID, partition, apiKeyVersion, time.milliseconds(), time.milliseconds(), error);
     }
 
     private ClientResponse mockOffsetCommitResponse(String topic,
+                                                   Uuid topicId,
                                                    int partition,
                                                    short apiKeyVersion,
                                                    long createdTimeMs,
@@ -1667,6 +1679,7 @@ public class CommitRequestManagerTest {
             .setTopics(Collections.singletonList(
                 new OffsetCommitResponseData.OffsetCommitResponseTopic()
                     .setName(topic)
+                    .setTopicId(topicId)
                     .setPartitions(Collections.singletonList(
                         new OffsetCommitResponseData.OffsetCommitResponsePartition()
                             .setErrorCode(error.code())

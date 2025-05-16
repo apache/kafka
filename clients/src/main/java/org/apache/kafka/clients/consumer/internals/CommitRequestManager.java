@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -758,10 +759,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
             Set<String> unauthorizedTopics = new HashSet<>();
+            Set<Uuid> unknownTopicIds = new HashSet<>();
             boolean failedRequestRegistered = false;
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
+                String topicName = metadata.topicNames().getOrDefault(topic.topicId(), topic.name());
                 for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
-                    TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                    TopicPartition tp = new TopicPartition(topicName, partition.partitionIndex());
 
                     Errors error = Errors.forCode(partition.errorCode());
                     if (error == Errors.NONE) {
@@ -808,6 +811,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                         // Collect all unauthorized topics before failing
                         unauthorizedTopics.add(tp.topic());
+                    } else if (error == Errors.UNKNOWN_TOPIC_ID) {
+                        // Collect all unknown topic ids
+                        unknownTopicIds.add(topic.topicId());
                     } else {
                         // Fail with a non-retriable KafkaException for all unexpected errors
                         // (even if they are retriable)
@@ -820,6 +826,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (!unauthorizedTopics.isEmpty()) {
                 log.error("OffsetCommit failed due to not authorized to commit to topics {}", unauthorizedTopics);
                 future.completeExceptionally(new TopicAuthorizationException(unauthorizedTopics));
+            } else if (!unknownTopicIds.isEmpty()) {
+                log.error("OffsetCommit failed due to unknown topic id to commit to topic ids {}", unknownTopicIds);
+                future.completeExceptionally(new UnknownTopicIdException(Errors.UNKNOWN_TOPIC_ID.message()));
             } else {
                 future.complete(null);
             }
