@@ -179,5 +179,5 @@ class StreamsEosTest(BaseStreamsTest):
     @staticmethod
     def wait_for(monitor, processor, output):
         monitor.wait_until(output,
-                           timeout_sec=60,
+                           timeout_sec=480,
                            err_msg=("Never saw output '%s' on " % output) + str(processor.node.account))

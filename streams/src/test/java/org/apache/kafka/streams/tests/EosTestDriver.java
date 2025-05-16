@@ -252,33 +252,31 @@ public class EosTestDriver extends SmokeTestUtil {
 
     private static void ensureStreamsApplicationDown(final Admin adminClient, final String groupProtocol) {
         final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
-        if (Objects.equals(groupProtocol, "streams")) {
-            StreamsGroupDescription description;
-            do {
-                description = getStreamsGroupDescription(adminClient);
-                if (System.currentTimeMillis() > maxWaitTime && !description.members().isEmpty()) {
-                    throw new RuntimeException(
-                        "Streams application not down after " + MAX_IDLE_TIME_MS / 1000L + " seconds. " +
-                            "Group: " + description
-                    );
+        boolean isEmpty;
+        do {
+            if (Objects.equals(groupProtocol, "streams")) {
+                StreamsGroupDescription description = getStreamsGroupDescription(adminClient);
+                isEmpty = description.members().isEmpty();
+                if (System.currentTimeMillis() > maxWaitTime && !isEmpty) {
+                    throwNotDownException(description);
                 }
-                sleep(1000L);
-            } while (!description.members().isEmpty());
-        } else {
-            ConsumerGroupDescription description;
-            do {
-                description = getConsumerGroupDescription(adminClient);
-                if (System.currentTimeMillis() > maxWaitTime && !description.members().isEmpty()) {
-                    throw new RuntimeException(
-                        "Streams application not down after " + MAX_IDLE_TIME_MS / 1000L + " seconds. " +
-                            "Group: " + description
-                    );
+            } else {
+                ConsumerGroupDescription description = getConsumerGroupDescription(adminClient);
+                isEmpty = description.members().isEmpty();
+                if (System.currentTimeMillis() > maxWaitTime && !isEmpty) {
+                    throwNotDownException(description);
                 }
-                sleep(1000L);
-            } while (!description.members().isEmpty());
-        }
+            }
+            sleep(1000L);
+        } while (!isEmpty);
     }
 
+    private static void throwNotDownException(Object description) {
+        throw new RuntimeException(
+            "Streams application not down after " + MAX_IDLE_TIME_MS / 1000L + " seconds. " +
+                "Group: " + description
+        );
+    }
 
     private static Map<TopicPartition, Long> getCommittedOffsets(final Admin adminClient,
                                                                  final boolean withRepartitioning) {
