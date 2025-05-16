@@ -270,56 +270,54 @@ class KafkaApis(val requestChannel: RequestChannel,
     val getReplicaLogInfoRequest = request.body[GetReplicaLogInfoRequest]
     val data = getReplicaLogInfoRequest.data()
     var partitionCount = 0
-    val partitionInfoList = data.topicPartitions().asScala.map(topic => {
+    val topicPartitionIter = data.topicPartitions().iterator()
+    val responseData = new GetReplicaLogInfoResponseData()
+      .setBrokerEpoch(brokerEpochSupplier.get())
+    while (topicPartitionIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
+      val topic = topicPartitionIter.next()
       val maybeTopicName = metadataCache.getTopicName(topic.topicId())
       val topicPartitionLogInfo = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
           .setTopicId(topic.topicId())
-      val logInfos = if (maybeTopicName.isPresent) {
-        val topicName = maybeTopicName.get()
-        topic.partitions().asScala
-          .map(new TopicPartition(topicName, _))
-          .map((topicPartition: TopicPartition) => {
-            val logInfo = if (partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
-              replicaManager.getPartitionOrError(topicPartition) match {
-                case Left(err) => new GetReplicaLogInfoResponseData.PartitionLogInfo()
-                  .setPartition(topicPartition.partition())
-                  .setErrorCode(err.code())
-                case Right(partition) => partition.log match {
-                  case None => new GetReplicaLogInfoResponseData.PartitionLogInfo()
-                    .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
-                  case Some(log) => {
-                    val logEndOffset = log.logEndOffset
-                    val lastLeaderEpoch = log.latestEpoch.orElse(-1)
-                    val leaderEpoch = partition.getLeaderEpoch
-                    new GetReplicaLogInfoResponseData.PartitionLogInfo()
-                      .setPartition(partition.partitionId)
-                      .setLogEndOffset(logEndOffset)
-                      .setCurrentLeaderEpoch(leaderEpoch)
-                      .setLastWrittenLeaderEpoch(lastLeaderEpoch)
-                  }
-                }
-              }
-            } else {
-              new GetReplicaLogInfoResponseData.PartitionLogInfo()
-                .setPartition(topicPartition.partition())
-                .setErrorCode(Errors.POLICY_VIOLATION.code())
-                .setErrorMessage(s"No more than ${GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST} partitions per request are allowed")
-            }
-            partitionCount += 1
-            logInfo
-          })
+      val partitionIter = topic.partitions().iterator()
+      if (maybeTopicName.isEmpty) {
+        while (partitionIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
+          val partitionId = partitionIter.next()
+          topicPartitionLogInfo.partitionLogInfo().add(new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setPartition(partitionId)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
+          partitionCount += 1
+        }
       } else {
-        topic.partitions().asScala.map { partition =>
-          new GetReplicaLogInfoResponseData.PartitionLogInfo()
-            .setPartition(partition)
-            .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code())
+        val topicName = maybeTopicName.get()
+        while (partitionIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
+          val partitionId = partitionIter.next()
+          val topicPartition = new TopicPartition(topicName, partitionId)
+          val partitionLogInfo = replicaManager.getPartitionOrError(topicPartition) match {
+            case Left(err) => new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setPartition(topicPartition.partition())
+              .setErrorCode(err.code())
+            case Right(partition) => partition.log match {
+              case None => new GetReplicaLogInfoResponseData.PartitionLogInfo()
+                .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
+              case Some(log) => {
+                val logEndOffset = log.logEndOffset
+                val lastLeaderEpoch = log.latestEpoch.orElse(-1)
+                val leaderEpoch = partition.getLeaderEpoch
+                new GetReplicaLogInfoResponseData.PartitionLogInfo()
+                  .setPartition(partitionId)
+                  .setLogEndOffset(logEndOffset)
+                  .setCurrentLeaderEpoch(leaderEpoch)
+                  .setLastWrittenLeaderEpoch(lastLeaderEpoch)
+              }
+            }
+          }
+          topicPartitionLogInfo.partitionLogInfo().add(partitionLogInfo)
+          partitionCount += 1
         }
       }
-      topicPartitionLogInfo.setPartitionLogInfo(logInfos asJava)
-    })
-    val responseData = new GetReplicaLogInfoResponseData()
-      .setTopicPartitionLogInfoList(partitionInfoList.asJava)
-      .setBrokerEpoch(brokerEpochSupplier.get())
+      responseData.topicPartitionLogInfoList().add(topicPartitionLogInfo)
+    }
+    responseData.setTruncated(partitionCount == GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST)
     requestHelper.sendMaybeThrottle(request, new GetReplicaLogInfoResponse(responseData))
   }
 

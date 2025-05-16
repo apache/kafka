@@ -13526,6 +13526,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testGetReplicaLogInfoRequestTooManyTopics(): Unit = {
     // 100 topics, 20 partitions per topic = 2k topic-partitions
+    // only first 1000 should be sent back and truncated = true
     val numberUuids = 100
     val numberPartitions = 20
     val uuids: List[Uuid] = (1 to numberUuids).map(_ => Uuid.randomUuid()).toList
@@ -13534,9 +13535,9 @@ class KafkaApisTest extends Logging {
       .setPartitions((1 to numberPartitions).map(new Integer(_)).asJava))
     val builder = new GetReplicaLogInfoRequest.Builder(
       new GetReplicaLogInfoRequestData().setTopicPartitions(tps asJava))
-    val expectedLogEndOffset = 100L
-    val expectedLeaderEpoch = 1
-    val expectedLatestEpoch = 1
+    val expectedLogEndOffset = 10L
+    val expectedLeaderEpoch = 2
+    val expectedLatestEpoch = 3
 
     def mockTopicName(uuid: Uuid, idx: Int): String = s"topic-idx-$idx-with-uuid-$uuid"
 
@@ -13544,7 +13545,12 @@ class KafkaApisTest extends Logging {
     uuids.zipWithIndex.foreach { case (uuid, idx) =>
       when(metadataCache.getTopicName(uuid)).thenReturn(Optional.of(mockTopicName(uuid, idx)))
     }
+
+    val expectedResponseData =
+      new GetReplicaLogInfoResponseData().setTruncated(true).setBrokerEpoch(brokerEpoch)
     uuids.take(50).zipWithIndex.foreach { case (uuid, idx) =>
+      val tpli = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+        .setTopicId(uuid)
       val topicName = mockTopicName(uuid, idx)
       val log = mock(classOf[UnifiedLog])
       when(log.logEndOffset).thenReturn(expectedLogEndOffset)
@@ -13555,22 +13561,18 @@ class KafkaApisTest extends Logging {
         when(partition.getLeaderEpoch).thenReturn(expectedLeaderEpoch)
         when(partition.partitionId).thenReturn(pid)
         when(replicaManager.getPartitionOrError(new TopicPartition(topicName, pid))).thenReturn(Right(partition))
+        tpli.partitionLogInfo().add(new GetReplicaLogInfoResponseData.PartitionLogInfo()
+          .setPartition(pid)
+          .setLogEndOffset(expectedLogEndOffset)
+          .setLastWrittenLeaderEpoch(expectedLatestEpoch)
+          .setCurrentLeaderEpoch(expectedLeaderEpoch))
       }
+      expectedResponseData.topicPartitionLogInfoList().add(tpli)
     }
-    verifyGetReplicaLogInfoRequest(builder, { response =>
-      var idx = 0
-      response.data().topicPartitionLogInfoList.asScala.zip(uuids).foreach { case(topic, expectedUuid) =>
-        assertEquals(expectedUuid, topic.topicId())
-        topic.partitionLogInfo().asScala.foreach { pli =>
-          if (idx < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST)
-            assertEquals(Errors.NONE.code(), pli.errorCode())
-          else
-            assertEquals(Errors.POLICY_VIOLATION.code(), pli.errorCode())
-          idx += 1
-        }
-      }
-    })
 
+    verifyGetReplicaLogInfoRequest(builder, { response =>
+      assertEquals(expectedResponseData, response.data())
+    })
   }
 
   @Test
