@@ -112,85 +112,15 @@ public class EndToEndClusterIdTest {
 
     @ClusterTest
     public void testEndToEndWithClassicProtocol(ClusterInstance clusterInstance) throws Exception {
-        GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
-        MockConsumerInterceptor.resetCounters();
-        MockProducerInterceptor.resetCounters();
-
-        // Should have cluster id at broker metrics reporter after startup
-        Assertions.assertNotNull(MockBrokerMetricsReporter.CLUSTER_META);
-        isValidClusterId(MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
-
-
-        // --- PRODUCER CONFIGURATION ---
-        try (var producer = clusterInstance.<byte[], byte[]>producer(PRODUCER_CONFIG)) {
-            // Send one record and make sure clusterId is set after send and before onAcknowledgement
-            sendRecords(producer, NUM_RECORDS, TP);
-        }
-
-        Assertions.assertNotEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get(), MockProducerInterceptor.NO_CLUSTER_ID);
-        Assertions.assertNotNull(MockProducerInterceptor.CLUSTER_META);
-        Assertions.assertEquals(
-            MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get().clusterId(),
-            MockProducerInterceptor.CLUSTER_META.get().clusterId()
-        );
-        isValidClusterId(MockProducerInterceptor.CLUSTER_META.get().clusterId());
-
-        // Ensure the serializer sees Cluster ID before serialization
-        Assertions.assertNotEquals(MockSerializer.CLUSTER_ID_BEFORE_SERIALIZE.get(), MockSerializer.NO_CLUSTER_ID);
-        Assertions.assertNotNull(MockSerializer.CLUSTER_META);
-        isValidClusterId(MockSerializer.CLUSTER_META.get().clusterId());
-
-        // Producer metric reporter receives cluster id
-        Assertions.assertNotNull(MockProducerMetricsReporter.CLUSTER_META);
-        isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
-
-        // --- CONSUMER CONFIGURATION ---
-        Map<String, Object> consumerConfigWithGroupProtocol = new HashMap<>(CONSUMER_CONFIG);
-        consumerConfigWithGroupProtocol.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
-        try (var consumer = clusterInstance.<byte[], byte[]>consumer(consumerConfigWithGroupProtocol)) {
-            consumer.assign(Collections.singletonList(TP));
-            consumer.seek(TP, 0);
-            // Consume one record
-            consumeRecords(consumer, NUM_RECORDS);
-        }
-
-        // Cluster ID in consumer interceptor before onConsume
-        Assertions.assertNotEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get(), MockConsumerInterceptor.NO_CLUSTER_ID);
-        Assertions.assertNotNull(MockConsumerInterceptor.CLUSTER_META);
-        isValidClusterId(MockConsumerInterceptor.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(
-            MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get().clusterId(),
-            MockConsumerInterceptor.CLUSTER_META.get().clusterId()
-        );
-
-        // Cluster ID in deserializer before deserialize
-        Assertions.assertNotEquals(MockDeserializer.clusterIdBeforeDeserialize.get(), MockDeserializer.noClusterId);
-        Assertions.assertNotNull(MockDeserializer.clusterMeta);
-        isValidClusterId(MockDeserializer.clusterMeta.get().clusterId());
-        Assertions.assertEquals(
-            MockDeserializer.clusterIdBeforeDeserialize.get().clusterId(),
-            MockDeserializer.clusterMeta.get().clusterId()
-        );
-
-        Assertions.assertNotNull(MockConsumerMetricsReporter.CLUSTER_META);
-        isValidClusterId(MockConsumerMetricsReporter.CLUSTER_META.get().clusterId());
-
-        // All components received the same cluster id
-        String id = MockProducerInterceptor.CLUSTER_META.get().clusterId();
-        Assertions.assertEquals(id, MockSerializer.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(id, MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(id, MockConsumerInterceptor.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(id, MockDeserializer.clusterMeta.get().clusterId());
-        Assertions.assertEquals(id, MockConsumerMetricsReporter.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(id, MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
-
-        MockConsumerInterceptor.resetCounters();
-        MockProducerInterceptor.resetCounters();
+        testEndToEnd(GroupProtocol.CONSUMER, clusterInstance);
     }
 
     @ClusterTest
     public void testEndToEndWithConsumerProtocol(ClusterInstance clusterInstance) throws Exception {
-        GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
+        testEndToEnd(GroupProtocol.CONSUMER, clusterInstance);
+    }
+
+    public void testEndToEnd(GroupProtocol groupProtocol, ClusterInstance clusterInstance) throws Exception {
         MockConsumerInterceptor.resetCounters();
         MockProducerInterceptor.resetCounters();
 
