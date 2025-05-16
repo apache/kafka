@@ -17,27 +17,19 @@
 
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterTemplate;
-
-import java.util.List;
-import java.util.Map;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MinInSyncReplicasConfigTest {
 
-    @ClusterTemplate("generateConfig")
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, value = "5")
+    })
     public void testDefaultKafkaConfig(ClusterInstance cluster) {
         assertEquals(5, cluster.brokers().get(0).logManager().initialDefaultConfig().minInSyncReplicas);
-    }
-
-    static List<ClusterConfig> generateConfig() {
-        var props = Map.of(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "5");
-        var config = ClusterConfig.defaultBuilder()
-                .setServerProperties(props)
-                .build();
-        return List.of(config);
     }
 }
