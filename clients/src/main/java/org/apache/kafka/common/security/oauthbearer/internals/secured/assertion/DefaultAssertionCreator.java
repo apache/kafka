@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
 import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,9 +30,9 @@ import java.security.PrivateKey;
 import java.util.Base64;
 import java.util.Optional;
 
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.AssertionUtils.privateKey;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.AssertionUtils.sign;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.checkLastModifiedPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.lastModifiedPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.privateKey;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.sign;
 
 public class DefaultAssertionCreator implements AssertionCreator {
 
@@ -50,7 +51,7 @@ public class DefaultAssertionCreator implements AssertionCreator {
             }
         };
 
-        CachedFile.RefreshPolicy<PrivateKey> privateKeyRefreshPolicy = checkLastModifiedPolicy();
+        CachedFile.RefreshPolicy<PrivateKey> privateKeyRefreshPolicy = lastModifiedPolicy();
         this.privateKeyFile = new CachedFile<>(privateKeyFile, privateKeyTransformer, privateKeyRefreshPolicy);
     }
 

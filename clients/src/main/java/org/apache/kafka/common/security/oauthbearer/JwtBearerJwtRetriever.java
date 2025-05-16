@@ -17,17 +17,17 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AssertionCreator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AssertionJwtTemplate;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAssertionCreator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.FileAssertionCreator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.LayeredAssertionJwtTemplate;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.StaticAssertionJwtTemplate;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionCreator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionJwtTemplate;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.DefaultAssertionCreator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.FileAssertionCreator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.LayeredAssertionJwtTemplate;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.StaticAssertionJwtTemplate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -52,9 +52,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.AssertionUtils.dynamicAssertionJwtTemplate;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.AssertionUtils.fileAssertionJwtTemplate;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.AssertionUtils.staticAssertionJwtTemplate;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.dynamicAssertionJwtTemplate;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.fileAssertionJwtTemplate;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.staticAssertionJwtTemplate;
 
 public class JwtBearerJwtRetriever implements JwtRetriever {
 

@@ -27,7 +27,7 @@ import java.util.Map;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.checkLastModifiedPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.lastModifiedPolicy;
 
 /**
  * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
@@ -44,7 +44,7 @@ public class FileJwtRetriever implements JwtRetriever {
 
         // always non-null; to remove any newline chars or backend will report err
         CachedFile.Transformer<String> transformer = (file, contents) -> contents.trim();
-        jwt = new CachedFile<>(jwtFile, transformer, checkLastModifiedPolicy());
+        jwt = new CachedFile<>(jwtFile, transformer, lastModifiedPolicy());
     }
 
     @Override

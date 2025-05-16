@@ -60,12 +60,12 @@ public class CachedFile<T> {
         /**
          * This policy will refresh the cached file if the snapshot's time is older than the current timestamp.
          */
-        static <T> RefreshPolicy<T> checkLastModifiedPolicy() {
+        static <T> RefreshPolicy<T> lastModifiedPolicy() {
             return (file, snapshot) -> {
                 if (snapshot == null)
                     return true;
 
-                return file.lastModified() > snapshot.lastModified();
+                return file.lastModified() != snapshot.lastModified();
             };
         }
     }

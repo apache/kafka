@@ -14,22 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion;
 
+
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
 
 import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.NOOP_TRANSFORMER;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.checkLastModifiedPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.lastModifiedPolicy;
 
 public class FileAssertionCreator implements AssertionCreator {
 
     private final CachedFile<String> assertionFile;
 
     public FileAssertionCreator(File assertionFile) {
-        this.assertionFile = new CachedFile<>(assertionFile, NOOP_TRANSFORMER, checkLastModifiedPolicy());
+        this.assertionFile = new CachedFile<>(assertionFile, NOOP_TRANSFORMER, lastModifiedPolicy());
     }
 
     @Override

@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -24,7 +25,7 @@ import java.io.File;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.checkLastModifiedPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.lastModifiedPolicy;
 
 /**
  * {@code AssertionJwtTemplateFile} is used by the user to specify a JSON file on disk that contains static values
@@ -134,7 +135,7 @@ public class FileAssertionJwtTemplate implements AssertionJwtTemplate {
     private final CachedFile<CachedTemplate> jsonFile;
 
     public FileAssertionJwtTemplate(File jsonFile) {
-        this.jsonFile = new CachedFile<>(jsonFile, JSON_TRANSFORMER, checkLastModifiedPolicy());
+        this.jsonFile = new CachedFile<>(jsonFile, JSON_TRANSFORMER, lastModifiedPolicy());
     }
 
     @Override
