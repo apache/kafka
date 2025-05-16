@@ -26,7 +26,6 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionJwtTemplate;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.DefaultAssertionCreator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.FileAssertionCreator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.LayeredAssertionJwtTemplate;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.StaticAssertionJwtTemplate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -34,7 +33,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,9 +50,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.dynamicAssertionJwtTemplate;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.fileAssertionJwtTemplate;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.staticAssertionJwtTemplate;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.layeredAssertionJwtTemplate;
 
 public class JwtBearerJwtRetriever implements JwtRetriever {
 
@@ -74,11 +70,10 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
-        String scope = cu.validateString(SCOPE_CONFIG, false);
-
         JaasOptionsUtils jou = new JaasOptionsUtils(JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries));
 
+        URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        String scope = cu.validateString(SCOPE_CONFIG, false);
         SSLSocketFactory sslSocketFactory = null;
 
         if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
@@ -92,11 +87,7 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
             String algorithm = cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
             File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE).toFile();
             assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile, Optional.empty());
-            List<AssertionJwtTemplate> templates = new ArrayList<>();
-            staticAssertionJwtTemplate(cu).ifPresent(templates::add);
-            fileAssertionJwtTemplate(cu).ifPresent(templates::add);
-            templates.add(dynamicAssertionJwtTemplate(cu, time));
-            assertionJwtTemplate = new LayeredAssertionJwtTemplate(templates);
+            assertionJwtTemplate = layeredAssertionJwtTemplate(cu, time);
         }
 
         Supplier<String> assertionSupplier = () -> {

@@ -19,6 +19,11 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion
 import java.util.Collections;
 import java.util.Map;
 
+/**
+ * This {@link AssertionJwtTemplate} uses a static set of headers and claims provided on initialization.
+ * The values typically come from configuration, and it is often used in conjunction with other templates
+ * such as {@link LayeredAssertionJwtTemplate}.
+ */
 public class StaticAssertionJwtTemplate implements AssertionJwtTemplate {
 
     private final Map<String, Object> header;

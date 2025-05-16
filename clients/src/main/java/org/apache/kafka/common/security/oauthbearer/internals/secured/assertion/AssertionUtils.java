@@ -28,8 +28,10 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -99,7 +101,7 @@ public class AssertionUtils {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(signedContent);
     }
 
-    public static Optional<AssertionJwtTemplate> fileAssertionJwtTemplate(ConfigurationUtils cu) {
+    public static Optional<FileAssertionJwtTemplate> fileAssertionJwtTemplate(ConfigurationUtils cu) {
         if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE)) {
             File assertionTemplateFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE).toFile();
             return Optional.of(new FileAssertionJwtTemplate(assertionTemplateFile));
@@ -108,7 +110,7 @@ public class AssertionUtils {
         }
     }
 
-    public static Optional<AssertionJwtTemplate> staticAssertionJwtTemplate(ConfigurationUtils cu) {
+    public static Optional<StaticAssertionJwtTemplate> staticAssertionJwtTemplate(ConfigurationUtils cu) {
         if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD) ||
             cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS) ||
             cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB)) {
@@ -130,11 +132,19 @@ public class AssertionUtils {
         }
     }
 
-    public static AssertionJwtTemplate dynamicAssertionJwtTemplate(ConfigurationUtils cu, Time time) {
+    public static DynamicAssertionJwtTemplate dynamicAssertionJwtTemplate(ConfigurationUtils cu, Time time) {
         String algorithm = cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
         int expSeconds = cu.validateInteger(SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS, true);
         int nbfSeconds = cu.validateInteger(SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS, true);
         boolean includeJti = cu.validateBoolean(SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE, true);
         return new DynamicAssertionJwtTemplate(time, algorithm, expSeconds, nbfSeconds, includeJti);
+    }
+
+    public static LayeredAssertionJwtTemplate layeredAssertionJwtTemplate(ConfigurationUtils cu, Time time) {
+        List<AssertionJwtTemplate> templates = new ArrayList<>();
+        staticAssertionJwtTemplate(cu).ifPresent(templates::add);
+        fileAssertionJwtTemplate(cu).ifPresent(templates::add);
+        templates.add(dynamicAssertionJwtTemplate(cu, time));
+        return new LayeredAssertionJwtTemplate(templates);
     }
 }
