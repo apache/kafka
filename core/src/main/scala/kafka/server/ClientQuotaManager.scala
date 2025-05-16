@@ -155,6 +155,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     case None => new DefaultQuotaCallback
   }
   private val clientQuotaType = QuotaType.toClientQuotaType(quotaType)
+  private val activeQuotaTypes = new ConcurrentHashMap[Int, Int]()
 
   @volatile
   private var quotaTypesEnabled = clientQuotaCallbackPlugin match {
@@ -428,18 +429,21 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     try {
       val quotaEntity = KafkaQuotaEntity(userEntity, clientEntity)
 
-      if (userEntity.nonEmpty) {
-        if (quotaEntity.clientIdEntity.nonEmpty)
-          quotaTypesEnabled |= QuotaTypes.UserClientIdQuotaEnabled
-        else
-          quotaTypesEnabled |= QuotaTypes.UserQuotaEnabled
-      } else if (clientEntity.nonEmpty)
-        quotaTypesEnabled |= QuotaTypes.ClientIdQuotaEnabled
-
-      quota match {
-        case Some(newQuota) => quotaCallback.updateQuota(clientQuotaType, quotaEntity, newQuota.bound)
-        case None => quotaCallback.removeQuota(clientQuotaType, quotaEntity)
+      val quotaTypes = (userEntity.nonEmpty, clientEntity.nonEmpty) match {
+        case (true, true) => QuotaTypes.UserClientIdQuotaEnabled
+        case (true, false) => QuotaTypes.UserQuotaEnabled
+        case (false, true) => QuotaTypes.ClientIdQuotaEnabled
+        case (false, false) => QuotaTypes.NoQuotas
       }
+      quota match {
+        case Some(newQuota) =>
+          quotaCallback.updateQuota(clientQuotaType, quotaEntity, newQuota.bound)
+          updateQuotaTypes(quotaTypes, increment = true)
+        case None =>
+          quotaCallback.removeQuota(clientQuotaType, quotaEntity) // change here.
+          updateQuotaTypes(quotaTypes, increment = false)
+      }
+
       val updatedEntity = if (userEntity.contains(DefaultUserEntity) || clientEntity.contains(DefaultClientIdEntity))
         None // more than one entity may need updating, so `updateQuotaMetricConfigs` will go through all metrics
       else
@@ -448,6 +452,43 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
     } finally {
       lock.writeLock().unlock()
+    }
+  }
+
+  /**
+   * Helper method to update quota types counts and quotaTypesEnabled flag.
+   * @param quotaTypeKey The QuotaTypes constant (e.g., QuotaTypes.UserClientIdQuotaEnabled)
+   * @param increment True to increment count, false to decrement
+   */
+  private def updateQuotaTypes(quotaTypeKey: Int, increment: Boolean): Unit = {
+    if (quotaTypeKey == QuotaTypes.NoQuotas) {
+      return
+    }
+    val previousQuotaTypesEnabled = quotaTypesEnabled
+
+    // Update activeQuotaTypes counts
+    activeQuotaTypes.compute(quotaTypeKey, (_, count) =>
+      if (increment) Option(count).getOrElse(0) + 1
+      else if (Option(count).exists(_ > 1)) count - 1
+      else 0
+    )
+
+    // Update quotaTypesEnabled based on activeQuotaTypes counts
+    quotaTypesEnabled = clientQuotaCallbackPlugin match {
+      case Some(_) => QuotaTypes.CustomQuotas
+      case None =>
+        var newQuotaTypes = QuotaTypes.NoQuotas
+        if (activeQuotaTypes.getOrDefault(QuotaTypes.UserClientIdQuotaEnabled, 0) > 0)
+          newQuotaTypes |= QuotaTypes.UserClientIdQuotaEnabled
+        if (activeQuotaTypes.getOrDefault(QuotaTypes.UserQuotaEnabled, 0) > 0)
+          newQuotaTypes |= QuotaTypes.UserQuotaEnabled
+        if (activeQuotaTypes.getOrDefault(QuotaTypes.ClientIdQuotaEnabled, 0) > 0)
+          newQuotaTypes |= QuotaTypes.ClientIdQuotaEnabled
+        newQuotaTypes
+    }
+
+    if (previousQuotaTypesEnabled != quotaTypesEnabled) {
+      debug(s"Quota types enabled changed from $previousQuotaTypesEnabled to $quotaTypesEnabled")
     }
   }
 
