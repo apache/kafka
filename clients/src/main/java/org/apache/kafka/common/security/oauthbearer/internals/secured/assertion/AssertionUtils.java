@@ -48,6 +48,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 
+/**
+ * Set of utilities for the OAuth JWT assertion logic.
+ */
 public class AssertionUtils {
 
     public static final String TOKEN_SIGNING_ALGORITHM_RS256 = "RS256";
