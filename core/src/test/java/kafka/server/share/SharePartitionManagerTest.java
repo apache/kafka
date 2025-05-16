@@ -47,7 +47,6 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.common.ShareVersion;
@@ -75,10 +74,12 @@ import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
@@ -158,7 +159,7 @@ public class SharePartitionManagerTest {
 
     static final int DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL = 1000;
 
-    private Time time;
+    private MockTime time;
     private ReplicaManager mockReplicaManager;
     private BrokerTopicStats brokerTopicStats;
     private SharePartitionManager sharePartitionManager;
@@ -2802,6 +2803,39 @@ public class SharePartitionManagerTest {
         // Verify the partitions rotation, rotate by 1 (2147483647 % 7).
         resultShareFetch = captor.getValue();
         validateRotatedListEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 1);
+    }
+
+    @Test
+    public void testCreateIdleShareFetchTask() throws Exception {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+
+        MockTimer mockTimer = new MockTimer(time);
+        long maxWaitMs = 1000L;
+
+        // Set up the mock to capture and add the timer task
+        Mockito.doAnswer(invocation -> {
+            TimerTask timerTask = invocation.getArgument(0);
+            mockTimer.add(timerTask);
+            return null;
+        }).when(replicaManager).addShareFetchTimerRequest(Mockito.any(TimerTask.class));
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withTime(time)
+            .withTimer(mockTimer)
+            .build();
+
+        CompletableFuture<Void> future = sharePartitionManager.createIdleShareFetchTimerTask(maxWaitMs);
+        // Future should not be completed immediately
+        assertFalse(future.isDone());
+
+        mockTimer.advanceClock(maxWaitMs / 2);
+        assertFalse(future.isDone());
+
+        mockTimer.advanceClock((maxWaitMs / 2) + 1);
+        // Verify the future is completed after the wait time
+        assertTrue(future.isDone());
+        assertFalse(future.isCompletedExceptionally());
     }
 
     @Test

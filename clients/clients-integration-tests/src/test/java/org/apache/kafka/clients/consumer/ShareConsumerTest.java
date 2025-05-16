@@ -2199,6 +2199,41 @@ public class ShareConsumerTest {
         shareConsumer4.close();
     }
 
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = "group.share.max.size", value = "1"), // Setting max group size to 1
+            @ClusterConfigProperty(key = "group.share.max.share.sessions", value = "1") // Setting max share sessions value to 1
+        }
+    )
+    public void testShareGroupShareSessionCacheIsFull() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group2")) {
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.flush();
+            shareConsumer1.subscribe(Set.of(tp.topic()));
+            shareConsumer2.subscribe(Set.of(tp.topic()));
+
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer1, 2500L, 1);
+            assertEquals(1, records.count());
+
+            producer.send(record);
+            producer.flush();
+
+            // The second share consumer should not throw any exception, but should not receive any records as well.
+            records = shareConsumer2.poll(Duration.ofMillis(1000));
+
+            assertEquals(0, records.count());
+
+            shareConsumer1.close();
+            shareConsumer2.close();
+        }
+    }
+
     @ClusterTest
     public void testReadCommittedIsolationLevel() {
         alterShareAutoOffsetReset("group1", "earliest");
