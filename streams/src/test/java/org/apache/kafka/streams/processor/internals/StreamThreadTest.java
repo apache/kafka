@@ -55,7 +55,6 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -73,7 +72,6 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
-import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -91,7 +89,6 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -107,8 +104,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -117,8 +113,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 
-import java.io.File;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -139,7 +133,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
@@ -149,7 +142,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
-import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -222,13 +214,6 @@ public class StreamThreadTest {
         }
     };
 
-    static Stream<Arguments> data() {
-        return Stream.of(
-            Arguments.of(false),
-            Arguments.of(true)
-        );
-    }
-
     @BeforeEach
     public void setUp() {
         Thread.currentThread().setName(CLIENT_ID + "-StreamThread-" + threadIdx);
@@ -261,7 +246,6 @@ public class StreamThreadTest {
     // task0 is unused
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
-    private final TaskId task3 = new TaskId(1, 1);
 
     private Properties configProps(final boolean enableEoS, final boolean processingThreadsEnabled) {
         return mkProperties(mkMap(
@@ -371,7 +355,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldChangeStateInRebalanceListener(final boolean processingThreadsEnabled) {
         thread = createStreamThread(CLIENT_ID, processingThreadsEnabled);
 
@@ -408,7 +392,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")    
+    @ValueSource(booleans = {true, false})
     public void shouldChangeStateAtStartClose(final boolean processingThreadsEnabled) throws Exception {
         thread = createStreamThread(CLIENT_ID, new MockTime(1), processingThreadsEnabled);
 
@@ -432,7 +416,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldCreateMetricsAtStartup(final boolean processingThreadsEnabled) {
         thread = createStreamThread(CLIENT_ID, new MockTime(1), processingThreadsEnabled);
         final String defaultGroupName = "stream-thread-metrics";
@@ -532,7 +516,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCommitBeforeTheCommitInterval(final boolean processingThreadsEnabled) {
         final long commitInterval = 1000L;
         final Properties props = configProps(false, processingThreadsEnabled);
@@ -559,7 +543,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotPurgeBeforeThePurgeInterval(final boolean processingThreadsEnabled) {
         final long commitInterval = 1000L;
         final long purgeInterval = 2000L;
@@ -587,7 +571,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldAlsoPurgeWhenNothingGetsCommitted(final boolean processingThreadsEnabled) {
         final long purgeInterval = 1000L;
         final Properties props = configProps(false, processingThreadsEnabled);
@@ -619,7 +603,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotProcessWhenPartitionRevoked(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
 
@@ -643,7 +627,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldProcessWhenRunning(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
         final Properties props = configProps(false, processingThreadsEnabled);
@@ -668,7 +652,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldProcessWhenPartitionAssigned(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
         final Properties props = configProps(false, processingThreadsEnabled);
@@ -692,7 +676,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldProcessWhenStarting(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
         final Properties props = configProps(false, processingThreadsEnabled);
@@ -715,7 +699,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldEnforceRebalanceWhenScheduledAndNotCurrentlyRebalancing(final boolean processingThreadsEnabled) throws InterruptedException {
         final Time mockTime = new MockTime(1);
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
@@ -780,7 +764,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotEnforceRebalanceWhenCurrentlyRebalancing(final boolean processingThreadsEnabled) throws InterruptedException {
         final Time mockTime = new MockTime(1);
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
@@ -876,7 +860,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldRespectNumIterationsInMainLoopWithoutProcessingThreads(final boolean processingThreadsEnabled) {
         // With processing threads, there is no guarantee how many iterations will be performed
         assumeFalse(processingThreadsEnabled);
@@ -1003,7 +987,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCauseExceptionIfNothingCommitted(final boolean processingThreadsEnabled) {
         final long commitInterval = 1000L;
         final Properties props = configProps(false, processingThreadsEnabled);
@@ -1032,7 +1016,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldCommitAfterCommitInterval(final boolean processingThreadsEnabled) {
         final long commitInterval = 100L;
         final long commitLatency = 10L;
@@ -1093,7 +1077,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldPurgeAfterPurgeInterval(final boolean processingThreadsEnabled) {
         final long commitInterval = 100L;
         final long purgeInterval = 200L;
@@ -1126,7 +1110,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldRecordCommitLatency(final boolean processingThreadsEnabled) {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -1235,7 +1219,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosDisabled(final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalStreamsBuilder.buildAndOptimizeTopology();
@@ -1275,7 +1259,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldInjectProducerPerThreadUsingClientSupplierOnCreateIfEosV2Enabled(final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
@@ -1312,60 +1296,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
-    public void shouldOnlyCompleteShutdownAfterRebalanceNotInProgress(final boolean processingThreadsEnabled) throws InterruptedException {
-        // The state updater is disabled for this test because this test relies on the fact the mainConsumer.resume()
-        // is not called. This is not true when the state updater is enabled which leads to
-        // java.lang.IllegalStateException: No current assignment for partition topic1-2.
-        // Since this tests verifies an aspect that is independent from the state updater, it is OK to disable
-        // the state updater and leave the rewriting of the test to later, when the code path for disabled state updater
-        // is removed.
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-
-        final Properties props = configProps(true, processingThreadsEnabled);
-        thread =
-            createStreamThread(CLIENT_ID, new StreamsConfig(props), new MockTime(1));
-
-        thread.taskManager().handleRebalanceStart(Collections.singleton(topic1));
-
-        // assign single partition
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
-        assignedPartitions.add(t1p1);
-        assignedPartitions.add(t1p2);
-        activeTasks.put(task1, Collections.singleton(t1p1));
-        activeTasks.put(task2, Collections.singleton(t1p2));
-
-        thread.taskManager().handleAssignment(activeTasks, emptyMap());
-
-        thread.start();
-        TestUtils.waitForCondition(
-                () -> thread.state() == StreamThread.State.STARTING,
-                10 * 1000,
-                "Thread never started.");
-
-        thread.shutdown();
-
-        // even if thread is no longer running, it should still be polling
-        // as long as the rebalance is still ongoing
-        assertFalse(thread.isRunning());
-        assertTrue(thread.isAlive());
-
-        Thread.sleep(1000);
-        assertEquals(Set.of(task1, task2), thread.taskManager().activeTaskIds());
-        assertEquals(StreamThread.State.PENDING_SHUTDOWN, thread.state());
-
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
-
-        TestUtils.waitForCondition(
-            () -> thread.state() == StreamThread.State.DEAD,
-            10 * 1000,
-            "Thread never shut down.");
-        assertEquals(Collections.emptySet(), thread.taskManager().activeTaskIds());
-    }
-
-    @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldShutdownTaskManagerOnClose(final boolean processingThreadsEnabled) {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -1389,7 +1320,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotReturnDataAfterTaskMigrated(final boolean processingThreadsEnabled) {
         final TaskManager taskManager = mock(TaskManager.class);
         final InternalTopologyBuilder internalTopologyBuilder = mock(InternalTopologyBuilder.class);
@@ -1455,7 +1386,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldShutdownTaskManagerOnCloseWithoutStart(final boolean processingThreadsEnabled) {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -1473,7 +1404,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldOnlyShutdownOnce(final boolean processingThreadsEnabled) {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -1493,7 +1424,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotThrowWhenStandbyTasksAssignedAndNoStateStoresForTopology(final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "name", null, null, null, "topic");
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
@@ -1515,7 +1446,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerWasFencedWhileProcessing(final boolean processingThreadsEnabled) throws Exception {
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
         internalTopologyBuilder.addSink("sink", "dummyTopic", null, null, null, "source");
@@ -1629,18 +1560,18 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenSuspendingTasks(final boolean processingThreadsEnabled) throws Exception {
         testThrowingDurringCommitTransactionException(new ProducerFencedException("Producer is fenced"), processingThreadsEnabled);
     }
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfInvalidPidMappingOccurredInCommitTransactionWhenSuspendingTasks(final boolean processingThreadsEnabled) throws Exception {
         testThrowingDurringCommitTransactionException(new InvalidPidMappingException("PidMapping is invalid"), processingThreadsEnabled);
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldReinitializeRevivedTasksInAnyState(final boolean processingThreadsEnabled) throws Exception {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config, new MockTime(1));
@@ -1809,19 +1740,19 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenCommitting(final boolean processingThreadsEnabled) {
         testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(new ProducerFencedException("Producer is fenced"), processingThreadsEnabled);
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfPidMappingIsInvalidInCommitTransactionWhenCommitting(final boolean processingThreadsEnabled) {
         testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(new InvalidPidMappingException("PID Mapping is invalid"), processingThreadsEnabled);
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCloseTaskProducerWhenSuspending(final boolean processingThreadsEnabled) throws Exception {
         final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
@@ -1868,7 +1799,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldReturnActiveTaskMetadataWhileRunningState(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
@@ -1945,7 +1876,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldReturnStandbyTaskMetadataWhileRunningState(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
@@ -1990,43 +1921,6 @@ public class StreamThreadTest {
         assertTrue(threadMetadata.activeTasks().isEmpty());
     }
 
-    @SuppressWarnings("unchecked")
-    @ParameterizedTest
-    @MethodSource("data")        
-    public void shouldUpdateStandbyTask(final boolean processingThreadsEnabled) throws Exception {
-
-        final String storeName1 = "count-one";
-        final String storeName2 = "table-two";
-        final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
-        final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
-        final Properties props = configProps(false, processingThreadsEnabled);
-        final StreamsConfig config = new StreamsConfig(props);
-        thread = createStreamThread(CLIENT_ID, config);
-        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
-
-        setupThread(storeName1, storeName2, changelogName1, changelogName2, restoreConsumer, false);
-
-        runOnce(processingThreadsEnabled);
-
-        final StandbyTask standbyTask1 = standbyTask(thread.taskManager(), t1p1);
-        final StandbyTask standbyTask2 = standbyTask(thread.taskManager(), t2p1);
-        assertEquals(task1, standbyTask1.id());
-        assertEquals(task3, standbyTask2.id());
-
-        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.store(storeName1);
-        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.store(storeName2);
-
-        assertEquals(0L, store1.approximateNumEntries());
-        assertEquals(0L, store2.approximateNumEntries());
-
-        addStandbyRecordsToRestoreConsumer(restoreConsumer);
-
-        runOnce(processingThreadsEnabled);
-
-        assertEquals(10L, store1.approximateNumEntries());
-        assertEquals(4L, store2.approximateNumEntries());
-    }
-
     private void addActiveRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
         for (long i = 0L; i < 10L; i++) {
             restoreConsumer.addRecord(new ConsumerRecord<>(
@@ -2056,123 +1950,8 @@ public class StreamThreadTest {
         }
     }
 
-    private void setupThread(final String storeName1,
-                             final String storeName2,
-                             final String changelogName1,
-                             final String changelogName2,
-                             final MockConsumer<byte[], byte[]> restoreConsumer,
-                             final boolean addActiveTask) throws IOException {
-        final TopicPartition activePartition = new TopicPartition(changelogName1, 2);
-        final TopicPartition partition1 = new TopicPartition(changelogName1, 1);
-        final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
-
-        internalStreamsBuilder
-            .stream(Collections.singleton(topic1), consumed)
-            .groupByKey()
-            .count(Materialized.as(storeName1));
-        final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized
-            = new MaterializedInternal<>(Materialized.as(storeName2), internalStreamsBuilder, "");
-        internalStreamsBuilder.table(topic2, new ConsumedInternal<>(Consumed.with(null, null)), materialized);
-
-        internalStreamsBuilder.buildAndOptimizeTopology();
-        restoreConsumer.updatePartitions(changelogName1,
-            Collections.singletonList(new PartitionInfo(changelogName1, 1, null, new Node[0], new Node[0]))
-        );
-
-        restoreConsumer.updateEndOffsets(Collections.singletonMap(activePartition, 10L));
-        restoreConsumer.updateBeginningOffsets(Collections.singletonMap(activePartition, 0L));
-        ((MockAdminClient) (thread.adminClient())).updateBeginningOffsets(Collections.singletonMap(activePartition, 0L));
-        ((MockAdminClient) (thread.adminClient())).updateEndOffsets(Collections.singletonMap(activePartition, 10L));
-
-        restoreConsumer.updateEndOffsets(Collections.singletonMap(partition1, 10L));
-        restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition1, 0L));
-        restoreConsumer.updateEndOffsets(Collections.singletonMap(partition2, 10L));
-        restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition2, 0L));
-        final OffsetCheckpoint checkpoint
-            = new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(task3), CHECKPOINT_FILE_NAME));
-        checkpoint.write(Collections.singletonMap(partition2, 5L));
-
-        thread.setState(StreamThread.State.STARTING);
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
-
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
-
-        if (addActiveTask) {
-            activeTasks.put(task2, Collections.singleton(t1p2));
-        }
-
-        // assign single partition
-        standbyTasks.put(task1, Collections.singleton(t1p1));
-        standbyTasks.put(task3, Collections.singleton(t2p1));
-
-        thread.taskManager().handleAssignment(activeTasks, standbyTasks);
-        thread.taskManager().tryToCompleteRestoration(mockTime.milliseconds(), null);
-
-        thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
-    }
-
-    @SuppressWarnings("unchecked")
     @ParameterizedTest
-    @MethodSource("data")        
-    public void shouldNotUpdateStandbyTaskWhenPaused(final boolean processingThreadsEnabled) throws Exception {
-
-        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
-        final String storeName1 = "count-one";
-        final String storeName2 = "table-two";
-        final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
-        final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
-        thread = createStreamThread(CLIENT_ID, config);
-        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
-
-        setupThread(storeName1, storeName2, changelogName1, changelogName2, restoreConsumer, true);
-
-        runOnce(processingThreadsEnabled);
-
-        final StreamTask activeTask1 = activeTask(thread.taskManager(), t1p2);
-        final StandbyTask standbyTask1 = standbyTask(thread.taskManager(), t1p1);
-        final StandbyTask standbyTask2 = standbyTask(thread.taskManager(), t2p1);
-        assertEquals(task1, standbyTask1.id());
-        assertEquals(task3, standbyTask2.id());
-
-        final KeyValueStore<Object, Long> activeStore = (KeyValueStore<Object, Long>) activeTask1.store(storeName1);
-
-        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.store(storeName1);
-        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.store(storeName2);
-
-        assertEquals(0L, activeStore.approximateNumEntries());
-        assertEquals(0L, store1.approximateNumEntries());
-        assertEquals(0L, store2.approximateNumEntries());
-
-        // Add some records that the active task would handle
-        addActiveRecordsToRestoreConsumer(restoreConsumer);
-        // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
-        addStandbyRecordsToRestoreConsumer(restoreConsumer);
-
-        // Simulate pause
-        thread.taskManager().topologyMetadata().pauseTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
-        runOnce(processingThreadsEnabled);
-
-        assertEquals(0L, activeStore.approximateNumEntries());
-        assertEquals(0L, store1.approximateNumEntries());
-        assertEquals(0L, store2.approximateNumEntries());
-
-        // Simulate resume
-        thread.taskManager().topologyMetadata().resumeTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
-        runOnce(processingThreadsEnabled);
-
-        assertEquals(10L, activeStore.approximateNumEntries());
-        assertEquals(0L, store1.approximateNumEntries());
-        assertEquals(0L, store2.approximateNumEntries());
-
-        runOnce(processingThreadsEnabled);
-        assertEquals(10L, activeStore.approximateNumEntries());
-        assertEquals(10L, store1.approximateNumEntries());
-        assertEquals(4L, store2.approximateNumEntries());
-    }
-
-    @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldCreateStandbyTask(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         setupInternalTopologyWithoutState(config);
@@ -2182,7 +1961,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCreateStandbyTaskWithoutStateStores(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         setupInternalTopologyWithoutState(config);
@@ -2191,7 +1970,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         setupInternalTopologyWithoutState(config);
@@ -2204,7 +1983,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("deprecation")
     public void shouldPunctuateActiveTask(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
@@ -2279,7 +2058,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldPunctuateWithTimestampPreservedInProcessorContext(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
 
@@ -2353,7 +2132,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldAlwaysUpdateTasksMetadataAfterChangingState(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
@@ -2369,7 +2148,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore(final boolean processingThreadsEnabled) throws Exception {
         internalStreamsBuilder.stream(Collections.singleton("topic"), consumed)
             .groupByKey()
@@ -2485,7 +2264,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldLogAndRecordSkippedMetricForDeserializationException(final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
@@ -2550,7 +2329,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldThrowTaskMigratedExceptionHandlingTaskLost(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
@@ -2578,7 +2357,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldThrowTaskMigratedExceptionHandlingRevocation(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
@@ -2606,7 +2385,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void shouldCatchHandleCorruptionOnTaskCorruptedExceptionPath(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
@@ -2667,7 +2446,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void shouldCatchTimeoutExceptionFromHandleCorruptionAndInvokeExceptionHandler(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
@@ -2734,7 +2513,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void shouldCatchTaskMigratedExceptionOnOnTaskCorruptedExceptionPath(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
@@ -2800,7 +2579,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void shouldEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnActiveTask(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
@@ -2865,7 +2644,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void shouldNotEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnInactiveTask(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
@@ -2928,7 +2707,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotCommitNonRunningNonRestoringTasks(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TaskManager taskManager = mock(TaskManager.class);
@@ -2967,7 +2746,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldLogAndRecordSkippedRecordsForInvalidTimestamps(
         final boolean processingThreadsEnabled
     ) throws Exception {
@@ -3072,7 +2851,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldTransmitTaskManagerMetrics(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
@@ -3099,7 +2878,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldConstructAdminMetrics(final boolean processingThreadsEnabled) {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
@@ -3156,13 +2935,13 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldNotRecordFailedStreamThread(final boolean processingThreadsEnabled) {
         runAndVerifyFailedStreamThreadRecording(false, processingThreadsEnabled);
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldRecordFailedStreamThread(final boolean processingThreadsEnabled) {
         runAndVerifyFailedStreamThreadRecording(true, processingThreadsEnabled);
     }
@@ -3225,7 +3004,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldCheckStateUpdater(final boolean processingThreadsEnabled) {
         final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         thread = setUpThread(streamsConfigProps);
@@ -3242,7 +3021,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldCheckStateUpdaterInBetweenProcessCalls(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
 
@@ -3259,7 +3038,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldUpdateLagsAfterPolling(final boolean processingThreadsEnabled) {
         final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         thread = setUpThread(streamsConfigProps);
@@ -3277,7 +3056,7 @@ public class StreamThreadTest {
 
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldResumePollingForPartitionsWithAvailableSpaceBeforePolling(final boolean processingThreadsEnabled) {
         final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         thread = setUpThread(streamsConfigProps);
@@ -3292,7 +3071,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldRespectPollTimeInPartitionsAssignedStateWithStateUpdater(final boolean processingThreadsEnabled) {
         final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);
@@ -3307,26 +3086,13 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
-    public void shouldNotBlockWhenPollingInPartitionsAssignedStateWithoutStateUpdater(final boolean processingThreadsEnabled) {
-        final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
-        thread = setUpThread(streamsConfigProps);
-        thread.setState(State.STARTING);
-        thread.setState(State.PARTITIONS_ASSIGNED);
-
-        runOnce(processingThreadsEnabled);
-
-        Mockito.verify(mainConsumer).poll(Duration.ZERO);
-    }
-
-    @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldGetMainAndRestoreConsumerInstanceId(final boolean processingThreadsEnabled) throws Exception {
         getClientInstanceId(false, processingThreadsEnabled);
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldGetMainAndRestoreConsumerInstanceIdWithInternalTimeout(final boolean processingThreadsEnabled) throws Exception {
         getClientInstanceId(true, processingThreadsEnabled);
     }
@@ -3372,7 +3138,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldReturnErrorIfMainConsumerInstanceIdNotInitialized(final boolean processingThreadsEnabled) {
         thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
@@ -3388,7 +3154,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldReturnErrorIfRestoreConsumerInstanceIdNotInitialized(final boolean processingThreadsEnabled) {
         thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
@@ -3404,8 +3170,8 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
-    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    @ValueSource(booleans = {true, false})
+    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean processingThreadsEnabled) {
         thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
@@ -3420,7 +3186,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldReturnNullIfMainConsumerTelemetryDisabled(final boolean processingThreadsEnabled) throws Exception {
         clientSupplier.consumer.disableTelemetry();
         thread = createStreamThread("clientId", processingThreadsEnabled);
@@ -3436,7 +3202,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldReturnNullIfRestoreConsumerTelemetryDisabled(final boolean processingThreadsEnabled) throws Exception {
         clientSupplier.restoreConsumer.disableTelemetry();
 
@@ -3453,7 +3219,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldReturnNullIfProducerTelemetryDisabled(final boolean processingThreadsEnabled) throws Exception {
         final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         producer.disableTelemetry();
@@ -3472,7 +3238,7 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldTimeOutOnMainConsumerInstanceId(final boolean processingThreadsEnabled) {
         clientSupplier.consumer.setClientInstanceId(Uuid.randomUuid());
         clientSupplier.consumer.injectTimeoutException(-1);
@@ -3496,7 +3262,7 @@ public class StreamThreadTest {
 
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @ValueSource(booleans = {true, false})
     public void shouldTimeOutOnRestoreConsumerInstanceId(final boolean processingThreadsEnabled) {
         clientSupplier.restoreConsumer.setClientInstanceId(Uuid.randomUuid());
         clientSupplier.restoreConsumer.injectTimeoutException(-1);
@@ -3520,8 +3286,8 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
-    public void shouldTimeOutOnProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    @ValueSource(booleans = {true, false})
+    public void shouldTimeOutOnProducerInstanceId(final boolean processingThreadsEnabled) {
         final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         producer.setClientInstanceId(Uuid.randomUuid());
         producer.injectTimeoutException(-1);
@@ -3990,25 +3756,6 @@ public class StreamThreadTest {
             new byte[0],
             new RecordHeaders(),
             Optional.empty()));
-    }
-
-    StreamTask activeTask(final TaskManager taskManager, final TopicPartition partition) {
-        final Stream<Task> standbys = taskManager.allTasks().values().stream().filter(Task::isActive);
-        for (final Task task : (Iterable<Task>) standbys::iterator) {
-            if (task.inputPartitions().contains(partition)) {
-                return (StreamTask) task;
-            }
-        }
-        return null;
-    }
-    StandbyTask standbyTask(final TaskManager taskManager, final TopicPartition partition) {
-        final Stream<Task> standbys = taskManager.standbyTaskMap().values().stream();
-        for (final Task task : (Iterable<Task>) standbys::iterator) {
-            if (task.inputPartitions().contains(partition)) {
-                return (StandbyTask) task;
-            }
-        }
-        return null;
     }
 
     private StreamThread buildStreamThread(final Consumer<byte[], byte[]> consumer,

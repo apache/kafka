@@ -88,7 +88,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -120,7 +119,6 @@ public class ProcessorStateManagerTest {
     private final byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
     private final ConsumerRecord<byte[], byte[]> consumerRecord =
         new ConsumerRecord<>(persistentStoreTopicName, 1, 100L, keyBytes, valueBytes);
-    private final MockChangelogReader changelogReader = new MockChangelogReader();
     private final LogContext logContext = new LogContext("process-state-manager-test ");
     private final StateRestoreCallback noopStateRestoreCallback = (k, v) -> { };
 
@@ -303,49 +301,6 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldUnregisterChangelogsDuringClose() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-        final StateStore store = mock(StateStore.class);
-        when(store.name()).thenReturn(persistentStoreName);
-
-        stateMgr.registerStateStores(singletonList(store), context);
-
-        verify(context).uninitialize();
-        verify(store).init(context, store);
-
-        stateMgr.registerStore(store, noopStateRestoreCallback, null);
-        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
-
-        stateMgr.close();
-        verify(store).close();
-
-        assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-    }
-
-    @Test
-    public void shouldRecycleStoreAndReregisterChangelog() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-        final StateStore store = mock(StateStore.class);
-        when(store.name()).thenReturn(persistentStoreName);
-
-        stateMgr.registerStateStores(singletonList(store), context);
-        verify(context).uninitialize();
-        verify(store).init(context, store);
-
-        stateMgr.registerStore(store, noopStateRestoreCallback, null);
-        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
-
-        stateMgr.recycle();
-        assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
-
-        stateMgr.registerStateStores(singletonList(store), context);
-
-        verify(context, times(2)).uninitialize();
-        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
-    }
-
-    @Test
     public void shouldClearStoreCache() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         final CachingStore store = mock(CachingStore.class);
@@ -356,10 +311,9 @@ public class ProcessorStateManagerTest {
         verify(store).init(context, store);
 
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
-        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
+        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
 
         stateMgr.recycle();
-        assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
         assertThat(stateMgr.store(persistentStoreName), equalTo(store));
 
         verify(store).clearCache();
@@ -371,7 +325,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
-            assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
+            assertEquals(persistentStore, stateMgr.store(persistentStoreName));
         } finally {
             stateMgr.close();
         }
@@ -383,26 +337,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback, null);
-            assertTrue(changelogReader.isPartitionRegistered(nonPersistentStorePartition));
-        } finally {
-            stateMgr.close();
-        }
-    }
-
-    @Test
-    public void shouldNotRegisterNonLoggedStore() {
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(
-            taskId,
-            Task.TaskType.STANDBY,
-            false,
-            logContext,
-            stateDirectory,
-            emptyMap(),
-            emptySet());
-
-        try {
-            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
-            assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
+            assertEquals(nonPersistentStore, stateMgr.store(nonPersistentStoreName));
         } finally {
             stateMgr.close();
         }
