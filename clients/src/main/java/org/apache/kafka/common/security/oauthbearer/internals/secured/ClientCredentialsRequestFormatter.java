@@ -17,7 +17,6 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.URLEncoder;
@@ -25,6 +24,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
 
 public class ClientCredentialsRequestFormatter implements HttpRequestFormatter {
 
@@ -38,23 +40,27 @@ public class ClientCredentialsRequestFormatter implements HttpRequestFormatter {
 
     public ClientCredentialsRequestFormatter(String clientId, String clientSecret, String scope, boolean urlencode) {
         if (Utils.isBlank(clientId))
-            throw new ConfigException(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, clientId);
+            throw new ConfigException(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, clientId);
 
         if (Utils.isBlank(clientSecret))
-            throw new ConfigException(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, clientId);
+            throw new ConfigException(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, clientId);
 
         clientId = clientId.trim();
         clientSecret = clientSecret.trim();
+        scope = Utils.isBlank(scope) ? null : scope.trim();
 
         // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
         if (urlencode) {
             clientId = URLEncoder.encode(clientId, StandardCharsets.UTF_8);
             clientSecret = URLEncoder.encode(clientSecret, StandardCharsets.UTF_8);
+
+            if (scope != null)
+                scope = URLEncoder.encode(scope, StandardCharsets.UTF_8);
         }
 
         this.clientId = clientId;
         this.clientSecret = clientSecret;
-        this.scope = Utils.isBlank(scope) ? null : scope.trim();
+        this.scope = scope;
     }
 
     @Override
@@ -75,12 +81,10 @@ public class ClientCredentialsRequestFormatter implements HttpRequestFormatter {
     @Override
     public String formatBody() {
         StringBuilder requestParameters = new StringBuilder();
-        requestParameters.append("grant_type=client_credentials");
+        requestParameters.append("grant_type=").append(GRANT_TYPE);
 
-        if (scope != null) {
-            String encodedScope = URLEncoder.encode(scope, StandardCharsets.UTF_8);
-            requestParameters.append("&scope=").append(encodedScope);
-        }
+        if (scope != null)
+            requestParameters.append("&scope=").append(scope);
 
         return requestParameters.toString();
     }
