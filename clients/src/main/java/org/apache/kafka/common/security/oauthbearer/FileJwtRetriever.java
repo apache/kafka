@@ -17,50 +17,45 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.utils.Utils;
 
-import java.io.IOException;
-import java.nio.file.Path;
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.checkLastModifiedPolicy;
 
 /**
  * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
  * of a file, interpreting them as a JWT access key in the serialized form.
- *
- * @see JwtRetriever
  */
-
 public class FileJwtRetriever implements JwtRetriever {
 
-    private String accessToken;
+    private CachedFile<String> jwt;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        Path accessTokenFile = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        File jwtFile = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).toFile();
 
-        try {
-            this.accessToken = Utils.readFileAsString(accessTokenFile.toFile().getPath());
-            // always non-null; to remove any newline chars or backend will report err
-            this.accessToken = this.accessToken.trim();
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        }
+        // always non-null; to remove any newline chars or backend will report err
+        CachedFile.Transformer<String> transformer = (file, contents) -> contents.trim();
+        jwt = new CachedFile<>(jwtFile, transformer, checkLastModifiedPolicy());
     }
 
     @Override
     public String retrieve() throws JwtRetrieverException {
-        if (accessToken == null)
-            throw new IllegalStateException("Access token is null; please call configure() first");
+        if (jwt == null)
+            throw new IllegalStateException("JWT is null; please call configure() first");
 
-        return accessToken;
+        try {
+            return jwt.transformed();
+        } catch (Exception e) {
+            throw new JwtRetrieverException(e);
+        }
     }
-
 }

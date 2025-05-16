@@ -24,7 +24,7 @@ import java.io.File;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.staticCacheRefreshPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.checkLastModifiedPolicy;
 
 /**
  * {@code AssertionJwtTemplateFile} is used by the user to specify a JSON file on disk that contains static values
@@ -117,7 +117,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Cac
 public class FileAssertionJwtTemplate implements AssertionJwtTemplate {
 
     @SuppressWarnings("unchecked")
-    private static final CachedFile.FileTransformer<CachedTemplate> JSON_TRANSFORMER = (file, json) -> {
+    private static final CachedFile.Transformer<CachedTemplate> JSON_TRANSFORMER = (file, json) -> {
         try {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> map = (Map<String, Object>) mapper.readValue(json, Map.class);
@@ -134,7 +134,7 @@ public class FileAssertionJwtTemplate implements AssertionJwtTemplate {
     private final CachedFile<CachedTemplate> jsonFile;
 
     public FileAssertionJwtTemplate(File jsonFile) {
-        this.jsonFile = new CachedFile<>(jsonFile, JSON_TRANSFORMER, staticCacheRefreshPolicy());
+        this.jsonFile = new CachedFile<>(jsonFile, JSON_TRANSFORMER, checkLastModifiedPolicy());
     }
 
     @Override

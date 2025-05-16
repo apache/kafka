@@ -31,7 +31,7 @@ import java.util.Optional;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.AssertionUtils.privateKey;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.AssertionUtils.sign;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.staticCacheRefreshPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.checkLastModifiedPolicy;
 
 public class DefaultAssertionCreator implements AssertionCreator {
 
@@ -42,7 +42,7 @@ public class DefaultAssertionCreator implements AssertionCreator {
     public DefaultAssertionCreator(String algorithm, File privateKeyFile, Optional<String> passphrase) {
         this.algorithm = algorithm;
 
-        CachedFile.FileTransformer<PrivateKey> privateKeyTransformer = (file, privateKeyContents) -> {
+        CachedFile.Transformer<PrivateKey> privateKeyTransformer = (file, privateKeyContents) -> {
             try {
                 return privateKey(privateKeyContents.getBytes(StandardCharsets.UTF_8), passphrase);
             } catch (GeneralSecurityException | IOException e) {
@@ -50,8 +50,8 @@ public class DefaultAssertionCreator implements AssertionCreator {
             }
         };
 
-        CachedFile.FileRefreshPolicy<PrivateKey> privateKeyFileRefreshPolicy = staticCacheRefreshPolicy();
-        this.privateKeyFile = new CachedFile<>(privateKeyFile, privateKeyTransformer, privateKeyFileRefreshPolicy);
+        CachedFile.RefreshPolicy<PrivateKey> privateKeyRefreshPolicy = checkLastModifiedPolicy();
+        this.privateKeyFile = new CachedFile<>(privateKeyFile, privateKeyTransformer, privateKeyRefreshPolicy);
     }
 
     @Override

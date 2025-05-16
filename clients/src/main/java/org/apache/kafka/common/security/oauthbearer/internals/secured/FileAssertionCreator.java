@@ -16,25 +16,20 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.KafkaException;
 
 import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.NOOP_TRANSFORMER;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.staticCacheRefreshPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.checkLastModifiedPolicy;
 
 public class FileAssertionCreator implements AssertionCreator {
 
     private final CachedFile<String> assertionFile;
 
     public FileAssertionCreator(File assertionFile) {
-        try {
-            this.assertionFile = new CachedFile<>(assertionFile, NOOP_TRANSFORMER, staticCacheRefreshPolicy());
-        } catch (Exception e) {
-            throw new KafkaException("An error occurred reading the OAuth JWT from " + assertionFile);
-        }
+        this.assertionFile = new CachedFile<>(assertionFile, NOOP_TRANSFORMER, checkLastModifiedPolicy());
     }
 
     @Override

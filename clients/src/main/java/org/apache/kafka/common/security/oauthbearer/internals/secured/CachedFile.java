@@ -21,32 +21,69 @@ import org.apache.kafka.common.KafkaException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.function.BiFunction;
 
+/**
+ * {@code CachedFile} goes a little beyond the basic file caching mechanism by allowing the file to be "transformed"
+ * into an in-memory representation of the file contents for easier use by the caller.
+ *
+ * @param <T> Type of the "transformed" file contents
+ */
 public class CachedFile<T> {
 
-    public interface FileTransformer<T> extends BiFunction<File, String, T> { }
-    public interface FileRefreshPolicy<T> extends BiFunction<File, CachedFileInfo<T>, Boolean> { }
+    /**
+     * Function object that provides as arguments the file and its contents and returns the in-memory representation
+     * of the file contents.
+     */
+    public interface Transformer<T> {
 
-    public static final FileTransformer<String> NOOP_TRANSFORMER = (file, contents) -> contents;
+        T transform(File file, String contents);
+    }
 
-    protected final File file;
-    protected final FileTransformer<T> transformer;
-    protected final FileRefreshPolicy<T> cacheRefreshPolicy;
-    protected CachedFileInfo<T> cachedFileInfo;
+    /**
+     * Function object that provides as arguments the file and its metadata and returns a flag to determine if the
+     * file should be reloaded from disk.
+     */
+    public interface RefreshPolicy<T> {
 
-    public CachedFile(File file, FileTransformer<T> transformer, FileRefreshPolicy<T> cacheRefreshPolicy) {
+        /**
+         * Given the {@link File} and its snapshot, determine if the file should be reloaded from disk.
+         */
+        boolean shouldRefresh(File file, Snapshot<T> snapshot);
+
+        /**
+         * This cache refresh policy only loads the file once.
+         */
+        static <T> RefreshPolicy<T> staticPolicy() {
+            return (file, snapshot) -> snapshot == null;
+        }
+
+        /**
+         * This policy will refresh the cached file if the snapshot's time is older than the current timestamp.
+         */
+        static <T> RefreshPolicy<T> checkLastModifiedPolicy() {
+            return (file, snapshot) -> {
+                if (snapshot == null)
+                    return true;
+
+                return file.lastModified() > snapshot.lastModified();
+            };
+        }
+    }
+
+    /**
+     * No-op transformer that retains the basic file contents as a string.
+     */
+    public static final Transformer<String> NOOP_TRANSFORMER = (file, contents) -> contents;
+
+    private final File file;
+    private final Transformer<T> transformer;
+    private final RefreshPolicy<T> cacheRefreshPolicy;
+    private Snapshot<T> snapshot;
+
+    public CachedFile(File file, Transformer<T> transformer, RefreshPolicy<T> cacheRefreshPolicy) {
         this.file = file;
         this.transformer = transformer;
         this.cacheRefreshPolicy = cacheRefreshPolicy;
-    }
-
-    public static <T> FileRefreshPolicy<T> staticCacheRefreshPolicy() {
-        return (file, cachedFileInfo) -> cachedFileInfo == null;
-    }
-
-    public static <T> FileRefreshPolicy<T> lastModifiedCacheRefreshPolicy() {
-        return (file, cachedFileInfo) -> cachedFileInfo == null || cachedFileInfo.lastModified() != file.lastModified();
     }
 
     public long size() {
@@ -65,8 +102,8 @@ public class CachedFile<T> {
         return cachedFileInfo().transformed();
     }
 
-    protected CachedFileInfo<T> cachedFileInfo() {
-        if (cacheRefreshPolicy.apply(file, cachedFileInfo)) {
+    private Snapshot<T> cachedFileInfo() {
+        if (cacheRefreshPolicy.shouldRefresh(file, snapshot)) {
             long size = file.length();
             long lastModified = file.lastModified();
             String contents;
@@ -77,14 +114,14 @@ public class CachedFile<T> {
                 throw new KafkaException("Error reading the file contents of OAuth resource " + file.getPath() + " for caching");
             }
 
-            T transformed = transformer.apply(file, contents);
-            cachedFileInfo = new CachedFileInfo<>(size, lastModified, contents, transformed);
+            T transformed = transformer.transform(file, contents);
+            snapshot = new Snapshot<>(size, lastModified, contents, transformed);
         }
 
-        return cachedFileInfo;
+        return snapshot;
     }
 
-    public static class CachedFileInfo<T> {
+    public static class Snapshot<T> {
 
         private final long size;
 
@@ -94,7 +131,7 @@ public class CachedFile<T> {
 
         private final T transformed;
 
-        public CachedFileInfo(long size, long lastModified, String contents, T transformed) {
+        public Snapshot(long size, long lastModified, String contents, T transformed) {
             this.size = size;
             this.lastModified = lastModified;
             this.contents = contents;
