@@ -255,13 +255,13 @@ public class EosTestDriver extends SmokeTestUtil {
         boolean isEmpty;
         do {
             if (Objects.equals(groupProtocol, "streams")) {
-                StreamsGroupDescription description = getStreamsGroupDescription(adminClient);
+                final StreamsGroupDescription description = getStreamsGroupDescription(adminClient);
                 isEmpty = description.members().isEmpty();
                 if (System.currentTimeMillis() > maxWaitTime && !isEmpty) {
                     throwNotDownException(description);
                 }
             } else {
-                ConsumerGroupDescription description = getConsumerGroupDescription(adminClient);
+                final ConsumerGroupDescription description = getConsumerGroupDescription(adminClient);
                 isEmpty = description.members().isEmpty();
                 if (System.currentTimeMillis() > maxWaitTime && !isEmpty) {
                     throwNotDownException(description);
@@ -271,7 +271,7 @@ public class EosTestDriver extends SmokeTestUtil {
         } while (!isEmpty);
     }
 
-    private static void throwNotDownException(Object description) {
+    private static void throwNotDownException(final Object description) {
         throw new RuntimeException(
             "Streams application not down after " + MAX_IDLE_TIME_MS / 1000L + " seconds. " +
                 "Group: " + description

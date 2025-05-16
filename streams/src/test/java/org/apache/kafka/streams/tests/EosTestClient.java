@@ -190,8 +190,8 @@ public class EosTestClient extends SmokeTestUtil {
     // Detect a completed rebalance by checking if the group epoch has been bumped for all threads.
     private void logGroupEpochBump() {
         int currentMin = Integer.MAX_VALUE;
-        for (CapturingConsumerWrapper consumer : CAPTURING_CONSUMER_WRAPPERS) {
-            int groupEpoch = consumer.lastSeenGroupEpoch;
+        for (final CapturingConsumerWrapper consumer : CAPTURING_CONSUMER_WRAPPERS) {
+            final int groupEpoch = consumer.lastSeenGroupEpoch;
             if (groupEpoch < currentMin) {
                 currentMin = groupEpoch;
             }
@@ -216,7 +216,7 @@ public class EosTestClient extends SmokeTestUtil {
 
         @Override
         public ConsumerGroupMetadata groupMetadata() {
-            ConsumerGroupMetadata consumerGroupMetadata = delegate.groupMetadata();
+            final ConsumerGroupMetadata consumerGroupMetadata = delegate.groupMetadata();
             lastSeenGroupEpoch = consumerGroupMetadata.generationId();
             return consumerGroupMetadata;
         }
