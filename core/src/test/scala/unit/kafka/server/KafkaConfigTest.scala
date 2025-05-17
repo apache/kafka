@@ -1137,6 +1137,8 @@ class KafkaConfigTest {
         // topic only config
         case QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
+        case "internal.segment.bytes" =>
+        // topic internal config
         case prop =>
           fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
       }
