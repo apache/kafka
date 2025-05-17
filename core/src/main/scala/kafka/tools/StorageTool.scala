@@ -376,7 +376,7 @@ object StorageTool extends Logging {
 
   def configToLogDirectories(config: KafkaConfig): Seq[String] = {
     val directories = new mutable.TreeSet[String]
-    directories ++= config.logDirs
+    directories ++= config.logDirs.asScala
     Option(config.metadataLogDir).foreach(directories.add)
     directories.toSeq
   }
