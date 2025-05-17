@@ -457,67 +457,73 @@ public class StreamThread extends Thread implements ProcessingThread {
                 threadIdx
             );
 
-        final TaskManager taskManager = new TaskManager(
-            time,
-            changelogReader,
-            new ProcessId(processId),
-            logPrefix,
-            activeTaskCreator,
-            standbyTaskCreator,
-            tasks,
-            topologyMetadata,
-            adminClient,
-            stateDirectory,
-            stateUpdater,
-            schedulingTaskManager
-        );
-        referenceContainer.taskManager = taskManager;
+        try {
+            final TaskManager taskManager = new TaskManager(
+                time,
+                changelogReader,
+                new ProcessId(processId),
+                logPrefix,
+                activeTaskCreator,
+                standbyTaskCreator,
+                tasks,
+                topologyMetadata,
+                adminClient,
+                stateDirectory,
+                stateUpdater,
+                schedulingTaskManager
+            );
+            referenceContainer.taskManager = taskManager;
 
-        log.info("Creating consumer client");
-        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, consumerClientId(threadId), threadIdx);
-        consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
+            log.info("Creating consumer client");
+            final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+            final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, consumerClientId(threadId), threadIdx);
+            consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
 
-        final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
-        // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
-        if (topologyMetadata.hasOffsetResetOverrides()) {
-            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+            final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+            // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
+            if (topologyMetadata.hasOffsetResetOverrides()) {
+                consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+            }
+
+            final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, log, consumerConfigs);
+
+            taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
+            referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
+
+            final StreamsThreadMetricsDelegatingReporter reporter = new StreamsThreadMetricsDelegatingReporter(mainConsumerSetup.mainConsumer, threadId, Optional.of(stateUpdaterId));
+            streamsMetrics.metricsRegistry().addReporter(reporter);
+
+            final StreamThread streamThread = new StreamThread(
+                time,
+                config,
+                adminClient,
+                mainConsumerSetup.mainConsumer,
+                restoreConsumer,
+                changelogReader,
+                originalReset,
+                taskManager,
+                stateUpdater,
+                streamsMetrics,
+                topologyMetadata,
+                processId,
+                threadId,
+                logContext,
+                referenceContainer.assignmentErrorCode,
+                referenceContainer.nextScheduledRebalanceMs,
+                referenceContainer.nonFatalExceptionsToHandle,
+                shutdownErrorHook,
+                streamsUncaughtExceptionHandler,
+                cache::resize,
+                mainConsumerSetup.streamsRebalanceData,
+                streamsMetadataState
+            );
+
+            return streamThread.updateThreadMetadata(adminClientId(clientId));
+        } catch (final Throwable t) {
+            log.error("Exception during StreamThread creation, shutting down the StateUpdater.", t);
+            stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
+            throw t;
         }
-
-        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, log, consumerConfigs);
-
-        taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
-        referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
-
-        final StreamsThreadMetricsDelegatingReporter reporter = new StreamsThreadMetricsDelegatingReporter(mainConsumerSetup.mainConsumer, threadId, Optional.of(stateUpdaterId));
-        streamsMetrics.metricsRegistry().addReporter(reporter);
-
-        final StreamThread streamThread = new StreamThread(
-            time,
-            config,
-            adminClient,
-            mainConsumerSetup.mainConsumer,
-            restoreConsumer,
-            changelogReader,
-            originalReset,
-            taskManager,
-            stateUpdater,
-            streamsMetrics,
-            topologyMetadata,
-            processId,
-            threadId,
-            logContext,
-            referenceContainer.assignmentErrorCode,
-            referenceContainer.nextScheduledRebalanceMs,
-            referenceContainer.nonFatalExceptionsToHandle,
-            shutdownErrorHook,
-            streamsUncaughtExceptionHandler,
-            cache::resize,
-            mainConsumerSetup.streamsRebalanceData,
-            streamsMetadataState
-        );
-
-        return streamThread.updateThreadMetadata(adminClientId(clientId));
     }
 
     private static MainConsumerSetup setupMainConsumer(final TopologyMetadata topologyMetadata,
