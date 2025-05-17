@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -47,6 +48,7 @@ import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
 import static org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
@@ -489,7 +491,10 @@ public class PlaintextConsumerPollTest {
     }
 
     private void testNoOffsetForPartitionExceptionOnPollZero(GroupProtocol groupProtocol) throws InterruptedException {
-        Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT), ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+        Map<String, Object> config = Map.of(
+            GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT), 
+            AUTO_OFFSET_RESET_CONFIG, "none"
+        );
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
             consumer.assign(List.of(tp));
 
@@ -504,6 +509,69 @@ public class PlaintextConsumerPollTest {
                 }
                 return false;
             }, "Continuous poll not fail");
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerRecoveryOnPollAfterDelayedRebalance() throws InterruptedException {
+        testConsumerRecoveryOnPollAfterDelayedRebalance(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerRecoveryOnPollAfterDelayedRebalance() throws InterruptedException {
+        testConsumerRecoveryOnPollAfterDelayedRebalance(GroupProtocol.CONSUMER);
+    }
+    
+    public void testConsumerRecoveryOnPollAfterDelayedRebalance(GroupProtocol groupProtocol) throws InterruptedException {
+        var rebalanceTimeout = 1000;
+        Map<String, Object> config = Map.of(
+            GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
+            MAX_POLL_INTERVAL_MS_CONFIG, 1000,
+            ENABLE_AUTO_COMMIT_CONFIG, false
+        );
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             // Subscribe consumer that will reconcile in time on the first rebalance, but will
+             // take longer than the allowed timeout in the second rebalance (onPartitionsRevoked) to get fenced by the broker.
+             // The consumer should recover after being fenced (automatically rejoin the group on the next call to poll)
+             Consumer<byte[], byte[]> consumer = cluster.consumer(config)
+        ) {
+            var numMessages = 10;
+            var otherTopic = "otherTopic";
+            var tpOther = new TopicPartition("otherTopic", 0);
+            cluster.createTopic(otherTopic, 1, (short) BROKER_COUNT);
+            sendRecords(producer, tpOther, numMessages, System.currentTimeMillis(), -1);
+            sendRecords(producer, tp, numMessages, System.currentTimeMillis(), -1);
+
+            var rebalanceTimeoutExceeded = new AtomicBoolean(false);
+
+            var listener = new TestConsumerReassignmentListener() {
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    if (!partitions.isEmpty() && partitions.contains(tp)) {
+                        // on the second rebalance (after we have joined the group initially), sleep longer
+                        // than rebalance timeout to get fenced.
+                        Utils.sleep(rebalanceTimeout + 500);
+                        rebalanceTimeoutExceeded.set(true);
+                    }
+                    super.onPartitionsRevoked(partitions);
+                }
+            };
+            // Subscribe to get first assignment (no delays) and verify consumption
+            consumer.subscribe(List.of(topic), listener);
+            var records = awaitNonEmptyRecords(consumer, tp, 0L);
+            assertEquals(numMessages, records.count());
+
+            // Subscribe to different topic. This will trigger the delayed revocation exceeding rebalance timeout and get fenced
+            consumer.subscribe(List.of(otherTopic), listener);
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(100));
+                return rebalanceTimeoutExceeded.get();
+            }, "Timeout waiting for delayed callback to complete");
+
+            // Verify consumer recovers after being fenced, being able to continue consuming.
+            // (The member should automatically rejoin on the next poll, with the new topic as subscription)
+            records = awaitNonEmptyRecords(consumer, tpOther, 0L);
+            assertEquals(numMessages, records.count());
         }
     }
 
@@ -575,7 +643,7 @@ public class PlaintextConsumerPollTest {
      * @param partitions set of partitions that consumers subscribed to
      * @return true if partition assignment is valid
      */
-    protected boolean isPartitionAssignmentValid(
+    private boolean isPartitionAssignmentValid(
         List<Set<TopicPartition>> assignments,
         Set<TopicPartition> partitions
     ) {
@@ -619,7 +687,7 @@ public class PlaintextConsumerPollTest {
      * @param subscriptions   set of all topic partitions
      * @param msg             message to print when waiting for/validating assignment fails
      */
-    protected void validateGroupAssignment(
+    private void validateGroupAssignment(
         List<ConsumerAssignmentPoller> consumerPollers,
         Set<TopicPartition> subscriptions,
         String msg
@@ -636,7 +704,7 @@ public class PlaintextConsumerPollTest {
         );
     }
 
-    protected ConsumerRecords<byte[], byte[]> awaitNonEmptyRecords(
+    private ConsumerRecords<byte[], byte[]> awaitNonEmptyRecords(
         Consumer<byte[], byte[]> consumer,
         TopicPartition partition,
         long pollTimeoutMs
