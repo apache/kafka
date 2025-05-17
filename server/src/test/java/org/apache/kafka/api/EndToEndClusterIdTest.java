@@ -69,7 +69,6 @@ public class EndToEndClusterIdTest {
 
     private static final String TOPIC = "e2etopic";
     private static final int PARTITION = 0;
-    private static final int NUM_RECORDS = 1;
     private static final TopicPartition TP = new TopicPartition(TOPIC, PARTITION);
     private final ClusterInstance clusterInstance;
 
@@ -134,7 +133,7 @@ public class EndToEndClusterIdTest {
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName());
         try (var producer = clusterInstance.<byte[], byte[]>producer(producerConfig)) {
             // Send one record and make sure clusterId is set after sending and before onAcknowledgement
-            sendRecords(producer);
+            sendRecord(producer);
         }
         assertNotEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get(), MockProducerInterceptor.NO_CLUSTER_ID);
         assertNotNull(MockProducerInterceptor.CLUSTER_META);
@@ -161,7 +160,7 @@ public class EndToEndClusterIdTest {
             consumer.assign(List.of(TP));
             consumer.seek(TP, 0);
             // consume and verify that values are modified by interceptors
-            consumeRecords(consumer);
+            consumeRecord(consumer);
         }
 
         // Check that cluster id is present after the first poll call.
@@ -197,25 +196,21 @@ public class EndToEndClusterIdTest {
         MockProducerInterceptor.resetCounters();
     }
 
-    private static void sendRecords(Producer<byte[], byte[]> producer) throws Exception {
-        for (int i = 0; i < NUM_RECORDS; i++) {
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(TP.topic(), TP.partition(), String.valueOf(i).getBytes(), String.valueOf(i).getBytes());
-            producer.send(record).get();
-        }
+    private static void sendRecord(Producer<byte[], byte[]> producer) throws Exception {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(TP.topic(), TP.partition(), "0".getBytes(), "0".getBytes());
+        producer.send(record).get();
     }
 
-    private void consumeRecords(Consumer<byte[], byte[]> consumer) throws InterruptedException {
+    private void consumeRecord(Consumer<byte[], byte[]> consumer) throws InterruptedException {
         List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
             consumer.poll(Duration.ofMillis(100)).forEach(records::add);
-            return records.size() >= NUM_RECORDS;
-        }, 60000, "Timed out before consuming expected " + NUM_RECORDS + " records.");
+            return !records.isEmpty();
+        }, 60000, "Timed out before consuming expected record.");
 
-        for (int i = 0; i < NUM_RECORDS; i++) {
-            ConsumerRecord<byte[], byte[]> record = records.get(i);
-            assertEquals(TOPIC, record.topic());
-            assertEquals(PARTITION, record.partition());
-            assertEquals(i, record.offset());
-        }
+        ConsumerRecord<byte[], byte[]> record = records.get(0);
+        assertEquals(TOPIC, record.topic());
+        assertEquals(PARTITION, record.partition());
+        assertEquals(0, record.offset());
     }
 }
