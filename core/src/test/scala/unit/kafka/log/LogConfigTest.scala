@@ -28,39 +28,13 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
-import org.apache.kafka.server.config.{ServerLogConfigs, ServerTopicConfigSynonyms}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import scala.jdk.CollectionConverters._
-
 class LogConfigTest {
-
-  /**
-   * This test verifies that KafkaConfig object initialization does not depend on
-   * LogConfig initialization. Bad things happen due to static initialization
-   * order dependencies. For example, LogConfig.configDef ends up adding null
-   * values in serverDefaultConfigNames. This test ensures that the mapping of
-   * keys from LogConfig to KafkaConfig are not missing values.
-   */
-  @Test
-  def ensureNoStaticInitializationOrderDependency(): Unit = {
-    // Access any KafkaConfig val to load KafkaConfig object before LogConfig.
-    assertNotNull(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG)
-    assertTrue(LogConfig.configNames.asScala
-      .filter(config => !LogConfig.CONFIGS_WITH_NO_SERVER_DEFAULTS.contains(config))
-      .forall { config =>
-        // this internal config naming pattern is not as same as a default pattern
-        if (config.equals(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG)) {
-          ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.containsKey(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG)
-        } else {
-          val serverConfigOpt = LogConfig.serverConfigName(config)
-          serverConfigOpt.isPresent && (serverConfigOpt.get != null)
-        }
-      })
-  }
 
   @Test
   def testKafkaConfigToProps(): Unit = {

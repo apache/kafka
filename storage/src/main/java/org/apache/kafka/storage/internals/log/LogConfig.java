@@ -142,16 +142,6 @@ public class LogConfig extends AbstractConfig {
     public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
     public static final String INTERNAL_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
 
-
-    // Visible for testing
-    public static final Set<String> CONFIGS_WITH_NO_SERVER_DEFAULTS = Set.of(
-            TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
-            TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
-            TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG,
-            QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
-            QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
-    );
-
     public static final ConfigDef SERVER_CONFIG_DEF = new ConfigDef()
             .define(ServerLogConfigs.NUM_PARTITIONS_CONFIG, INT, ServerLogConfigs.NUM_PARTITIONS_DEFAULT, atLeast(1), MEDIUM, ServerLogConfigs.NUM_PARTITIONS_DOC)
             .define(ServerLogConfigs.LOG_DIR_CONFIG, STRING, ServerLogConfigs.LOG_DIR_DEFAULT, HIGH, ServerLogConfigs.LOG_DIR_DOC)

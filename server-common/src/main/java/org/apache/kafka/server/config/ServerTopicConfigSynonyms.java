@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 public final class ServerTopicConfigSynonyms {
     public static final String LOG_PREFIX = "log.";
+    public static final String INTERNAL_PREFIX = "internal.";
     public static final String LOG_CLEANER_PREFIX = LOG_PREFIX + "cleaner.";
 
     /**
@@ -50,7 +51,7 @@ public final class ServerTopicConfigSynonyms {
     // Topic configs with no mapping to a server config can be found in `LogConfig.CONFIGS_WITH_NO_SERVER_DEFAULTS`
     public static final Map<String, List<ConfigSynonym>> ALL_TOPIC_CONFIG_SYNONYMS = Utils.mkMap(
         sameNameWithLogPrefix(TopicConfig.SEGMENT_BYTES_CONFIG),
-        sameName("internal.log." + TopicConfig.SEGMENT_BYTES_CONFIG),
+        sameNameWithInternalLogPrefix(TopicConfig.SEGMENT_BYTES_CONFIG),
         listWithLogPrefix(TopicConfig.SEGMENT_MS_CONFIG,
             new ConfigSynonym("roll.ms"),
             new ConfigSynonym("roll.hours", ConfigSynonym.HOURS_TO_MILLISECONDS)),
@@ -135,6 +136,10 @@ public final class ServerTopicConfigSynonyms {
             .map(s -> new ConfigSynonym(LOG_PREFIX + s.name(), s.converter()))
             .collect(Collectors.toList());
         return Utils.mkEntry(topicConfigName, synonymsWithPrefix);
+    }
+
+    private static Entry<String, List<ConfigSynonym>> sameNameWithInternalLogPrefix(String configName) {
+        return Utils.mkEntry(configName, List.of(new ConfigSynonym(INTERNAL_PREFIX + LOG_PREFIX + configName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> single(String topicConfigName, String brokerConfigName) {
