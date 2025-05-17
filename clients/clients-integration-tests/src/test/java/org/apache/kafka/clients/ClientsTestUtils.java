@@ -260,7 +260,7 @@ public class ClientsTestUtils {
      * When converting tests that extend from BaseConsumerTest.scala to Java,
      * we should use the test cases provided in this class.
      */
-    public static class BaseConsumerTestcase {
+    public static final class BaseConsumerTestcase {
         
         public static final int BROKER_COUNT = 3;
         public static final String TOPIC = "topic";
