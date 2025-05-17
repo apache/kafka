@@ -250,9 +250,8 @@ public interface Admin extends AutoCloseable {
      * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
      * may continue to return information about the deleted topics.
      * <p>
-     * If delete.topic.enable is false on the brokers, deleteTopics will mark
-     * the topics for deletion, but not actually delete them. The futures will
-     * return successfully in this case.
+     * If delete.topic.enable is set to false on the brokers, an exception will be returned to the client indicating
+     * that topic deletion is disabled.
      * <p>
      * When using topic IDs, this operation is supported by brokers with inter-broker protocol 2.8 or higher.
      * When using topic names, this operation is supported by brokers with version 0.10.1.0 or higher.
