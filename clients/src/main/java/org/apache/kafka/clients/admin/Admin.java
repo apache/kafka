@@ -1779,6 +1779,7 @@ public interface Admin extends AutoCloseable {
      * List the configuration resources available in the cluster which matches config resource type.
      * If no config resource types are specified, all configuration resources will be listed.
      *
+     * @param configResourceTypes The set of configuration resource types to list.
      * @param options The options to use when listing the configuration resources.
      * @return The ListConfigurationResourcesResult.
      */

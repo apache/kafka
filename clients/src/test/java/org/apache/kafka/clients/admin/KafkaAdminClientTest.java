@@ -10830,6 +10830,30 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testListConfigResourcesFallbackToV0Once() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            // simulate a broker doesn't support version 1 request
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(new ListConfigResourcesResponseData()
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())));
+
+            // second unsupported version doesn't make a call again
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(new ListConfigResourcesResponseData()
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())));
+
+            ListConfigResourcesResult result = env.adminClient().listConfigResources(
+                Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions());
+
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
+            assertTrue(env.kafkaClient().futureResponses().isEmpty());
+        }
+    }
+
+    @Test
     public void testListConfigResourcesDoesNotFallbackToV0() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
