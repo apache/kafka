@@ -2160,7 +2160,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(transactionalId2),
       ArgumentMatchers.eq(producerId),
       ArgumentMatchers.eq(epoch),
-      ArgumentMatchers.eq(Set(tp1)),
+      ArgumentMatchers.eq(util.Set.of(tp1)),
       verifyPartitionsCallback.capture(),
     )).thenAnswer(_ => verifyPartitionsCallback.getValue.apply(AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, Map(tp1 -> Errors.PRODUCER_FENCED).asJava)))
     kafkaApis = createKafkaApis()

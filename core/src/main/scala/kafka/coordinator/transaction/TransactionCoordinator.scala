@@ -35,7 +35,6 @@ import org.apache.kafka.server.util.Scheduler
 import java.util
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
 
 object TransactionCoordinator {
@@ -365,13 +364,15 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
   def handleVerifyPartitionsInTransaction(transactionalId: String,
                                           producerId: Long,
                                           producerEpoch: Short,
-                                          partitions: collection.Set[TopicPartition],
+                                          partitions: util.Set[TopicPartition],
                                           responseCallback: VerifyPartitionsCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request for verification")
-      responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitions.map(_ -> Errors.INVALID_REQUEST).toMap.asJava))
+      val errors = new util.HashMap[TopicPartition, Errors]()
+      partitions.forEach(partition => errors.put(partition, Errors.INVALID_REQUEST))
+      responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors))
     } else {
-      val result: ApiResult[Map[TopicPartition, Errors]] =
+      val result: ApiResult[util.Map[TopicPartition, Errors]] =
         txnManager.getTransactionState(transactionalId).flatMap {
           case None => Left(Errors.INVALID_PRODUCER_ID_MAPPING)
 
@@ -389,12 +390,14 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               } else if (txnMetadata.state == TransactionState.PREPARE_COMMIT || txnMetadata.state == TransactionState.PREPARE_ABORT) {
                 Left(Errors.CONCURRENT_TRANSACTIONS)
               } else {
-                Right(partitions.map { part =>
+                val errors = new util.HashMap[TopicPartition, Errors]()
+                partitions.forEach(part => {
                   if (txnMetadata.topicPartitions.contains(part))
-                    (part, Errors.NONE)
+                    errors.put(part, Errors.NONE)
                   else
-                    (part, Errors.TRANSACTION_ABORTABLE)
-                }.toMap)
+                    errors.put(part, Errors.TRANSACTION_ABORTABLE)
+                })
+                Right(errors)
               }
             })
         }
@@ -402,10 +405,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       result match {
         case Left(err) =>
           debug(s"Returning $err error code to client for $transactionalId's AddPartitions request for verification")
-          responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitions.map(_ -> err).toMap.asJava))
+          val errors = new util.HashMap[TopicPartition, Errors]()
+          partitions.forEach(partition => errors.put(partition, err))
+          responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors))
           
         case Right(errors) =>
-          responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors.asJava))
+          responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors))
       }
     }
     

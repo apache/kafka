@@ -1884,7 +1884,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             txnCoordinator.handleVerifyPartitionsInTransaction(transactionalId,
               transaction.producerId,
               transaction.producerEpoch,
-              authorizedPartitions.asScala,
+              authorizedPartitions,
               addResultAndMaybeSendResponse)
           }
         }

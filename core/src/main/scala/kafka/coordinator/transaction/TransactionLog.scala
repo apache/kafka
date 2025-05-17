@@ -131,11 +131,10 @@ object TransactionLog {
 
         if (!transactionMetadata.state.equals(TransactionState.EMPTY))
           value.transactionPartitions.forEach(partitionsSchema => {
-            val partitions = new util.ArrayList[TopicPartition]()
-            partitionsSchema.partitionIds.forEach(partitionId => {
-              partitions.add(new TopicPartition(partitionsSchema.topic, partitionId))
-            })
-            transactionMetadata.addPartitions(partitions)
+            transactionMetadata.addPartitions(partitionsSchema.partitionIds
+              .stream
+              .map(partitionId => new TopicPartition(partitionsSchema.topic, partitionId.intValue()))
+              .toList)
           })
         Some(transactionMetadata)
       } else throw new IllegalStateException(s"Unknown version $version from the transaction log message value")

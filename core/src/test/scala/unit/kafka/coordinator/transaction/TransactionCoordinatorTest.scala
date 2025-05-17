@@ -347,7 +347,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, wrongPidTxnMetadata))))
 
-    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions.asScala, verifyPartitionsInTxnCallback)
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
       assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, error)
     }
@@ -358,7 +358,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, oldEpochTxnMetadata))))
 
-    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 1, partitions.asScala, verifyPartitionsInTxnCallback)
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 1, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
       assertEquals(Errors.PRODUCER_FENCED, error)
     }
@@ -369,7 +369,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, emptyTxnMetadata))))
     
-    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions.asScala, verifyPartitionsInTxnCallback)
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) => 
       assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
     }
@@ -381,7 +381,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, ongoingTxnMetadata))))
 
-    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions.asScala, verifyPartitionsInTxnCallback)
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
       assertEquals(Errors.TRANSACTION_ABORTABLE, error)
     }
@@ -487,7 +487,7 @@ class TransactionCoordinatorTest {
         new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
           0, RecordBatch.NO_PRODUCER_EPOCH, 0, TransactionState.ONGOING, partitions, 0, 0, TV_0)))))
 
-    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions.asScala, verifyPartitionsInTxnCallback)
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
       assertEquals(Errors.NONE, error)
     }
@@ -505,8 +505,9 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
           0, RecordBatch.NO_PRODUCER_EPOCH, 0, TransactionState.EMPTY, partitions, 0, 0, TV_0)))))
-    
-    val extraPartitions = partitions.asScala ++ Set(new TopicPartition("topic2", 0))
+
+    val extraPartitions = new util.HashSet[TopicPartition](partitions)
+    extraPartitions.add(new TopicPartition("topic2", 0))
     
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, extraPartitions, verifyPartitionsInTxnCallback)
     assertEquals(Errors.TRANSACTION_ABORTABLE, errors(new TopicPartition("topic2", 0)))
