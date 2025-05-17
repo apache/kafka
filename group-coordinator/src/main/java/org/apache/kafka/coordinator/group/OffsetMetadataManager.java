@@ -929,7 +929,7 @@ public class OffsetMetadataManager {
     }
 
     private boolean isMismatchedTopicId(Uuid actual, Uuid expected) {
-        return !actual.equals(Uuid.ZERO_UUID) && !actual.equals(expected);
+        return !actual.equals(Uuid.ZERO_UUID) && !expected.equals(Uuid.ZERO_UUID) && !actual.equals(expected);
     }
 
     /**
