@@ -17,7 +17,7 @@
 
 package kafka.utils
 
-import org.apache.kafka.server.logging.LoggingController
+import org.apache.kafka.server.logger.LoggingController
 import java.lang.management.ManagementFactory
 
 import javax.management.ObjectName
@@ -42,7 +42,7 @@ class LoggingTest extends Logging {
     val log4jControllerName = ObjectName.getInstance("kafka:type=kafka.Log4jController")
     assertTrue(mbs.isRegistered(log4jControllerName), "kafka.utils.Log4jController is not registered")
     val log4jInstance = mbs.getObjectInstance(log4jControllerName)
-    assertEquals("org.apache.kafka.server.logging.LoggingController", log4jInstance.getClassName)
+    assertEquals("org.apache.kafka.server.logger.LoggingController", log4jInstance.getClassName)
   }
 
   @Test

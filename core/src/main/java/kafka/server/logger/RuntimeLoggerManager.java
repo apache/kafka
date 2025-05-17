@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.server.logging.LoggingController;
+import org.apache.kafka.server.logger.LoggingController;
 
 import org.slf4j.Logger;
 

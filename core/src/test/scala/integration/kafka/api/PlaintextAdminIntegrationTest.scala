@@ -54,7 +54,7 @@ import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
-import org.apache.kafka.server.logging.LoggingController
+import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
 import org.apache.kafka.test.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
 import org.apache.logging.log4j.core.config.Configurator

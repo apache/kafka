@@ -14,13 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.logging;
+package org.apache.kafka.server.logger;
 
-import java.util.List;
+import java.util.Map;
 
+class NoOpController implements LoggingControllerDelegate {
 
-public interface LoggingControllerMBean {
-    List<String> getLoggers();
-    String getLogLevel(String logger);
-    boolean setLogLevel(String logger, String level);
+    @Override
+    public Map<String, String> loggers() {
+        return Map.of();
+    }
+
+    @Override
+    public boolean logLevel(String loggerName, String logLevel) {
+        return false;
+    }
+
+    @Override
+    public boolean unsetLogLevel(String loggerName) {
+        return false;
+    }
 }

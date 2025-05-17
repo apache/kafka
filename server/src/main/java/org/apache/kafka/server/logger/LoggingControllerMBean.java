@@ -14,15 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.logging;
+package org.apache.kafka.server.logger;
 
-import java.util.Map;
+import java.util.List;
 
-public abstract class LoggingControllerDelegate {
-    public abstract Map<String, String> loggers();
-    public abstract boolean logLevel(String loggerName, String logLevel);
-    public abstract boolean unsetLogLevel(String loggerName);
-    public boolean loggerExists(String loggerName) {
-        return loggers().containsKey(loggerName);
-    }
+
+public interface LoggingControllerMBean {
+    List<String> getLoggers();
+    String getLogLevel(String logger);
+    boolean setLogLevel(String logger, String level);
 }

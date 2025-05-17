@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.logging;
+package org.apache.kafka.server.logger;
 
 import org.apache.kafka.common.utils.Utils;
 
@@ -29,7 +29,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-public class Log4jCoreController extends LoggingControllerDelegate {
+class Log4jCoreController implements LoggingControllerDelegate {
     private final LoggerContext logContext;
 
     public Log4jCoreController() {
@@ -68,14 +68,12 @@ public class Log4jCoreController extends LoggingControllerDelegate {
         if (loggerName.equals(LoggingController.ROOT_LOGGER)) {
             Configurator.setLevel(LogManager.ROOT_LOGGER_NAME, level);
             return true;
-        } else {
-            if (loggerExists(loggerName) && level != null) {
-                Configurator.setLevel(loggerName, level);
-                return true;
-            } else {
-                return false;
-            }
         }
+        if (loggerExists(loggerName) && level != null) {
+            Configurator.setLevel(loggerName, level);
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -84,13 +82,11 @@ public class Log4jCoreController extends LoggingControllerDelegate {
         if (loggerName.equals(LoggingController.ROOT_LOGGER)) {
             Configurator.setLevel(LogManager.ROOT_LOGGER_NAME, nullLevel);
             return true;
-        } else {
-            if (loggerExists(loggerName)) {
-                Configurator.setLevel(loggerName, nullLevel);
-                return true;
-            } else {
-                return false;
-            }
         }
+        if (loggerExists(loggerName)) {
+            Configurator.setLevel(loggerName, nullLevel);
+            return true;
+        }
+        return false;
     }
 }
