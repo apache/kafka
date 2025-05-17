@@ -1165,7 +1165,7 @@ class KafkaConfigTest {
     assertEquals(1, config.brokerId)
     assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedBrokerListeners.map(JTestUtils.endpointToString))
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
-    assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
+    assertEquals(util.List.of("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
@@ -1500,7 +1500,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(metadataDir, config.metadataLogDir)
-    assertEquals(Seq(dataDir), config.logDirs)
+    assertEquals(util.List.of(dataDir), config.logDirs)
   }
 
   @Test
@@ -1518,7 +1518,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
-    assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
+    assertEquals(util.List.of(dataDir1, dataDir2), config.logDirs)
   }
 
   @Test

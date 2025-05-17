@@ -65,7 +65,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import scala.Option;
 import scala.jdk.javaapi.CollectionConverters;
@@ -115,8 +114,7 @@ public class PartitionCreationBench {
         this.time = Time.SYSTEM;
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
-        final List<File> files =
-                CollectionConverters.asJava(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
+        final List<File> files = brokerProperties.logDirs().stream().map(File::new).toList();
         CleanerConfig cleanerConfig = new CleanerConfig(1,
                 4 * 1024 * 1024L, 0.9d,
                 1024 * 1024, 32 * 1024 * 1024,
