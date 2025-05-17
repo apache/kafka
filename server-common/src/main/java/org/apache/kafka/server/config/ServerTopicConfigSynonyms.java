@@ -48,9 +48,10 @@ public final class ServerTopicConfigSynonyms {
      * both the first and the second synonyms are configured, we will use only the value of
      * the first synonym and ignore the second.
      */
-    // Topic configs with no mapping to a server config can be found in `LogConfig.CONFIGS_WITH_NO_SERVER_DEFAULTS`
     public static final Map<String, List<ConfigSynonym>> ALL_TOPIC_CONFIG_SYNONYMS = Utils.mkMap(
         sameNameWithLogPrefix(TopicConfig.SEGMENT_BYTES_CONFIG),
+        // Due to the internal.segment.bytes is in storage module, thus we could not use the 
+        // LogConfig#INTERNAL_SEGMENT_BYTES_CONFIG directly. We need to use the string value instead.
         sameNameWithInternalLogPrefix("internal.segment.bytes"),
         listWithLogPrefix(TopicConfig.SEGMENT_MS_CONFIG,
             new ConfigSynonym("roll.ms"),
