@@ -51,6 +51,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+/** The test cases here verify the following conditions.
+ * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called and before onAcknowledgement() method is called.
+ * 2. The Serializer receives the cluster id before the serialize() method is called.
+ * 3. The producer MetricReporter receives the cluster id after send() method is called on KafkaProducer.
+ * 4. The ConsumerInterceptor receives the cluster id before the onConsume() method.
+ * 5. The Deserializer receives the cluster id before the deserialize() method is called.
+ * 6. The consumer MetricReporter receives the cluster id after poll() is called on KafkaConsumer.
+ * 7. The broker MetricReporter receives the cluster id after the broker startup is over.
+ * 8. The broker KafkaMetricReporter receives the cluster id after the broker startup is over.
+ * 9. All the components receive the same cluster id.
+ */
 @ClusterTestDefaults(serverProperties = {
     @ClusterConfigProperty(key = MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.api.EndToEndClusterIdTest$MockBrokerMetricsReporter"),
 })
@@ -113,10 +124,8 @@ public class EndToEndClusterIdTest {
         MockConsumerInterceptor.resetCounters();
         MockProducerInterceptor.resetCounters();
 
-        // Should have cluster id at broker metrics reporter after startup
         assertNotNull(MockBrokerMetricsReporter.CLUSTER_META);
         isValidClusterId(MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
-
 
         Map<String, Object> producerConfig = Map.of(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName(),
             "mock.interceptor.append", "mock",
@@ -124,10 +133,9 @@ public class EndToEndClusterIdTest {
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName(),
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName());
         try (var producer = clusterInstance.<byte[], byte[]>producer(producerConfig)) {
-            // Send one record and make sure clusterId is set after send and before onAcknowledgement
+            // Send one record and make sure clusterId is set after sending and before onAcknowledgement
             sendRecords(producer);
         }
-
         assertNotEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get(), MockProducerInterceptor.NO_CLUSTER_ID);
         assertNotNull(MockProducerInterceptor.CLUSTER_META);
         assertEquals(
@@ -136,12 +144,11 @@ public class EndToEndClusterIdTest {
         );
         isValidClusterId(MockProducerInterceptor.CLUSTER_META.get().clusterId());
 
-        // Ensure the serializer sees Cluster ID before serialization
+        // Make sure the serializer sees Cluster ID before serialize method
         assertNotEquals(MockSerializer.CLUSTER_ID_BEFORE_SERIALIZE.get(), MockSerializer.NO_CLUSTER_ID);
         assertNotNull(MockSerializer.CLUSTER_META);
         isValidClusterId(MockSerializer.CLUSTER_META.get().clusterId());
 
-        // Producer metric reporter receives cluster id
         assertNotNull(MockProducerMetricsReporter.CLUSTER_META);
         isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
 
@@ -153,11 +160,11 @@ public class EndToEndClusterIdTest {
         try (var consumer = clusterInstance.<byte[], byte[]>consumer(consumerConfig)) {
             consumer.assign(List.of(TP));
             consumer.seek(TP, 0);
-            // Consume one record
+            // consume and verify that values are modified by interceptors
             consumeRecords(consumer);
         }
 
-        // Cluster ID in consumer interceptor before onConsume
+        // Check that cluster id is present after the first poll call.
         assertNotEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get(), MockConsumerInterceptor.NO_CLUSTER_ID);
         assertNotNull(MockConsumerInterceptor.CLUSTER_META);
         isValidClusterId(MockConsumerInterceptor.CLUSTER_META.get().clusterId());
@@ -166,7 +173,6 @@ public class EndToEndClusterIdTest {
             MockConsumerInterceptor.CLUSTER_META.get().clusterId()
         );
 
-        // Cluster ID in deserializer before deserialize
         assertNotEquals(MockDeserializer.clusterIdBeforeDeserialize.get(), MockDeserializer.noClusterId);
         assertNotNull(MockDeserializer.clusterMeta);
         isValidClusterId(MockDeserializer.clusterMeta.get().clusterId());
@@ -178,7 +184,7 @@ public class EndToEndClusterIdTest {
         assertNotNull(MockConsumerMetricsReporter.CLUSTER_META);
         isValidClusterId(MockConsumerMetricsReporter.CLUSTER_META.get().clusterId());
 
-        // All components received the same cluster id
+        // Make sure everyone receives the same cluster id.
         String id = MockProducerInterceptor.CLUSTER_META.get().clusterId();
         assertEquals(id, MockSerializer.CLUSTER_META.get().clusterId());
         assertEquals(id, MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
