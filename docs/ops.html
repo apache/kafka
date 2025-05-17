@@ -1752,6 +1752,31 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
         <td>0; non-zero when a partition reassignment is in progress.</td>
       </tr>
       <tr>
+        <td>event-queue-time-ms-p95</td>
+        <td>The 95th percentile of time that an event spent waiting in the queue to be processed</td>
+        <td>kafka.server:type=group-coordinator-metrics,name=event-queue-time-ms-p95</td>
+      </tr>
+      <tr>
+        <td>num-partitions,state=[loading|active|failed]</td>
+        <td>The number of `__consumer_offsets` partitions hosted by the broker, broken down by state</td>
+        <td>kafka.server:type=group-coordinator-metrics,name=num-partitions,state=[loading|active|failed]</td>
+      </tr>
+      <tr>
+        <td>event-processing-time-ms-p95</td>
+        <td>The 95th percentile of time that an event took to be processed</td>
+        <td>kafka.server:type=group-coordinator-metrics,name=event-processing-time-ms-p95</td>
+      </tr>
+      <tr>
+        <td>event-purgatory-time-ms-p95</td>
+        <td>The 95th percentile of time that an event waited in the purgatory before being completed</td>
+        <td>kafka.server:type=group-coordinator-metrics,name=event-purgatory-time-ms-p95</td>
+      </tr>
+      <tr>
+        <td>batch-flush-time-ms-p95</td>
+        <td>The 95th percentile of time that a batch took to be flushed to the local partition</td>
+        <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-time-ms-p95</td>
+      </tr>
+      <tr>
         <td>Size of a partition on disk (in bytes)</td>
         <td>kafka.log:type=Log,name=Size,topic=([-.\w]+),partition=([0-9]+)</td>
         <td>The size of a partition on disk, measured in bytes.</td>
