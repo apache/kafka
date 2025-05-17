@@ -62,7 +62,7 @@ class LocalLeaderEndPointTest extends Logging {
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(sourceBroker.id, port = sourceBroker.port)
     val config = KafkaConfig.fromProps(props)
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)))
     val alterPartitionManager = mock(classOf[AlterPartitionManager])
     val metrics = new Metrics
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "", "")

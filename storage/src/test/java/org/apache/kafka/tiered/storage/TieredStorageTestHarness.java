@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.collection.Seq;
@@ -154,7 +155,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     public static List<BrokerLocalStorage> localStorages(Seq<KafkaBroker> brokers) {
         return CollectionConverters.asJava(brokers).stream()
-                .map(b -> new BrokerLocalStorage(b.config().brokerId(), CollectionConverters.asJava(b.config().logDirs().toSet()),
+                .map(b -> new BrokerLocalStorage(b.config().brokerId(), Set.copyOf(b.config().logDirs()),
                         STORAGE_WAIT_TIMEOUT_SEC))
                 .collect(Collectors.toList());
     }
