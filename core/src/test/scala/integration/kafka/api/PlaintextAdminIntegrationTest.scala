@@ -894,11 +894,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Generate two mutually exclusive replicaAssignment
     val firstReplicaAssignment = brokers.map { server =>
-      val logDir = new File(server.config.logDirs(randomNums(server))).getAbsolutePath
+      val logDir = new File(server.config.logDirs.get(randomNums(server))).getAbsolutePath
       new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
     }.toMap
     val secondReplicaAssignment = brokers.map { server =>
-      val logDir = new File(server.config.logDirs(1 - randomNums(server))).getAbsolutePath
+      val logDir = new File(server.config.logDirs.get(1 - randomNums(server))).getAbsolutePath
       new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
     }.toMap
 
@@ -1520,7 +1520,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
 
     // we will create another dir just for one server
-    val futureLogDir = brokers(0).config.logDirs(1)
+    val futureLogDir = brokers(0).config.logDirs.get(1)
     val futureReplica = new TopicPartitionReplica(topic, 0, brokers(0).config.brokerId)
 
     // Verify that replica can be moved to the specified log directory
@@ -3570,7 +3570,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFutureThrows(classOf[InvalidTopicException], results.get(invalidTopicName))
     assertFutureThrows(classOf[InvalidTopicException],
       client.alterReplicaLogDirs(
-        Map(new TopicPartitionReplica(longTopicName, 0, 0) -> brokers(0).config.logDirs(0)).asJava).all())
+        util.Map.of(new TopicPartitionReplica(longTopicName, 0, 0), brokers(0).config.logDirs.get(0))).all())
     client.close()
   }
 
