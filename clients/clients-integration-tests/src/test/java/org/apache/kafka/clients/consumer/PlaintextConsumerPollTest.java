@@ -537,7 +537,7 @@ public class PlaintextConsumerPollTest {
         ) {
             var numMessages = 10;
             var otherTopic = "otherTopic";
-            var tpOther = new TopicPartition("otherTopic", 0);
+            var tpOther = new TopicPartition(otherTopic, 0);
             cluster.createTopic(otherTopic, 1, (short) BROKER_COUNT);
             sendRecords(producer, tpOther, numMessages, System.currentTimeMillis(), -1);
             sendRecords(producer, tp, numMessages, System.currentTimeMillis(), -1);
