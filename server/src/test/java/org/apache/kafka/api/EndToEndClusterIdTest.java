@@ -38,17 +38,18 @@ import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.test.TestUtils.isValidClusterId;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @ClusterTestDefaults(serverProperties = {
     @ClusterConfigProperty(key = MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.api.EndToEndClusterIdTest$MockBrokerMetricsReporter"),
@@ -100,20 +101,20 @@ public class EndToEndClusterIdTest {
 
     @ClusterTest
     public void testEndToEndWithClassicProtocol(ClusterInstance clusterInstance) throws Exception {
-        testEndToEnd(GroupProtocol.CONSUMER, clusterInstance);
+        testEndToEnd(GroupProtocol.CONSUMER);
     }
 
     @ClusterTest
     public void testEndToEndWithConsumerProtocol(ClusterInstance clusterInstance) throws Exception {
-        testEndToEnd(GroupProtocol.CONSUMER, clusterInstance);
+        testEndToEnd(GroupProtocol.CONSUMER);
     }
 
-    public void testEndToEnd(GroupProtocol groupProtocol, ClusterInstance clusterInstance) throws Exception {
+    public void testEndToEnd(GroupProtocol groupProtocol) throws Exception {
         MockConsumerInterceptor.resetCounters();
         MockProducerInterceptor.resetCounters();
 
         // Should have cluster id at broker metrics reporter after startup
-        Assertions.assertNotNull(MockBrokerMetricsReporter.CLUSTER_META);
+        assertNotNull(MockBrokerMetricsReporter.CLUSTER_META);
         isValidClusterId(MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
 
 
@@ -127,21 +128,21 @@ public class EndToEndClusterIdTest {
             sendRecords(producer);
         }
 
-        Assertions.assertNotEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get(), MockProducerInterceptor.NO_CLUSTER_ID);
-        Assertions.assertNotNull(MockProducerInterceptor.CLUSTER_META);
-        Assertions.assertEquals(
+        assertNotEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get(), MockProducerInterceptor.NO_CLUSTER_ID);
+        assertNotNull(MockProducerInterceptor.CLUSTER_META);
+        assertEquals(
             MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get().clusterId(),
             MockProducerInterceptor.CLUSTER_META.get().clusterId()
         );
         isValidClusterId(MockProducerInterceptor.CLUSTER_META.get().clusterId());
 
         // Ensure the serializer sees Cluster ID before serialization
-        Assertions.assertNotEquals(MockSerializer.CLUSTER_ID_BEFORE_SERIALIZE.get(), MockSerializer.NO_CLUSTER_ID);
-        Assertions.assertNotNull(MockSerializer.CLUSTER_META);
+        assertNotEquals(MockSerializer.CLUSTER_ID_BEFORE_SERIALIZE.get(), MockSerializer.NO_CLUSTER_ID);
+        assertNotNull(MockSerializer.CLUSTER_META);
         isValidClusterId(MockSerializer.CLUSTER_META.get().clusterId());
 
         // Producer metric reporter receives cluster id
-        Assertions.assertNotNull(MockProducerMetricsReporter.CLUSTER_META);
+        assertNotNull(MockProducerMetricsReporter.CLUSTER_META);
         isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
 
         Map<String, Object> consumerConfig = Map.of(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName(),
@@ -150,41 +151,41 @@ public class EndToEndClusterIdTest {
             ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, MockDeserializer.class.getName(),
             ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         try (var consumer = clusterInstance.<byte[], byte[]>consumer(consumerConfig)) {
-            consumer.assign(Collections.singletonList(TP));
+            consumer.assign(List.of(TP));
             consumer.seek(TP, 0);
             // Consume one record
             consumeRecords(consumer);
         }
 
         // Cluster ID in consumer interceptor before onConsume
-        Assertions.assertNotEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get(), MockConsumerInterceptor.NO_CLUSTER_ID);
-        Assertions.assertNotNull(MockConsumerInterceptor.CLUSTER_META);
+        assertNotEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get(), MockConsumerInterceptor.NO_CLUSTER_ID);
+        assertNotNull(MockConsumerInterceptor.CLUSTER_META);
         isValidClusterId(MockConsumerInterceptor.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(
+        assertEquals(
             MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get().clusterId(),
             MockConsumerInterceptor.CLUSTER_META.get().clusterId()
         );
 
         // Cluster ID in deserializer before deserialize
-        Assertions.assertNotEquals(MockDeserializer.clusterIdBeforeDeserialize.get(), MockDeserializer.noClusterId);
-        Assertions.assertNotNull(MockDeserializer.clusterMeta);
+        assertNotEquals(MockDeserializer.clusterIdBeforeDeserialize.get(), MockDeserializer.noClusterId);
+        assertNotNull(MockDeserializer.clusterMeta);
         isValidClusterId(MockDeserializer.clusterMeta.get().clusterId());
-        Assertions.assertEquals(
+        assertEquals(
             MockDeserializer.clusterIdBeforeDeserialize.get().clusterId(),
             MockDeserializer.clusterMeta.get().clusterId()
         );
 
-        Assertions.assertNotNull(MockConsumerMetricsReporter.CLUSTER_META);
+        assertNotNull(MockConsumerMetricsReporter.CLUSTER_META);
         isValidClusterId(MockConsumerMetricsReporter.CLUSTER_META.get().clusterId());
 
         // All components received the same cluster id
         String id = MockProducerInterceptor.CLUSTER_META.get().clusterId();
-        Assertions.assertEquals(id, MockSerializer.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(id, MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(id, MockConsumerInterceptor.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(id, MockDeserializer.clusterMeta.get().clusterId());
-        Assertions.assertEquals(id, MockConsumerMetricsReporter.CLUSTER_META.get().clusterId());
-        Assertions.assertEquals(id, MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
+        assertEquals(id, MockSerializer.CLUSTER_META.get().clusterId());
+        assertEquals(id, MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
+        assertEquals(id, MockConsumerInterceptor.CLUSTER_META.get().clusterId());
+        assertEquals(id, MockDeserializer.clusterMeta.get().clusterId());
+        assertEquals(id, MockConsumerMetricsReporter.CLUSTER_META.get().clusterId());
+        assertEquals(id, MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
 
         MockConsumerInterceptor.resetCounters();
         MockProducerInterceptor.resetCounters();
@@ -206,9 +207,9 @@ public class EndToEndClusterIdTest {
 
         for (int i = 0; i < NUM_RECORDS; i++) {
             ConsumerRecord<byte[], byte[]> record = records.get(i);
-            Assertions.assertEquals(TOPIC, record.topic());
-            Assertions.assertEquals(PARTITION, record.partition());
-            Assertions.assertEquals(i, record.offset());
+            assertEquals(TOPIC, record.topic());
+            assertEquals(PARTITION, record.partition());
+            assertEquals(i, record.offset());
         }
     }
 }
