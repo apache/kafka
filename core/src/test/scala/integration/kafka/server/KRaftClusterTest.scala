@@ -1551,7 +1551,7 @@ class KRaftClusterTest {
         // Copy foo-0 to targetParentDir
         // This is so that we can rename the main replica to a future down below
         val parentDir = log.parentDir
-        val targetParentDir = broker0.config.logDirs.filter(_ != parentDir).head
+        val targetParentDir = broker0.config.logDirs.stream().filter(l => !l.equals(parentDir)).findFirst().get()
         val targetDirFile = new File(targetParentDir, log.dir.getName)
         targetDirFile.mkdir()
         copyDirectory(log.dir.toString(), targetDirFile.toString())

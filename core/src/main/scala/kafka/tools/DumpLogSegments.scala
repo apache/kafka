@@ -277,7 +277,7 @@ object DumpLogSegments {
         println(s"Snapshot end offset: ${path.snapshotId.offset}, epoch: ${path.snapshotId.epoch}")
       }
     }
-    val fileRecords = FileRecords.open(file, false).slice(0, maxBytes).asInstanceOf[FileRecords]
+    val fileRecords = FileRecords.open(file, false).slice(0, maxBytes)
     try {
       var validBytes = 0L
       var lastOffset = -1L
@@ -567,7 +567,7 @@ object DumpLogSegments {
 
   private class RemoteMetadataLogMessageParser extends MessageParser[String, String] {
     private val metadataRecordSerde = new RemoteLogMetadataSerde
-    
+
     override def parse(record: Record): (Option[String], Option[String]) = {
       val output = try {
         val data = new Array[Byte](record.value.remaining)
@@ -626,7 +626,7 @@ object DumpLogSegments {
     private val transactionLogOpt = parser.accepts("transaction-log-decoder", "If set, log data will be parsed as " +
       "transaction metadata from the __transaction_state topic.")
     private val clusterMetadataOpt = parser.accepts("cluster-metadata-decoder", "If set, log data will be parsed as cluster metadata records.")
-    private val remoteMetadataOpt = parser.accepts("remote-log-metadata-decoder", "If set, log data will be parsed as TopicBasedRemoteLogMetadataManager (RLMM) metadata records." + 
+    private val remoteMetadataOpt = parser.accepts("remote-log-metadata-decoder", "If set, log data will be parsed as TopicBasedRemoteLogMetadataManager (RLMM) metadata records." +
       " Instead, the value-decoder-class option can be used if a custom RLMM implementation is configured.")
     private val shareStateOpt = parser.accepts("share-group-state-decoder", "If set, log data will be parsed as share group state data from the " +
       "__share_group_state topic.")
