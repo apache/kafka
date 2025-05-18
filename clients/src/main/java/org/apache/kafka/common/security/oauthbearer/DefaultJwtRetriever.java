@@ -17,10 +17,14 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter;
 import org.apache.kafka.common.utils.Utils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URL;
@@ -30,15 +34,36 @@ import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 /**
  * {@code DefaultJwtRetriever} instantiates and delegates {@link JwtRetriever} API calls to an embedded implementation
- * based on configuration. If {@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL} is configured with a
- * {@code file}-based URL, a {@link FileJwtRetriever} is created and the JWT is expected be contained in the file
- * specified. Otherwise, it's assumed to be an HTTP/HTTPS-based URL, so an {@link HttpJwtRetriever} is created.
+ * based on configuration:
+ *
+ * <ul>
+ *     <li>
+ *         If the value of <code>sasl.oauthbearer.token.endpoint.url</code> is set to a value that starts with the
+ *         <code>file</code> protocol (e.g. <code>file:/tmp/path/to/a/static-jwt.json</code>), an instance of
+ *         {@link FileJwtRetriever} will be used as the underlying {@link JwtRetriever}. Otherwise, the URL is
+ *         assumed to be an HTTP/HTTPS-based URL, and the value of
+ *         <code>sasl.oauthbearer.grant.type</code> will be used to determine the class to use.
+ *     </li>
+ *     <li>
+ *         If the grant type configuration <code>sasl.oauthbearer.grant.type</code> is not present <em>or</em> it
+ *         is set to <code>client_credentials</code>, an instance of {@link ClientCredentialsRequestFormatter} will
+ *         be created and used. If the grant type configuration value is set to
+ *         <code>urn:ietf:params:oauth:grant-type:jwt-bearer</code>, then an instance of {@link JwtBearerJwtRetriever}
+ *         will be used.
+ *     </li>
+ * </ul>
+ *
+ * The configuration required by the individual {@code JwtRetriever} classes will likely differ. Please refer to the
+ * official Apache Kafka documentation for more information on these, and related, configuration.
  */
 public class DefaultJwtRetriever implements JwtRetriever {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultJwtRetriever.class);
 
     private JwtRetriever delegate;
 
@@ -50,9 +75,18 @@ public class DefaultJwtRetriever implements JwtRetriever {
         if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
             delegate = new FileJwtRetriever();
         } else {
-            delegate = new ClientCredentialsJwtRetriever();
+            String grantType = cu.validateString(SASL_OAUTHBEARER_GRANT_TYPE, false);
+
+            if (grantType == null || grantType.equalsIgnoreCase(ClientCredentialsRequestFormatter.GRANT_TYPE)) {
+                delegate = new ClientCredentialsJwtRetriever();
+            } else if (grantType.equalsIgnoreCase(JwtBearerRequestFormatter.GRANT_TYPE)) {
+                delegate = new JwtBearerJwtRetriever();
+            } else {
+                throw new ConfigException("The grant type \"" + grantType + "\" is not supported by the class " + getClass().getName());
+            }
         }
 
+        LOG.debug("Created instance of {} as delegate", delegate.getClass().getName());
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 

@@ -78,11 +78,15 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
  * The {@code ClientCredentialsJwtRetriever} also uses the following configuration:
  *
  * <ul>
- *     <li><code>sasl.oauthbearer.client.credentials.client.id</code>: OAuth client ID (required)</li>
- *     <li><code>sasl.oauthbearer.client.credentials.client.secret</code>: OAuth client secret (required)</li>
- *     <li><code>sasl.oauthbearer.scope</code>: OAuth scope (optional)</li>
- *     <li><code>sasl.oauthbearer.token.endpoint.url</code>: URL for token endpoint (required)</li>
+ *     <li><code>sasl.oauthbearer.client.credentials.client.id</code></li>
+ *     <li><code>sasl.oauthbearer.client.credentials.client.secret</code></li>
+ *     <li><code>sasl.oauthbearer.scope</code></li>
+ *     <li><code>sasl.oauthbearer.token.endpoint.url</code></li>
  * </ul>
+ *
+ * Please refer to the official Apache Kafka documentation for more information on these, and related, configuration.
+ *
+ * <p/>
  *
  * Previous versions of this implementation used <code>sasl.jaas.config</code> to specify attributes such
  * as <code>clientId</code>, <code>clientSecret</code>, and <code>scope</code>. These will still work, but
@@ -93,13 +97,13 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
  * Here's an example of the JAAS configuration for a Kafka client:
  *
  * <pre>
+ * sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ;
+ *
  * sasl.oauthbearer.client.credentials.client.id=jdoe
  * sasl.oauthbearer.client.credentials.client.secret=$3cr3+
  * sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever
  * sasl.oauthbearer.scope=my-application-scope
  * sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
- *
- * sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ;
  * </pre>
  *
  * <p/>
@@ -107,6 +111,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientCredentialsJwtRetriever.class);
+
     private HttpJwtRetriever delegate;
 
     @Override

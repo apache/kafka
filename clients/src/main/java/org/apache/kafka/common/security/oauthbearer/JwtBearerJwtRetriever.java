@@ -52,6 +52,80 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.layeredAssertionJwtTemplate;
 
+/**
+ * {@code JwtBearerJwtRetriever} is a {@link JwtRetriever} that performs the steps to request
+ * a JWT from an OAuth/OIDC identity provider using the <code>urn:ietf:params:oauth:grant-type:jwt-bearer</code>
+ * grant type. This grant type is used for machine-to-machine "service accounts".
+ *
+ * <p/>
+ *
+ * This {@code JwtRetriever} is enabled by specifying its class name in the Kafka configuration.
+ * For client use, specify the class name in the <code>sasl.oauthbearer.jwt.retriever.class</code>
+ * configuration like so:
+ *
+ * <pre>
+ * sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever
+ * </pre>
+ *
+ * <p/>
+ *
+ * If using this {@code JwtRetriever} on the broker side (for inter-broker communication), the configuration
+ * should be specified with a listener-based property:
+ *
+ * <pre>
+ * listener.name.<listener name>.oauthbearer.sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever
+ * </pre>
+ *
+ * <p/>
+ *
+ * The {@code JwtBearerJwtRetriever} also uses the following configuration:
+ *
+ * <ul>
+
+ *     <li><code>sasl.oauthbearer.assertion.algorithm</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.claim.aud</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.claim.exp.seconds</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.claim.iss</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.claim.jti.include</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.claim.nbf.seconds</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.claim.sub</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.file</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.private.key.file</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.private.key.passphrase</code></li>
+ *     <li><code>sasl.oauthbearer.assertion.template.file</code></li>
+ *     <li><code>sasl.oauthbearer.grant.type</code></li>
+ *     <li><code>sasl.oauthbearer.jwt.retriever.class</code></li>
+ *     <li><code>sasl.oauthbearer.scope</code></li>
+ *     <li><code>sasl.oauthbearer.token.endpoint.url</code></li>
+ * </ul>
+ *
+ * Please refer to the official Apache Kafka documentation for more information on these, and related, configuration.
+ *
+ * <p/>
+ *
+ * Here's an example of the JAAS configuration for a Kafka client:
+ *
+ * <pre>
+ * sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ;
+ *
+ * sasl.oauthbearer.assertion.algorithm=RS256
+ * sasl.oauthbearer.assertion.claim.aud=my-application-audience
+ * sasl.oauthbearer.assertion.claim.exp.seconds=600
+ * sasl.oauthbearer.assertion.claim.iss=my-oauth-issuer
+ * sasl.oauthbearer.assertion.claim.jti.include=true
+ * sasl.oauthbearer.assertion.claim.nbf.seconds=120
+ * sasl.oauthbearer.assertion.claim.sub=kafka-app-1234
+ * sasl.oauthbearer.assertion.private.key.file=/path/to/private.key
+ * sasl.oauthbearer.assertion.private.key.passphrase=$3cr3+
+ * sasl.oauthbearer.assertion.template.file=/path/to/assertion-template.json
+ * sasl.oauthbearer.grant.type=urn:ietf:params:oauth:grant-type:jwt-bearer
+ * sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever
+ * sasl.oauthbearer.scope=my-application-scope
+ * sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
+ * </pre>
+ *
+ * <p/>
+ */
 public class JwtBearerJwtRetriever implements JwtRetriever {
 
     private final Time time;

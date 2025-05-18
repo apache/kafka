@@ -101,15 +101,6 @@ public class AssertionUtils {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(signedContent);
     }
 
-    public static Optional<FileAssertionJwtTemplate> fileAssertionJwtTemplate(ConfigurationUtils cu) {
-        if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE)) {
-            File assertionTemplateFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE).toFile();
-            return Optional.of(new FileAssertionJwtTemplate(assertionTemplateFile));
-        } else {
-            return Optional.empty();
-        }
-    }
-
     public static Optional<StaticAssertionJwtTemplate> staticAssertionJwtTemplate(ConfigurationUtils cu) {
         if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD) ||
             cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS) ||
@@ -127,6 +118,15 @@ public class AssertionUtils {
 
             Map<String, Object> header = Map.of();
             return Optional.of(new StaticAssertionJwtTemplate(header, staticClaimsPayload));
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<FileAssertionJwtTemplate> fileAssertionJwtTemplate(ConfigurationUtils cu) {
+        if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE)) {
+            File assertionTemplateFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE).toFile();
+            return Optional.of(new FileAssertionJwtTemplate(assertionTemplateFile));
         } else {
             return Optional.empty();
         }
