@@ -1188,7 +1188,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
         
         if (groupId == null) {
-            return CompletableFuture.failedFuture(Errors.GROUP_ID_NOT_FOUND.exception());
+            return CompletableFuture.failedFuture(Errors.INVALID_GROUP_ID.exception());
         }
 
         return runtime.scheduleWriteOperation(

@@ -13269,6 +13269,48 @@ class KafkaApisTest extends Logging {
     })
   }
 
+  @Test
+  def testAlterShareGroupOffsetsRequestGroupCoordinatorThrowsError(): Unit = {
+    val groupId = "group"
+    val topicName1 = "foo"
+    val topicId1 = Uuid.randomUuid
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
+    val topicCollection = new AlterShareGroupOffsetsRequestTopicCollection();
+    topicCollection.addAll(util.List.of(
+      new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+        .setTopicName(topicName1)
+        .setPartitions(List(
+          new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+            .setPartitionIndex(0)
+            .setStartOffset(0L),
+          new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+            .setPartitionIndex(1)
+            .setStartOffset(0L)
+        ).asJava)))
+
+    val alterRequestData = new AlterShareGroupOffsetsRequestData()
+      .setGroupId(groupId)
+      .setTopics(topicCollection)
+
+    val requestChannelRequest = buildRequest(new AlterShareGroupOffsetsRequest.Builder(alterRequestData).build)
+    when(groupCoordinator.alterShareGroupOffsets(
+      any(),
+      ArgumentMatchers.eq[String](groupId),
+      ArgumentMatchers.any(classOf[AlterShareGroupOffsetsRequestData])
+    )).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception))
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val alterShareGroupOffsetsResponseData = new AlterShareGroupOffsetsResponseData()
+      .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message())
+      .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+
+    val response = verifyNoThrottling[AlterShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(alterShareGroupOffsetsResponseData, response.data)
+  }
+
   def getShareGroupDescribeResponse(groupIds: util.List[String], enableShareGroups: Boolean = true,
                                     verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                     describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup]): ShareGroupDescribeResponse = {
