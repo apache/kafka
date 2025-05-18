@@ -38,6 +38,8 @@ import org.apache.kafka.common.errors.StreamsTopologyFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -5229,6 +5231,140 @@ public class GroupCoordinatorServiceTest {
         );
         verify(mockPersister, times(1)).initializeState(ArgumentMatchers.any());
     }
+
+    @Test
+    public void testAlterShareGroupOffsetsMetadataImageNull() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build(true);
+
+        // Forcing a null Metadata Image
+        service.onNewMetadataImage(null, null);
+
+        String groupId = "share-group";
+        AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(null);
+
+        AlterShareGroupOffsetsResponseData response = new AlterShareGroupOffsetsResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                .setErrorMessage(Errors.COORDINATOR_NOT_AVAILABLE.message());
+
+        CompletableFuture<AlterShareGroupOffsetsResponseData> future = service.alterShareGroupOffsets(
+            requestContext(ApiKeys.ALTER_SHARE_GROUP_OFFSETS),
+            groupId,
+            request
+        );
+        assertEquals(response, future.get());
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsInvalidGroupId() throws InterruptedException, ExecutionException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setMetrics(mock(GroupCoordinatorMetrics.class))
+            .build(true);
+
+        String groupId = "";
+        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection requestTopicCollection =
+            new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection(List.of(
+                new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+                    .setTopicName(TOPIC_NAME)
+                    .setPartitions(List.of(
+                        new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                            .setPartitionIndex(0)
+                            .setStartOffset(0L)
+                    ))
+            ).iterator());
+        AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(requestTopicCollection);
+
+        AlterShareGroupOffsetsResponseData response = new AlterShareGroupOffsetsResponseData()
+            .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            .setErrorMessage(Errors.INVALID_GROUP_ID.message());
+
+        CompletableFuture<AlterShareGroupOffsetsResponseData> future = service.alterShareGroupOffsets(
+            requestContext(ApiKeys.ALTER_SHARE_GROUP_OFFSETS),
+            groupId,
+            request
+        );
+        assertEquals(response, future.get());
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsEmptyRequest() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setMetrics(mock(GroupCoordinatorMetrics.class))
+            .build(true);
+
+        String groupId = "share-group";
+        AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
+            .setGroupId(groupId);
+
+        CompletableFuture<AlterShareGroupOffsetsResponseData> future = service.alterShareGroupOffsets(
+            requestContext(ApiKeys.ALTER_SHARE_GROUP_OFFSETS),
+            groupId,
+            request
+        );
+
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+        assertEquals(data, future.get());
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsRequestReturnsGroupNotEmpty() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister persister = mock(DefaultStatePersister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(persister)
+            .build(true);
+        service.startup(() -> 1);
+
+        String groupId = "share-group";
+
+        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection requestTopicCollection =
+            new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection(List.of(
+                new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+                    .setTopicName(TOPIC_NAME)
+                    .setPartitions(List.of(
+                        new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                            .setPartitionIndex(0)
+                            .setStartOffset(0L)
+                    ))
+            ).iterator());
+
+        AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(requestTopicCollection);
+
+        AlterShareGroupOffsetsResponseData response = new AlterShareGroupOffsetsResponseData()
+            .setErrorCode(Errors.NON_EMPTY_GROUP.code())
+            .setErrorMessage(Errors.NON_EMPTY_GROUP.message());
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("share-group-offsets-alter"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(
+            new GroupNotEmptyException("bad stuff")
+        ));
+
+        CompletableFuture<AlterShareGroupOffsetsResponseData> future =
+            service.alterShareGroupOffsets(requestContext(ApiKeys.ALTER_SHARE_GROUP_OFFSETS), groupId, request);
+        assertEquals(response, future.get());
+    }
+
 
     @FunctionalInterface
     private interface TriFunction<A, B, C, R> {

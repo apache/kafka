@@ -1199,11 +1199,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
     @Override
     public CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(AuthorizableRequestContext context, String groupId, AlterShareGroupOffsetsRequestData request) {
         if (!isActive.get() || metadataImage == null) {
-            return CompletableFuture.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponse(Errors.COORDINATOR_NOT_AVAILABLE));
         }
         
-        if (groupId == null) {
-            return CompletableFuture.failedFuture(Errors.INVALID_GROUP_ID.exception());
+        if (groupId == null || groupId.isEmpty()) {
+            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponse(Errors.INVALID_GROUP_ID));
+        }
+
+        if (request.topics() == null || request.topics().isEmpty()) {
+            return CompletableFuture.completedFuture(new AlterShareGroupOffsetsResponseData());
         }
 
         return runtime.scheduleWriteOperation(
