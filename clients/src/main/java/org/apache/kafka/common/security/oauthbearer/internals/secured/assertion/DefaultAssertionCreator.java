@@ -89,5 +89,4 @@ public class DefaultAssertionCreator implements AssertionCreator {
             }
         }
     }
-
 }
