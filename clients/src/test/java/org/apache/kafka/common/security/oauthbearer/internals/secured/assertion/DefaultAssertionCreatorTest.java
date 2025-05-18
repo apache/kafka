@@ -76,7 +76,7 @@ public class DefaultAssertionCreatorTest {
 
         try (AssertionCreator assertionCreator = builder.build()) {
             String assertion = assertionCreator.create(jwtTemplate);
-            assertClaims(builder, keyPair.getPublic(), assertion);
+            assertClaims(keyPair.getPublic(), assertion);
         }
     }
 
@@ -99,7 +99,7 @@ public class DefaultAssertionCreatorTest {
 
         try (AssertionCreator assertionCreator = builder.build()) {
             String assertion = assertionCreator.create(jwtTemplate);
-            JwtContext context = assertContext(builder, keyPair.getPublic(), assertion);
+            JwtContext context = assertContext(keyPair.getPublic(), assertion);
             List<JsonWebStructure> joseObjects = context.getJoseObjects();
             assertNotNull(joseObjects);
             assertEquals(1, joseObjects.size());
@@ -150,9 +150,9 @@ public class DefaultAssertionCreatorTest {
             assertion = assertionCreator.create(jwtTemplate);
         }
 
-        assertClaims(builder, keyPair.getPublic(), assertion);
+        assertClaims(keyPair.getPublic(), assertion);
 
-        JwtContext context = assertContext(builder, keyPair.getPublic(), assertion);
+        JwtContext context = assertContext(keyPair.getPublic(), assertion);
         List<JsonWebStructure> joseObjects = context.getJoseObjects();
         assertNotNull(joseObjects);
         assertEquals(1, joseObjects.size());
@@ -172,17 +172,17 @@ public class DefaultAssertionCreatorTest {
             () -> sign(builder.algorithm, privateKey, "dummy content"));
     }
 
-    private void assertClaims(Builder builder, PublicKey publicKey, String assertion) throws InvalidJwtException {
-        JwtConsumer jwtConsumer = jwtConsumer(builder, publicKey);
+    private void assertClaims(PublicKey publicKey, String assertion) throws InvalidJwtException {
+        JwtConsumer jwtConsumer = jwtConsumer(publicKey);
         jwtConsumer.processToClaims(assertion);
     }
 
-    private JwtContext assertContext(Builder builder, PublicKey publicKey, String assertion) throws InvalidJwtException {
-        JwtConsumer jwtConsumer = jwtConsumer(builder, publicKey);
+    private JwtContext assertContext(PublicKey publicKey, String assertion) throws InvalidJwtException {
+        JwtConsumer jwtConsumer = jwtConsumer(publicKey);
         return jwtConsumer.process(assertion);
     }
 
-    private JwtConsumer jwtConsumer(Builder builder, PublicKey publicKey) {
+    private JwtConsumer jwtConsumer(PublicKey publicKey) {
         return new JwtConsumerBuilder()
             .setVerificationKey(publicKey)
             .setRequireExpirationTime()
