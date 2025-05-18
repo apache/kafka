@@ -39,7 +39,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-
 /**
  * Implementation of {@link HttpsJwks} that will periodically refresh the JWKS cache to reduce or
  * even prevent HTTP/HTTPS traffic in the hot path of validation. It is assumed that it's
@@ -57,7 +56,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @see org.jose4j.keys.resolvers.VerificationKeyResolver
  * @see BrokerJwtValidator
  */
-
 public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
@@ -375,5 +373,4 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
             }
         }
     }
-
 }

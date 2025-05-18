@@ -85,7 +85,6 @@ import javax.security.auth.login.AppConfigurationEntry;
  * @see RefreshingHttpsJwks
  * @see HttpsJwks
  */
-
 public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVerificationKeyResolver {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
@@ -152,5 +151,4 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
             throw new UnresolvableKeyException(sb, e);
         }
     }
-
 }
