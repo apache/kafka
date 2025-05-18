@@ -18,8 +18,9 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -197,30 +198,30 @@ public class ConfigurationUtils {
         return url;
     }
 
-    public String validateString(String name) throws JwtValidatorException {
+    public String validatePassword(String name) {
+        Password value = get(name);
+
+        if (value == null || Utils.isBlank(value.value()))
+            throw new ConfigException(String.format("The OAuth configuration option %s value must be provided", name));
+
+        return value.value().trim();
+    }
+
+    public String validateString(String name) {
         return validateString(name, true);
     }
 
-    public String validateString(String name, boolean isRequired) throws JwtValidatorException {
+    public String validateString(String name, boolean isRequired) {
         String value = get(name);
 
-        if (value == null) {
+        if (Utils.isBlank(value)) {
             if (isRequired)
                 throw new ConfigException(String.format("The OAuth configuration option %s value must be non-null", name));
             else
                 return null;
         }
 
-        value = value.trim();
-
-        if (value.isEmpty()) {
-            if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must not contain only whitespace", name));
-            else
-                return null;
-        }
-
-        return value;
+        return value.trim();
     }
 
     public Boolean validateBoolean(String name, boolean isRequired) {

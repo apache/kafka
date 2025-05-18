@@ -20,11 +20,12 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ConnectionMode;
-import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,11 +88,20 @@ public class JaasOptionsUtils {
         return socketFactory;
     }
 
-    public String validateString(String name) throws JwtValidatorException {
+    public String validatePassword(String name) {
+        Password value = (Password) options.get(name);
+
+        if (value == null || Utils.isBlank(value.value()))
+            throw new ConfigException(String.format("The OAuth configuration option %s value must be provided", name));
+
+        return value.value().trim();
+    }
+
+    public String validateString(String name) {
         return validateString(name, true);
     }
 
-    public String validateString(String name, boolean isRequired) throws JwtValidatorException {
+    public String validateString(String name, boolean isRequired) {
         String value = (String) options.get(name);
 
         if (value == null) {

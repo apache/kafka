@@ -64,9 +64,11 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *         Basic structural validation of the <code>b64token</code> value as defined in
  *         <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section 2.1</a>
  *     </li>
- *     <li>Basic conversion of the token into an in-memory data structure</li>
  *     <li>
- *         Presence of scope, <code>exp</code>, subject, <code>iss</code>, and
+ *         Basic conversion of the token into an in-memory data structure
+ *     </li>
+ *     <li>
+ *         Presence of <code>scope</code>, <code>exp</code>, <code>subject</code>, <code>iss</code>, and
  *         <code>iat</code> claims
  *     </li>
  *     <li>
@@ -75,7 +77,6 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *     </li>
  * </ol>
  */
-
 public class BrokerJwtValidator implements JwtValidator {
 
     private static final Logger log = LoggerFactory.getLogger(BrokerJwtValidator.class);
@@ -88,11 +89,17 @@ public class BrokerJwtValidator implements JwtValidator {
 
     private String subClaimName;
 
+    /**
+     * A public, no-args constructor is necessary for instantiation via configuration.
+     */
     public BrokerJwtValidator() {
         this.verificationKeyResolverOpt = Optional.empty();
     }
 
-    public BrokerJwtValidator(CloseableVerificationKeyResolver verificationKeyResolver) {
+    /*
+     * Package-visible for testing.
+     */
+    BrokerJwtValidator(CloseableVerificationKeyResolver verificationKeyResolver) {
         this.verificationKeyResolverOpt = Optional.of(verificationKeyResolver);
     }
 

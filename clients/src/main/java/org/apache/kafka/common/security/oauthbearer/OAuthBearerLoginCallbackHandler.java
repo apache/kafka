@@ -47,7 +47,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  * <code>OAuthBearerLoginCallbackHandler</code> is an {@link AuthenticateCallbackHandler} that
  * accepts {@link OAuthBearerTokenCallback} and {@link SaslExtensionsCallback} callbacks to
  * perform the steps to request a JWT from an OAuth/OIDC provider using the
- * <code>clientcredentials</code>. This grant type is commonly used for non-interactive
+ * <code>client_credentials</code>. This grant type is commonly used for non-interactive
  * "service accounts" where there is no user available to interactively supply credentials.
  * </p>
  *
