@@ -1275,10 +1275,10 @@ class ReplicaManager(val config: KafkaConfig,
    * 2) size and lag of current and future logs for each partition in the given log directory. Only logs of the queried partitions
    *    are included. There may be future logs (which will replace the current logs of the partition in the future) on the broker after KIP-113 is implemented.
    */
-  def describeLogDirs(partitions: Set[TopicPartition]): List[DescribeLogDirsResponseData.DescribeLogDirsResult] = {
+  def describeLogDirs(partitions: Set[TopicPartition]): util.List[DescribeLogDirsResponseData.DescribeLogDirsResult] = {
     val logsByDir = logManager.allLogs.groupBy(log => log.parentDir)
 
-    config.logDirs.toSet.map { logDir: String =>
+    config.logDirs.stream().distinct().map(logDir => {
       val file = Paths.get(logDir)
       val absolutePath = file.toAbsolutePath.toString
       try {
@@ -1326,7 +1326,7 @@ class ReplicaManager(val config: KafkaConfig,
             .setLogDir(absolutePath)
             .setErrorCode(Errors.forException(t).code)
       }
-    }.toList
+    }).toList()
   }
 
   // See: https://bugs.openjdk.java.net/browse/JDK-8162520
