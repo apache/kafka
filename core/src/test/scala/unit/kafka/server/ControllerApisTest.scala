@@ -61,6 +61,7 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, 
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
+import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -951,18 +952,18 @@ class ControllerApisTest {
     controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
-    assertThrows(classOf[TopicDeletionDisabledException],
-      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
-        ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-        hasClusterAuth = false,
-        _ => Set("foo", "bar"),
-        _ => Set("foo", "bar")))
-    assertThrows(classOf[InvalidRequestException],
-      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
-        1,
-        hasClusterAuth = false,
-        _ => Set("foo", "bar"),
-        _ => Set("foo", "bar")))
+
+    TestUtils.assertFutureThrows(classOf[TopicDeletionDisabledException], controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
+      ApiKeys.DELETE_TOPICS.latestVersion().toInt,
+      hasClusterAuth = false,
+      _ => Set("foo", "bar"),
+      _ => Set("foo", "bar")))
+
+    TestUtils.assertFutureThrows(classOf[InvalidRequestException], controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
+      1,
+      hasClusterAuth = false,
+      _ => Set("foo", "bar"),
+      _ => Set("foo", "bar")))
   }
 
   @ParameterizedTest

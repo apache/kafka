@@ -80,7 +80,7 @@ class RecordsBatchReaderTest {
     public void testLeaderChangeControlBatch() {
         // Confirm that the RecordsBatchReader is able to iterate over control batches
         MemoryRecords records = RecordsIteratorTest.buildControlRecords(ControlRecordType.LEADER_CHANGE);
-        ControlRecord expectedRecord = new ControlRecord(ControlRecordType.LEADER_CHANGE, new LeaderChangeMessage());
+        ControlRecord expectedRecord = ControlRecord.of(new LeaderChangeMessage());
 
         try (RecordsBatchReader<String> reader = RecordsBatchReader.of(
                 0,

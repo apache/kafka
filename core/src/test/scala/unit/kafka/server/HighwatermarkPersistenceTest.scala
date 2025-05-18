@@ -33,6 +33,8 @@ import org.apache.kafka.storage.internals.log.{CleanerConfig, LogDirFailureChann
 
 import java.util.Optional
 
+import scala.jdk.CollectionConverters._
+
 class HighwatermarkPersistenceTest {
 
   val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps)
@@ -40,7 +42,7 @@ class HighwatermarkPersistenceTest {
   val configRepository = new MockConfigRepository()
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
-      logDirs = config.logDirs.map(new File(_)),
+      logDirs = config.logDirs.asScala.map(new File(_)),
       cleanerConfig = new CleanerConfig(true))
   }
 
@@ -194,7 +196,7 @@ class HighwatermarkPersistenceTest {
   }
 
   private def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
-    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read().getOrDefault(
+    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.get(0)).getAbsolutePath).read().getOrDefault(
       new TopicPartition(topic, partition), 0L)
   }
 }

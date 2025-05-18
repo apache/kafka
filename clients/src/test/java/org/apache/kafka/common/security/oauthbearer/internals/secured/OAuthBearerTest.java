@@ -19,9 +19,6 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.authenticator.TestJaasConfig;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,8 +49,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
-import javax.security.auth.login.AppConfigurationEntry;
-
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -78,18 +73,6 @@ public abstract class OAuthBearerTest {
             String.format("Expected exception message (\"%s\") to contain substring (\"%s\")",
                 actual,
                 expectedSubstring));
-    }
-
-    protected void configureHandler(AuthenticateCallbackHandler handler,
-        Map<String, ?> configs,
-        Map<String, Object> jaasConfig) {
-        TestJaasConfig config = new TestJaasConfig();
-        config.createOrUpdateEntry("KafkaClient", OAuthBearerLoginModule.class.getName(), jaasConfig);
-        AppConfigurationEntry kafkaClient = config.getAppConfigurationEntry("KafkaClient")[0];
-
-        handler.configure(configs,
-            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-            Collections.singletonList(kafkaClient));
     }
 
     protected String createBase64JsonJwtSection(Consumer<ObjectNode> c) {
@@ -212,4 +195,11 @@ public abstract class OAuthBearerTest {
         return jwk;
     }
 
+    protected String createAccessKey(String header, String payload, String signature) {
+        Base64.Encoder enc = Base64.getEncoder();
+        header = enc.encodeToString(Utils.utf8(header));
+        payload = enc.encodeToString(Utils.utf8(payload));
+        signature = enc.encodeToString(Utils.utf8(signature));
+        return String.format("%s.%s.%s", header, payload, signature);
+    }
 }
