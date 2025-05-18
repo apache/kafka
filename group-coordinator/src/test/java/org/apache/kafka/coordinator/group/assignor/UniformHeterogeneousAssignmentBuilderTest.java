@@ -92,7 +92,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
     public void testTwoMembersNoTopicSubscription() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
-            .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -130,7 +129,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
     public void testTwoMembersSubscribedToNonexistentTopics() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
-            .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -166,7 +164,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic3Uuid, topic3Name, 6)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -216,7 +213,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 2)
             .addTopic(topic3Uuid, topic3Name, 1)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -277,7 +273,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             .addTopic(topic1Uuid, topic1Name, 6)
             .addTopic(topic2Uuid, topic2Name, 4)
             .addTopic(topic3Uuid, topic3Name, 4)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -350,7 +345,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             .addTopic(topic2Uuid, topic2Name, 5)
             .addTopic(topic3Uuid, topic3Name, 3)
             .addTopic(topic4Uuid, topic4Name, 3)
-            .addRacks()
             .build();
 
 
@@ -410,7 +404,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 6)
             .addTopic(topic2Uuid, topic2Name, 7)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -478,7 +471,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 8)
             .addTopic(topic3Uuid, topic3Name, 3)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -535,7 +527,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 5)
-            .addRacks()
             .build();
 
         // Initial subscriptions were [T1, T2]
@@ -598,7 +589,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             .addTopic(topic1Uuid, topic1Name, 2)
             .addTopic(topic2Uuid, topic2Name, 2)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -652,7 +642,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
     public void testFirstAssignmentWithTwoMembersIncludingOneWithoutSubscriptions() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();

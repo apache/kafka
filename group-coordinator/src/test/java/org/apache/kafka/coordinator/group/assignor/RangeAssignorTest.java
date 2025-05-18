@@ -98,7 +98,6 @@ public class RangeAssignorTest {
     public void testOneMemberSubscribedToNonExistentTopic() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
-            .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -129,7 +128,6 @@ public class RangeAssignorTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -181,7 +179,6 @@ public class RangeAssignorTest {
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -242,7 +239,6 @@ public class RangeAssignorTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -303,7 +299,6 @@ public class RangeAssignorTest {
     public void testStaticMembership() throws PartitionAssignorException {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
-            .addRacks()
             .build();
         SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -370,7 +365,6 @@ public class RangeAssignorTest {
     public void testMixedStaticMembership() throws PartitionAssignorException {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 5)
-            .addRacks()
             .build();
         SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -452,7 +446,6 @@ public class RangeAssignorTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 2)
             .addTopic(topic2Uuid, topic2Name, 2)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -520,7 +513,6 @@ public class RangeAssignorTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 4)
             .addTopic(topic2Uuid, topic2Name, 4)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -577,7 +569,6 @@ public class RangeAssignorTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -647,7 +638,6 @@ public class RangeAssignorTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 4)
             .addTopic(topic2Uuid, topic2Name, 3)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -715,7 +705,6 @@ public class RangeAssignorTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -761,7 +750,6 @@ public class RangeAssignorTest {
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .addRacks()
             .build();
 
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3

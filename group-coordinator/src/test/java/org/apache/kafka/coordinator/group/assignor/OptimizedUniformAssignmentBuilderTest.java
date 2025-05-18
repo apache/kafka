@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.stream.IntStream;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
@@ -65,7 +64,6 @@ public class OptimizedUniformAssignmentBuilderTest {
     public void testOneMemberNoTopicSubscription() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
-            .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -99,7 +97,6 @@ public class OptimizedUniformAssignmentBuilderTest {
     public void testOneMemberSubscribedToNonexistentTopic() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
-            .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -130,7 +127,6 @@ public class OptimizedUniformAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -179,7 +175,6 @@ public class OptimizedUniformAssignmentBuilderTest {
     public void testFirstAssignmentNumMembersGreaterThanTotalNumPartitions() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic3Uuid, topic3Name, 2)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -239,12 +234,12 @@ public class OptimizedUniformAssignmentBuilderTest {
     public void testValidityAndBalanceForLargeSampleSet() {
         MetadataImageBuilder metadataImageBuilder = new MetadataImageBuilder();
         Set<Uuid> topicIds = new HashSet<>();
-        IntStream.range(1, 101).forEach(i -> {
+        for (int i = 1; i < 101; i++) {
             Uuid topicId = Uuid.randomUuid();
             metadataImageBuilder.addTopic(topicId, "topic-" + i, 3);
             topicIds.add(topicId);
-        });
-        MetadataImage metadataImage = metadataImageBuilder.addRacks().build();
+        }
+        MetadataImage metadataImage = metadataImageBuilder.build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         for (int i = 1; i < 50; i++) {
@@ -278,7 +273,6 @@ public class OptimizedUniformAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -337,7 +331,6 @@ public class OptimizedUniformAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 6)
             .addTopic(topic2Uuid, topic2Name, 5)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -395,7 +388,6 @@ public class OptimizedUniformAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -463,7 +455,6 @@ public class OptimizedUniformAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -523,7 +514,6 @@ public class OptimizedUniformAssignmentBuilderTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 2)
             .addTopic(topic2Uuid, topic2Name, 2)
-            .addRacks()
             .build();
 
         // Initial subscriptions were [T1, T2]
@@ -579,7 +569,6 @@ public class OptimizedUniformAssignmentBuilderTest {
     public void testReassignmentStickinessWhenAlreadyBalanced() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 5)
-            .addRacks()
             .build();
 
         // A TreeMap ensures that memberA is first in the iteration order.

@@ -107,7 +107,6 @@ public class SimpleAssignorTest {
     public void testAssignWithNoSubscribedTopic() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
-            .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -141,7 +140,6 @@ public class SimpleAssignorTest {
     public void testAssignWithSubscribedToNonExistentTopic() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
-            .addRacks()
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -172,7 +170,6 @@ public class SimpleAssignorTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 2)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
@@ -234,7 +231,6 @@ public class SimpleAssignorTest {
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 3)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 2)
-            .addRacks()
             .build();
 
         Set<Uuid> memberATopicsSubscription = new LinkedHashSet<>();
@@ -306,7 +302,6 @@ public class SimpleAssignorTest {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 2)
-            .addRacks()
             .build();
 
         Set<Uuid> memberATopicsSubscription = new LinkedHashSet<>();
@@ -475,7 +470,6 @@ public class SimpleAssignorTest {
         MetadataImage metadataImage1 = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 2)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members1 = new HashMap<>();
@@ -534,7 +528,6 @@ public class SimpleAssignorTest {
         MetadataImage metadataImage2 = new MetadataImageBuilder()
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 2)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 3)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members2 = new HashMap<>();
@@ -612,7 +605,6 @@ public class SimpleAssignorTest {
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 3)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 2)
-            .addRacks()
             .build();
 
         Set<Uuid> memberATopicsSubscription1 = new LinkedHashSet<>();
@@ -685,7 +677,6 @@ public class SimpleAssignorTest {
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 3)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 2)
             .addTopic(TOPIC_4_UUID, TOPIC_4_NAME, 1)
-            .addRacks()
             .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members2 = new HashMap<>();

@@ -54,7 +54,7 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
         Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
     ) {
         this.metadataImage = Objects.requireNonNull(metadataImage);
-        this.topicPartitionAllowedMap = topicPartitionAllowedMap;
+        this.topicPartitionAllowedMap = Objects.requireNonNull(topicPartitionAllowedMap);
     }
 
     /**

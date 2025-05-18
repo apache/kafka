@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -41,12 +40,11 @@ public class SubscribedTopicMetadataTest {
     @BeforeEach
     public void setUp() {
         MetadataImageBuilder metadataImageBuilder = new MetadataImageBuilder();
-        IntStream.range(0, 5).forEach(i -> {
+        for (int i = 0; i < 5; i++) {
             Uuid topicId = Uuid.randomUuid();
             String topicName = "topic" + i;
             metadataImageBuilder.addTopic(topicId, topicName, numPartitions);
-        });
-        metadataImageBuilder.addRacks();
+        }
         metadataImage = metadataImageBuilder.addRacks().build();
 
         subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage);
@@ -55,6 +53,11 @@ public class SubscribedTopicMetadataTest {
     @Test
     public void testMetadataImageCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(null));
+    }
+
+    @Test
+    public void testTopicPartitionAllowedMapCannotBeNull() {
+        assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(metadataImage, null));
     }
 
     @Test
@@ -102,7 +105,7 @@ public class SubscribedTopicMetadataTest {
     public void testAssignablePartitions() {
         String t1Name = "t1";
         Uuid t1Id = Uuid.randomUuid();
-        metadataImage = new MetadataImageBuilder().addTopic(t1Id, t1Name, numPartitions).addRacks().build();
+        metadataImage = new MetadataImageBuilder().addTopic(t1Id, t1Name, numPartitions).build();
         // Optional.empty() allow map (all partitions assignable)
         subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage, Optional.empty());
         assertEquals(Set.of(0, 1, 2, 3, 4), subscribedTopicMetadata.assignablePartitions(t1Id));
