@@ -79,17 +79,17 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testUrlNull() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl(null), "must be non-null");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl(null), "is required");
     }
 
     @Test
     public void testUrlEmptyString() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl(""), "must not contain only whitespace");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl(""), "is required");
     }
 
     @Test
     public void testUrlWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl("    "), "must not contain only whitespace");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl("    "), "is required");
     }
 
     private void testUrl(String value) {
@@ -128,17 +128,17 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testFileNull() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(null), "must be non-null");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile(null), "is required");
     }
 
     @Test
     public void testFileEmptyString() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(""), "must not contain only whitespace");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile(""), "is required");
     }
 
     @Test
     public void testFileWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile("    "), "must not contain only whitespace");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile("    "), "is required");
     }
 
     @Test

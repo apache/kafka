@@ -116,7 +116,7 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
             else
                 return null;
         }
@@ -149,7 +149,7 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
             else
                 return null;
         }
@@ -202,7 +202,7 @@ public class ConfigurationUtils {
         Password value = get(name);
 
         if (value == null || Utils.isBlank(value.value()))
-            throw new ConfigException(String.format("The OAuth configuration option %s value must be provided", name));
+            throw new ConfigException(String.format("The OAuth configuration option %s value is required", name));
 
         return value.value().trim();
     }
@@ -216,7 +216,7 @@ public class ConfigurationUtils {
 
         if (Utils.isBlank(value)) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s value is required", name));
             else
                 return null;
         }
@@ -228,7 +228,7 @@ public class ConfigurationUtils {
         Boolean value = get(name);
 
         if (value == null && isRequired)
-            throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+            throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
 
         return value;
     }
@@ -246,13 +246,14 @@ public class ConfigurationUtils {
     // visible for testing
     // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
     void throwIfURLIsNotAllowed(String value) {
-        Set<String> allowedUrls = Arrays.stream(
-                        System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(","))
-                .map(String::trim)
-                .collect(Collectors.toSet());
+        String[] allowedUrlsArray = System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(",");
+        Set<String> allowedUrls = Arrays.stream(allowedUrlsArray)
+            .map(String::trim)
+            .collect(Collectors.toSet());
+
         if (!allowedUrls.contains(value)) {
             throw new ConfigException(value + " is not allowed. Update system property '"
-                    + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
+                + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
         }
     }
 }

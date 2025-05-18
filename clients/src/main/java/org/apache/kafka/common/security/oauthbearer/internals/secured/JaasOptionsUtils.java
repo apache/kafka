@@ -92,7 +92,7 @@ public class JaasOptionsUtils {
         Password value = (Password) options.get(name);
 
         if (value == null || Utils.isBlank(value.value()))
-            throw new ConfigException(String.format("The OAuth configuration option %s value must be provided", name));
+            throw new ConfigException(String.format("The OAuth configuration option %s value is required", name));
 
         return value.value().trim();
     }
@@ -104,23 +104,13 @@ public class JaasOptionsUtils {
     public String validateString(String name, boolean isRequired) {
         String value = (String) options.get(name);
 
-        if (value == null) {
+        if (Utils.isBlank(value)) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s value is required", name));
             else
                 return null;
         }
 
-        value = value.trim();
-
-        if (value.isEmpty()) {
-            if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must not contain only whitespace", name));
-            else
-                return null;
-        }
-
-        return value;
+        return value.trim();
     }
-
 }

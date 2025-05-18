@@ -203,7 +203,7 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
                 "clientSecret",
                 true,
                 cu::validatePassword,
-                jou::validatePassword
+                jou::validateString
             );
         }
 
