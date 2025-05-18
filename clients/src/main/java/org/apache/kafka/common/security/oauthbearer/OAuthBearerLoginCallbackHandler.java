@@ -189,7 +189,6 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
             SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
             JwtRetriever.class
         );
-        jwtRetriever.configure(configs, saslMechanism, jaasConfigEntries);
 
         jwtValidator = OAuthBearerUtils.getConfiguredInstanceOrDefault(
             configs,
@@ -198,7 +197,6 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
             SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
             JwtValidator.class
         );
-        jwtValidator.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     /*
@@ -210,8 +208,10 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
                    JwtRetriever jwtRetriever,
                    JwtValidator jwtValidator) {
         this.moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+
         this.jwtRetriever = jwtRetriever;
         this.jwtRetriever.configure(configs, saslMechanism, jaasConfigEntries);
+
         this.jwtValidator = jwtValidator;
         this.jwtValidator.configure(configs, saslMechanism, jaasConfigEntries);
     }

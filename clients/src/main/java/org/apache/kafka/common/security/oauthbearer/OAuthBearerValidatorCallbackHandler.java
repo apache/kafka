@@ -109,7 +109,6 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
             SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
             JwtValidator.class
         );
-        jwtValidator.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     /*

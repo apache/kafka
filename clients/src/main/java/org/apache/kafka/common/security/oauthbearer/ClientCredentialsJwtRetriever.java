@@ -105,8 +105,6 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
  * sasl.oauthbearer.scope=my-application-scope
  * sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
  * </pre>
- *
- * <p/>
  */
 public class ClientCredentialsJwtRetriever implements JwtRetriever {
 

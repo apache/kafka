@@ -81,7 +81,6 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.ass
  * The {@code JwtBearerJwtRetriever} also uses the following configuration:
  *
  * <ul>
-
  *     <li><code>sasl.oauthbearer.assertion.algorithm</code></li>
  *     <li><code>sasl.oauthbearer.assertion.claim.aud</code></li>
  *     <li><code>sasl.oauthbearer.assertion.claim.exp.seconds</code></li>
@@ -123,8 +122,6 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.ass
  * sasl.oauthbearer.scope=my-application-scope
  * sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
  * </pre>
- *
- * <p/>
  */
 public class JwtBearerJwtRetriever implements JwtRetriever {
 
