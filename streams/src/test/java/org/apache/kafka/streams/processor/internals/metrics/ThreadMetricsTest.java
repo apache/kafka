@@ -435,7 +435,7 @@ public class ThreadMetricsTest {
 
     @Test
     public void shouldAddThreadStateJmxMetric() {
-        final Gauge<StreamThread.State> threadStateProvider = (streamsMetrics, startTime) -> StreamThread.State.RUNNING;
+        final Gauge<String> threadStateProvider = (streamsMetrics, startTime) -> StreamThread.State.RUNNING.name();
         ThreadMetrics.addThreadStateMetric(
                 THREAD_ID,
                 streamsMetrics,

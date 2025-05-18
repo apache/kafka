@@ -44,13 +44,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-
-import scala.jdk.javaapi.CollectionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -242,9 +238,8 @@ public class ListOffsetsIntegrationTest {
 
         // case 2: test the offsets from recovery path.
         // server will rebuild offset index according to log files if the index files are nonexistent
-        Set<String> indexFiles = clusterInstance.brokers().values().stream().flatMap(broker ->
-                CollectionConverters.asJava(broker.config().logDirs()).stream()
-        ).collect(Collectors.toUnmodifiableSet());
+        List<String> indexFiles = clusterInstance.brokers().values().stream().flatMap(broker ->
+            broker.config().logDirs().stream()).toList();
         clusterInstance.brokers().values().forEach(KafkaBroker::shutdown);
         indexFiles.forEach(root -> {
             File[] files = new File(String.format("%s/%s-0", root, topic)).listFiles();
