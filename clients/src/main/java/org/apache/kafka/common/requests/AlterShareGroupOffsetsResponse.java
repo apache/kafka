@@ -40,6 +40,7 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(topic -> topic.partitions().forEach(partitionResponse ->
             updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()))
         ));
