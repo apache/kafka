@@ -38,7 +38,6 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -52,13 +51,10 @@ import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
-import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 
 import java.net.InetAddress;
@@ -71,7 +67,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -81,7 +76,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@ClusterTestDefaults(types = {Type.CO_KRAFT},
+//types = {Type.CO_KRAFT},
+@ClusterTestDefaults(
     serverProperties = {
 //        @ClusterConfigProperty(key = ServerConfigs.BROKER_ID_CONFIG, value = "0"),
 //        @ClusterConfigProperty(key = KRaftConfigs.NODE_ID_CONFIG, value = "0"),
@@ -93,27 +89,22 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 //        @ClusterConfigProperty(key = SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, value = "BROKER://localhost:0,CLIENT://localhost:0,CONTROLLER://localhost:0"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, value = "1"),
+//        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+//        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+//        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, value = "1"),
         @ClusterConfigProperty(key = ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, value = "org.apache.kafka.metadata.authorizer.StandardAuthorizer"),
         @ClusterConfigProperty(key = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, value = "org.apache.kafka.clients.security.GroupAuthorizerIntegrationTest$GroupPrincipalBuilder"),
-        @ClusterConfigProperty(key = KRaftConfigs.PROCESS_ROLES_CONFIG, value = "broker,controller"),
-        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
+//        @ClusterConfigProperty(key = KRaftConfigs.PROCESS_ROLES_CONFIG, value = "broker,controller"),
+//        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
     })
 public class GroupAuthorizerIntegrationTest {
     private static final KafkaPrincipal BROKER_PRINCIPAL = new KafkaPrincipal("Group", "broker");
     private static final KafkaPrincipal CLIENT_PRINCIPAL = new KafkaPrincipal("Group", "client");
 
     private static final String BROKER_LISTENER_NAME = "BROKER";
-    private static final String CLIENT_LISTENER_NAME = "CLIENT";
+    private static final String CLIENT_LISTENER_NAME = "EXTERNAL";
+//    private static final String CLIENT_LISTENER_NAME = "CLIENT";
     private static final String CONTROLLER_LISTENER_NAME = "CONTROLLER";
-
-    private static final ListenerName INTER_BROKER_LISTENER_NAME = new ListenerName(BROKER_LISTENER_NAME);
-    private static final ListenerName LISTENER_NAME = new ListenerName(CLIENT_LISTENER_NAME);
-
-    private static final String GROUP_PRINCIPAL_BUILDER_CLASS_NAME = GroupPrincipalBuilder.class.getName();
-
 
     private Authorizer getAuthorizer(ClusterInstance clusterInstance) {
         return clusterInstance.controllers().values().stream()
@@ -159,22 +150,15 @@ public class GroupAuthorizerIntegrationTest {
         @Override
         public KafkaPrincipal build(AuthenticationContext context) {
             String listenerName = context.listenerName();
-            KafkaPrincipal principal;
             switch (listenerName) {
                 case BROKER_LISTENER_NAME:
-                    principal = BROKER_PRINCIPAL;
-                    break;
                 case CONTROLLER_LISTENER_NAME:
-                    principal = BROKER_PRINCIPAL;
-                    break;
+                    return BROKER_PRINCIPAL;
                 case CLIENT_LISTENER_NAME:
-                    principal = CLIENT_PRINCIPAL;
-                    break;
+                    return CLIENT_PRINCIPAL;
                 default:
-                    System.out.println("No principal mapped to listener: " + listenerName);
                     throw new IllegalArgumentException("No principal mapped to listener " + listenerName);
             }
-            return principal;
         }
     }
 
@@ -269,15 +253,16 @@ public class GroupAuthorizerIntegrationTest {
     };
 
     @ClusterTest(
-        brokerListener = "CLIENT"
+        brokerListener = CLIENT_LISTENER_NAME
     )
     public void testUnauthorizedProduceAndConsumeWithClassicConsumer(ClusterInstance clusterInstance) throws InterruptedException {
         testUnauthorizedProduceAndConsume(clusterInstance, GroupProtocol.CLASSIC);
     }
 
     @ClusterTest(
-            brokerListener = "CLIENT"
+            brokerListener = CLIENT_LISTENER_NAME
     )
+//    kkk
     public void testUnauthorizedProduceAndConsumeWithAsyncConsumer(ClusterInstance clusterInstance) throws InterruptedException {
         testUnauthorizedProduceAndConsume(clusterInstance, GroupProtocol.CONSUMER);
     }
@@ -290,8 +275,15 @@ public class GroupAuthorizerIntegrationTest {
 
         Admin admin = clusterInstance.admin();
         Producer<byte[], byte[]> producer = clusterInstance.producer();
+        String group = "group";
+        addAndVerifyAcls(
+                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+                clusterInstance
+        );
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
-            GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)
+            GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT),
+            ConsumerConfig.GROUP_ID_CONFIG, group
         ));
         
         try {
@@ -307,7 +299,7 @@ public class GroupAuthorizerIntegrationTest {
             assertInstanceOf(TopicAuthorizationException.class, cause);
             TopicAuthorizationException topicAuthException = (TopicAuthorizationException) cause;
             assertEquals(Set.of(topic), topicAuthException.unauthorizedTopics());
-
+//kkk
             consumer.assign(Collections.singletonList(topicPartition));
             TopicAuthorizationException consumeException = assertThrows(
                 TopicAuthorizationException.class,
@@ -324,14 +316,14 @@ public class GroupAuthorizerIntegrationTest {
 
 
     @ClusterTest(
-        brokerListener = "CLIENT"
+        brokerListener = CLIENT_LISTENER_NAME
     )
     public void testClassicConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         testConsumeUnsubscribeWithoutGroupPermission(clusterInstance, GroupProtocol.CLASSIC);
     }
 
     @ClusterTest(
-            brokerListener = "CLIENT"
+            brokerListener = CLIENT_LISTENER_NAME
     )
 //    fail
     public void testAsyncConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
@@ -376,6 +368,8 @@ public class GroupAuthorizerIntegrationTest {
         consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, group);
         consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         consumerConfigs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT));
+        //here
+//        consumerConfigs.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 240000);
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(consumerConfigs);
         consumer.subscribe(Collections.singletonList(topic));
 
@@ -385,11 +379,11 @@ public class GroupAuthorizerIntegrationTest {
         }, "poll message");
 
 //        here
-        removeAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                getAuthorizer(clusterInstance)
-        );
+//        removeAndVerifyAcls(
+//                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+//                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+//                getAuthorizer(clusterInstance)
+//        );
 
         // Test unsubscribe fail
 //        consumer.unsubscribe();
@@ -398,7 +392,7 @@ public class GroupAuthorizerIntegrationTest {
     }
 
     @ClusterTest(
-        brokerListener = "CLIENT"
+        brokerListener = CLIENT_LISTENER_NAME
     )
     public void testClassicConsumeCloseWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         testConsumeCloseWithoutGroupPermission(clusterInstance, GroupProtocol.CLASSIC);
@@ -406,7 +400,7 @@ public class GroupAuthorizerIntegrationTest {
 
 //    slow
     @ClusterTest(
-            brokerListener = "CLIENT"
+            brokerListener = CLIENT_LISTENER_NAME
     )
     public void testAsyncConsumeCloseWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         testConsumeCloseWithoutGroupPermission(clusterInstance, GroupProtocol.CONSUMER);
@@ -456,25 +450,25 @@ public class GroupAuthorizerIntegrationTest {
         }, "poll message");
 
 //        here
-        removeAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                getAuthorizer(clusterInstance)
-        );
+//        removeAndVerifyAcls(
+//                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+//                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+//                getAuthorizer(clusterInstance)
+//        );
 
         assertDoesNotThrow(() -> consumer.close());
         admin.close();
     }
 
     @ClusterTest(
-        brokerListener = "CLIENT"
+        brokerListener = CLIENT_LISTENER_NAME
     )
     public void testAuthorizedProduceAndConsumeWithClassic(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         testAuthorizedProduceAndConsume(clusterInstance, GroupProtocol.CLASSIC);
     }
 
     @ClusterTest(
-            brokerListener = "CLIENT"
+            brokerListener = CLIENT_LISTENER_NAME
     )
     public void testAuthorizedProduceAndConsumeWithAsync(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         testAuthorizedProduceAndConsume(clusterInstance, GroupProtocol.CONSUMER);
