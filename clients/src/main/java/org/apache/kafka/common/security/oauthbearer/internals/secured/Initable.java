@@ -14,21 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.io.IOException;
+import java.util.Map;
 
-public interface Initable {
+public interface HttpRequestFormatter {
 
-    /**
-     * Lifecycle method to perform any one-time initialization of a given resource. This must
-     * be invoked by the caller to ensure the correct state before methods are invoked.
-     *
-     * @throws IOException Thrown on errors related to IO during initialization
-     */
+    Map<String, String> formatHeaders();
 
-    default void init() throws IOException {
-        // This method left intentionally blank.
-    }
+    String formatBody();
 }

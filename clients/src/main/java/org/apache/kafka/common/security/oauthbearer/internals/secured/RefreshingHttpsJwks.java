@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator;
 import org.apache.kafka.common.utils.Time;
 
 import org.jose4j.jwk.HttpsJwks;
@@ -25,7 +26,6 @@ import org.jose4j.lang.JoseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -56,8 +56,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @see org.jose4j.keys.resolvers.VerificationKeyResolver
  * @see BrokerJwtValidator
  */
-
-public final class RefreshingHttpsJwks implements Initable, Closeable {
+public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
@@ -171,7 +170,6 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
         this(time, httpsJwks, refreshMs, refreshRetryBackoffMs, refreshRetryBackoffMaxMs, Executors.newSingleThreadScheduledExecutor());
     }
 
-    @Override
     public void init() throws IOException {
         try {
             log.debug("init started");
@@ -375,5 +373,4 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
             }
         }
     }
-
 }

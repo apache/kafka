@@ -15,10 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import java.io.Closeable;
-import java.io.IOException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfigurable;
+
 
 /**
  * A <code>JwtRetriever</code> is the internal API by which the login module will
@@ -34,7 +35,7 @@ import java.io.IOException;
  * @see FileJwtRetriever
  */
 
-public interface JwtRetriever extends Initable, Closeable {
+public interface JwtRetriever extends OAuthBearerConfigurable {
 
     /**
      * Retrieves a JWT access token in its serialized three-part form. The implementation
@@ -48,21 +49,8 @@ public interface JwtRetriever extends Initable, Closeable {
      *
      * @return Non-<code>null</code> JWT access token string
      *
-     * @throws IOException Thrown on errors related to IO during retrieval
+     * @throws JwtRetrieverException Thrown on errors related to IO during retrieval
      */
 
-    String retrieve() throws IOException;
-
-    /**
-     * Lifecycle method to perform a clean shutdown of the retriever. This must
-     * be performed by the caller to ensure the correct state, freeing up and releasing any
-     * resources performed in {@link #init()}.
-     *
-     * @throws IOException Thrown on errors related to IO during closure
-     */
-
-    default void close() throws IOException {
-        // This method left intentionally blank.
-    }
-
+    String retrieve() throws JwtRetrieverException;
 }

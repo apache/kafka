@@ -25,12 +25,9 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.JwtValidator;
 import org.apache.kafka.common.utils.Exit;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
@@ -40,6 +37,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
+import javax.security.auth.login.AppConfigurationEntry;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -116,6 +114,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_DOC;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_DOC;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 
 public class OAuthCompatibilityTool {
 
@@ -133,24 +132,27 @@ public class OAuthCompatibilityTool {
         ConfigHandler configHandler = new ConfigHandler(namespace);
 
         Map<String, ?> configs = configHandler.getConfigs();
-        Map<String, Object> jaasConfigs = configHandler.getJaasOptions();
+        List<AppConfigurationEntry> jaasConfigEntries = List.of(
+            new AppConfigurationEntry(
+                OAuthBearerLoginModule.class.getName(),
+                AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+                configHandler.getJaasOptions()
+            )
+        );
 
         try {
-            String accessToken;
+            String jwt;
 
             {
                 // Client side...
-                try (JwtRetriever atr = new DefaultJwtRetriever(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, jaasConfigs)) {
-                    atr.init();
-
-                    try (JwtValidator atv = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM)) {
-                        atv.init();
+                try (JwtRetriever retriever = createRetriever(configs, jaasConfigEntries)) {
+                    try (JwtValidator validator = createValidator(configs, jaasConfigEntries)) {
                         System.out.println("PASSED 1/5: client configuration");
 
-                        accessToken = atr.retrieve();
+                        jwt = retriever.retrieve();
                         System.out.println("PASSED 2/5: client JWT retrieval");
 
-                        atv.validate(accessToken);
+                        validator.validate(jwt);
                         System.out.println("PASSED 3/5: client JWT validation");
                     }
                 }
@@ -158,16 +160,11 @@ public class OAuthCompatibilityTool {
 
             {
                 // Broker side...
-                try (CloseableVerificationKeyResolver vkr = VerificationKeyResolverFactory.create(configs, jaasConfigs)) {
-                    vkr.init();
+                try (JwtValidator validator = createValidator(configs, jaasConfigEntries)) {
+                    System.out.println("PASSED 4/5: broker configuration");
 
-                    try (JwtValidator atv = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, vkr)) {
-                        atv.init();
-                        System.out.println("PASSED 4/5: broker configuration");
-
-                        atv.validate(accessToken);
-                        System.out.println("PASSED 5/5: broker JWT validation");
-                    }
+                    validator.validate(jwt);
+                    System.out.println("PASSED 5/5: broker JWT validation");
                 }
             }
 
@@ -186,6 +183,25 @@ public class OAuthCompatibilityTool {
         }
     }
 
+    private static JwtRetriever createRetriever(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
+        return OAuthBearerUtils.getConfiguredInstanceOrDefault(
+            configs,
+            OAUTHBEARER_MECHANISM,
+            jaasConfigEntries,
+            SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
+            JwtRetriever.class
+        );
+    }
+
+    private static JwtValidator createValidator(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
+        return OAuthBearerUtils.getConfiguredInstanceOrDefault(
+            configs,
+            OAUTHBEARER_MECHANISM,
+            jaasConfigEntries,
+            SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+            JwtValidator.class
+        );
+    }
 
     private static class ArgsHandler {
 

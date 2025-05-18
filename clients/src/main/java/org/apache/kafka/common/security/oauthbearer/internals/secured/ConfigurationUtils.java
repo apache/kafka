@@ -18,7 +18,9 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -56,6 +58,10 @@ public class ConfigurationUtils {
             this.prefix = ListenerName.saslMechanismPrefix(saslMechanism.trim());
         else
             this.prefix = null;
+    }
+
+    public boolean containsKey(String name) {
+        return get(name) != null;
     }
 
     /**
@@ -110,7 +116,7 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
             else
                 return null;
         }
@@ -143,7 +149,7 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
             else
                 return null;
         }
@@ -192,37 +198,37 @@ public class ConfigurationUtils {
         return url;
     }
 
-    public String validateString(String name) throws ValidateException {
+    public String validatePassword(String name) {
+        Password value = get(name);
+
+        if (value == null || Utils.isBlank(value.value()))
+            throw new ConfigException(String.format("The OAuth configuration option %s value is required", name));
+
+        return value.value().trim();
+    }
+
+    public String validateString(String name) {
         return validateString(name, true);
     }
 
-    public String validateString(String name, boolean isRequired) throws ValidateException {
+    public String validateString(String name, boolean isRequired) {
         String value = get(name);
 
-        if (value == null) {
+        if (Utils.isBlank(value)) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s value is required", name));
             else
                 return null;
         }
 
-        value = value.trim();
-
-        if (value.isEmpty()) {
-            if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must not contain only whitespace", name));
-            else
-                return null;
-        }
-
-        return value;
+        return value.trim();
     }
 
     public Boolean validateBoolean(String name, boolean isRequired) {
         Boolean value = get(name);
 
         if (value == null && isRequired)
-            throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+            throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
 
         return value;
     }
@@ -240,13 +246,14 @@ public class ConfigurationUtils {
     // visible for testing
     // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
     void throwIfURLIsNotAllowed(String value) {
-        Set<String> allowedUrls = Arrays.stream(
-                        System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(","))
-                .map(String::trim)
-                .collect(Collectors.toSet());
+        String[] allowedUrlsArray = System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(",");
+        Set<String> allowedUrls = Arrays.stream(allowedUrlsArray)
+            .map(String::trim)
+            .collect(Collectors.toSet());
+
         if (!allowedUrls.contains(value)) {
             throw new ConfigException(value + " is not allowed. Update system property '"
-                    + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
+                + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
         }
     }
 }

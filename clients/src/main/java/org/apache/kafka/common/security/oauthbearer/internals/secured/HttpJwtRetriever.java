@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
-import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,10 +35,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -54,7 +51,7 @@ import javax.net.ssl.SSLSocketFactory;
  * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/{@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
  * to a publicized token endpoint URL ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  */
-public class HttpJwtRetriever implements JwtRetriever {
+public class HttpJwtRetriever {
 
     private static final Logger log = LoggerFactory.getLogger(HttpJwtRetriever.class);
 
@@ -89,11 +86,7 @@ public class HttpJwtRetriever implements JwtRetriever {
         UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_VERSION);
     }
 
-    private final String clientId;
-
-    private final String clientSecret;
-
-    private final String scope;
+    private final HttpRequestFormatter requestFormatter;
 
     private final SSLSocketFactory sslSocketFactory;
 
@@ -107,28 +100,20 @@ public class HttpJwtRetriever implements JwtRetriever {
 
     private final Integer loginReadTimeoutMs;
 
-    private final boolean urlencodeHeader;
-
-    public HttpJwtRetriever(String clientId,
-                            String clientSecret,
-                            String scope,
+    public HttpJwtRetriever(HttpRequestFormatter requestFormatter,
                             SSLSocketFactory sslSocketFactory,
                             String tokenEndpointUrl,
                             long loginRetryBackoffMs,
                             long loginRetryBackoffMaxMs,
                             Integer loginConnectTimeoutMs,
-                            Integer loginReadTimeoutMs,
-                            boolean urlencodeHeader) {
-        this.clientId = Objects.requireNonNull(clientId);
-        this.clientSecret = Objects.requireNonNull(clientSecret);
-        this.scope = scope;
+                            Integer loginReadTimeoutMs) {
+        this.requestFormatter = Objects.requireNonNull(requestFormatter);
         this.sslSocketFactory = sslSocketFactory;
         this.tokenEndpointUrl = Objects.requireNonNull(tokenEndpointUrl);
         this.loginRetryBackoffMs = loginRetryBackoffMs;
         this.loginRetryBackoffMaxMs = loginRetryBackoffMaxMs;
         this.loginConnectTimeoutMs = loginConnectTimeoutMs;
         this.loginReadTimeoutMs = loginReadTimeoutMs;
-        this.urlencodeHeader = urlencodeHeader;
     }
 
     /**
@@ -143,15 +128,12 @@ public class HttpJwtRetriever implements JwtRetriever {
      *
      * @return Non-<code>null</code> JWT access token string
      *
-     * @throws IOException Thrown on errors related to IO during retrieval
+     * @throws JwtRetrieverException Thrown on errors related to IO, parsing, etc. during retrieval
      */
-
-    @Override
-    public String retrieve() throws IOException {
-        String authorizationHeader = formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader);
-        String requestBody = formatRequestBody(scope);
+    public String retrieve() throws JwtRetrieverException {
+        String requestBody = requestFormatter.formatBody();
         Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);
-        Map<String, String> headers = Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
+        Map<String, String> headers = requestFormatter.formatHeaders();
 
         String responseBody;
 
@@ -174,8 +156,8 @@ public class HttpJwtRetriever implements JwtRetriever {
                 }
             });
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof IOException)
-                throw (IOException) e.getCause();
+            if (e.getCause() instanceof JwtRetrieverException)
+                throw (JwtRetrieverException) e.getCause();
             else
                 throw new KafkaException(e.getCause());
         }
@@ -323,9 +305,16 @@ public class HttpJwtRetriever implements JwtRetriever {
         return String.format("{%s}", errorResponseBody);
     }
 
-    static String parseAccessToken(String responseBody) throws IOException {
+    static String parseAccessToken(String responseBody) throws JwtRetrieverException {
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode rootNode = mapper.readTree(responseBody);
+        JsonNode rootNode;
+
+        try {
+            rootNode = mapper.readTree(responseBody);
+        } catch (IOException e) {
+            throw new JwtRetrieverException(e);
+        }
+
         JsonNode accessTokenNode = rootNode.at("/access_token");
 
         if (accessTokenNode == null) {
@@ -339,39 +328,10 @@ public class HttpJwtRetriever implements JwtRetriever {
                 snippet = String.format("%s (trimmed to first %d characters out of %d total)", s, MAX_RESPONSE_BODY_LENGTH, actualLength);
             }
 
-            throw new IOException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", snippet));
+            throw new JwtRetrieverException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", snippet));
         }
 
         return sanitizeString("the token endpoint response's access_token JSON attribute", accessTokenNode.textValue());
-    }
-
-    static String formatAuthorizationHeader(String clientId, String clientSecret, boolean urlencode) {
-        clientId = sanitizeString("the token endpoint request client ID parameter", clientId);
-        clientSecret = sanitizeString("the token endpoint request client secret parameter", clientSecret);
-
-        // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
-        if (urlencode) {
-            clientId = URLEncoder.encode(clientId, StandardCharsets.UTF_8);
-            clientSecret = URLEncoder.encode(clientSecret, StandardCharsets.UTF_8);
-        }
-
-        String s = String.format("%s:%s", clientId, clientSecret);
-        // Per RFC-7617, we need to use the *non-URL safe* base64 encoder. See KAFKA-14496.
-        String encoded = Base64.getEncoder().encodeToString(Utils.utf8(s));
-        return String.format("Basic %s", encoded);
-    }
-
-    static String formatRequestBody(String scope) {
-        StringBuilder requestParameters = new StringBuilder();
-        requestParameters.append("grant_type=client_credentials");
-
-        if (scope != null && !scope.trim().isEmpty()) {
-            scope = scope.trim();
-            String encodedScope = URLEncoder.encode(scope, StandardCharsets.UTF_8);
-            requestParameters.append("&scope=").append(encodedScope);
-        }
-
-        return requestParameters.toString();
     }
 
     private static String sanitizeString(String name, String value) {
@@ -388,5 +348,4 @@ public class HttpJwtRetriever implements JwtRetriever {
 
         return value;
     }
-
 }

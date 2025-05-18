@@ -15,13 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
+
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 
 public class ClientJwtValidatorTest extends JwtValidatorTest {
 
     @Override
     protected JwtValidator createJwtValidator(AccessTokenBuilder builder) {
-        return new ClientJwtValidator(builder.scopeClaimName(), builder.subjectClaimName());
+        return new ClientJwtValidator();
     }
 
 }

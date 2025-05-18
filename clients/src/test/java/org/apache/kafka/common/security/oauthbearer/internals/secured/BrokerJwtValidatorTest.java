@@ -15,29 +15,28 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.lang.InvalidAlgorithmException;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class BrokerJwtValidatorTest extends JwtValidatorTest {
 
     @Override
     protected JwtValidator createJwtValidator(AccessTokenBuilder builder) {
-        return new BrokerJwtValidator(30,
-            Collections.emptySet(),
-            null,
-            (jws, nestingContext) -> builder.jwk().getKey(),
-            builder.scopeClaimName(),
-            builder.subjectClaimName());
+        CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> builder.jwk().getKey();
+        return new BrokerJwtValidator(resolver);
     }
 
     @Test
@@ -73,6 +72,8 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
             .subjectClaimName(subClaimName)
             .subject(null);
         JwtValidator validator = createJwtValidator(tokenBuilder);
+        Map<String, ?> saslConfigs = getSaslConfigs(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME, subClaimName);
+        validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
 
         // Validation should succeed (e.g. signature verification) even if sub claim is missing
         OAuthBearerToken token = validator.validate(tokenBuilder.build());
@@ -83,6 +84,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
     private void testEncryptionAlgorithm(PublicJsonWebKey jwk, String alg) throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg);
         JwtValidator validator = createJwtValidator(builder);
+        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, getJaasConfigEntries());
         String accessToken = builder.build();
         OAuthBearerToken token = validator.validate(accessToken);
 
