@@ -20,7 +20,7 @@ package kafka.server
 import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager}
 import kafka.server.Server.MetricsPrefix
-import kafka.utils.{CoreUtils, Logging, VerifiableProperties}
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
@@ -38,6 +38,7 @@ import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics}
+import org.apache.kafka.server.util.VerifiableProperties
 
 import java.net.InetSocketAddress
 import java.util.Arrays
@@ -102,7 +103,7 @@ class SharedServer(
   val faultHandlerFactory: FaultHandlerFactory,
   val socketFactory: ServerSocketFactory
 ) extends Logging {
-  KafkaMetricsReporter.startReporters(VerifiableProperties(sharedServerConfig.originals))
+  KafkaMetricsReporter.startReporters(new VerifiableProperties(sharedServerConfig.originals))
   KafkaYammerMetrics.INSTANCE.configure(sharedServerConfig.originals)
 
   private val logContext: LogContext = new LogContext(s"[SharedServer id=${sharedServerConfig.nodeId}] ")
