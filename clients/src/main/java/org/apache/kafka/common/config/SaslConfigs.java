@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString;
 import org.apache.kafka.common.config.ConfigDef.Range;
 
 public class SaslConfigs {
@@ -401,7 +402,7 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_SCOPE_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, ConfigDef.Type.PASSWORD, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_ASSERTION_ALGORITHM, ConfigDef.CaseInsensitiveValidString.in("ES256", "RS256"), ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_ALGORITHM_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_ASSERTION_ALGORITHM, CaseInsensitiveValidString.in("ES256", "RS256"), ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_ALGORITHM_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS, ConfigDef.Type.INT, DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS, Range.between(0, 86400), ConfigDef.Importance.LOW, SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS_DOC)
