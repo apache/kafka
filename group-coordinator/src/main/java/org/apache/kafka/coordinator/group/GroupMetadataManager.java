@@ -8116,6 +8116,7 @@ public class GroupMetadataManager {
                 alterShareGroupOffsetsResponseTopics.add(
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
                         .setTopicName(topic.topicName())
+                        .setTopicId(topicId)
                         .setPartitions(partitions)
                 );
 

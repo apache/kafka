@@ -5365,6 +5365,39 @@ public class GroupCoordinatorServiceTest {
         assertEquals(response, future.get());
     }
 
+    @Test
+    public void testPersisterInitializeForAlterShareGroupOffsetsResponseSuccess() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister mockPersister = mock(Persister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(mockPersister)
+            .build(true);
+
+        Uuid topicId = Uuid.randomUuid();
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(topicId, "topic-name", 1)
+            .build();
+
+        service.onNewMetadataImage(image, null);
+
+        when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
+            new InitializeShareGroupStateResult.Builder()
+                .setTopicsData(List.of(
+                    new TopicData<>(topicId, List.of(
+                        PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())
+                    ))
+                )).build()
+        ));
+
+        AlterShareGroupOffsetsResponseData defaultResponse = new AlterShareGroupOffsetsResponseData();
+        InitializeShareGroupStateParameters params = new InitializeShareGroupStateParameters.Builder()
+            .build();
+
+        assertEquals(defaultResponse, service.persisterInitialize(params, defaultResponse).getNow(null));
+        verify(mockPersister, times(1)).initializeState(ArgumentMatchers.any());
+    }
 
     @FunctionalInterface
     private interface TriFunction<A, B, C, R> {

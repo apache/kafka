@@ -670,7 +670,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ));
     }
 
-    private CompletableFuture<AlterShareGroupOffsetsResponseData> persisterInitialize(
+    // Visibility for testing
+    CompletableFuture<AlterShareGroupOffsetsResponseData> persisterInitialize(
         InitializeShareGroupStateParameters request,
         AlterShareGroupOffsetsResponseData response
     ) {

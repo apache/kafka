@@ -54,8 +54,8 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        Errors errors = Errors.forException(e);
-        return new AlterShareGroupOffsetsResponse(getErrorResponse(throttleTimeMs, errors));
+        Errors error = Errors.forException(e);
+        return new AlterShareGroupOffsetsResponse(getErrorResponse(throttleTimeMs, error));
     }
 
     public static AlterShareGroupOffsetsResponseData getErrorResponse(int throttleTimeMs, Errors error) {
@@ -65,8 +65,8 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
             .setErrorMessage(error.message());
     }
 
-    public static AlterShareGroupOffsetsResponseData getErrorResponse(Errors errors) {
-        return getErrorResponse(errors.code(), errors.message());
+    public static AlterShareGroupOffsetsResponseData getErrorResponse(Errors error) {
+        return getErrorResponse(error.code(), error.message());
     }
 
     public static AlterShareGroupOffsetsResponseData getErrorResponse(short errorCode, String errorMessage) {
