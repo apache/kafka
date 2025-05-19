@@ -111,7 +111,7 @@ public class EndToEndClusterIdTest {
 
     @ClusterTest
     public void testEndToEndWithClassicProtocol() throws Exception {
-        testEndToEnd(GroupProtocol.CONSUMER);
+        testEndToEnd(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
