@@ -1774,7 +1774,7 @@ class KafkaRaftClientTest {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 1;
-        int jitter = 85;  // set it large enough so that replica will bound on jitter
+        int jitter = 85;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)

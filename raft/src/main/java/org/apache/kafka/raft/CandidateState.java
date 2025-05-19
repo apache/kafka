@@ -81,7 +81,7 @@ public class CandidateState implements NomineeState {
     }
 
     /**
-     * Check if the candidate is backing off before transitionint back to prospective state
+     * Check if the candidate is backing off before transitioning back to prospective state
      */
     public boolean isBackingOff() {
         return isBackingOff;
