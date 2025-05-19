@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.PartitionRegistration;
 
 import java.util.Collections;
@@ -88,9 +89,12 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
                 Set<String> racks = new HashSet<>();
                 for (int replica : partitionRegistration.replicas) {
                     // Only add the rack if it is available for the broker/replica.
-                    metadataImage.cluster().broker(replica).rack().ifPresent(racks::add);
+                    BrokerRegistration brokerRegistration = metadataImage.cluster().broker(replica);
+                    if (brokerRegistration != null) {
+                        brokerRegistration.rack().ifPresent(racks::add);
+                    }
                 }
-                return racks;
+                return Collections.unmodifiableSet(racks);
             }
         }
         return Set.of();
