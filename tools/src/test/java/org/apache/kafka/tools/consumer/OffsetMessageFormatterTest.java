@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools.consumer;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
@@ -28,7 +29,6 @@ import java.util.Collections;
 import java.util.stream.Stream;
 
 public class OffsetMessageFormatterTest extends CoordinatorRecordMessageFormatterTest {
-
     private static final OffsetCommitKey OFFSET_COMMIT_KEY = new OffsetCommitKey()
         .setGroup("group-id")
         .setTopic("foo")
@@ -38,7 +38,8 @@ public class OffsetMessageFormatterTest extends CoordinatorRecordMessageFormatte
         .setLeaderEpoch(10)
         .setMetadata("metadata")
         .setCommitTimestamp(1234L)
-        .setExpireTimestamp(5678L);
+        .setExpireTimestamp(5678L)
+        .setTopicId(Uuid.fromString("MKXx1fIkQy2J9jXHhK8m1w"));
     private static final GroupMetadataKey GROUP_METADATA_KEY = new GroupMetadataKey().setGroup("group-id");
     private static final GroupMetadataValue GROUP_METADATA_VALUE = new GroupMetadataValue()
         .setProtocolType("consumer")
@@ -121,7 +122,8 @@ public class OffsetMessageFormatterTest extends CoordinatorRecordMessageFormatte
                               "data":{"offset":100,
                                       "leaderEpoch":10,
                                       "metadata":"metadata",
-                                      "commitTimestamp":1234}}}
+                                      "commitTimestamp":1234,
+                                      "topicId":"MKXx1fIkQy2J9jXHhK8m1w"}}}
                 """
             ),
             Arguments.of(
