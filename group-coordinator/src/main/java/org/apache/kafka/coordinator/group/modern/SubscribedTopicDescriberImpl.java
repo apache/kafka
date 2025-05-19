@@ -23,6 +23,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -112,7 +113,7 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
         }
 
         if (topicPartitionAllowedMap.isEmpty()) {
-            return topic.partitions().keySet();
+            return Collections.unmodifiableSet(topic.partitions().keySet());
         }
 
         return topicPartitionAllowedMap.get().getOrDefault(topicId, Set.of());
