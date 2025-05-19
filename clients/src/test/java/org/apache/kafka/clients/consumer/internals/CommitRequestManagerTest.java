@@ -470,7 +470,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testCommitSyncShouldSuccessWithTopicHasId() {
+    public void testCommitSyncShouldSucceedWithTopicId() {
         subscriptionState = mock(SubscriptionState.class);
         TopicPartition tp = new TopicPartition("topic", 1);
         Uuid topicId = Uuid.randomUuid();

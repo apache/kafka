@@ -31,7 +31,6 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -701,14 +700,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
             Map<String, Uuid> topicIds = metadata.topicIds();
-            int partitionsWithoutTopicIds = 0;
+            boolean canUseTopicIds = true;
             Map<String, OffsetCommitRequestData.OffsetCommitRequestTopic> requestTopicDataMap = new HashMap<>();
             for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 OffsetAndMetadata offsetAndMetadata = entry.getValue();
                 Uuid topicId = topicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID);
                 if (topicId.equals(Uuid.ZERO_UUID)) {
-                    partitionsWithoutTopicIds++;
+                    canUseTopicIds = false;
                 }
 
                 OffsetCommitRequestData.OffsetCommitRequestTopic topic = requestTopicDataMap
@@ -739,7 +738,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 lastEpochSentOnCommit = Optional.empty();
             }
 
-            boolean canUseTopicIds = partitionsWithoutTopicIds == 0;
             OffsetCommitRequest.Builder builder = canUseTopicIds
                     ? OffsetCommitRequest.Builder.forTopicIdsOrNames(data, true)
                     : OffsetCommitRequest.Builder.forTopicNames(data);
@@ -827,8 +825,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 log.error("OffsetCommit failed due to not authorized to commit to topics {}", unauthorizedTopics);
                 future.completeExceptionally(new TopicAuthorizationException(unauthorizedTopics));
             } else if (!unknownTopicIds.isEmpty()) {
-                log.error("OffsetCommit failed due to unknown topic id to commit to topic ids {}", unknownTopicIds);
-                future.completeExceptionally(new UnknownTopicIdException(Errors.UNKNOWN_TOPIC_ID.message()));
+                log.error("OffsetCommit failed due to unknown topic IDs {}", unknownTopicIds);
+                future.completeExceptionally(Errors.UNKNOWN_TOPIC_ID.exception());
             } else {
                 future.complete(null);
             }
