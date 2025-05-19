@@ -68,6 +68,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.net.InetAddress;
 import java.time.Duration;
@@ -80,6 +81,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_COMMITS_SENSOR_NAME;
@@ -449,7 +451,8 @@ public class OffsetMetadataManagerTest {
                     OptionalInt.of(leaderEpoch),
                     "metadata",
                     commitTimestamp,
-                    OptionalLong.empty()
+                    OptionalLong.empty(),
+                    Uuid.ZERO_UUID
                 )
             ));
         }
@@ -578,6 +581,13 @@ public class OffsetMetadataManagerTest {
             return offsetMetadataManager.hasCommittedOffset(groupId, topic, partition) ||
                 offsetMetadataManager.hasPendingTransactionalOffsets(groupId, topic, partition);
         }
+    }
+
+    private static Stream<Uuid> uuids() {
+        return Stream.of(
+            Uuid.ZERO_UUID,
+            Uuid.randomUuid()
+        );
     }
 
     @ParameterizedTest
@@ -906,7 +916,8 @@ public class OffsetMetadataManagerTest {
                     OptionalInt.empty(),
                     "",
                     context.time.milliseconds(),
-                    OptionalLong.of(context.time.milliseconds() + 1234L)
+                    OptionalLong.of(context.time.milliseconds() + 1234L),
+                    Uuid.ZERO_UUID
                 )
             )),
             result.records()
@@ -971,8 +982,9 @@ public class OffsetMetadataManagerTest {
         assertFalse(group.hasMember(member.memberId()));
     }
 
-    @Test
-    public void testSimpleGroupOffsetCommit() {
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testSimpleGroupOffsetCommit(Uuid topicId) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(
@@ -981,6 +993,7 @@ public class OffsetMetadataManagerTest {
                 .setTopics(List.of(
                     new OffsetCommitRequestData.OffsetCommitRequestTopic()
                         .setName("bar")
+                        .setTopicId(topicId)
                         .setPartitions(List.of(
                             new OffsetCommitRequestData.OffsetCommitRequestPartition()
                                 .setPartitionIndex(0)
@@ -994,6 +1007,7 @@ public class OffsetMetadataManagerTest {
                 .setTopics(List.of(
                     new OffsetCommitResponseData.OffsetCommitResponseTopic()
                         .setName("bar")
+                        .setTopicId(topicId)
                         .setPartitions(List.of(
                             new OffsetCommitResponseData.OffsetCommitResponsePartition()
                                 .setPartitionIndex(0)
@@ -1013,7 +1027,8 @@ public class OffsetMetadataManagerTest {
                     OptionalInt.empty(),
                     "",
                     context.time.milliseconds(),
-                    OptionalLong.empty()
+                    OptionalLong.empty(),
+                    topicId
                 )
             )),
             result.records()
@@ -1072,7 +1087,8 @@ public class OffsetMetadataManagerTest {
                     OptionalInt.empty(),
                     "",
                     context.time.milliseconds(),
-                    OptionalLong.empty()
+                    OptionalLong.empty(),
+                    Uuid.ZERO_UUID
                 )
             )),
             result.records()
@@ -1235,15 +1251,17 @@ public class OffsetMetadataManagerTest {
                     OptionalInt.empty(),
                     "",
                     context.time.milliseconds(),
-                    OptionalLong.empty()
+                    OptionalLong.empty(),
+                    Uuid.ZERO_UUID
                 )
             )),
             result.records()
         );
     }
 
-    @Test
-    public void testConsumerGroupOffsetCommit() {
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testConsumerGroupOffsetCommit(Uuid topicId) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
@@ -1267,6 +1285,7 @@ public class OffsetMetadataManagerTest {
                 .setTopics(List.of(
                     new OffsetCommitRequestData.OffsetCommitRequestTopic()
                         .setName("bar")
+                        .setTopicId(topicId)
                         .setPartitions(List.of(
                             new OffsetCommitRequestData.OffsetCommitRequestPartition()
                                 .setPartitionIndex(0)
@@ -1282,6 +1301,7 @@ public class OffsetMetadataManagerTest {
                 .setTopics(List.of(
                     new OffsetCommitResponseData.OffsetCommitResponseTopic()
                         .setName("bar")
+                        .setTopicId(topicId)
                         .setPartitions(List.of(
                             new OffsetCommitResponseData.OffsetCommitResponsePartition()
                                 .setPartitionIndex(0)
@@ -1301,76 +1321,8 @@ public class OffsetMetadataManagerTest {
                     OptionalInt.of(10),
                     "metadata",
                     context.time.milliseconds(),
-                    OptionalLong.empty()
-                )
-            )),
-            result.records()
-        );
-    }
-
-    @Test
-    public void testConsumerGroupOffsetCommitWithTopicIds() {
-        Uuid topicId = Uuid.randomUuid();
-        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-
-        // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
-            "foo",
-            true
-        );
-
-        // Add member.
-        group.updateMember(new ConsumerGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(10)
-            .build()
-        );
-
-        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(10)
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setTopicId(topicId)
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                                .setCommittedLeaderEpoch(10)
-                                .setCommittedMetadata("metadata")
-                        ))
-                ))
-        );
-
-        assertEquals(
-            new OffsetCommitResponseData()
-                .setTopics(List.of(
-                    new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                        .setTopicId(topicId)
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                                .setPartitionIndex(0)
-                                .setErrorCode(Errors.NONE.code())
-                        ))
-                )),
-            result.response()
-        );
-
-        assertEquals(
-            List.of(GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
-                "foo",
-                "bar",
-                0,
-                new OffsetAndMetadata(
-                    100L,
-                    OptionalInt.of(10),
-                    "metadata",
-                    context.time.milliseconds(),
-                    OptionalLong.empty()
+                    OptionalLong.empty(),
+                    topicId
                 )
             )),
             result.records()
@@ -1446,7 +1398,8 @@ public class OffsetMetadataManagerTest {
                     OptionalInt.of(10),
                     "small",
                     context.time.milliseconds(),
-                    OptionalLong.empty()
+                    OptionalLong.empty(),
+                    Uuid.ZERO_UUID
                 )
             )),
             result.records()
@@ -1512,7 +1465,8 @@ public class OffsetMetadataManagerTest {
                     OptionalInt.of(10),
                     "metadata",
                     context.time.milliseconds(),
-                    OptionalLong.empty()
+                    OptionalLong.empty(),
+                    Uuid.ZERO_UUID
                 )
             )),
             result.records()
@@ -1669,7 +1623,8 @@ public class OffsetMetadataManagerTest {
                     OptionalInt.of(10),
                     "metadata",
                     context.time.milliseconds(),
-                    OptionalLong.empty()
+                    OptionalLong.empty(),
+                    Uuid.ZERO_UUID
                 )
             )),
             result.records()
@@ -2766,8 +2721,9 @@ public class OffsetMetadataManagerTest {
             .setMetadata("");
     }
 
-    @Test
-    public void testReplay() {
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testReplay(Uuid topicId) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
@@ -2776,7 +2732,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            topicId
         ));
 
         verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
@@ -2785,7 +2742,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.of(10),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            topicId
         ));
 
         verifyReplay(context, "foo", "bar", 1, new OffsetAndMetadata(
@@ -2794,7 +2752,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.of(10),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            topicId
         ));
 
         verifyReplay(context, "foo", "bar", 1, new OffsetAndMetadata(
@@ -2803,7 +2762,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.of(10),
             "small",
             context.time.milliseconds(),
-            OptionalLong.of(12345L)
+            OptionalLong.of(12345L),
+            topicId
         ));
     }
 
@@ -2817,7 +2777,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         verifyTransactionalReplay(context, 5, "foo", "bar", 1, new OffsetAndMetadata(
@@ -2826,7 +2787,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         verifyTransactionalReplay(context, 5, "bar", "zar", 0, new OffsetAndMetadata(
@@ -2835,7 +2797,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         verifyTransactionalReplay(context, 5, "bar", "zar", 1, new OffsetAndMetadata(
@@ -2844,7 +2807,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         verifyTransactionalReplay(context, 6, "foo", "bar", 2, new OffsetAndMetadata(
@@ -2853,7 +2817,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         verifyTransactionalReplay(context, 6, "foo", "bar", 3, new OffsetAndMetadata(
@@ -2862,7 +2827,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
     }
 
@@ -2877,7 +2843,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         verifyTransactionalReplay(context, 10L, "foo", "bar", 0, new OffsetAndMetadata(
@@ -2886,7 +2853,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         verifyTransactionalReplay(context, 10L, "foo", "bar", 1, new OffsetAndMetadata(
@@ -2895,7 +2863,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         // Delete the offsets.
@@ -2927,7 +2896,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         // Add pending transactional commit for producer id 5.
@@ -2937,7 +2907,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         // Add pending transactional commit for producer id 6.
@@ -2947,7 +2918,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         // Replaying an end marker with an unknown producer id should not fail.
@@ -2971,7 +2943,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ), context.offsetMetadataManager.offset(
             "foo",
             "bar",
@@ -3007,7 +2980,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         // Add regular offset commit.
@@ -3017,7 +2991,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         // Replaying an end marker to commit transaction of producer id 5.
@@ -3039,7 +3014,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ), context.offsetMetadataManager.offset(
             "foo",
             "bar",
@@ -3058,7 +3034,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         // Add pending transactional commit for producer id 5.
@@ -3068,7 +3045,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         // Add pending transactional commit for producer id 6.
@@ -3078,7 +3056,8 @@ public class OffsetMetadataManagerTest {
             OptionalInt.empty(),
             "small",
             context.time.milliseconds(),
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         ));
 
         // Commit all the transactions.
