@@ -112,7 +112,7 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
         }
 
         if (topicPartitionAllowedMap.isEmpty()) {
-            return Set.copyOf(topic.partitions().keySet());
+            return topic.partitions().keySet();
         }
 
         return topicPartitionAllowedMap.get().getOrDefault(topicId, Set.of());
