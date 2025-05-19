@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.DirectoryId;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.ClearElrRecord;
@@ -45,6 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.CLEAR_ELR_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
@@ -57,18 +60,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-
 @Timeout(value = 40)
 public class TopicsImageTest {
     public static final TopicsImage IMAGE1;
-
     public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
-
-    static final TopicsDelta DELTA1;
 
     static final TopicsImage IMAGE2;
 
-    static final List<TopicImage> TOPIC_IMAGES1;
+    private static final TopicsDelta DELTA1;
+    private static final List<TopicImage> TOPIC_IMAGES1;
 
     private static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
@@ -95,17 +95,18 @@ public class TopicsImageTest {
         return map;
     }
 
-    public static final Uuid FOO_UUID = Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA");
-
+    private static final Uuid FOO_UUID = Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA");
     private static final Uuid FOO_UUID2 = Uuid.fromString("9d3lha5qv8DoIl93jf8pbX");
-
     private static final Uuid BAR_UUID = Uuid.fromString("f62ptyETTjet8SL5ZeREiw");
-
     private static final Uuid BAZ_UUID = Uuid.fromString("tgHBnRglT5W_RlENnuG5vg");
-
     private static final Uuid BAM_UUID = Uuid.fromString("b66ybsWIQoygs01vdjH07A");
-
     private static final Uuid BAM_UUID2 = Uuid.fromString("yd6Sq3a9aK1G8snlKv7ag5");
+
+    private static final TopicIdPartition FOO_0 = new TopicIdPartition(FOO_UUID, new TopicPartition("foo", 0));
+    private static final TopicIdPartition FOO_1 = new TopicIdPartition(FOO_UUID, new TopicPartition("foo", 1));
+    private static final TopicIdPartition BAR_0 = new TopicIdPartition(BAR_UUID, new TopicPartition("bam", 0));
+    private static final TopicIdPartition BAR_1 = new TopicIdPartition(BAR_UUID, new TopicPartition("bam", 1));
+    private static final TopicIdPartition BAZ_0 = new TopicIdPartition(BAZ_UUID, new TopicPartition("baz", 0));
 
     static {
         TOPIC_IMAGES1 = List.of(
@@ -907,5 +908,55 @@ public class TopicsImageTest {
         delta.replay(new RemoveTopicRecord().setTopicId(FOO_UUID));
         assertEquals(delta.deletedTopicIds().contains(FOO_UUID), false);
         assertEquals(delta.createdTopicIds().contains(FOO_UUID), false);
+    }
+
+    @Test
+    public void testIsStrayReplicaWithEmptyImage() {
+        TopicsImage image = topicsImage(List.of());
+        List<TopicIdPartition> onDisk = List.of(FOO_0, FOO_1, BAR_0, BAR_1, BAZ_0);
+        assertTrue(onDisk.stream().allMatch(log ->
+                TopicsImage.isStrayReplica(image, 0, Optional.of(log.topicId()), log.partition(), ""))
+        );
+    }
+
+    @Test
+    public void testIsStrayReplicaInImage() {
+        TopicsImage image = topicsImage(List.of(
+                newTopicImage(FOO_0.topic(), FOO_0.topicId(), newPartition(new int[]{0, 1, 2})),
+                newTopicImage(BAR_0.topic(), BAR_0.topicId(), newPartition(new int[]{0, 1, 2}), newPartition(new int[]{0, 1, 2}))
+        ));
+        List<TopicIdPartition> onDisk = List.of(FOO_0, FOO_1, BAR_0, BAR_1, BAZ_0);
+        Set<TopicPartition> expectedStrays = Stream.of(FOO_1, BAZ_0).map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
+
+        onDisk.forEach(log -> assertEquals(
+                expectedStrays.contains(log.topicPartition()),
+                TopicsImage.isStrayReplica(image, 0, Optional.of(log.topicId()), log.partition(), "")));
+    }
+
+    @Test
+    public void testIsStrayReplicaInImageWithRemoteReplicas() {
+        TopicsImage image = topicsImage(List.of(
+                newTopicImage(FOO_0.topic(), FOO_0.topicId(), newPartition(new int[]{0, 1, 2})),
+                newTopicImage(BAR_0.topic(), BAR_0.topicId(), newPartition(new int[]{1, 2, 3}), newPartition(new int[]{2, 3, 0}))
+        ));
+        List<TopicIdPartition> onDisk = List.of(FOO_0, BAR_0, BAR_1);
+        Set<TopicPartition> expectedStrays = Stream.of(BAR_0).map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
+        onDisk.forEach(log -> assertEquals(
+                expectedStrays.contains(log.topicPartition()),
+                TopicsImage.isStrayReplica(image, 0, Optional.of(log.topicId()), log.partition(), ""))
+        );
+    }
+
+    @Test
+    public void testIsStrayMissingTopicId() {
+        assertTrue(TopicsImage.isStrayReplica(topicsImage(List.of()), 0, Optional.empty(), 0, ""));
+    }
+
+    private static TopicsImage topicsImage(List<TopicImage> topics) {
+        TopicsImage retval = TopicsImage.EMPTY;
+        for (TopicImage topic : topics) {
+            retval = retval.including(topic);
+        }
+        return retval;
     }
 }

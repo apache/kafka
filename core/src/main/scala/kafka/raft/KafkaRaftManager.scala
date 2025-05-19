@@ -37,7 +37,7 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, QuorumConfig, RaftManager, ReplicatedLog, TimingWheelExpirationService}
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, KafkaRaftLog, MetadataLogConfig, QuorumConfig, RaftManager, ReplicatedLog, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -190,14 +190,14 @@ class KafkaRaftManager[T](
     KafkaRaftManager.createLogDirectory(new File(config.metadataLogDir), logDirName)
   }
 
-  private def buildMetadataLog(): KafkaMetadataLog = {
-    KafkaMetadataLog(
+  private def buildMetadataLog(): KafkaRaftLog = {
+    KafkaRaftLog.createLog(
       topicPartition,
       topicId,
       dataDir,
       time,
       scheduler,
-      config = new MetadataLogConfig(config),
+      new MetadataLogConfig(config),
       config.nodeId
     )
   }
