@@ -29,7 +29,6 @@ import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.{DelayedShareFetch, SharePartition}
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.TestUtils
-import kafka.server.AbstractFetcherThread
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
@@ -167,7 +166,6 @@ class ReplicaManagerTest {
       .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()))
     metadataDelta.replay(new TopicRecord().setName(topic).setTopicId(topicId))
     image = metadataDelta.apply(new MetadataProvenance(100L, 10, 1000L, true))
-
   }
 
   private def setupMetadataCacheWithTopicIds(topicIds: Map[String, Uuid], metadataCache:MetadataCache): Unit = {
@@ -1303,6 +1301,7 @@ class ReplicaManagerTest {
       val partition1Replicas = Seq[Integer](0, 2).asJava
       val leaderEpoch = 0
       val topicsDelta0 = new TopicsDelta(image.topics())
+      topicsDelta0.replay(new TopicRecord().setTopicId(topicId).setName(topic))
       topicsDelta0.replay(new PartitionRecord()
         .setTopicId(tidp0.topicId())
         .setPartitionId(tidp0.partition())
@@ -1312,9 +1311,11 @@ class ReplicaManagerTest {
         .setPartitionEpoch(0)
         .setReplicas(partition0Replicas)
       )
+      image = imageFromTopics(topicsDelta0.apply())
       replicaManager.applyDelta(topicsDelta0, image)
 
       val topicsDelta1 = new TopicsDelta(image.topics())
+      topicsDelta1.replay(new TopicRecord().setTopicId(topicId).setName(topic))
       topicsDelta0.replay(new PartitionRecord()
         .setTopicId(tidp1.topicId())
         .setPartitionId(tidp1.partition())
@@ -1324,6 +1325,7 @@ class ReplicaManagerTest {
         .setPartitionEpoch(0)
         .setReplicas(partition1Replicas)
       )
+      image = imageFromTopics(topicsDelta1.apply())
       replicaManager.applyDelta(topicsDelta1, image)
       // Append a couple of messages.
       for (i <- 1 to 2) {
@@ -2798,11 +2800,7 @@ class ReplicaManagerTest {
     val topicPartitionObj = new TopicPartition(topic, topicPartition)
     val mockLogMgr: LogManager = mock(classOf[LogManager])
     when(mockLogMgr.liveLogDirs).thenReturn(config.logDirs.asScala.map(new File(_).getAbsoluteFile))
-    when(mockLogMgr.getOrCreateLog(ArgumentMatchers.eq(topicPartitionObj), ArgumentMatchers.eq(false), ArgumentMatchers.eq(false), any(), any())).thenAnswer(invocation => {
-      val args = invocation.getArguments
-      println(s"[Mock] getOrCreateLog called with: ${args.mkString(", ")}")
-      mockLog
-    })
+    when(mockLogMgr.getOrCreateLog(ArgumentMatchers.eq(topicPartitionObj), anyBoolean(), ArgumentMatchers.eq(false), any(), any())).thenReturn(mockLog)
     when(mockLogMgr.getLog(topicPartitionObj, isFuture = false)).thenReturn(Some(mockLog))
     when(mockLogMgr.getLog(topicPartitionObj, isFuture = true)).thenReturn(None)
     val allLogs = new ConcurrentHashMap[TopicPartition, UnifiedLog]()
@@ -3390,10 +3388,11 @@ class ReplicaManagerTest {
       val tp1 = new TopicPartition(topic, 1)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](1, 0).asJava
-      val topicIds = Map(tp0.topic -> Uuid.randomUuid(), tp1.topic -> Uuid.randomUuid()).asJava
+
       val topicsDelta0 = new TopicsDelta(image.topics())
+      topicsDelta0.replay(new TopicRecord().setName(topic).setTopicId(topicId))
       topicsDelta0.replay(new PartitionRecord()
-        .setTopicId(topicIds.get(tp0))
+        .setTopicId(topicId)
         .setPartitionId(tp0.partition)
         .setLeader(0)
         .setLeaderEpoch(leaderEpoch)
@@ -3404,8 +3403,9 @@ class ReplicaManagerTest {
 
       // make broker 0 the leader of partition 1 so broker 1 loses its leadership position
       val topicsDelta1 = new TopicsDelta(image.topics())
+      topicsDelta1.replay(new TopicRecord().setName(topic).setTopicId(topicId))
       topicsDelta1.replay(new PartitionRecord()
-        .setTopicId(topicIds.get(tp1))
+        .setTopicId(topicId)
         .setPartitionId(tp1.partition)
         .setLeader(1)
         .setLeaderEpoch(leaderEpoch)
@@ -3413,14 +3413,18 @@ class ReplicaManagerTest {
         .setPartitionEpoch(0)
         .setReplicas(partition1Replicas)
       )
+      image = imageFromTopics(topicsDelta1.apply())
 
       rm0.applyDelta(topicsDelta0, image)
+      rm0.applyDelta(topicsDelta1, image)
+      rm1.applyDelta(topicsDelta0, image)
       rm1.applyDelta(topicsDelta1, image)
 
       // make broker 0 the leader of partition 1 so broker 1 loses its leadership position
       val topicsDelta2 = new TopicsDelta(image.topics())
-      topicsDelta0.replay(new PartitionRecord()
-        .setTopicId(topicIds.get(tp0))
+      topicsDelta2.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+      topicsDelta2.replay(new PartitionRecord()
+        .setTopicId(topicId)
         .setPartitionId(tp0.partition)
         .setLeader(0)
         .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
@@ -3428,11 +3432,12 @@ class ReplicaManagerTest {
         .setPartitionEpoch(0)
         .setReplicas(partition0Replicas)
       )
+      image = imageFromTopics(topicsDelta2.apply())
 
-      // make broker 0 the leader of partition 1 so broker 1 loses its leadership position
       val topicsDelta3 = new TopicsDelta(image.topics())
-      topicsDelta1.replay(new PartitionRecord()
-        .setTopicId(topicIds.get(tp1))
+      topicsDelta3.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+      topicsDelta3.replay(new PartitionRecord()
+        .setTopicId(topicId)
         .setPartitionId(tp1.partition)
         .setLeader(0)
         .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
@@ -3440,9 +3445,12 @@ class ReplicaManagerTest {
         .setPartitionEpoch(0)
         .setReplicas(partition1Replicas)
       )
+      image = imageFromTopics(topicsDelta3.apply())
 
       rm0.applyDelta(topicsDelta2, image)
-      rm1.applyDelta(topicsDelta3, image)
+      rm0.applyDelta(topicsDelta3, image)
+      rm1.applyDelta(topicsDelta2, image)
+      rm0.applyDelta(topicsDelta3, image)
     } finally {
       Utils.tryAll(util.Arrays.asList[Callable[Void]](
         () => {
@@ -3575,7 +3583,6 @@ class ReplicaManagerTest {
     val aliveBrokers = util.List.of(new Node(0, "host0", 0), new Node(1, "host1", 1))
     mockGetAliveBrokerFunctions(metadataCache0, aliveBrokers)
     mockGetAliveBrokerFunctions(metadataCache1, aliveBrokers)
-    when(metadataCache.getImage()).thenReturn(image)
     when(metadataCache0.metadataVersion()).thenReturn(MetadataVersion.MINIMUM_VERSION)
     when(metadataCache1.metadataVersion()).thenReturn(MetadataVersion.MINIMUM_VERSION)
 
@@ -4529,6 +4536,7 @@ class ReplicaManagerTest {
       // Make the local replica the leader
       val leaderTopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      System.err.println("QQQ " + leaderMetadataImage.topics().getTopic(FOO_UUID).partitions())
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the broker shouldn't updated the controller with the correct assignment.
@@ -5440,6 +5448,7 @@ class ReplicaManagerTest {
 
       // Apply the delta.
       var metadataImage = imageFromTopics(topicsDelta.apply())
+      System.err.println("ZZZZ " + metadataImage.topics())
       replicaManager.applyDelta(topicsDelta, metadataImage)
 
       // Check the state of the partitions.
@@ -5835,7 +5844,7 @@ class ReplicaManagerTest {
       // Make the local replica the leader.
       val leaderTopicsDelta = topicsCreateDelta(localId, true)
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
-
+      System.err.println("ZZZ " + leaderMetadataImage.topics().topicsById.get(FOO_UUID).partitions())
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher.
