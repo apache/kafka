@@ -57,7 +57,6 @@ import org.apache.kafka.server.config.ServerConfigs;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -97,21 +96,20 @@ public class GroupAuthorizerIntegrationTest {
     private void setup(ClusterInstance clusterInstance) throws InterruptedException {
         // Allow inter-broker communication
         addAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW, BROKER_PRINCIPAL)),
+                Set.of(createAcl(AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW, BROKER_PRINCIPAL)),
                 new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL),
                 clusterInstance
         );
         addAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                Set.of(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
                 new ResourcePattern(ResourceType.TOPIC, Topic.GROUP_METADATA_TOPIC_NAME, PatternType.LITERAL),
                 clusterInstance
         );
 
         NewTopic offsetTopic = new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
-        Map<String, Object> configs = new HashMap<>(2);
-        configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
-        try (Admin admin = clusterInstance.admin(configs)) {
+        try (Admin admin = clusterInstance.admin(Map.of(
+                AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true))
+        ) {
             admin.createTopics(Collections.singleton(offsetTopic));
             clusterInstance.waitForTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1);
         }
@@ -215,46 +213,44 @@ public class GroupAuthorizerIntegrationTest {
         String group = "group";
 
         addAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                Set.of(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
                 new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
                 clusterInstance
         );
         addAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
                 new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
                 clusterInstance
         );
 
-        Admin admin = clusterInstance.admin();
         Producer<byte[], byte[]> producer = clusterInstance.producer();
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
                 GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT),
                 ConsumerConfig.GROUP_ID_CONFIG, group
         ));
 
-        NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-        admin.createTopics(Collections.singleton(newTopic));
-        clusterInstance.waitForTopic(topic, 1);
-        admin.close();
+        try {
+            clusterInstance.createTopic(topic, 1, (short) 1);
+            ExecutionException produceException = assertThrows(
+                ExecutionException.class,
+                () -> producer.send(new ProducerRecord<>(topic, "message".getBytes())).get()
+            );
+            Throwable cause = produceException.getCause();
+            assertInstanceOf(TopicAuthorizationException.class, cause);
+            TopicAuthorizationException topicAuthException = (TopicAuthorizationException) cause;
+            assertEquals(Set.of(topic), topicAuthException.unauthorizedTopics());
 
-        ExecutionException produceException = assertThrows(
-            ExecutionException.class,
-            () -> producer.send(new ProducerRecord<>(topic, "message".getBytes())).get()
-        );
-        Throwable cause = produceException.getCause();
-        assertInstanceOf(TopicAuthorizationException.class, produceException.getCause());
-        TopicAuthorizationException topicAuthException = (TopicAuthorizationException) cause;
-        assertEquals(Set.of(topic), topicAuthException.unauthorizedTopics());
-        producer.close(Duration.ZERO);
-
-        TopicPartition topicPartition = new TopicPartition(topic, 0);
-        consumer.assign(Collections.singletonList(topicPartition));
-        TopicAuthorizationException consumeException = assertThrows(
-            TopicAuthorizationException.class,
-            () -> consumer.poll(Duration.ofSeconds(15))
-        );
-        assertEquals(consumeException.unauthorizedTopics(), topicAuthException.unauthorizedTopics());
-        consumer.close();
+            TopicPartition topicPartition = new TopicPartition(topic, 0);
+            consumer.assign(Collections.singletonList(topicPartition));
+            TopicAuthorizationException consumeException = assertThrows(
+                TopicAuthorizationException.class,
+                () -> consumer.poll(Duration.ofSeconds(15))
+            );
+            assertEquals(consumeException.unauthorizedTopics(), topicAuthException.unauthorizedTopics());
+        } finally {
+            producer.close(Duration.ZERO);
+            consumer.close();
+        }
     }
 
     @ClusterTest
@@ -283,33 +279,26 @@ public class GroupAuthorizerIntegrationTest {
             clusterInstance
         );
         addAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
                 new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
                 clusterInstance
         );
 
-        Admin admin = clusterInstance.admin();
-        NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-        admin.createTopics(Collections.singleton(newTopic));
-        clusterInstance.waitForTopic(topic, 1);
-        admin.close();
-
-        Producer<byte[], byte[]> producer = clusterInstance.producer();
-        producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
-        producer.close();
-
-        Map<String, Object> consumerConfigs = new HashMap<>();
-        consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, group);
-        consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        consumerConfigs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT));
-        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(consumerConfigs);
-        consumer.subscribe(Collections.singletonList(topic));
-        TestUtils.waitForCondition(() -> {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
-            return records.count() == 1;
-        }, "consumer failed to receive message");
-        assertDoesNotThrow(consumer::unsubscribe);
-        consumer.close();
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer();
+            Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
+                ConsumerConfig.GROUP_ID_CONFIG, group,
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+                GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
+        ) {
+            clusterInstance.createTopic(topic, 1, (short) 1);
+            producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
+            consumer.subscribe(Collections.singletonList(topic));
+            TestUtils.waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
+                return records.count() == 1;
+            }, "consumer failed to receive message");
+            assertDoesNotThrow(consumer::unsubscribe);
+        }
     }
 
     @ClusterTest
@@ -338,31 +327,29 @@ public class GroupAuthorizerIntegrationTest {
                 clusterInstance
         );
         addAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
                 new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
                 clusterInstance
         );
 
-        Admin admin = clusterInstance.admin();
-        NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-        admin.createTopics(Collections.singleton(newTopic));
-        admin.close();
-
         Producer<Object, Object> producer = clusterInstance.producer();
-        producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
-        producer.close();
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
+                ConsumerConfig.GROUP_ID_CONFIG, group,
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+                GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)));
 
-        Map<String, Object> consumerConfigs = new HashMap<>();
-        consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, group);
-        consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        consumerConfigs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT));
-        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(consumerConfigs);
-        consumer.subscribe(Collections.singletonList(topic));
-        TestUtils.waitForCondition(() -> {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
-            return records.count() == 1;
-        }, "consumer failed to receive message");
-        assertDoesNotThrow(() -> consumer.close());
+        try {
+            clusterInstance.createTopic(topic, 1, (short) 1);
+            producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
+            consumer.subscribe(List.of(topic));
+            TestUtils.waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
+                return records.count() == 1;
+            }, "consumer failed to receive message");
+        } finally {
+            producer.close();
+            assertDoesNotThrow(() -> consumer.close());
+        }
     }
 
     @ClusterTest
@@ -390,33 +377,26 @@ public class GroupAuthorizerIntegrationTest {
                 clusterInstance
         );
         addAndVerifyAcls(
-                Collections.singleton(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
                 new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
                 clusterInstance
         );
 
-        Admin admin = clusterInstance.admin();
-        NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-        admin.createTopics(Collections.singleton(newTopic));
-        clusterInstance.waitForTopic(topic, 1);
-        admin.close();
-
-        Producer<Object, Object> producer = clusterInstance.producer();
-        producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
-        producer.close();
-
-        Map<String, Object> consumerConfigs = new HashMap<>();
-        consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, group);
-        consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        consumerConfigs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT));
-        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(consumerConfigs);
-        TopicPartition topicPartition = new TopicPartition(topic, 0);
-        consumer.assign(List.of(topicPartition));
-        TestUtils.waitForCondition(() -> {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
-            return records.count() == 1;
-        }, "consumer failed to receive message");
-        consumer.close();
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer();
+             Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
+                     ConsumerConfig.GROUP_ID_CONFIG, group,
+                     ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+                     GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
+        ) {
+            clusterInstance.createTopic(topic, 1, (short) 1);
+            producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
+            TopicPartition topicPartition = new TopicPartition(topic, 0);
+            consumer.assign(List.of(topicPartition));
+            TestUtils.waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
+                return records.count() == 1;
+            }, "consumer failed to receive message");
+        }
     }
 
 }
