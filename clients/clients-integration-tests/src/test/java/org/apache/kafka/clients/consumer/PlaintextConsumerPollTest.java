@@ -62,7 +62,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MI
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
@@ -433,27 +432,29 @@ public class PlaintextConsumerPollTest {
 
             // first subscribe consumers that are defined in this class
             List<ConsumerAssignmentPoller> consumerPollers = new ArrayList<>();
-            consumerPollers.add(subscribeConsumerAndStartPolling(consumer1, List.of(topic, topic1)));
-            consumerPollers.add(subscribeConsumerAndStartPolling(consumer2, List.of(topic, topic1)));
-            
-            ConsumerAssignmentPoller timeoutPoller = subscribeConsumerAndStartPolling(timeoutConsumer, List.of(topic, topic1));
-            consumerPollers.add(timeoutPoller);
+            try {
+                consumerPollers.add(subscribeConsumerAndStartPolling(consumer1, List.of(topic, topic1)));
+                consumerPollers.add(subscribeConsumerAndStartPolling(consumer2, List.of(topic, topic1)));
 
-            // validate the initial assignment
-            validateGroupAssignment(consumerPollers, subscriptions, null);
+                ConsumerAssignmentPoller timeoutPoller = subscribeConsumerAndStartPolling(timeoutConsumer, List.of(topic, topic1));
+                consumerPollers.add(timeoutPoller);
 
-            // stop polling and close one of the consumers, should trigger partition re-assignment among alive consumers
-            timeoutPoller.shutdown();
-            consumerPollers.remove(timeoutPoller);
-            if (closeConsumer)
-                timeoutConsumer.close();
+                // validate the initial assignment
+                validateGroupAssignment(consumerPollers, subscriptions, null);
 
-            validateGroupAssignment(consumerPollers, subscriptions,
-                    "Did not get valid assignment for partitions " + subscriptions + " after one consumer left");
+                // stop polling and close one of the consumers, should trigger partition re-assignment among alive consumers
+                timeoutPoller.shutdown();
+                consumerPollers.remove(timeoutPoller);
+                if (closeConsumer)
+                    timeoutConsumer.close();
 
-            // done with pollers and consumers
-            for (ConsumerAssignmentPoller poller : consumerPollers)
-                poller.shutdown();
+                validateGroupAssignment(consumerPollers, subscriptions,
+                        "Did not get valid assignment for partitions " + subscriptions + " after one consumer left");
+            } finally {
+                // done with pollers and consumers
+                for (ConsumerAssignmentPoller poller : consumerPollers)
+                    poller.shutdown();
+            }
         }
     }
 
@@ -502,12 +503,11 @@ public class PlaintextConsumerPollTest {
             // (fail only when resetting positions after coordinator is known)
             TestUtils.waitForCondition(() -> {
                 try {
-                    assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
+                    consumer.poll(Duration.ZERO);
+                    return false;
+                } catch (NoOffsetForPartitionException e) {
                     return true;
-                } catch (AssertionError e) {
-                    // ignore
                 }
-                return false;
             }, "Continuous poll not fail");
         }
     }
