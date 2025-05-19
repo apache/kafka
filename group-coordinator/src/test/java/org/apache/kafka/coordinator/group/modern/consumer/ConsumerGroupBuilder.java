@@ -21,8 +21,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.MetadataImage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,7 +35,8 @@ public class ConsumerGroupBuilder {
     private int assignmentEpoch;
     private final Map<String, ConsumerGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
-    private Map<String, TopicMetadata> subscriptionMetadata;
+    private Map<String, TopicMetadata> subscriptionMetadata = Map.of();
+    private long metadataHash = 0L;
     private final Map<String, ResolvedRegularExpression> resolvedRegularExpressions = new HashMap<>();
 
     public ConsumerGroupBuilder(String groupId, int groupEpoch) {
@@ -63,6 +63,11 @@ public class ConsumerGroupBuilder {
         return this;
     }
 
+    public ConsumerGroupBuilder withMetadataHash(long metadataHash) {
+        this.metadataHash = metadataHash;
+        return this;
+    }
+
     public ConsumerGroupBuilder withAssignment(String memberId, Map<Uuid, Set<Integer>> assignment) {
         this.assignments.put(memberId, new Assignment(assignment));
         return this;
@@ -73,7 +78,7 @@ public class ConsumerGroupBuilder {
         return this;
     }
 
-    public List<CoordinatorRecord> build(TopicsImage topicsImage) {
+    public List<CoordinatorRecord> build(MetadataImage metadataImage) {
         List<CoordinatorRecord> records = new ArrayList<>();
 
         // Add subscription records for members.
@@ -86,29 +91,12 @@ public class ConsumerGroupBuilder {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(groupId, regex, resolvedRegularExpression))
         );
 
-        // Add subscription metadata.
-        if (subscriptionMetadata == null) {
-            subscriptionMetadata = new HashMap<>();
-            members.forEach((memberId, member) ->
-                member.subscribedTopicNames().forEach(topicName -> {
-                    TopicImage topicImage = topicsImage.getTopic(topicName);
-                    if (topicImage != null) {
-                        subscriptionMetadata.put(topicName, new TopicMetadata(
-                            topicImage.id(),
-                            topicImage.name(),
-                            topicImage.partitions().size()
-                        ));
-                    }
-                })
-            );
-        }
-
         if (!subscriptionMetadata.isEmpty()) {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
         }
 
         // Add group epoch record.
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, metadataHash));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->

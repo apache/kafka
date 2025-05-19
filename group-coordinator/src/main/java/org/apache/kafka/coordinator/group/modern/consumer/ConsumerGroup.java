@@ -60,6 +60,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
@@ -150,6 +151,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * The resolved regular expressions.
      */
     private final TimelineHashMap<String, ResolvedRegularExpression> resolvedRegularExpressions;
+
+    private final AtomicBoolean addSubscriptionMetadataTombstoneRecord = new AtomicBoolean(false);
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
@@ -1210,7 +1213,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), 0));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), metadataHash()));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
@@ -1297,5 +1300,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             }
         }
         return false;
+    }
+
+    public void setAddSubscriptionMetadataTombstoneRecord(boolean addSubscriptionMetadataTombstoneRecord) {
+        this.addSubscriptionMetadataTombstoneRecord.set(addSubscriptionMetadataTombstoneRecord);
+    }
+
+    public boolean addSubscriptionMetadataTombstoneRecord() {
+        return addSubscriptionMetadataTombstoneRecord.get();
     }
 }
