@@ -123,7 +123,7 @@ public class EndToEndClusterIdTest {
         MockConsumerInterceptor.resetCounters();
         MockProducerInterceptor.resetCounters();
 
-        assertNotNull(MockBrokerMetricsReporter.CLUSTER_META);
+        assertNotNull(MockBrokerMetricsReporter.CLUSTER_META.get());
         isValidClusterId(MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
 
         Map<String, Object> producerConfig = Map.of(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName(),
@@ -136,7 +136,7 @@ public class EndToEndClusterIdTest {
             sendRecord(producer);
         }
         assertNotEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get(), MockProducerInterceptor.NO_CLUSTER_ID);
-        assertNotNull(MockProducerInterceptor.CLUSTER_META);
+        assertNotNull(MockProducerInterceptor.CLUSTER_META.get());
         assertEquals(
             MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get().clusterId(),
             MockProducerInterceptor.CLUSTER_META.get().clusterId()
@@ -145,10 +145,10 @@ public class EndToEndClusterIdTest {
 
         // Make sure the serializer sees Cluster ID before serialize method
         assertNotEquals(MockSerializer.CLUSTER_ID_BEFORE_SERIALIZE.get(), MockSerializer.NO_CLUSTER_ID);
-        assertNotNull(MockSerializer.CLUSTER_META);
+        assertNotNull(MockSerializer.CLUSTER_META.get());
         isValidClusterId(MockSerializer.CLUSTER_META.get().clusterId());
 
-        assertNotNull(MockProducerMetricsReporter.CLUSTER_META);
+        assertNotNull(MockProducerMetricsReporter.CLUSTER_META.get());
         isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
 
         Map<String, Object> consumerConfig = Map.of(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName(),
@@ -165,7 +165,7 @@ public class EndToEndClusterIdTest {
 
         // Check that cluster id is present after the first poll call.
         assertNotEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get(), MockConsumerInterceptor.NO_CLUSTER_ID);
-        assertNotNull(MockConsumerInterceptor.CLUSTER_META);
+        assertNotNull(MockConsumerInterceptor.CLUSTER_META.get());
         isValidClusterId(MockConsumerInterceptor.CLUSTER_META.get().clusterId());
         assertEquals(
             MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get().clusterId(),
@@ -180,7 +180,7 @@ public class EndToEndClusterIdTest {
             MockDeserializer.clusterMeta.get().clusterId()
         );
 
-        assertNotNull(MockConsumerMetricsReporter.CLUSTER_META);
+        assertNotNull(MockConsumerMetricsReporter.CLUSTER_META.get());
         isValidClusterId(MockConsumerMetricsReporter.CLUSTER_META.get().clusterId());
 
         // Make sure everyone receives the same cluster id.
