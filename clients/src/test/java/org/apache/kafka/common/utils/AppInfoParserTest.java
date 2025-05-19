@@ -31,6 +31,7 @@ import javax.management.ObjectName;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -53,6 +54,23 @@ public class AppInfoParserTest {
     @AfterEach
     public void tearDown() {
         metrics.close();
+    }
+
+    @Test
+    public void testGetPlatformMBeanServer() {
+        assertNotNull(AppInfoParser.getPlatformMBeanServer(AppInfoParser.class.getClassLoader()));
+    }
+
+    @Test
+    public void testFailGetPlatformMBeanServer() {
+        ClassLoader nullLoader = new ClassLoader(null) {
+            @Override
+            public Class<?> loadClass(String name) throws ClassNotFoundException {
+                throw new ClassNotFoundException(name);
+            }
+        };
+
+        assertNull(AppInfoParser.getPlatformMBeanServer(nullLoader));
     }
 
     @Test

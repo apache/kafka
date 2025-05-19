@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.util.Properties;
 
 import javax.management.JMException;
@@ -36,7 +35,6 @@ public class AppInfoParser {
     private static final Logger log = LoggerFactory.getLogger(AppInfoParser.class);
     private static final String VERSION;
     private static final String COMMIT_ID;
-    private static final Method GET_MBEAN_SERVER;
 
     protected static final String DEFAULT_VALUE = "unknown";
 
@@ -49,15 +47,20 @@ public class AppInfoParser {
         }
         VERSION = props.getProperty("version", DEFAULT_VALUE).trim();
         COMMIT_ID = props.getProperty("commitId", DEFAULT_VALUE).trim();
+    }
 
-        Method getMBeanServer;
+    static MBeanServer getPlatformMBeanServer(ClassLoader loader) {
         try {
-            Class<?> managementFactory = Class.forName("java.lang.management.ManagementFactory");
-            getMBeanServer = managementFactory.getMethod("getPlatformMBeanServer");
+            // Not all platforms (*cough*Android*cough*) have MBeans, query using reflection
+            Class<?> managementFactory = Class.forName("java.lang.management.ManagementFactory", true, loader);
+            return (MBeanServer) managementFactory.getMethod("getPlatformMBeanServer").invoke(null);
         } catch (ReflectiveOperationException e) {
-            getMBeanServer = null;
+            return null;
         }
-        GET_MBEAN_SERVER = getMBeanServer;
+    }
+
+    static MBeanServer getPlatformMBeanServer() {
+        return getPlatformMBeanServer(AppInfoParser.class.getClassLoader());
     }
 
     public static String getVersion() {
@@ -69,11 +72,12 @@ public class AppInfoParser {
     }
 
     public static synchronized void registerAppInfo(String prefix, String id, Metrics metrics, long nowMs) {
-        if (GET_MBEAN_SERVER == null)
+        MBeanServer server = getPlatformMBeanServer();
+        if (server == null) {
             return;
+        }
         try {
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
-            MBeanServer server = (MBeanServer) GET_MBEAN_SERVER.invoke(null);
             if (server.isRegistered(name)) {
                 log.info("The mbean of App info: [{}], id: [{}] already exists, so skipping a new mbean creation.", prefix, id);
                 return;
@@ -82,22 +86,23 @@ public class AppInfoParser {
             server.registerMBean(mBean, name);
 
             registerMetrics(metrics, mBean); // prefix will be added later by JmxReporter
-        } catch (JMException | ReflectiveOperationException e) {
+        } catch (JMException e) {
             log.warn("Error registering AppInfo mbean", e);
         }
     }
 
     public static synchronized void unregisterAppInfo(String prefix, String id, Metrics metrics) {
-        if (GET_MBEAN_SERVER == null)
+        MBeanServer server = getPlatformMBeanServer();
+        if (server == null) {
             return;
+        }
         try {
-            MBeanServer server = (MBeanServer) GET_MBEAN_SERVER.invoke(null);
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
             if (server.isRegistered(name))
                 server.unregisterMBean(name);
 
             unregisterMetrics(metrics);
-        } catch (JMException | ReflectiveOperationException e) {
+        } catch (JMException e) {
             log.warn("Error unregistering AppInfo mbean", e);
         } finally {
             log.info("App info {} for {} unregistered", prefix, id);
