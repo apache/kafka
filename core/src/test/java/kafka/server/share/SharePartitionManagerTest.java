@@ -158,6 +158,7 @@ public class SharePartitionManagerTest {
     private static final String CONNECTION_ID = "id-1";
 
     static final int DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL = 1000;
+    static final long REMOTE_STORAGE_REQUEST_WAIT_TIME_MS = 4000L;
 
     private MockTime time;
     private ReplicaManager mockReplicaManager;
@@ -3242,6 +3243,7 @@ public class SharePartitionManagerTest {
                 timer,
                 MAX_DELIVERY_COUNT,
                 MAX_IN_FLIGHT_MESSAGES,
+                REMOTE_STORAGE_REQUEST_WAIT_TIME_MS,
                 persister,
                 mock(GroupConfigManager.class),
                 shareGroupMetrics,

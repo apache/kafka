@@ -84,6 +84,7 @@ import static kafka.server.share.PendingRemoteFetches.RemoteFetch;
 import static kafka.server.share.SharePartitionManagerTest.DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL;
 import static kafka.server.share.SharePartitionManagerTest.buildLogReadResult;
 import static kafka.server.share.SharePartitionManagerTest.mockReplicaManagerDelayedShareFetch;
+import static kafka.server.share.SharePartitionManagerTest.REMOTE_STORAGE_REQUEST_WAIT_TIME_MS;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShareAcquiredRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2075,7 +2076,8 @@ public class DelayedShareFetchTest {
                 shareGroupMetrics,
                 time,
                 pendingRemoteFetches,
-                fetchId);
+                fetchId,
+                REMOTE_STORAGE_REQUEST_WAIT_TIME_MS);
         }
     }
 }
