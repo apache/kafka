@@ -157,8 +157,6 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             log.error("Encountered error while writing {}", provenance.snapshotName(), e);
             throw e;
         } finally {
-            Utils.closeQuietly(writer, "RaftSnapshotWriter");
-            Utils.closeQuietly(snapshotWriter.get(), "SnapshotWriter");
-        }
+            Utils.closeQuietly(writer, "RaftSnapshotWriter");}
     }
 }
