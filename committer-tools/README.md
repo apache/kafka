@@ -103,14 +103,3 @@ Found tests that were started, but not finished:
 
 2024-09-10T20:31:26.6830206Z Gradle Test Run :streams:test > Gradle Test Executor 47 > StreamThreadTest > shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean, boolean) > "shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean, boolean).stateUpdaterEnabled=true, processingThreadsEnabled=true" STARTED
 ```
-
-
-## Speed up the CI
-`update-cache.sh` allows developers to retrieve the latest commit SHA that contains the Gradle build cache and create a local branch called `trunk-cached`. 
-Developers can then checkout a new branch based on `trunk-cached` to speed up CI.
-
-```bash
-./update-cache.sh
-
-Local branch 'trunk-cached' successfully updated to f26974b16d (from 19 hours ago).
-```
