@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -53,9 +54,11 @@ public record ConfiguredSubtopology(Set<String> sourceTopics,
             .setSourceTopics(sourceTopics.stream().sorted().toList())
             .setRepartitionSinkTopics(repartitionSinkTopics.stream().sorted().toList())
             .setRepartitionSourceTopics(repartitionSourceTopics.values().stream()
-                .map(ConfiguredInternalTopic::asStreamsGroupDescribeTopicInfo).sorted().toList())
+                .map(ConfiguredInternalTopic::asStreamsGroupDescribeTopicInfo)
+                .sorted(Comparator.comparing(StreamsGroupDescribeResponseData.TopicInfo::name)).toList())
             .setStateChangelogTopics(stateChangelogTopics.values().stream()
-                .map(ConfiguredInternalTopic::asStreamsGroupDescribeTopicInfo).sorted().toList());
+                .map(ConfiguredInternalTopic::asStreamsGroupDescribeTopicInfo)
+                .sorted(Comparator.comparing(StreamsGroupDescribeResponseData.TopicInfo::name)).toList());
     }
 
 }
