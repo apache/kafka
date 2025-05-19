@@ -30,6 +30,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.metrics.MetricConfigs;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockDeserializer;
@@ -44,7 +45,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.kafka.test.TestUtils.isValidClusterId;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * 9. All the components receive the same cluster id.
  */
 @ClusterTestDefaults(serverProperties = {
-    @ClusterConfigProperty(key = MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.api.EndToEndClusterIdTest$MockBrokerMetricsReporter"),
+    @ClusterConfigProperty(key = MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.api.EndToEndClusterIdTest$MockCommonMetricsReporter"),
 })
 public class EndToEndClusterIdTest {
 
@@ -71,6 +72,9 @@ public class EndToEndClusterIdTest {
     private static final int PARTITION = 0;
     private static final TopicPartition TP = new TopicPartition(TOPIC, PARTITION);
     private final ClusterInstance clusterInstance;
+    private String clusterBrokerId;
+    private static final String PRODUCER_CLIENT_ID = "producerClientId";
+    private static final String CONSUMER_CLIENT_ID = "consumerClientId";
 
     EndToEndClusterIdTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
@@ -79,33 +83,27 @@ public class EndToEndClusterIdTest {
     @BeforeEach
     public void setup() throws InterruptedException {
         this.clusterInstance.createTopic(TOPIC, 2, (short) 1);
+        clusterBrokerId = String.valueOf(clusterInstance.brokerIds().iterator().next());
         MockDeserializer.resetStaticVariables();
     }
 
-    public static class MockConsumerMetricsReporter extends MockMetricsReporter implements ClusterResourceListener {
-        public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
+    public static class MockCommonMetricsReporter extends MockMetricsReporter implements ClusterResourceListener {
+        public static final Map<String, ClusterResource> CLUSTER_RESOURCE_MAP = new ConcurrentHashMap<>();
+        public String brokerId;
 
         @Override
-        public void onUpdate(ClusterResource clusterMetadata) {
-            CLUSTER_META.set(clusterMetadata);
+        public void configure(Map<String, ?> configs) {
+            super.configure(configs);
+            String roles = (String) configs.get("process.roles");
+            if (roles != null && roles.contains("broker")) {
+                brokerId = (String) configs.get(ServerConfigs.BROKER_ID_CONFIG);
+            }
         }
-    }
-
-    public static class MockProducerMetricsReporter extends MockMetricsReporter implements ClusterResourceListener {
-        public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
 
         @Override
         public void onUpdate(ClusterResource clusterMetadata) {
-            CLUSTER_META.set(clusterMetadata);
-        }
-    }
-
-    public static class MockBrokerMetricsReporter extends MockMetricsReporter implements ClusterResourceListener {
-        public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
-
-        @Override
-        public void onUpdate(ClusterResource clusterMetadata) {
-            CLUSTER_META.set(clusterMetadata);
+            if (clientId != null) CLUSTER_RESOURCE_MAP.put(clientId, clusterMetadata);
+            if (brokerId != null) CLUSTER_RESOURCE_MAP.put(brokerId, clusterMetadata);
         }
     }
 
@@ -123,14 +121,16 @@ public class EndToEndClusterIdTest {
         MockConsumerInterceptor.resetCounters();
         MockProducerInterceptor.resetCounters();
 
-        assertNotNull(MockBrokerMetricsReporter.CLUSTER_META.get());
-        isValidClusterId(MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
+        ClusterResource brokerClusterResource = MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(clusterBrokerId);
+        assertNotNull(brokerClusterResource);
+        isValidClusterId(brokerClusterResource.clusterId());
 
         Map<String, Object> producerConfig = Map.of(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName(),
             "mock.interceptor.append", "mock",
-            ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockProducerMetricsReporter.class.getName(),
+            ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockCommonMetricsReporter.class.getName(),
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName(),
-            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName());
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName(),
+            ProducerConfig.CLIENT_ID_CONFIG, PRODUCER_CLIENT_ID);
         try (var producer = clusterInstance.<byte[], byte[]>producer(producerConfig)) {
             // Send one record and make sure clusterId is set after sending and before onAcknowledgement
             sendRecord(producer);
@@ -148,14 +148,16 @@ public class EndToEndClusterIdTest {
         assertNotNull(MockSerializer.CLUSTER_META.get());
         isValidClusterId(MockSerializer.CLUSTER_META.get().clusterId());
 
-        assertNotNull(MockProducerMetricsReporter.CLUSTER_META.get());
-        isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
+        ClusterResource producerClusterResource = MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(PRODUCER_CLIENT_ID);
+        assertNotNull(producerClusterResource);
+        isValidClusterId(producerClusterResource.clusterId());
 
         Map<String, Object> consumerConfig = Map.of(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName(),
-            ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockConsumerMetricsReporter.class.getName(),
+            ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockCommonMetricsReporter.class.getName(),
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, MockDeserializer.class.getName(),
             ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, MockDeserializer.class.getName(),
-            ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name(),
+            ConsumerConfig.CLIENT_ID_CONFIG, CONSUMER_CLIENT_ID);
         try (var consumer = clusterInstance.<byte[], byte[]>consumer(consumerConfig)) {
             consumer.assign(List.of(TP));
             consumer.seek(TP, 0);
@@ -180,17 +182,18 @@ public class EndToEndClusterIdTest {
             MockDeserializer.clusterMeta.get().clusterId()
         );
 
-        assertNotNull(MockConsumerMetricsReporter.CLUSTER_META.get());
-        isValidClusterId(MockConsumerMetricsReporter.CLUSTER_META.get().clusterId());
+        ClusterResource consumerClusterResource = MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(CONSUMER_CLIENT_ID);
+        assertNotNull(consumerClusterResource);
+        isValidClusterId(consumerClusterResource.clusterId());
 
         // Make sure everyone receives the same cluster id.
         String id = MockProducerInterceptor.CLUSTER_META.get().clusterId();
         assertEquals(id, MockSerializer.CLUSTER_META.get().clusterId());
-        assertEquals(id, MockProducerMetricsReporter.CLUSTER_META.get().clusterId());
+        assertEquals(id, MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(PRODUCER_CLIENT_ID).clusterId());
         assertEquals(id, MockConsumerInterceptor.CLUSTER_META.get().clusterId());
         assertEquals(id, MockDeserializer.clusterMeta.get().clusterId());
-        assertEquals(id, MockConsumerMetricsReporter.CLUSTER_META.get().clusterId());
-        assertEquals(id, MockBrokerMetricsReporter.CLUSTER_META.get().clusterId());
+        assertEquals(id, MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(CONSUMER_CLIENT_ID).clusterId());
+        assertEquals(id, MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(clusterBrokerId).clusterId());
 
         MockConsumerInterceptor.resetCounters();
         MockProducerInterceptor.resetCounters();
