@@ -18,8 +18,6 @@ package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
@@ -41,11 +39,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.IOException;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -53,7 +49,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -413,12 +408,11 @@ public class StreamsGroupCommand {
                 ? listStreamsGroups()
                 : opts.options.valuesOf(opts.groupOpt);
 
-
-
-//            Map<String, Throwable> GroupDeletionRes = deleteGroups(groupIds);
-//            Map<String, Throwable> internalTopicsDeletionFailures = deleteInternalTopics(groupIds);
             Map<String, Throwable> success = new HashMap<>();
             Map<String, Throwable> failed = new HashMap<>();
+
+            // retrieve internal topics before deleting groups
+            Map<String, List<String>> internalTopics = retrieveInternalTopics(groupIds);
 
             Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteStreamsGroups(
                 groupIds
@@ -435,10 +429,25 @@ public class StreamsGroupCommand {
                 }
             });
 
+            // delete internal topics
+            Map<String, Throwable> internalTopicsDeletionFailures = new HashMap<>();
+            if (!success.isEmpty()) {
+                for (String groupId : success.keySet()) {
+                    List<String> internalTopicsToDelete = internalTopics.get(groupId);
+                    if (internalTopicsToDelete != null && !internalTopicsToDelete.isEmpty()) {
+                        try {
+                            DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(internalTopicsToDelete);
+                            deleteTopicsResult.all().get();
+                        } catch (InterruptedException | ExecutionException e) {
+                            internalTopicsDeletionFailures.put(groupId, e.getCause());
+                        }
+                    }
+                }
+            }
+
             if (failed.isEmpty()) {
                 System.out.println("Deletion of requested Streams groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
-            }
-            else {
+            } else {
                 printError("Deletion of some Streams groups failed:", Optional.empty());
                 failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
 
@@ -447,57 +456,49 @@ public class StreamsGroupCommand {
                 }
             }
 
-            Map<String, Throwable> internalTopicsDeletionFailures = new HashMap<>();
-            if (!success.isEmpty())
-                internalTopicsDeletionFailures = deleteInternalTopics(success.keySet().stream().toList());
+            printInternalTopicErrors(internalTopicsDeletionFailures, success.keySet(), internalTopics.keySet());
 
             failed.putAll(success);
             failed.putAll(internalTopicsDeletionFailures);
             return failed;
         }
 
-        private Map<String, Throwable> deleteInternalTopics(List<String> groupIds) {
-//            try {
-//                List<String> internalTopics = adminClient.describeStreamsGroups(groupIds)
-//                    .all()
-//                    .get()
-//                    .values()
-//                    .stream()
-//                    .flatMap(description -> description.subtopologies().stream())
-//                    .flatMap(subtopology -> subtopology.repartitionSourceTopics().keySet().stream())
-//                    .toList();
-//            } catch (InterruptedException | ExecutionException e) {
-//                throw new RuntimeException("Failed to describe streams groups", e);
-//            }
-            Map<String, Throwable> failed = new HashMap<>();
-            List<String> internalTopics = new ArrayList<>();
+        private void printInternalTopicErrors(Map<String, Throwable> internalTopicsDeletionFailures,
+                                              Set<String> deletedGroupIds,
+                                              Set<String> groupIdsWithInternalTopics) {
+            if (!deletedGroupIds.isEmpty()) {
+                if (internalTopicsDeletionFailures.isEmpty()) {
+                    List<String> successfulGroups = deletedGroupIds.stream()
+                        .filter(groupIdsWithInternalTopics::contains)
+                        .collect(Collectors.toList());
+                    System.out.println("Deletion of associated internal topics of the Streams groups ('" +
+                        String.join(", ", successfulGroups) + "') was successful.");
+                } else {
+                    System.out.println("Deletion of some associated internal topics failed:");
+                    internalTopicsDeletionFailures.forEach((group, error) ->
+                        System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
+                }
+            }
+        }
+
+        private Map<String, List<String>> retrieveInternalTopics(List<String> groupIds) {
+            Map<String, List<String>> groupToInternalTopics = new HashMap<>();
             try {
                 Map<String, StreamsGroupDescription> descriptionMap = adminClient.describeStreamsGroups(groupIds).all().get();
                 for (StreamsGroupDescription description : descriptionMap.values()) {
-                    for (StreamsGroupSubtopologyDescription subtopology : description.subtopologies()) {
-                        internalTopics.addAll(subtopology.repartitionSourceTopics().keySet());
+                    List<String> internalTopics = description.subtopologies().stream()
+                        .flatMap(subtopology -> Stream.concat(
+                            subtopology.repartitionSourceTopics().keySet().stream(),
+                            subtopology.stateChangelogTopics().keySet().stream()))
+                        .collect(Collectors.toList());
+                    if (!internalTopics.isEmpty()) {
+                        groupToInternalTopics.put(description.groupId(), internalTopics);
                     }
                 }
             } catch (InterruptedException | ExecutionException e) {
-                failed.put("Describe", e.getCause());
+                printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
             }
-            if (!internalTopics.isEmpty()) {
-                try {
-                    adminClient.deleteTopics(internalTopics).all().get();
-                } catch (InterruptedException | ExecutionException e) {
-                    failed.put("Delete", e.getCause());
-                }
-            }
-            if (failed.isEmpty()) {
-                System.out.println("Deletion of all associated internal topics was successful.");
-            } else {
-                if (failed.containsKey("Describe")) //todo message
-                    printError("No internal topic", Optional.of(failed.get("Describe")));
-                if (failed.containsKey("Delete"))
-                    printError("Deletion of some associated internal topics failed:", Optional.of(failed.get("Delete")));
-            }
-
-            return failed;
+            return groupToInternalTopics;
         }
 
         Collection<StreamsGroupMemberDescription> collectGroupMembers(String groupId) throws Exception {
