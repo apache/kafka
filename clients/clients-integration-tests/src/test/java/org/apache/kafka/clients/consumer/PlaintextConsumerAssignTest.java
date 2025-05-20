@@ -222,7 +222,7 @@ public class PlaintextConsumerAssignTest {
         int numRecords = 100;
         long startingTimestamp = System.currentTimeMillis();
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp, -1);
             consumer.assign(List.of(tp));
             // First consumer consumes and commits offsets
@@ -233,7 +233,7 @@ public class PlaintextConsumerAssignTest {
         }
 
         // We should see the committed offsets from another consumer
-        try (Consumer<byte[], byte[]> anotherConsumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol))) {
+        try (Consumer<byte[], byte[]> anotherConsumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
             anotherConsumer.assign(List.of(tp));
             assertEquals(numRecords, anotherConsumer.committed(Set.of(tp)).get(tp).offset());
         }
