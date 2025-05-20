@@ -20,17 +20,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.LogLevelConfig;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.Either;
 import org.apache.kafka.server.common.TransactionVersion;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MarkerFactory;
 
-import java.util.AbstractMap.SimpleEntry;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -161,7 +158,7 @@ public class TransactionMetadata {
         );
     }
 
-    public Either<Errors, TxnTransitMetadata> prepareIncrementProducerEpoch(
+    public TxnTransitMetadata prepareIncrementProducerEpoch(
         int newTxnTimeoutMs,
         Optional<Short> expectedProducerEpoch,
         long updateTimestamp) {
@@ -169,51 +166,50 @@ public class TransactionMetadata {
             throw new IllegalStateException("Cannot allocate any more producer epochs for producerId " + producerId);
 
         short bumpedEpoch = (short) (producerEpoch + 1);
-        Either<Errors, Map.Entry<Short, Short>> epochBumpResult;
+        Short produceEpochResult;
+        Short lastProducerEpochResult;
 
         if (expectedProducerEpoch.isEmpty()) {
             // If no expected epoch was provided by the producer, bump the current epoch and set the last epoch to -1
             // In the case of a new producer, producerEpoch will be -1 and bumpedEpoch will be 0
-            epochBumpResult = Either.right(new SimpleEntry<>(bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH));
+            produceEpochResult = bumpedEpoch;
+            lastProducerEpochResult = RecordBatch.NO_PRODUCER_EPOCH;
         } else {
             short expectedEpoch = expectedProducerEpoch.get();
             if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || expectedEpoch == producerEpoch) {
                 // If the expected epoch matches the current epoch, or if there is no current epoch, the producer is attempting
                 // to continue after an error and no other producer has been initialized. Bump the current and last epochs.
                 // The no current epoch case means this is a new producer; producerEpoch will be -1 and bumpedEpoch will be 0
-                epochBumpResult = Either.right(new SimpleEntry<>(bumpedEpoch, producerEpoch));
+                produceEpochResult = bumpedEpoch;
+                lastProducerEpochResult = producerEpoch;
             } else if (expectedEpoch == lastProducerEpoch) {
                 // If the expected epoch matches the previous epoch, it is a retry of a successful call, so just return the
                 // current epoch without bumping. There is no danger of this producer being fenced, because a new producer
                 // calling InitProducerId would have caused the last epoch to be set to -1.
                 // Note that if the IBP is prior to 2.4.IV1, the lastProducerId and lastProducerEpoch will not be written to
                 // the transaction log, so a retry that spans a coordinator change will fail. We expect this to be a rare case.
-                epochBumpResult = Either.right(new SimpleEntry<>(producerEpoch, lastProducerEpoch));
+                produceEpochResult = producerEpoch;
+                lastProducerEpochResult = lastProducerEpoch;
             } else {
                 // Otherwise, the producer has a fenced epoch and should receive an PRODUCER_FENCED error
                 LOGGER.info("Expected producer epoch {} does not match current producer epoch {} or previous producer epoch {}",
                     expectedEpoch, producerEpoch, lastProducerEpoch);
-                epochBumpResult = Either.left(Errors.PRODUCER_FENCED);
+                throw Errors.PRODUCER_FENCED.exception();
             }
         }
 
-        if (epochBumpResult.isRight()) {
-            Map.Entry<Short, Short> epochPair = epochBumpResult.right();
-            return Either.right(prepareTransitionTo(
-                TransactionState.EMPTY,
-                producerId,
-                nextProducerId,
-                epochPair.getKey(),
-                epochPair.getValue(),
-                newTxnTimeoutMs,
-                Set.of(),
-                -1L,
-                updateTimestamp,
-                clientTransactionVersion
-            ));
-        } else {
-            return Either.left(epochBumpResult.left());
-        }
+        return prepareTransitionTo(
+            TransactionState.EMPTY,
+            producerId,
+            nextProducerId,
+            produceEpochResult,
+            lastProducerEpochResult,
+            newTxnTimeoutMs,
+            Set.of(),
+            -1L,
+            updateTimestamp,
+            clientTransactionVersion
+        );
     }
 
     public TxnTransitMetadata prepareProducerIdRotation(long newProducerId,

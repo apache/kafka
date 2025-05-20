@@ -709,10 +709,10 @@ class TransactionMetadataTest {
       time.milliseconds(),
       TV_0)
 
-    val result = txnMetadata.prepareIncrementProducerEpoch(30000, Optional.of((lastProducerEpoch - 1).toShort),
-      time.milliseconds())
-    assertNotNull(result.left())
-    assertEquals(Errors.PRODUCER_FENCED, result.left())
+    assertThrows(Errors.PRODUCER_FENCED.exception().getClass, () =>
+      txnMetadata.prepareIncrementProducerEpoch(30000, Optional.of((lastProducerEpoch - 1).toShort),
+        time.milliseconds())
+    )
   }
 
   @Test
@@ -781,10 +781,7 @@ class TransactionMetadataTest {
   private def prepareSuccessfulIncrementProducerEpoch(txnMetadata: TransactionMetadata,
                                                       expectedProducerEpoch: Optional[java.lang.Short],
                                                       now: Option[Long] = None): TxnTransitMetadata = {
-    val result = txnMetadata.prepareIncrementProducerEpoch(30000, expectedProducerEpoch,
-      now.getOrElse(time.milliseconds()))
-    assertNotNull(result.right())
-    result.right()
+    txnMetadata.prepareIncrementProducerEpoch(30000, expectedProducerEpoch, now.getOrElse(time.milliseconds()))
   }
 
 }

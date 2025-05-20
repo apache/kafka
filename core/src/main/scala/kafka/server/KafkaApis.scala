@@ -1909,7 +1909,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           // partitions which failed, and an 'OPERATION_NOT_ATTEMPTED' error code for the partitions which succeeded
           // the authorization check to indicate that they were not added to the transaction.
           val partitionErrors = unauthorizedTopicErrors ++ nonExistingTopicErrors ++
-            authorizedPartitions.stream().map(_ -> Errors.OPERATION_NOT_ATTEMPTED).toList.asScala.toSeq
+            authorizedPartitions.stream().map(_ -> Errors.OPERATION_NOT_ATTEMPTED).toList.asScala
           addResultAndMaybeSendResponse(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitionErrors.asJava))
         } else {
           def sendResponseCallback(error: Errors): Unit = {

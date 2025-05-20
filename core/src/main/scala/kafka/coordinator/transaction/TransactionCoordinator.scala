@@ -267,12 +267,11 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 case e: Exception => Left(Errors.forException(e))
               }
             } else {
-              val result = txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(e => Short.box(e.epoch)).toJava,
-                time.milliseconds())
-              if (result.isLeft) {
-                Left(result.left)
-              } else {
-                Right(result.right)
+              try {
+                Right(txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(e => Short.box(e.epoch)).toJava,
+                  time.milliseconds()))
+              } catch {
+                case e: Exception => Left(Errors.forException(e))
               }
             }
 
