@@ -25,6 +25,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -43,7 +46,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTestUtils.produceRecord;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -202,7 +205,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
                                        GroupProtocol groupProtocol,
                                        boolean isStable,
                                        Runnable validateRunnable) {
-        produceRecord(inputTopic, clusterInstance.bootstrapServers());
+        produceRecord(inputTopic);
         try (Consumer<byte[], byte[]> consumer = createConsumer(inputGroup, groupProtocol)) {
             consumer.subscribe(Collections.singletonList(inputTopic));
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
@@ -217,6 +220,15 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
+    private void produceRecord(String topic) {
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(topic, 0, null, null)).get());
+        }
+    }
+
+    private Producer<byte[], byte[]> createProducer() {
+        return clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"));
+    }
 
     private Consumer<byte[], byte[]> createConsumer(String group, GroupProtocol groupProtocol) {
         Map<String, Object> consumerConfig = new HashMap<>();
