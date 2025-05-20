@@ -34,9 +34,7 @@ import org.apache.kafka.common.{KafkaException, Uuid, requests}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.io.IOException
 import java.net.{InetAddress, Socket}
@@ -84,9 +82,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   @Flaky("KAFKA-17999")
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicConnectionQuota(quorum: String): Unit = {
+  @Test
+  def testDynamicConnectionQuota(): Unit = {
     val maxConnectionsPerIP = 5
 
     def connectAndVerify(): Unit = {
@@ -112,9 +109,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicListenerConnectionQuota(quorum: String): Unit = {
+  @Test
+  def testDynamicListenerConnectionQuota(): Unit = {
     val initialConnectionCount = connectionCount
 
     def connectAndVerify(): Unit = {
@@ -185,9 +181,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicListenerConnectionCreationRateQuota(quorum: String): Unit = {
+  @Test
+  def testDynamicListenerConnectionCreationRateQuota(): Unit = {
     // Create another listener. PLAINTEXT is an inter-broker listener
     // keep default limits
     val newListenerNames = Seq("PLAINTEXT", "EXTERNAL")
@@ -247,9 +242,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     waitForConnectionCount(initialConnectionCount)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicIpConnectionRateQuota(quorum: String): Unit = {
+  @Test
+  def testDynamicIpConnectionRateQuota(): Unit = {
     val connRateLimit = 10
     val initialConnectionCount = connectionCount
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)

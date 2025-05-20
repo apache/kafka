@@ -49,12 +49,12 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * This instance is created and provided to the
  * {@link org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver} that is used when using
  * an HTTP-/HTTPS-based {@link org.jose4j.keys.resolvers.VerificationKeyResolver}, which is then
- * provided to the {@link ValidatorAccessTokenValidator} to use in validating the signature of
+ * provided to the {@link BrokerJwtValidator} to use in validating the signature of
  * a JWT.
  *
  * @see org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver
  * @see org.jose4j.keys.resolvers.VerificationKeyResolver
- * @see ValidatorAccessTokenValidator
+ * @see BrokerJwtValidator
  */
 
 public final class RefreshingHttpsJwks implements Initable, Closeable {

@@ -81,7 +81,7 @@ class KRaftQuorumImplementation(
   ): KafkaBroker = {
     val metaPropertiesEnsemble = {
       val loader = new MetaPropertiesEnsemble.Loader()
-      loader.addLogDirs(config.logDirs.asJava)
+      loader.addLogDirs(config.logDirs)
       loader.addMetadataLogDir(config.metadataLogDir)
       val ensemble = loader.load()
       val copier = new MetaPropertiesEnsemble.Copier(ensemble)
@@ -158,10 +158,6 @@ abstract class QuorumTestHarness extends Logging {
 
   private var testInfo: TestInfo = _
   protected var implementation: QuorumImplementation = _
-
-  def isShareGroupTest(): Boolean = {
-    TestInfoUtils.isShareGroupTest(testInfo)
-  }
 
   def maybeGroupProtocolSpecified(): Option[GroupProtocol] = {
     TestInfoUtils.maybeGroupProtocolSpecified(testInfo)

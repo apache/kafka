@@ -131,6 +131,53 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerRecoveryOnPollAfterDelayedRebalance(groupProtocol: String): Unit = {
+    val rebalanceTimeout = 1000
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, rebalanceTimeout.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
+
+    val producer = createProducer()
+    val numMessages = 10
+    createTopicAndSendRecords(producer, "otherTopic", 1, numMessages)
+    sendRecords(producer, numMessages, tp)
+
+    var rebalanceTimeoutExceeded = false
+
+    // Subscribe consumer that will reconcile in time on the first rebalance, but will
+    // take longer than the allowed timeout in the second rebalance (onPartitionsRevoked) to get fenced by the broker.
+    // The consumer should recover after being fenced (automatically rejoin the group on the next call to poll)
+    val consumer = createConsumer()
+    val listener = new TestConsumerReassignmentListener {
+
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+        if (!partitions.isEmpty && partitions.contains(tp)) {
+          // on the second rebalance (after we have joined the group initially), sleep longer
+          // than rebalance timeout to get fenced.
+          Utils.sleep(rebalanceTimeout + 500)
+          rebalanceTimeoutExceeded = true
+        }
+        super.onPartitionsRevoked(partitions)
+      }
+    }
+
+    // Subscribe to get first assignment (no delays) and verify consumption
+    consumer.subscribe(List(topic).asJava, listener)
+    var records = awaitNonEmptyRecords(consumer, tp, 0L)
+    assertEquals(numMessages, records.count())
+
+    // Subscribe to different topic. This will trigger the delayed revocation exceeding rebalance timeout and get fenced
+    consumer.subscribe(List("otherTopic").asJava, listener)
+    TestUtils.pollUntilTrue(consumer, () => rebalanceTimeoutExceeded, "Timeout waiting for delayed callback to complete")
+
+    // Verify consumer recovers after being fenced, being able to continue consuming.
+    // (The member should automatically rejoin on the next poll, with the new topic as subscription)
+    val tpOther = new TopicPartition("otherTopic", 0)
+    records = awaitNonEmptyRecords(consumer, tpOther, 0L)
+    assertEquals(numMessages, records.count())
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testMaxPollIntervalMsDelayInAssignment(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
