@@ -844,22 +844,24 @@ public class GroupCoordinatorRecordHelpers {
      */
     public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
         String groupId,
-        Map<Uuid, Map.Entry<String, Set<Integer>>> initializingTopics,
-        Map<Uuid, Map.Entry<String, Set<Integer>>> initializedTopics,
+        Map<Uuid, GroupMetadataManager.InitMapValue> initializingTopics,
+        Map<Uuid, GroupMetadataManager.InitMapValue> initializedTopics,
         Map<Uuid, String> deletingTopics
     ) {
         List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializingTopicPartitionInfo = initializingTopics.entrySet().stream()
             .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                 .setTopicId(entry.getKey())
-                .setTopicName(entry.getValue().getKey())
-                .setPartitions(entry.getValue().getValue().stream().toList()))
+                .setTopicName(entry.getValue().name())
+                .setPartitions(entry.getValue().partitions().stream().toList())
+                .setCreateTimestamp(entry.getValue().timestamp()))
             .toList();
 
         List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.entrySet().stream()
             .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                 .setTopicId(entry.getKey())
-                .setTopicName(entry.getValue().getKey())
-                .setPartitions(entry.getValue().getValue().stream().toList()))
+                .setTopicName(entry.getValue().name())
+                .setPartitions(entry.getValue().partitions().stream().toList())
+                .setCreateTimestamp(entry.getValue().timestamp()))
             .toList();
 
         List<ShareGroupStatePartitionMetadataValue.TopicInfo> deletingTopicsInfo = deletingTopics.entrySet().stream()

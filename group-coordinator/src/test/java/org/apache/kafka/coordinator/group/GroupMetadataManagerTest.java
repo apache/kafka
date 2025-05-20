@@ -15094,10 +15094,10 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords, result.records());
     }
 
-    private Map<Uuid, Map.Entry<String, Set<Integer>>> mkShareGroupStateMap(List<Map.Entry<Uuid, Map.Entry<String, Set<Integer>>>> entries) {
-        Map<Uuid, Map.Entry<String, Set<Integer>>> map = new HashMap<>();
+    private Map<Uuid, GroupMetadataManager.InitMapValue> mkShareGroupStateMap(List<Map.Entry<Uuid, Map.Entry<String, Set<Integer>>>> entries) {
+        Map<Uuid, GroupMetadataManager.InitMapValue> map = new HashMap<>();
         for (Map.Entry<Uuid, Map.Entry<String, Set<Integer>>> entry : entries) {
-            map.put(entry.getKey(), entry.getValue());
+            map.put(entry.getKey(), new GroupMetadataManager.InitMapValue(entry.getValue().getKey(), entry.getValue().getValue(), 1));
         }
         return map;
     }
@@ -20675,8 +20675,8 @@ public class GroupMetadataManagerTest {
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                Map.of(t1Uuid, Map.entry(t1Name, Set.of(0, 1))),
-                Map.of(t2Uuid, Map.entry(t2Name, Set.of(0, 1))),
+                Map.of(t1Uuid, new GroupMetadataManager.InitMapValue(t1Name, Set.of(0, 1), 1)),
+                Map.of(t2Uuid, new GroupMetadataManager.InitMapValue(t2Name, Set.of(0, 1), 1)),
                 Map.of()
             )
         );
@@ -20742,8 +20742,8 @@ public class GroupMetadataManagerTest {
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                Map.of(t1Uuid, Map.entry(t1Name, Set.of(0, 1))),
-                Map.of(t2Uuid, Map.entry(t2Name, Set.of(0, 1))),
+                Map.of(t1Uuid, new GroupMetadataManager.InitMapValue(t1Name, Set.of(0, 1), 1)),
+                Map.of(t2Uuid, new GroupMetadataManager.InitMapValue(t2Name, Set.of(0, 1), 1)),
                 Map.of(t3Uuid, t3Name)
             )
         );
@@ -20804,8 +20804,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(),
                 Map.of(
-                    topicId1, Map.entry(topicName1, Set.of(0, 1, 2)),
-                    topicId2, Map.entry(topicName2, Set.of(0, 1))
+                    topicId1, new GroupMetadataManager.InitMapValue(topicName1, Set.of(0, 1, 2), 1),
+                    topicId2, new GroupMetadataManager.InitMapValue(topicName2, Set.of(0, 1), 1)
                 ),
                 Map.of()
             )
@@ -20897,8 +20897,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(),
                 Map.of(
-                    topicId1, Map.entry(topicName1, Set.of(0, 1, 2)),
-                    topicId2, Map.entry(topicName2, Set.of(0, 1))
+                    topicId1, new GroupMetadataManager.InitMapValue(topicName1, Set.of(0, 1, 2), 1),
+                    topicId2, new GroupMetadataManager.InitMapValue(topicName2, Set.of(0, 1), 1)
                 ),
                 Map.of(
                     topicId3, topicName3,
@@ -21003,7 +21003,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
                 Map.of(),
-                Map.of(topicId1, Map.entry(topicName1, Set.of(0, 1, 2))),
+                Map.of(topicId1, new GroupMetadataManager.InitMapValue(topicName1, Set.of(0, 1, 2), 1)),
                 Map.of()
             )
         );
@@ -21086,8 +21086,8 @@ public class GroupMetadataManagerTest {
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                Map.of(topicId2, Map.entry(topicName2, Set.of(0, 1))),
-                Map.of(topicId1, Map.entry(topicName1, Set.of(0, 1, 2))),
+                Map.of(topicId2, new GroupMetadataManager.InitMapValue(topicName2, Set.of(0, 1), 1)),
+                Map.of(topicId1, new GroupMetadataManager.InitMapValue(topicName1, Set.of(0, 1, 2), 1)),
                 Map.of()
             )
         );
@@ -21110,7 +21110,7 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                Map.of(topicId2, Map.entry(topicName2, Set.of(0, 1))),
+                Map.of(topicId2, new GroupMetadataManager.InitMapValue(topicName2, Set.of(0, 1), 1)),
                 Map.of(),
                 Map.of(topicId1, topicName1)
             )
@@ -21171,8 +21171,8 @@ public class GroupMetadataManagerTest {
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                Map.of(topicId2, Map.entry(topicName2, Set.of(0, 1))),
-                Map.of(topicId1, Map.entry(topicName1, Set.of(0, 1, 2))),
+                Map.of(topicId2, new GroupMetadataManager.InitMapValue(topicName2, Set.of(0, 1), 1)),
+                Map.of(topicId1, new GroupMetadataManager.InitMapValue(topicName1, Set.of(0, 1, 2), 1)),
                 Map.of()
             )
         );
@@ -21195,7 +21195,7 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                Map.of(topicId2, Map.entry(topicName2, Set.of(0, 1))),
+                Map.of(topicId2, new GroupMetadataManager.InitMapValue(topicName2, Set.of(0, 1), 1)),
                 Map.of(),
                 Map.of(topicId1, topicName1)
             )
@@ -21586,7 +21586,7 @@ public class GroupMetadataManagerTest {
         );
 
         List<CoordinatorRecord> records = new ArrayList<>();
-        context.groupMetadataManager.addInitializingTopicsRecords(groupId, records, Map.of(t1Uuid, Set.of(0, 1)));
+        context.groupMetadataManager.addInitializingTopicsRecords(groupId, records, Map.of(t1Uuid, new GroupMetadataManager.InitMapValue(t1Name, Set.of(0, 1), 1)));
 
         List<CoordinatorRecord> expectedRecords = List.of(
             CoordinatorRecord.record(
@@ -21638,11 +21638,12 @@ public class GroupMetadataManagerTest {
             Set.of(0, 1)
         );
 
-        Map<Uuid, Map.Entry<String, Set<Integer>>> snapshotMetadataInitializeRecordMap = Map.of(
+        Map<Uuid, GroupMetadataManager.InitMapValue> snapshotMetadataInitializeRecordMap = Map.of(
             topicId,
-            Map.entry(
+            new GroupMetadataManager.InitMapValue(
                 topicName,
-                Set.of(0, 1)
+                Set.of(0, 1),
+                1
             )
         );
 
@@ -21818,7 +21819,7 @@ public class GroupMetadataManagerTest {
         result = context.groupMetadataManager.uninitializeShareGroupState(groupId, Map.of(t1Id, Set.of(0, 1)));
         Set<Integer> partitions = new LinkedHashSet<>(List.of(0, 1, 2));
         assertEquals(
-            List.of(newShareGroupStatePartitionMetadataRecord(groupId, Map.of(), Map.of(t2Id, Map.entry(t2Name, partitions)), Map.of())),
+            List.of(newShareGroupStatePartitionMetadataRecord(groupId, Map.of(), Map.of(t2Id, new GroupMetadataManager.InitMapValue(t2Name, partitions, 1)), Map.of())),
             result.records()
         );
     }

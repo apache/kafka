@@ -35,7 +35,9 @@
       { "name": "TopicName", "type": "string", "versions": "0+",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partitions." }
+        "about": "The partitions." },
+      { "name": "CreateTimestamp", "type":  "int64", "versions":  "0+",
+        "about": "Timestamp at which topic added to state state."}
     ]},
     { "name": "TopicInfo", "versions": "0+", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",

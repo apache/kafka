@@ -514,9 +514,16 @@ public class GroupMetadataManager {
      * @param deletingTopics    Set of topic ids.
      */
     private record ShareGroupStatePartitionMetadataInfo(
-        Map<Uuid, Set<Integer>> initializingTopics,
-        Map<Uuid, Set<Integer>> initializedTopics,
+        Map<Uuid, InitMapValue> initializingTopics,
+        Map<Uuid, InitMapValue> initializedTopics,
         Set<Uuid> deletingTopics
+    ) {
+    }
+
+    public record InitMapValue(
+        String name,
+        Set<Integer> partitions,
+        long timestamp
     ) {
     }
 
@@ -2653,7 +2660,7 @@ public class GroupMetadataManager {
         }
 
         // We need to check if all the group initialized share partitions are part of the group assignment.
-        Map<Uuid, Set<Integer>> initializedTps = shareGroupPartitionMetadata.get(group.groupId()).initializedTopics();
+        Map<Uuid, Set<Integer>> initializedTps = stripInitValue(shareGroupPartitionMetadata.get(group.groupId()).initializedTopics());
         Map<Uuid, Set<Integer>> currentAssigned = new HashMap<>();
         for (Assignment assignment : group.targetAssignment().values()) {
             for (Map.Entry<Uuid, Set<Integer>> tps : assignment.partitions().entrySet()) {
@@ -2674,27 +2681,22 @@ public class GroupMetadataManager {
      * @return  A map of topic partitions which are subscribed by the share group but not initialized yet.
      */
     // Visibility for testing
-    Map<Uuid, Set<Integer>> subscribedTopicsChangeMap(String groupId, Map<String, TopicMetadata> subscriptionMetadata) {
+    Map<Uuid, InitMapValue> subscribedTopicsChangeMap(String groupId, Map<String, TopicMetadata> subscriptionMetadata) {
         if (subscriptionMetadata == null || subscriptionMetadata.isEmpty()) {
             return Map.of();
         }
 
-        Map<Uuid, Set<Integer>> topicPartitionChangeMap = new HashMap<>();
+        Map<Uuid, InitMapValue> topicPartitionChangeMap = new HashMap<>();
         ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
 
-        // We are only considering initialized TPs here. This is because it could happen
-        // that some topics have been moved to initializing but the corresponding persister request
-        // could not be made/failed (invoked by the group coordinator). Then there would be no way to try
-        // the persister call. This way we get the opportunity to retry.
-        Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? new HashMap<>() : info.initializedTopics();
+        Map<Uuid, InitMapValue> alreadyInitialized = info == null ? new HashMap<>() : combineInitMaps(info.initializedTopics(), info.initializingTopics(), true);
 
         subscriptionMetadata.forEach((topicName, topicMetadata) -> {
-            Set<Integer> alreadyInitializedPartSet = alreadyInitialized.getOrDefault(topicMetadata.id(), Set.of());
+            Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicMetadata.id()) ? alreadyInitialized.get(topicMetadata.id()).partitions() : Set.of();
             if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.numPartitions()) {
                 Set<Integer> partitionSet = IntStream.range(0, topicMetadata.numPartitions()).boxed().collect(Collectors.toSet());
                 partitionSet.removeAll(alreadyInitializedPartSet);
-
-                topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> partitionSet);
+                topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> new InitMapValue(topicMetadata.name(), partitionSet, time.milliseconds()));
             }
         });
         return topicPartitionChangeMap;
@@ -2719,7 +2721,7 @@ public class GroupMetadataManager {
             return Optional.empty();
         }
 
-        Map<Uuid, Set<Integer>> topicPartitionChangeMap = subscribedTopicsChangeMap(groupId, subscriptionMetadata);
+        Map<Uuid, InitMapValue> topicPartitionChangeMap = subscribedTopicsChangeMap(groupId, subscriptionMetadata);
 
         // Nothing to initialize.
         if (topicPartitionChangeMap.isEmpty()) {
@@ -2730,12 +2732,12 @@ public class GroupMetadataManager {
         return Optional.of(buildInitializeShareGroupStateRequest(groupId, groupEpoch, topicPartitionChangeMap));
     }
 
-    private InitializeShareGroupStateParameters buildInitializeShareGroupStateRequest(String groupId, int groupEpoch, Map<Uuid, Set<Integer>> topicPartitions) {
+    private InitializeShareGroupStateParameters buildInitializeShareGroupStateRequest(String groupId, int groupEpoch, Map<Uuid, InitMapValue> topicPartitions) {
         return new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
             new GroupTopicPartitionData<>(groupId, topicPartitions.entrySet().stream()
                 .map(entry -> new TopicData<>(
                     entry.getKey(),
-                    entry.getValue().stream()
+                    entry.getValue().partitions().stream()
                         .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch, -1))
                         .toList())
                 ).toList()
@@ -2743,19 +2745,19 @@ public class GroupMetadataManager {
     }
 
     // Visibility for tests
-    void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, Set<Integer>> topicPartitionMap) {
+    void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, InitMapValue> topicPartitionMap) {
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return;
         }
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
         if (currentMap == null) {
-            records.add(newShareGroupStatePartitionMetadataRecord(groupId, attachTopicName(topicPartitionMap), Map.of(), Map.of()));
+            records.add(newShareGroupStatePartitionMetadataRecord(groupId, topicPartitionMap, Map.of(), Map.of()));
             return;
         }
 
         // We must combine the existing information in the record with the topicPartitionMap argument.
-        Map<Uuid, Set<Integer>> finalInitializingMap = mergeShareGroupInitMaps(currentMap.initializingTopics(), topicPartitionMap);
+        Map<Uuid, InitMapValue> finalInitializingMap = combineWithTimestamp(currentMap.initializingTopics(), topicPartitionMap);
 
         // If any initializing topics are also present in the deleting state
         // we should remove them from deleting.
@@ -2771,11 +2773,67 @@ public class GroupMetadataManager {
         records.add(
             newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                attachTopicName(finalInitializingMap),
-                attachTopicName(currentMap.initializedTopics()),
+                finalInitializingMap,
+                currentMap.initializedTopics(),
                 attachTopicName(currentDeleting)
             )
         );
+    }
+
+    Map<Uuid, InitMapValue> combineInitMaps(
+        Map<Uuid, InitMapValue> initialized,
+        Map<Uuid, InitMapValue> initializing,
+        boolean newInitializingOnly
+    ) {
+        Map<Uuid, InitMapValue> finalInitMap = new HashMap<>();
+        Set<Uuid> combinedTopicIdSet = new HashSet<>(initialized.keySet());
+
+        Set<Uuid> filteredInitializing = newInitializingOnly ? initializing.entrySet().stream()
+            .filter(entry -> time.milliseconds() - entry.getValue().timestamp() < 30_000)
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toSet()) : initializing.keySet();
+
+        combinedTopicIdSet.addAll(filteredInitializing);
+
+        for (Uuid topicId : combinedTopicIdSet) {
+            Set<Integer> initializedPartitions = initialized.containsKey(topicId) ? initialized.get(topicId).partitions() : new HashSet<>();
+            long timestamp = initialized.containsKey(topicId) ? initialized.get(topicId).timestamp() : -1;
+            String name = initialized.containsKey(topicId) ? initialized.get(topicId).name() : "UNKNOWN";
+            Set<Integer> finalPartitions = new HashSet<>(initializedPartitions);
+            if (filteredInitializing.contains(topicId)) {
+                finalPartitions.addAll(initializing.get(topicId).partitions());
+                timestamp = initializing.get(topicId).timestamp();
+                name = initializing.get(topicId).name();
+            }
+            finalInitMap.putIfAbsent(topicId, new InitMapValue(name, finalPartitions, timestamp));
+        }
+
+        return finalInitMap;
+    }
+
+    Map<Uuid, InitMapValue> combineWithTimestamp(
+        Map<Uuid, InitMapValue> existingShareGroupInitMap,
+        Map<Uuid, InitMapValue> newShareGroupInitMap
+    ) {
+        Map<Uuid, InitMapValue> finalInitMap = new HashMap<>();
+        Set<Uuid> combinedTopicIdSet = new HashSet<>(existingShareGroupInitMap.keySet());
+        combinedTopicIdSet.addAll(newShareGroupInitMap.keySet());
+        long curTimestamp = time.milliseconds();
+
+        for (Uuid topicId : combinedTopicIdSet) {
+            Set<Integer> existingPartitions = existingShareGroupInitMap.containsKey(topicId) ? existingShareGroupInitMap.get(topicId).partitions() : new HashSet<>();
+            long timestamp = existingShareGroupInitMap.containsKey(topicId) ? existingShareGroupInitMap.get(topicId).timestamp() : curTimestamp;
+            String name = existingShareGroupInitMap.containsKey(topicId) ? existingShareGroupInitMap.get(topicId).name() : "UNKNOWN";
+
+            Set<Integer> partitions = new HashSet<>(existingPartitions);
+            if (newShareGroupInitMap.containsKey(topicId)) {
+                partitions.addAll(newShareGroupInitMap.get(topicId).partitions());
+                name = newShareGroupInitMap.get(topicId).name();
+            }
+            finalInitMap.putIfAbsent(topicId, new InitMapValue(name, partitions, timestamp));
+        }
+
+        return finalInitMap;
     }
 
     // Visibility for tests
@@ -2796,6 +2854,14 @@ public class GroupMetadataManager {
         }
 
         return finalInitMap;
+    }
+
+    static Map<Uuid, Set<Integer>> stripInitValue(
+        Map<Uuid, InitMapValue> initMap
+    ) {
+        return initMap.entrySet().stream()
+            .map(entry -> Map.entry(entry.getKey(), entry.getValue().partitions()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /**
@@ -3708,7 +3774,7 @@ public class GroupMetadataManager {
     ) {
         try {
             Map<Uuid, Set<Integer>> initializedTopicPartitions = shareGroupPartitionMetadata.containsKey(group.groupId()) ?
-                shareGroupPartitionMetadata.get(group.groupId()).initializedTopics() :
+                stripInitValue(shareGroupPartitionMetadata.get(group.groupId()).initializedTopics()) :
                 Map.of();
 
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
@@ -4730,25 +4796,26 @@ public class GroupMetadataManager {
         ShareGroup group = (ShareGroup) groups.get(groupId);
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        Map<Uuid, InitMapValue> enrichedTopicPartitionMap = attachInitValue(topicPartitionMap);
         if (currentMap == null) {
             return new CoordinatorResult<>(
-                List.of(newShareGroupStatePartitionMetadataRecord(group.groupId(), Map.of(), attachTopicName(topicPartitionMap), Map.of())),
+                List.of(newShareGroupStatePartitionMetadataRecord(group.groupId(), Map.of(), enrichedTopicPartitionMap, Map.of())),
                 null
             );
         }
 
         // We must combine the existing information in the record with the topicPartitionMap argument so that the final
         // record has up-to-date information.
-        Map<Uuid, Set<Integer>> finalInitializedMap = mergeShareGroupInitMaps(currentMap.initializedTopics(), topicPartitionMap);
+        Map<Uuid, InitMapValue> finalInitializedMap = combineInitMaps(currentMap.initializedTopics(), enrichedTopicPartitionMap, false);
 
         // Fetch initializing info from state metadata.
-        Map<Uuid, Set<Integer>> finalInitializingMap = new HashMap<>(currentMap.initializingTopics());
+        Map<Uuid, InitMapValue> finalInitializingMap = new HashMap<>(currentMap.initializingTopics());
 
         // Remove any entries which are already initialized.
         for (Map.Entry<Uuid, Set<Integer>> entry : topicPartitionMap.entrySet()) {
             Uuid topicId = entry.getKey();
             if (finalInitializingMap.containsKey(topicId)) {
-                Set<Integer> partitions = finalInitializingMap.get(topicId);
+                Set<Integer> partitions = finalInitializingMap.get(topicId).partitions();
                 partitions.removeAll(entry.getValue());
                 if (partitions.isEmpty()) {
                     finalInitializingMap.remove(topicId);
@@ -4759,8 +4826,8 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(List.of(
             newShareGroupStatePartitionMetadataRecord(
                 group.groupId(),
-                attachTopicName(finalInitializingMap),
-                attachTopicName(finalInitializedMap),
+                finalInitializingMap,
+                finalInitializedMap,
                 attachTopicName(currentMap.deletingTopics())
             )),
             null
@@ -4784,19 +4851,19 @@ public class GroupMetadataManager {
             return new CoordinatorResult<>(List.of(), null);
         }
 
-        Map<Uuid, Set<Integer>> initializingTopics = info.initializingTopics();
-        Map<Uuid, Set<Integer>> finalInitializingTopics = new HashMap<>();
+        Map<Uuid, InitMapValue> initializingTopics = info.initializingTopics();
+        Map<Uuid, InitMapValue> finalInitializingTopics = new HashMap<>();
 
-        for (Map.Entry<Uuid, Set<Integer>> entry : initializingTopics.entrySet()) {
+        for (Map.Entry<Uuid, InitMapValue> entry : initializingTopics.entrySet()) {
             Uuid topicId = entry.getKey();
             // If topicId to clean is not present in topicPartitionMap map, retain it.
             if (!topicPartitionMap.containsKey(topicId)) {
                 finalInitializingTopics.put(entry.getKey(), entry.getValue());
             } else {
-                Set<Integer> partitions = new HashSet<>(entry.getValue());
+                Set<Integer> partitions = new HashSet<>(entry.getValue().partitions());
                 partitions.removeAll(topicPartitionMap.get(topicId));
                 if (!partitions.isEmpty()) {
-                    finalInitializingTopics.put(entry.getKey(), partitions);
+                    finalInitializingTopics.put(entry.getKey(), new InitMapValue(entry.getValue().name(), partitions, entry.getValue().timestamp()));
                 }
             }
         }
@@ -4805,8 +4872,8 @@ public class GroupMetadataManager {
             List.of(
                 newShareGroupStatePartitionMetadataRecord(
                     groupId,
-                    attachTopicName(finalInitializingTopics),
-                    attachTopicName(info.initializedTopics()),
+                    finalInitializingTopics,
+                    info.initializedTopics(),
                     attachTopicName(info.deletingTopics())
                 )
             ),
@@ -4825,14 +4892,15 @@ public class GroupMetadataManager {
         return Collections.unmodifiableMap(finalMap);
     }
 
-    private Map<Uuid, Map.Entry<String, Set<Integer>>> attachTopicName(Map<Uuid, Set<Integer>> initMap) {
+    private Map<Uuid, InitMapValue> attachInitValue(Map<Uuid, Set<Integer>> initMap) {
         TopicsImage topicsImage = metadataImage.topics();
-        Map<Uuid, Map.Entry<String, Set<Integer>>> finalMap = new HashMap<>();
+        Map<Uuid, InitMapValue> finalMap = new HashMap<>();
+        long timestamp = time.milliseconds();
         for (Map.Entry<Uuid, Set<Integer>> entry : initMap.entrySet()) {
             Uuid topicId = entry.getKey();
             TopicImage topicImage = topicsImage.getTopic(topicId);
             String topicName = (topicImage != null) ? topicImage.name() : "<UNKNOWN>";
-            finalMap.put(topicId, Map.entry(topicName, entry.getValue()));
+            finalMap.put(topicId, new InitMapValue(topicName, entry.getValue(), timestamp));
         }
         return Collections.unmodifiableMap(finalMap);
     }
@@ -4851,8 +4919,8 @@ public class GroupMetadataManager {
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
         if (currentMap != null) {
-            currentMap.initializedTopics().forEach((topicId, partitions) -> {
-                resultMap.put(topicId, new HashSet<>(partitions));
+            currentMap.initializedTopics().forEach((topicId, initMapValue) -> {
+                resultMap.put(topicId, new HashSet<>(initMapValue.partitions()));
             });
         }
 
@@ -5647,11 +5715,17 @@ public class GroupMetadataManager {
         } else {
             ShareGroupStatePartitionMetadataInfo info = new ShareGroupStatePartitionMetadataInfo(
                 value.initializingTopics().stream()
-                    .map(topicPartitionInfo -> Map.entry(topicPartitionInfo.topicId(), new HashSet<>(topicPartitionInfo.partitions())))
+                    .map(topicPartitionInfo -> Map.entry(
+                        topicPartitionInfo.topicId(),
+                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), topicPartitionInfo.createTimestamp())))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
+
                 value.initializedTopics().stream()
-                    .map(topicPartitionInfo -> Map.entry(topicPartitionInfo.topicId(), new HashSet<>(topicPartitionInfo.partitions())))
+                    .map(topicPartitionInfo -> Map.entry(
+                        topicPartitionInfo.topicId(),
+                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), topicPartitionInfo.createTimestamp())))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
+
                 value.deletingTopics().stream()
                     .map(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId)
                     .collect(Collectors.toSet())
@@ -7920,9 +7994,10 @@ public class GroupMetadataManager {
             return Optional.empty();
         }
 
-        Map<Uuid, Set<Integer>> deleteCandidates = mergeShareGroupInitMaps(
+        Map<Uuid, InitMapValue> deleteCandidates = combineInitMaps(
             shareGroupPartitionMetadata.get(shareGroupId).initializedTopics(),
-            shareGroupPartitionMetadata.get(shareGroupId).initializingTopics()
+            shareGroupPartitionMetadata.get(shareGroupId).initializingTopics(),
+            false
         );
 
         // Ideally the deleting should be empty - if it is not then it implies
@@ -7931,15 +8006,19 @@ public class GroupMetadataManager {
         // a retry for the same is possible. Since this is part of an admin operation
         // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
-        Map<Uuid, Set<Integer>> deletingTopics = shareGroupPartitionMetadata.get(shareGroupId).deletingTopics().stream()
-            .map(tid -> Map.entry(tid, metadataImage.topics().getTopic(tid).partitions().keySet()))
+        Map<Uuid, InitMapValue> deletingTopics = shareGroupPartitionMetadata.get(shareGroupId).deletingTopics().stream()
+            .map(tid -> {
+                TopicImage image = metadataImage.topics().getTopic(tid);
+                return Map.entry(tid, new InitMapValue(image.name(), image.partitions().keySet(), -1));
+            })
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         if (!deletingTopics.isEmpty()) {
             log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deletingTopics);
-            deleteCandidates = mergeShareGroupInitMaps(
+            deleteCandidates = combineInitMaps(
                 deleteCandidates,
-                deletingTopics
+                deletingTopics,
+                false
             );
         }
 
@@ -7949,10 +8028,10 @@ public class GroupMetadataManager {
 
         List<TopicData<PartitionIdData>> topicDataList = new ArrayList<>(deleteCandidates.size());
 
-        for (Map.Entry<Uuid, Set<Integer>> entry : deleteCandidates.entrySet()) {
+        for (Map.Entry<Uuid, InitMapValue> entry : deleteCandidates.entrySet()) {
             topicDataList.add(new TopicData<>(
                 entry.getKey(),
-                entry.getValue().stream()
+                entry.getValue().partitions().stream()
                     .map(PartitionFactory::newPartitionIdData)
                     .toList()
             ));
@@ -7992,7 +8071,6 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         List<DeleteShareGroupStateRequestData.DeleteStateData> deleteShareGroupStateRequestTopicsData = new ArrayList<>();
-        Map<Uuid, Set<Integer>> initializedTopics = new HashMap<>();
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
 
@@ -8000,7 +8078,10 @@ public class GroupMetadataManager {
             return deleteShareGroupStateRequestTopicsData;
         }
 
-        currentMap.initializedTopics().forEach((topicId, partitions) -> initializedTopics.put(topicId, new HashSet<>(partitions)));
+        Map<Uuid, InitMapValue> initializedTopics = new HashMap<>();
+        currentMap.initializedTopics().forEach((topicId, initValue) -> {
+            initializedTopics.put(topicId, new InitMapValue(initValue.name(), new HashSet<>(initValue.partitions()), initValue.timestamp()));
+        });
         Set<Uuid> deletingTopics = new HashSet<>(currentMap.deletingTopics());
 
         requestData.topics().forEach(topic -> {
@@ -8011,7 +8092,7 @@ public class GroupMetadataManager {
                 // share partitions are initialized for the group.
                 if (initializedTopics.containsKey(topicId)) {
                     List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                    initializedTopics.get(topicId).forEach(partition ->
+                    initializedTopics.get(topicId).partitions().forEach(partition ->
                         partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
                     deleteShareGroupStateRequestTopicsData.add(
                         new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -8052,8 +8133,8 @@ public class GroupMetadataManager {
         records.add(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                attachTopicName(currentMap.initializingTopics()),
-                attachTopicName(initializedTopics),
+                currentMap.initializingTopics(),
+                initializedTopics,
                 attachTopicName(deletingTopics)
             )
         );
@@ -8098,10 +8179,10 @@ public class GroupMetadataManager {
             // because the call setup of this method is such that the
             // persister call is automatically done by the BrokerMetadataPublisher
             // increasing efficiency and removing need of chained futures.
-            Map<Uuid, Set<Integer>> finalInitializing = new HashMap<>(metadata.initializingTopics());
+            Map<Uuid, InitMapValue> finalInitializing = new HashMap<>(metadata.initializingTopics());
             initializingDeletedCurrent.forEach(finalInitializing::remove);
 
-            Map<Uuid, Set<Integer>> finalInitialized = new HashMap<>(metadata.initializedTopics());
+            Map<Uuid, InitMapValue> finalInitialized = new HashMap<>(metadata.initializedTopics());
             initializedDeletedCurrent.forEach(finalInitialized::remove);
 
             Set<Uuid> deletingTopics = new HashSet<>(metadata.deletingTopics());
@@ -8109,8 +8190,8 @@ public class GroupMetadataManager {
 
             records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                attachTopicName(finalInitializing),
-                attachTopicName(finalInitialized),
+                finalInitializing,
+                finalInitialized,
                 attachTopicName(deletingTopics)
             ));
         });
@@ -8145,8 +8226,8 @@ public class GroupMetadataManager {
         records.add(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
-                attachTopicName(currentMap.initializingTopics()),
-                attachTopicName(currentMap.initializedTopics()),
+                currentMap.initializingTopics(),
+                currentMap.initializedTopics(),
                 attachTopicName(updatedDeletingTopics)
             )
         );

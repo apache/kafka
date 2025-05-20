@@ -333,7 +333,7 @@ public class GroupCoordinatorRecordHelpersTest {
             Map.of(),
             Map.of(
                 topicId1,
-                Map.entry(topicName1, partitions)
+                new GroupMetadataManager.InitMapValue(topicName1, partitions, 1)
             ),
             Map.of(
                 topicId2,
