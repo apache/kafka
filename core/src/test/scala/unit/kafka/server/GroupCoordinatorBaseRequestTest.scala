@@ -39,7 +39,7 @@ import java.util.stream.Collectors
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
+
 
 class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   private def brokers(): Seq[KafkaBroker] = cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).asScala.toSeq
@@ -919,7 +919,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
-  )(implicit classTag: ClassTag[T]): T = {
+  ): T = {
     IntegrationTestUtils.connectAndReceive[T](
       request,
       cluster.anyBrokerSocketServer(),
@@ -930,7 +930,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest,
     destination: Int
-  )(implicit classTag: ClassTag[T]): T = {
+  ): T = {
     IntegrationTestUtils.connectAndReceive[T](
       request,
       brokerSocketServer(destination),
