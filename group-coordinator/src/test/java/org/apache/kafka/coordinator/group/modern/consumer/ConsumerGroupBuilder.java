@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.image.MetadataImage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -71,7 +70,7 @@ public class ConsumerGroupBuilder {
         return this;
     }
 
-    public List<CoordinatorRecord> build(MetadataImage metadataImage) {
+    public List<CoordinatorRecord> build() {
         List<CoordinatorRecord> records = new ArrayList<>();
 
         // Add subscription records for members.
