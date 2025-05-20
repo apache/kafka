@@ -193,8 +193,8 @@ public class DelayedShareFetch extends DelayedOperation {
      * because records can be acquired for some partitions or due to MaxWaitMs timeout.
      * <p>
      * On operation timeout, onComplete is invoked, last try occurs to acquire partitions and read
-     * from log, if acquired. The fetch will only happen from local log and not tier log, on operation
-     * expiration.
+     * from log, if acquired. The fetch will only happen from local log and not remote storage, on
+     * operation expiration.
      */
     @Override
     public void onComplete() {
@@ -346,7 +346,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     releasePartitionLocks(topicPartitionData.keySet());
                 }
             } else {
-                log.trace("Can't acquire any partition in the share fetch request for group {}, member {}, " +
+                log.trace("Can't acquire any partitions in the share fetch request for group {}, member {}, " +
                         "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     sharePartitions.keySet());
             }
