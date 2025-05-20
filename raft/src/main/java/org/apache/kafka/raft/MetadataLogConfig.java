@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.server.config.ServerLogConfigs;
 
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -121,7 +120,7 @@ public class MetadataLogConfig {
     }
 
     public MetadataLogConfig(AbstractConfig config) {
-        this.logSegmentBytes = Objects.requireNonNullElseGet(config.getInt(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG), () -> config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG));
+        this.logSegmentBytes = config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG);
         this.logSegmentMillis = config.getLong(METADATA_LOG_SEGMENT_MILLIS_CONFIG);
         this.retentionMaxBytes = config.getLong(METADATA_MAX_RETENTION_BYTES_CONFIG);
         this.retentionMillis = config.getLong(METADATA_MAX_RETENTION_MILLIS_CONFIG);

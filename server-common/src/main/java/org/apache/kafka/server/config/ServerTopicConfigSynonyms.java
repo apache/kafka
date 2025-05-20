@@ -29,7 +29,6 @@ import java.util.stream.Collectors;
 
 public final class ServerTopicConfigSynonyms {
     public static final String LOG_PREFIX = "log.";
-    public static final String INTERNAL_PREFIX = "internal.";
     public static final String LOG_CLEANER_PREFIX = LOG_PREFIX + "cleaner.";
 
     /**
@@ -50,9 +49,6 @@ public final class ServerTopicConfigSynonyms {
      */
     public static final Map<String, List<ConfigSynonym>> ALL_TOPIC_CONFIG_SYNONYMS = Utils.mkMap(
         sameNameWithLogPrefix(TopicConfig.SEGMENT_BYTES_CONFIG),
-        // Due to the internal.segment.bytes is in storage module, thus we could not use the 
-        // LogConfig#INTERNAL_SEGMENT_BYTES_CONFIG directly. We need to use the string value instead.
-        sameNameWithInternalLogPrefix("internal.segment.bytes"),
         listWithLogPrefix(TopicConfig.SEGMENT_MS_CONFIG,
             new ConfigSynonym("roll.ms"),
             new ConfigSynonym("roll.hours", ConfigSynonym.HOURS_TO_MILLISECONDS)),
@@ -137,10 +133,6 @@ public final class ServerTopicConfigSynonyms {
             .map(s -> new ConfigSynonym(LOG_PREFIX + s.name(), s.converter()))
             .collect(Collectors.toList());
         return Utils.mkEntry(topicConfigName, synonymsWithPrefix);
-    }
-
-    private static Entry<String, List<ConfigSynonym>> sameNameWithInternalLogPrefix(String configName) {
-        return Utils.mkEntry(configName, List.of(new ConfigSynonym(INTERNAL_PREFIX + LOG_PREFIX + configName.replaceFirst(INTERNAL_PREFIX, ""))));
     }
 
     private static Entry<String, List<ConfigSynonym>> single(String topicConfigName, String brokerConfigName) {
