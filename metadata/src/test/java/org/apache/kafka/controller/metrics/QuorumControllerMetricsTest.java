@@ -41,7 +41,9 @@ public class QuorumControllerMetricsTest {
         try {
             try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(
                     Optional.of(registry),
-                    time)) {
+                    time,
+                    9000)) {
+                metrics.addTimeSinceLastHeartbeatMetric(1);
                 HashSet<String> expected = new HashSet<>(List.of(
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
@@ -53,7 +55,8 @@ public class QuorumControllerMetricsTest {
                     "kafka.controller:type=KafkaController,name=LastAppliedRecordTimestamp",
                     "kafka.controller:type=KafkaController,name=LastCommittedRecordOffset",
                     "kafka.controller:type=KafkaController,name=NewActiveControllersCount",
-                    "kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount"
+                    "kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount",
+                    "kafka.controller:type=KafkaController,name=TimeSinceLastHeartbeatReceivedMs,broker=1"
                 ));
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller", expected);
             }
@@ -68,7 +71,7 @@ public class QuorumControllerMetricsTest {
     public void testUpdateEventQueueTime() {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time)) {
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, 9000)) {
             metrics.updateEventQueueTime(1000);
             assertMetricHistogram(registry, metricName("ControllerEventManager", "EventQueueTimeMs"), 1, 1000);
         } finally {
@@ -80,7 +83,7 @@ public class QuorumControllerMetricsTest {
     public void testUpdateEventQueueProcessingTime() {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time)) {
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, 9000)) {
             metrics.updateEventQueueProcessingTime(1000);
             assertMetricHistogram(registry, metricName("ControllerEventManager", "EventQueueProcessingTimeMs"), 1, 1000);
         } finally {
@@ -93,7 +96,7 @@ public class QuorumControllerMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
         time.sleep(1000);
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time)) {
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, 9000)) {
             metrics.setLastAppliedRecordOffset(100);
             metrics.setLastAppliedRecordTimestamp(500);
             metrics.setLastCommittedRecordOffset(50);
@@ -163,6 +166,28 @@ public class QuorumControllerMetricsTest {
         }
     }
 
+    @Test
+    public void testTimeSinceLastHeartbeatReceivedMs() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        int brokerId = 1;
+        int sessionTimeoutMs = 9000;
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, sessionTimeoutMs)) {
+            metrics.addTimeSinceLastHeartbeatMetric(1);
+            int numMetrics = registry.allMetrics().size();
+            Gauge<Integer> timeSinceLastHeartbeatReceivedMs = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "TimeSinceLastHeartbeatReceivedMs", "broker=1"));
+            metrics.updateBrokerContactTime(brokerId);
+            time.sleep(1000);
+            assertEquals(1000, timeSinceLastHeartbeatReceivedMs.value());
+            time.sleep(100000);
+            assertEquals(sessionTimeoutMs, timeSinceLastHeartbeatReceivedMs.value());
+            metrics.removeTimeSinceLastHeartbeatMetrics();
+            assertEquals(numMetrics - 1, registry.allMetrics().size());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
     private static void assertMetricHistogram(MetricsRegistry registry, MetricName metricName, long count, double sum) {
         Histogram histogram = (Histogram) registry.allMetrics().get(metricName);
 
@@ -173,5 +198,10 @@ public class QuorumControllerMetricsTest {
     private static MetricName metricName(String type, String name) {
         String mBeanName = String.format("kafka.controller:type=%s,name=%s", type, name);
         return new MetricName("kafka.controller", type, name, null, mBeanName);
+    }
+
+    private static MetricName metricName(String type, String name, String scope) {
+        String mBeanName = String.format("kafka.controller:type=%s,name=%s,%s", type, name, scope);
+        return new MetricName("kafka.controller", type, name, scope, mBeanName);
     }
 }

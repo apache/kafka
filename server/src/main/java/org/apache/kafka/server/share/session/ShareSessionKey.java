@@ -30,6 +30,10 @@ public class ShareSessionKey {
         this.memberId = Objects.requireNonNull(memberId);
     }
 
+    public String groupId() {
+        return groupId;
+    }
+
     public Uuid memberId() {
         return memberId;
     }
