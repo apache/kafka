@@ -195,9 +195,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   /**
    * Returns true if any quotas are enabled for this quota manager. This is used
    * to determine if quota related metrics should be created.
-   * Note: If any quotas (static defaults, dynamic defaults or quota overrides) have
-   * been configured for this broker at any time for this quota type, quotasEnabled will
-   * return true until the next broker restart, even if all quotas are subsequently deleted.
    */
   def quotasEnabled: Boolean = quotaTypesEnabled != QuotaTypes.NoQuotas
 
@@ -573,6 +570,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     initiateShutdown()
     throttledChannelReaper.awaitShutdown()
   }
+
+  // Visible for testing
+  def getQuotaTypesEnabled: Int = quotaTypesEnabled
 
   private class DefaultQuotaCallback extends ClientQuotaCallback {
     private val overriddenQuotas = new ConcurrentHashMap[ClientQuotaEntity, Quota]()

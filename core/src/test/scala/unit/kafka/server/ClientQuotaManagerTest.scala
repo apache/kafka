@@ -501,6 +501,76 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
   }
 
+  @Test
+  def testQuotaTypesEnabledUpdatesOnAddAndRemove(): Unit = {
+    val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.CONTROLLER_MUTATION, time, "")
+    try {
+      // Initially, quotaTypesEnabled should be QuotaTypes.NoQuotas and quotasEnabled should be false
+      assertEquals(QuotaTypes.NoQuotas, clientQuotaManager.getQuotaTypesEnabled)
+      assertFalse(clientQuotaManager.quotasEnabled)
+
+      // Add a client-id quota and quotaTypesEnabled should be QuotaTypes.ClientIdQuotaEnabled
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
+        Some(new Quota(5, true))
+      )
+      assertEquals(QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Add a user quota and quotaTypesEnabled should be QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        None,
+        Some(new Quota(5, true))
+      )
+      assertEquals(QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Add a user-client-id quota and quotaTypesEnabled should
+      // be QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserQuotaEnabled
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userB")),
+        Some(ClientQuotaManager.ClientIdEntity("client2")),
+        Some(new Quota(10, true))
+      )
+      assertEquals(
+        QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserQuotaEnabled,
+        clientQuotaManager.getQuotaTypesEnabled
+      )
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Remove the user quota and quotaTypesEnabled should be QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        None,
+        None
+      )
+      assertEquals(QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Remove the client-id quota and quotaTypesEnabled should be QuotaTypes.UserClientIdQuotaEnabled
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
+        None
+      )
+      assertEquals(QuotaTypes.UserClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Remove the user-client-id quota and quotaTypesEnabled should be QuotaTypes.NoQuotas and quotasEnabled should be false
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userB")),
+        Some(ClientQuotaManager.ClientIdEntity("client2")),
+        None
+      )
+      assertEquals(QuotaTypes.NoQuotas, clientQuotaManager.getQuotaTypesEnabled)
+      assertFalse(clientQuotaManager.quotasEnabled)
+    } finally {
+      clientQuotaManager.shutdown()
+    }
+  }
+
   private case class UserClient(
     user: String,
     clientId: String,
