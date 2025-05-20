@@ -2766,28 +2766,27 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      *
      * @param currentTimeMs the current time
      * @param destination the node receiving the request
-     * @param requestSupplier the function that creates the request
-     * @param api the type of request to maybe send
+     * @param requestSupplier the function supplier that creates the request
      * @return the first element in the pair indicates if the request was sent; the second element
      *         in the pair indicates the time to wait before retrying.
      */
     private RequestSendResult maybeSendRequest(
         long currentTimeMs,
         Node destination,
-        Supplier<ApiMessage> requestSupplier,
-        ApiKeys api
+        RequestSupplier requestSupplier
     )  {
         var requestSent = false;
+        final var apiKey = requestSupplier.apiKey();
 
-        if (requestManager.isBackingOff(destination, currentTimeMs, api)) {
-            long remainingBackoffMs = requestManager.remainingBackoffMs(destination, currentTimeMs, api);
+        if (requestManager.isBackingOff(destination, currentTimeMs, apiKey)) {
+            long remainingBackoffMs = requestManager.remainingBackoffMs(destination, currentTimeMs, apiKey);
             logger.debug("Connection for {} is backing off for {} ms", destination, remainingBackoffMs);
             return RequestSendResult.of(requestSent, remainingBackoffMs);
         }
 
-        if (requestManager.isReady(destination, currentTimeMs, api)) {
+        if (requestManager.isReady(destination, currentTimeMs, apiKey)) {
             int correlationId = channel.newCorrelationId();
-            final var request = requestSupplier.get();
+            final var request = requestSupplier.request();
 
             RaftRequest.Outbound requestMessage = new RaftRequest.Outbound(
                 correlationId,
@@ -2799,7 +2798,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             requestMessage.completion.whenComplete((response, exception) -> {
                 if (exception != null) {
                     Errors error = Errors.forException(exception);
-                    ApiMessage errorResponse = RaftUtil.errorResponse(api, error);
+                    ApiMessage errorResponse = RaftUtil.errorResponse(apiKey, error);
 
                     response = new RaftResponse.Inbound(
                         correlationId,
@@ -2811,7 +2810,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 messageQueue.add(response);
             });
 
-            requestManager.onRequestSent(destination, correlationId, currentTimeMs, api);
+            requestManager.onRequestSent(destination, correlationId, currentTimeMs, apiKey);
             channel.send(requestMessage);
             requestSent = true;
             logger.trace("Sent outbound request: {}", requestMessage);
@@ -2819,7 +2818,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         return RequestSendResult.of(
             requestSent,
-            requestManager.remainingRequestTimeMs(destination, currentTimeMs, api)
+            requestManager.remainingRequestTimeMs(destination, currentTimeMs, apiKey)
         );
     }
 
@@ -2838,16 +2837,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private long maybeSendRequests(
         long currentTimeMs,
         Set<Node> destinations,
-        Supplier<ApiMessage> requestSupplier,
-        ApiKeys requestType
+        RequestSupplier requestSupplier
     ) {
         long minBackoffMs = Long.MAX_VALUE;
         for (Node destination : destinations) {
             long backoffMs = maybeSendRequest(
                 currentTimeMs,
                 destination,
-                requestSupplier,
-                requestType
+                requestSupplier
             ).timeToWaitMs();
             if (backoffMs < minBackoffMs) {
                 minBackoffMs = backoffMs;
@@ -2868,8 +2865,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             long backoffMs = maybeSendRequest(
                 currentTimeMs,
                 destinationSupplier.apply(voter.id()),
-                () -> requestSupplier.apply(voter),
-                requestType
+                RequestSupplier.of(() -> requestSupplier.apply(voter), requestType)
             ).timeToWaitMs();
             minBackoffMs = Math.min(minBackoffMs, backoffMs);
         }
@@ -2925,8 +2921,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             node -> maybeSendRequest(
                 currentTimeMs,
                 node,
-                this::buildFetchRequest,
-                ApiKeys.FETCH
+                RequestSupplier.of(this::buildFetchRequest, ApiKeys.FETCH)
             ).timeToWaitMs()
         ).orElseGet(() -> requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs));
     }
@@ -3068,8 +3063,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             partitionState
                 .lastVoterSet()
                 .voterNodes(state.unackedVoters().stream(), channel.listenerName()),
-            () -> buildEndQuorumEpochRequest(state),
-            ApiKeys.END_QUORUM_EPOCH
+            RequestSupplier.of(() -> buildEndQuorumEpochRequest(state), ApiKeys.END_QUORUM_EPOCH)
         );
 
         GracefulShutdown shutdown = this.shutdown.get();
@@ -3311,8 +3305,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         } else if (requestManager.isBackingOff(leaderNode, currentTimeMs, ApiKeys.FETCH) ||
             requestManager.isBackingOff(leaderNode, currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
             backoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
-        } else if (!(requestManager.hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH) ||
-            requestManager.hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH_SNAPSHOT))) {
+        } else if (!requestManager.hasAnyInflightRequest(currentTimeMs,
+            Set.of(ApiKeys.FETCH, ApiKeys.FETCH_SNAPSHOT))) {
             backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
         } else {
             backoffMs = requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs);
@@ -3338,8 +3332,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
-            requestSupplier,
-            requestType
+            RequestSupplier.of(requestSupplier, requestType)
         ).timeToWaitMs();
     }
 
@@ -3357,8 +3350,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
-            this::buildUpdateVoterRequest,
-            ApiKeys.UPDATE_RAFT_VOTER
+            RequestSupplier.of(this::buildUpdateVoterRequest, ApiKeys.UPDATE_RAFT_VOTER)
         );
     }
 
@@ -3769,6 +3761,24 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private boolean isInitialized() {
         return partitionState != null && quorum != null && requestManager != null && kafkaRaftMetrics != null;
+    }
+
+    private record RequestSupplier(Supplier<ApiMessage> supplier, ApiKeys apiKey) {
+        private static RequestSupplier of(
+            Supplier<ApiMessage> supplier,
+            ApiKeys apiKey
+        ) {
+            return new RequestSupplier(supplier, apiKey);
+        }
+
+        private ApiMessage request() {
+            ApiMessage request = supplier.get();
+            if (request.apiKey() != apiKey.id) {
+                throw new IllegalStateException("Request type mismatch: expected " + apiKey +
+                    " but got " + request.apiKey());
+            }
+            return request;
+        }
     }
 
     private class GracefulShutdown {
