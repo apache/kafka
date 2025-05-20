@@ -42,6 +42,7 @@ import org.mockito.Mockito.mock
 import java.io.File
 import java.util.{Map => JMap}
 import scala.collection.Map
+import scala.jdk.CollectionConverters._
 
 class LocalLeaderEndPointTest extends Logging {
 

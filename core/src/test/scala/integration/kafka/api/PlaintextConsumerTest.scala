@@ -14,7 +14,6 @@ package kafka.api
 
 import kafka.api.BaseConsumerTest.{DeserializerImpl, SerializerImpl}
 
-import java.lang.{Long => JLong}
 import java.time.Duration
 import java.util
 import java.util.{Locale, Optional, Properties}
@@ -885,7 +884,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNotNull(result2)
     assertEquals(0, result2.size())
 
-    val result3 = consumer.offsetsForTimes(Map[TopicPartition, JLong]((tp, 0)).asJava, Duration.ZERO)
+    val result3 = consumer.offsetsForTimes(java.util.Map.of(tp, 0), Duration.ZERO)
     assertNotNull(result3)
     assertEquals(1, result3.size())
     assertNull(result3.get(tp))
