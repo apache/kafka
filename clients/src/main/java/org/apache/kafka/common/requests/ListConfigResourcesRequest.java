@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListConfigResourcesRequestData;
 import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -28,24 +29,22 @@ import java.util.Set;
 public class ListConfigResourcesRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListConfigResourcesRequest> {
         public final ListConfigResourcesRequestData data;
-        private final boolean fallbackToV0;
 
         public Builder(ListConfigResourcesRequestData data) {
             super(ApiKeys.LIST_CONFIG_RESOURCES);
             this.data = data;
-            this.fallbackToV0 = false;
-        }
-
-        public Builder(ListConfigResourcesRequestData data, boolean fallbackToV0) {
-            super(ApiKeys.LIST_CONFIG_RESOURCES);
-            this.data = data;
-            this.fallbackToV0 = fallbackToV0;
         }
 
         @Override
         public ListConfigResourcesRequest build(short version) {
-            if (fallbackToV0) {
-                return new ListConfigResourcesRequest(data, (short) 0);
+            if (version == 0) {
+                // The v0 only supports CLIENT_METRICS resource type.
+                // Empty resource types means all supported resource types. In v0, it means CLIENT_METRICS, so it's acceptable.
+                if ((data.resourceTypes().size() == 1 && !data.resourceTypes().contains(ConfigResource.Type.CLIENT_METRICS.id())) ||
+                    data.resourceTypes().size() >= 2) {
+                    throw new UnsupportedVersionException("The broker only supports ListConfigResources " +
+                        "v0, but we need v1 or newer to request config resources other than CLIENT_METRICS.");
+                }
             }
             return new ListConfigResourcesRequest(data, version);
         }
