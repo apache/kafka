@@ -2689,14 +2689,25 @@ public class GroupMetadataManager {
         Map<Uuid, InitMapValue> topicPartitionChangeMap = new HashMap<>();
         ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
 
-        Map<Uuid, InitMapValue> alreadyInitialized = info == null ? new HashMap<>() : combineInitMaps(info.initializedTopics(), info.initializingTopics(), true);
+        // Fresh initializing only
+        long curTimestamp = time.milliseconds();
+        Map<Uuid, InitMapValue> alreadyInitialized = info == null ? new HashMap<>() :
+            combineInitMaps(
+                info.initializedTopics(),
+                info.initializingTopics().entrySet().stream()
+                    .filter(entry -> curTimestamp - entry.getValue().timestamp() < 30_000)
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
+            );
 
         subscriptionMetadata.forEach((topicName, topicMetadata) -> {
             Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicMetadata.id()) ? alreadyInitialized.get(topicMetadata.id()).partitions() : Set.of();
             if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.numPartitions()) {
                 Set<Integer> partitionSet = IntStream.range(0, topicMetadata.numPartitions()).boxed().collect(Collectors.toSet());
                 partitionSet.removeAll(alreadyInitializedPartSet);
-                topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> new InitMapValue(topicMetadata.name(), partitionSet, time.milliseconds()));
+                // alreadyInitialized contains all initialized topics and less than delta seconds old initializing topics
+                // which means we are putting subscribed topics which are unseen or initializing for more than delta seconds. But, we
+                // are also updating the timestamp here which means, old initializing will not be included repeatedly.
+                topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> new InitMapValue(topicMetadata.name(), partitionSet, curTimestamp));
             }
         });
         return topicPartitionChangeMap;
@@ -2757,7 +2768,7 @@ public class GroupMetadataManager {
         }
 
         // We must combine the existing information in the record with the topicPartitionMap argument.
-        Map<Uuid, InitMapValue> finalInitializingMap = combineWithTimestamp(currentMap.initializingTopics(), topicPartitionMap);
+        Map<Uuid, InitMapValue> finalInitializingMap = combineInitMaps(currentMap.initializingTopics(), topicPartitionMap);
 
         // If any initializing topics are also present in the deleting state
         // we should remove them from deleting.
@@ -2782,55 +2793,27 @@ public class GroupMetadataManager {
 
     Map<Uuid, InitMapValue> combineInitMaps(
         Map<Uuid, InitMapValue> initialized,
-        Map<Uuid, InitMapValue> initializing,
-        boolean newInitializingOnly
+        Map<Uuid, InitMapValue> initializing
     ) {
         Map<Uuid, InitMapValue> finalInitMap = new HashMap<>();
         Set<Uuid> combinedTopicIdSet = new HashSet<>(initialized.keySet());
 
-        Set<Uuid> filteredInitializing = newInitializingOnly ? initializing.entrySet().stream()
-            .filter(entry -> time.milliseconds() - entry.getValue().timestamp() < 30_000)
-            .map(Map.Entry::getKey)
-            .collect(Collectors.toSet()) : initializing.keySet();
+        Set<Uuid> initializingSet = initializing.keySet();
 
-        combinedTopicIdSet.addAll(filteredInitializing);
+        combinedTopicIdSet.addAll(initializingSet);
 
         for (Uuid topicId : combinedTopicIdSet) {
             Set<Integer> initializedPartitions = initialized.containsKey(topicId) ? initialized.get(topicId).partitions() : new HashSet<>();
             long timestamp = initialized.containsKey(topicId) ? initialized.get(topicId).timestamp() : -1;
             String name = initialized.containsKey(topicId) ? initialized.get(topicId).name() : "UNKNOWN";
+
             Set<Integer> finalPartitions = new HashSet<>(initializedPartitions);
-            if (filteredInitializing.contains(topicId)) {
+            if (initializingSet.contains(topicId)) {
                 finalPartitions.addAll(initializing.get(topicId).partitions());
                 timestamp = initializing.get(topicId).timestamp();
                 name = initializing.get(topicId).name();
             }
             finalInitMap.putIfAbsent(topicId, new InitMapValue(name, finalPartitions, timestamp));
-        }
-
-        return finalInitMap;
-    }
-
-    Map<Uuid, InitMapValue> combineWithTimestamp(
-        Map<Uuid, InitMapValue> existingShareGroupInitMap,
-        Map<Uuid, InitMapValue> newShareGroupInitMap
-    ) {
-        Map<Uuid, InitMapValue> finalInitMap = new HashMap<>();
-        Set<Uuid> combinedTopicIdSet = new HashSet<>(existingShareGroupInitMap.keySet());
-        combinedTopicIdSet.addAll(newShareGroupInitMap.keySet());
-        long curTimestamp = time.milliseconds();
-
-        for (Uuid topicId : combinedTopicIdSet) {
-            Set<Integer> existingPartitions = existingShareGroupInitMap.containsKey(topicId) ? existingShareGroupInitMap.get(topicId).partitions() : new HashSet<>();
-            long timestamp = existingShareGroupInitMap.containsKey(topicId) ? existingShareGroupInitMap.get(topicId).timestamp() : curTimestamp;
-            String name = existingShareGroupInitMap.containsKey(topicId) ? existingShareGroupInitMap.get(topicId).name() : "UNKNOWN";
-
-            Set<Integer> partitions = new HashSet<>(existingPartitions);
-            if (newShareGroupInitMap.containsKey(topicId)) {
-                partitions.addAll(newShareGroupInitMap.get(topicId).partitions());
-                name = newShareGroupInitMap.get(topicId).name();
-            }
-            finalInitMap.putIfAbsent(topicId, new InitMapValue(name, partitions, timestamp));
         }
 
         return finalInitMap;
@@ -4806,7 +4789,7 @@ public class GroupMetadataManager {
 
         // We must combine the existing information in the record with the topicPartitionMap argument so that the final
         // record has up-to-date information.
-        Map<Uuid, InitMapValue> finalInitializedMap = combineInitMaps(currentMap.initializedTopics(), enrichedTopicPartitionMap, false);
+        Map<Uuid, InitMapValue> finalInitializedMap = combineInitMaps(currentMap.initializedTopics(), enrichedTopicPartitionMap);
 
         // Fetch initializing info from state metadata.
         Map<Uuid, InitMapValue> finalInitializingMap = new HashMap<>(currentMap.initializingTopics());
@@ -7996,8 +7979,7 @@ public class GroupMetadataManager {
 
         Map<Uuid, InitMapValue> deleteCandidates = combineInitMaps(
             shareGroupPartitionMetadata.get(shareGroupId).initializedTopics(),
-            shareGroupPartitionMetadata.get(shareGroupId).initializingTopics(),
-            false
+            shareGroupPartitionMetadata.get(shareGroupId).initializingTopics()
         );
 
         // Ideally the deleting should be empty - if it is not then it implies
@@ -8015,11 +7997,7 @@ public class GroupMetadataManager {
 
         if (!deletingTopics.isEmpty()) {
             log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deletingTopics);
-            deleteCandidates = combineInitMaps(
-                deleteCandidates,
-                deletingTopics,
-                false
-            );
+            deleteCandidates = combineInitMaps(deleteCandidates, deletingTopics);
         }
 
         if (deleteCandidates.isEmpty()) {
