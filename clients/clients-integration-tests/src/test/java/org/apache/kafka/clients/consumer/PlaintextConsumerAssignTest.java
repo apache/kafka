@@ -34,7 +34,6 @@ import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.METADATA_MAX_AGE_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
@@ -255,7 +254,7 @@ public class PlaintextConsumerAssignTest {
         int offset = 10;
         long startingTimestamp = System.currentTimeMillis();
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1", METADATA_MAX_AGE_CONFIG, "10"))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp, -1);
             consumer.assign(List.of(tp));
             consumer.commitSync(Map.of(tp, new OffsetAndMetadata(offset)));
@@ -263,7 +262,7 @@ public class PlaintextConsumerAssignTest {
         }
 
         // We should see the committed offsets from another consumer
-        try (Consumer<byte[], byte[]> anotherConsumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1", METADATA_MAX_AGE_CONFIG, "10"))) {
+        try (Consumer<byte[], byte[]> anotherConsumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
             assertEquals(offset, anotherConsumer.committed(Set.of(tp)).get(tp).offset());
             anotherConsumer.assign(List.of(tp));
             ClientsTestUtils.consumeAndVerifyRecords(anotherConsumer, tp, numRecords - offset, offset, offset, startingTimestamp + offset);
@@ -284,7 +283,7 @@ public class PlaintextConsumerAssignTest {
         int numRecords = 100;
         long startingTimestamp = System.currentTimeMillis();
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1", METADATA_MAX_AGE_CONFIG, "10"))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp, -1);
             consumer.assign(List.of(tp));
 
