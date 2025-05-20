@@ -55,7 +55,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -123,7 +122,7 @@ public class KRaftMetadataCache implements MetadataCache {
      * @param errorUnavailableEndpoints Whether to filter the unavailable endpoints. This field is to support v0 MetadataResponse.
      * @param errorUnavailableListeners Whether to return LISTENER_NOT_FOUND or LEADER_NOT_AVAILABLE.
      */
-    private List<MetadataResponsePartition> getPartitionMetadata(
+    private List<MetadataResponsePartition> partitionMetadata(
         MetadataImage image,
         String topicName,
         ListenerName listenerName,
@@ -190,7 +189,7 @@ public class KRaftMetadataCache implements MetadataCache {
      * @return                            A collection of topic partition metadata and next partition index (-1 means
      *                                    no next partition).
      */
-    private Entry<Optional<List<DescribeTopicPartitionsResponsePartition>>, Integer> getPartitionMetadataForDescribeTopicResponse(
+    private Entry<Optional<List<DescribeTopicPartitionsResponsePartition>>, Integer> partitionMetadataForDescribeTopicResponse(
         MetadataImage image,
         String topicName,
         ListenerName listenerName,
@@ -264,7 +263,7 @@ public class KRaftMetadataCache implements MetadataCache {
     ) {
         MetadataImage image = currentImage;
         return topics.stream().flatMap(topic -> {
-            List<MetadataResponsePartition> partitions = getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners);
+            List<MetadataResponsePartition> partitions = partitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners);
             if (partitions.isEmpty()) return Stream.empty();
             return Stream.of(new MetadataResponseTopic()
                 .setErrorCode(Errors.NONE.code())
@@ -289,11 +288,11 @@ public class KRaftMetadataCache implements MetadataCache {
         while (topics.hasNext()) {
             String topicName = topics.next();
             if (remaining.get() > 0) {
-                Entry<Optional<List<DescribeTopicPartitionsResponsePartition>>, Integer> partitionResponseEntry = getPartitionMetadataForDescribeTopicResponse(image, topicName, listenerName, topicPartitionStartIndex.apply(topicName), remaining.get());
+                Entry<Optional<List<DescribeTopicPartitionsResponsePartition>>, Integer> partitionResponseEntry = partitionMetadataForDescribeTopicResponse(image, topicName, listenerName, topicPartitionStartIndex.apply(topicName), remaining.get());
                 Optional<List<DescribeTopicPartitionsResponsePartition>> partitionResponse = partitionResponseEntry.getKey();
                 int nextPartition = partitionResponseEntry.getValue();
-                AtomicBoolean breakLoop = new AtomicBoolean(false);
-                partitionResponse.ifPresent(partitions -> {
+                if (partitionResponse.isPresent()) {
+                    List<DescribeTopicPartitionsResponsePartition> partitions = partitionResponse.get();
                     DescribeTopicPartitionsResponseTopic response = new DescribeTopicPartitionsResponseTopic()
                         .setErrorCode(Errors.NONE.code())
                         .setName(topicName)
@@ -304,16 +303,11 @@ public class KRaftMetadataCache implements MetadataCache {
 
                     if (nextPartition != -1) {
                         result.setNextCursor(new Cursor().setTopicName(topicName).setPartitionIndex(nextPartition));
-                        breakLoop.set(true);
+                        break;
+                    } else {
+                        remaining.addAndGet(-partitions.size());
                     }
-                    remaining.addAndGet(-partitions.size());
-                });
-
-                if (breakLoop.get()) {
-                    break;
-                }
-
-                if (!ignoreTopicsWithExceptions && partitionResponse.isEmpty()) {
+                } else if (!ignoreTopicsWithExceptions) {
                     Errors error;
                     try {
                         Topic.validate(topicName);
