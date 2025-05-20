@@ -1017,18 +1017,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * If replica is candidate, it will start backing off.
      */
     private void maybeHandleElectionLoss(NomineeState state, long currentTimeMs) {
-        if (state instanceof CandidateState candidate) {
-            if (candidate.epochElection().isVoteRejected() && !candidate.isBackingOff()) {
-                logger.info(
-                    "Insufficient remaining votes to become leader. Candidate will wait the remaining election " +
-                        "timeout ({}) before transitioning back to Prospective. Current epoch election state is {}.",
-                    candidate.remainingElectionTimeMs(currentTimeMs),
-                    candidate.epochElection()
-                );
-                // Mark that the candidate is now backing off. After election timeout expires the candidate will
-                // transition back to prospective
-                candidate.startBackingOff();
-            }
+        if (state instanceof CandidateState candidate && candidate.epochElection().isVoteRejected()) {
+            logger.info(
+                "Insufficient remaining votes to become leader. Candidate will wait the remaining election " +
+                    "timeout ({}) before transitioning back to Prospective. Current epoch election state is {}.",
+                candidate.remainingElectionTimeMs(currentTimeMs),
+                candidate.epochElection()
+            );
         } else if (state instanceof ProspectiveState prospective) {
             if (prospective.epochElection().isVoteRejected()) {
                 logger.info(
@@ -3143,7 +3138,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logger.info("Election was not granted, transitioning to prospective");
             transitionToProspective(currentTimeMs);
             return 0L;
-        } else if (state.isBackingOff()) {
+        } else if (state.epochElection().isVoteRejected()) {
             return state.remainingElectionTimeMs(currentTimeMs);
         } else {
             long minVoteRequestBackoffMs = maybeSendVoteRequests(state, currentTimeMs);

@@ -1792,7 +1792,7 @@ class KafkaRaftClientTest {
             context.electionTimeoutMs() + jitter,
             candidate.remainingElectionTimeMs(context.time.milliseconds())
         );
-        assertFalse(candidate.isBackingOff());
+        assertFalse(candidate.epochElection().isVoteRejected());
 
         // Quorum size is two. If the other member rejects, then the local replica will lose the election.
         RaftRequest.Outbound request = context.assertSentVoteRequest(epoch, 0, 0L, 1);
@@ -1803,7 +1803,7 @@ class KafkaRaftClientTest {
         );
 
         context.client.poll();
-        assertTrue(candidate.isBackingOff());
+        assertTrue(candidate.epochElection().isVoteRejected());
 
         // Election is lost, but local replica should still remember that it has voted
         context.assertVotedCandidate(epoch, localId);
@@ -1820,7 +1820,7 @@ class KafkaRaftClientTest {
         assertTrue(context.client.quorum().isProspective());
         ProspectiveState prospective = context.client.quorum().prospectiveStateOrThrow();
         context.pollUntilRequest();
-        request = context.assertSentPreVoteRequest(epoch, 0, 0L, 1);
+        context.assertSentPreVoteRequest(epoch, 0, 0L, 1);
         assertEquals(
             context.electionTimeoutMs() + jitter,
             prospective.remainingElectionTimeMs(context.time.milliseconds())
@@ -1852,7 +1852,7 @@ class KafkaRaftClientTest {
             context.electionTimeoutMs() + jitter,
             candidate.remainingElectionTimeMs(context.time.milliseconds())
         );
-        assertFalse(candidate.isBackingOff());
+        assertFalse(candidate.epochElection().isVoteRejected());
 
         // If election times out, replica transition to prospective without any additional backoff
         context.time.sleep(candidate.remainingElectionTimeMs(context.time.milliseconds()));

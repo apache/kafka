@@ -34,10 +34,8 @@ public class CandidateState implements NomineeState {
     private final Optional<LogOffsetMetadata> highWatermark;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
-    private final Timer backoffTimer;
     private final Logger log;
 
-    private boolean isBackingOff;
     /**
      * The lifetime of a candidate state is the following.
      *
@@ -73,18 +71,10 @@ public class CandidateState implements NomineeState {
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
-        this.backoffTimer = time.timer(0);
         this.log = logContext.logger(CandidateState.class);
 
         this.epochElection = new EpochElection(voters.voterKeys());
         epochElection.recordVote(localId, true);
-    }
-
-    /**
-     * Check if the candidate is backing off before transitioning back to prospective state
-     */
-    public boolean isBackingOff() {
-        return isBackingOff;
     }
 
     @Override
@@ -108,13 +98,6 @@ public class CandidateState implements NomineeState {
                 " which previously granted our request");
         }
         return epochElection().recordVote(remoteNodeId, false);
-    }
-
-    /**
-     * Record the current election has failed since we've received sufficient rejecting voters
-     */
-    public void startBackingOff() {
-        this.isBackingOff = true;
     }
 
     @Override
