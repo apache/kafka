@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.MetadataImage;
 
 import java.util.ArrayList;
@@ -35,7 +34,6 @@ public class ConsumerGroupBuilder {
     private int assignmentEpoch;
     private final Map<String, ConsumerGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
-    private Map<String, TopicMetadata> subscriptionMetadata = Map.of();
     private long metadataHash = 0L;
     private final Map<String, ResolvedRegularExpression> resolvedRegularExpressions = new HashMap<>();
 
@@ -55,11 +53,6 @@ public class ConsumerGroupBuilder {
         ResolvedRegularExpression resolvedRegularExpression
     ) {
         this.resolvedRegularExpressions.put(regex, resolvedRegularExpression);
-        return this;
-    }
-
-    public ConsumerGroupBuilder withSubscriptionMetadata(Map<String, TopicMetadata> subscriptionMetadata) {
-        this.subscriptionMetadata = subscriptionMetadata;
         return this;
     }
 
@@ -90,10 +83,6 @@ public class ConsumerGroupBuilder {
         resolvedRegularExpressions.forEach((regex, resolvedRegularExpression) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(groupId, regex, resolvedRegularExpression))
         );
-
-        if (!subscriptionMetadata.isEmpty()) {
-            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
-        }
 
         // Add group epoch record.
         records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, metadataHash));

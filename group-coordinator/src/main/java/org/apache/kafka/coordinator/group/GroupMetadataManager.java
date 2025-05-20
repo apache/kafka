@@ -2237,6 +2237,11 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         SubscriptionType subscriptionType = group.subscriptionType();
 
+        if (group.addSubscriptionMetadataTombstoneRecord()) {
+            records.add(newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId));
+            group.setAddSubscriptionMetadataTombstoneRecord(false);
+        }
+
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
@@ -3606,17 +3611,12 @@ public class GroupMetadataManager {
             numMembers
         );
 
-        System.out.println("groupMetadataHash: " + groupMetadataHash + ", group.metadataHash(): " + group.metadataHash());
         if (groupMetadataHash != group.metadataHash()) {
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Computed new metadata hash: {}.",
                     groupId, groupMetadataHash);
             }
             bumpGroupEpoch = true;
-            if (group.addSubscriptionMetadataTombstoneRecord()) {
-                records.add(newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId));
-                group.setAddSubscriptionMetadataTombstoneRecord(false);
-            }
         }
 
         if (bumpGroupEpoch) {
@@ -4930,6 +4930,8 @@ public class GroupMetadataManager {
             consumerGroup.removeMember(memberId);
         }
 
+        System.out.println("oldSubscribedTopicNames: " + oldSubscribedTopicNames);
+        System.out.println("subscribedTopicNames: " + consumerGroup.subscribedTopicNames().keySet());
         updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames().keySet());
     }
 
@@ -4968,7 +4970,11 @@ public class GroupMetadataManager {
     ) {
         groupsByTopics.computeIfPresent(topicName, (__, groupIds) -> {
             groupIds.remove(groupId);
-            return groupIds.isEmpty() ? null : groupIds;
+            if (groupIds.isEmpty()) {
+                topicHashCache.remove(topicName);
+                return null;
+            }
+            return groupIds;
         });
     }
 
@@ -5073,11 +5079,9 @@ public class GroupMetadataManager {
             return;
         }
 
-        if (value != null) {
-            // Add subscription metadata tombstone record in the next consumer group heartbeat,
-            // because the subscription metadata is replaced by ConsumerGroupMetadataValue in 4.1.
-            group.setAddSubscriptionMetadataTombstoneRecord(true);
-        }
+        // If value is not null, add subscription metadata tombstone record in the next consumer group heartbeat,
+        // because the subscription metadata is replaced by metadata hash in ConsumerGroupMetadataValue.
+        group.setAddSubscriptionMetadataTombstoneRecord(value != null);
     }
 
     /**
@@ -8281,6 +8285,10 @@ public class GroupMetadataManager {
         return Collections.unmodifiableSet(this.groups.keySet());
     }
 
+    // Visible for testing
+    Map<String, Long> topicHashCache() {
+        return Collections.unmodifiableMap(this.topicHashCache);
+    }
 
     /**
      * Get the session timeout of the provided consumer group.
