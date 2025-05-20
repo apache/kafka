@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -50,6 +51,15 @@ public class ClientsTestUtils {
         }, 60000, "Timed out before consuming expected " + numRecords + " records.");
 
         return records;
+    }
+
+    public static void pollUntilTrue(Consumer<byte[], byte[]> consumer,
+                                     Supplier<Boolean> testCondition,
+                                     long waitTimeMs, String msg) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(100));
+            return testCondition.get();
+        }, waitTimeMs, msg);
     }
 
     public static void consumeAndVerifyRecords(
