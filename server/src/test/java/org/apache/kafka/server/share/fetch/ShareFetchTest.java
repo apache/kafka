@@ -19,7 +19,14 @@ package org.apache.kafka.server.share.fetch;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
@@ -27,12 +34,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
-import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.orderedMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -60,7 +68,7 @@ public class ShareFetchTest {
     public void testErrorInAllPartitions() {
         TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, new CompletableFuture<>(),
-            orderedMap(10, topicIdPartition), BATCH_SIZE, 100, brokerTopicStats);
+            List.of(topicIdPartition), BATCH_SIZE, 100, brokerTopicStats);
         assertFalse(shareFetch.errorInAllPartitions());
 
         shareFetch.addErroneous(topicIdPartition, new RuntimeException());
@@ -68,11 +76,26 @@ public class ShareFetchTest {
     }
 
     @Test
+    public void testDontCacheAnyData() {
+        final TopicIdPartition tidp = new TopicIdPartition(Uuid.randomUuid(), 0, "topic");
+        MemoryRecords records = buildRecords(1L, 3, 1);
+
+        ShareFetchResponse shareFetch = shareFetchResponse(tidp, records, Errors.NONE, "", (short) 0,
+                "", List.of(), 0);
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = shareFetch.responseData(Map.of(tidp.topicId(), tidp.topic()));
+        assertEquals(1, responseData.size());
+        responseData.forEach((topicIdPartition, partitionData) -> assertEquals(records, partitionData.records()));
+
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> nonResponseData = shareFetch.responseData(Map.of());
+        assertEquals(0, nonResponseData.size());
+    }
+
+    @Test
     public void testErrorInAllPartitionsWithMultipleTopicIdPartitions() {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, new CompletableFuture<>(),
-            orderedMap(10, topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
+            List.of(topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
         assertFalse(shareFetch.errorInAllPartitions());
 
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
@@ -87,7 +110,7 @@ public class ShareFetchTest {
         TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, new CompletableFuture<>(),
-            orderedMap(10, topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
+            List.of(topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
         Set<TopicIdPartition> result = shareFetch.filterErroneousTopicPartitions(Set.of(topicIdPartition0, topicIdPartition1));
         // No erroneous partitions, hence all partitions should be returned.
         assertEquals(2, result.size());
@@ -113,7 +136,7 @@ public class ShareFetchTest {
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            orderedMap(10, topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
+            List.of(topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
 
         // Add both erroneous partition and complete request.
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
@@ -134,7 +157,7 @@ public class ShareFetchTest {
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            orderedMap(10, topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
+            List.of(topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
 
         // Add an erroneous partition and complete request.
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
@@ -154,7 +177,7 @@ public class ShareFetchTest {
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            orderedMap(10, topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
+            List.of(topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
 
         shareFetch.maybeCompleteWithException(List.of(topicIdPartition0, topicIdPartition1), new RuntimeException());
         assertEquals(2, future.join().size());
@@ -173,7 +196,7 @@ public class ShareFetchTest {
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            orderedMap(10, topicIdPartition0, topicIdPartition1, topicIdPartition2), BATCH_SIZE, 100, brokerTopicStats);
+            List.of(topicIdPartition0, topicIdPartition1, topicIdPartition2), BATCH_SIZE, 100, brokerTopicStats);
 
         shareFetch.maybeCompleteWithException(List.of(topicIdPartition0, topicIdPartition2), new RuntimeException());
         assertEquals(2, future.join().size());
@@ -191,7 +214,7 @@ public class ShareFetchTest {
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
-            orderedMap(10, topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
+            List.of(topicIdPartition0, topicIdPartition1), BATCH_SIZE, 100, brokerTopicStats);
 
         shareFetch.addErroneous(topicIdPartition0, new RuntimeException());
         shareFetch.maybeCompleteWithException(List.of(topicIdPartition1), new RuntimeException());
@@ -201,5 +224,28 @@ public class ShareFetchTest {
         // Validate failed share fetch request metrics, though 2 partitions failed but only 1 topic failed.
         assertEquals(1, brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().count());
         assertEquals(1, brokerTopicStats.topicStats("foo").failedShareFetchRequestRate().count());
+    }
+
+    private MemoryRecords buildRecords(long baseOffset, int count, long firstMessageId) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(
+                ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, baseOffset);
+        for (int i = 0; i < count; i++)
+            builder.append(0L, "key".getBytes(), ("value-" + (firstMessageId + i)).getBytes());
+        return builder.build();
+    }
+
+    private ShareFetchResponse shareFetchResponse(TopicIdPartition tp, MemoryRecords records, Errors error,
+                                                  String errorMessage, short acknowledgeErrorCode, String acknowledgeErrorMessage,
+                                                  List<ShareFetchResponseData.AcquiredRecords> acquiredRecords, int throttleTime) {
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitions = Map.of(tp,
+                new ShareFetchResponseData.PartitionData()
+                        .setPartitionIndex(tp.topicPartition().partition())
+                        .setErrorCode(error.code())
+                        .setErrorMessage(errorMessage)
+                        .setAcknowledgeErrorCode(acknowledgeErrorCode)
+                        .setAcknowledgeErrorMessage(acknowledgeErrorMessage)
+                        .setRecords(records)
+                        .setAcquiredRecords(acquiredRecords));
+        return ShareFetchResponse.of(Errors.NONE, throttleTime, new LinkedHashMap<>(partitions), List.of(), Integer.MAX_VALUE);
     }
 }

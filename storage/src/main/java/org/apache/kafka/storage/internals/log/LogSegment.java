@@ -43,6 +43,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.attribute.FileTime;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.Callable;
@@ -50,7 +51,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static java.util.Arrays.asList;
 
 /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileRecords containing
@@ -381,7 +381,7 @@ public class LogSegment implements Closeable {
      */
     LogOffsetPosition translateOffset(long offset, int startingFilePosition) throws IOException {
         OffsetPosition mapping = offsetIndex().lookup(offset);
-        return log.searchForOffsetWithSize(offset, Math.max(mapping.position, startingFilePosition));
+        return log.searchForOffsetFromPosition(offset, Math.max(mapping.position, startingFilePosition));
     }
 
     /**
@@ -490,7 +490,7 @@ public class LogSegment implements Closeable {
 
                 if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
                     if (batch.partitionLeaderEpoch() >= 0 &&
-                            (leaderEpochCache.latestEpoch().isEmpty() || batch.partitionLeaderEpoch() > leaderEpochCache.latestEpoch().getAsInt()))
+                            (leaderEpochCache.latestEpoch().isEmpty() || batch.partitionLeaderEpoch() > leaderEpochCache.latestEpoch().get()))
                         leaderEpochCache.assign(batch.partitionLeaderEpoch(), batch.baseOffset());
                     updateProducerState(producerStateManager, batch);
                 }
@@ -772,7 +772,7 @@ public class LogSegment implements Closeable {
      */
     public void deleteIfExists() throws IOException {
         try {
-            Utils.tryAll(asList(
+            Utils.tryAll(List.of(
                 () -> deleteTypeIfExists(() -> log.deleteIfExists(), "log", log.file(), true),
                 () -> deleteTypeIfExists(() -> lazyOffsetIndex.deleteIfExists(), "offset index", offsetIndexFile(), true),
                 () -> deleteTypeIfExists(() -> lazyTimeIndex.deleteIfExists(), "time index", timeIndexFile(), true),

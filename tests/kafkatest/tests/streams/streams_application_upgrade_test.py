@@ -21,21 +21,22 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 from kafkatest.version import LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
-  LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_VERSION, KafkaVersion
+  LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, \
+  LATEST_3_9, LATEST_4_0, DEV_VERSION, KafkaVersion
 
-smoke_test_versions = [str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4),
-                       str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7),
-                       str(LATEST_2_8), str(LATEST_3_0), str(LATEST_3_1),
-                       str(LATEST_3_2), str(LATEST_3_3), str(LATEST_3_4),
-                       str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7),
-                       str(LATEST_3_8), str(LATEST_3_9)]
+
+smoke_test_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6),
+                       str(LATEST_2_7), str(LATEST_2_8), str(LATEST_3_0),
+                       str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3),
+                       str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6),
+                       str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9),
+                       str(LATEST_4_0)]
 
 class StreamsUpgradeTest(Test):
     """
-    Test upgrading Kafka Streams (all version combination)
-    If metadata was changes, upgrade is more difficult
-    Metadata version was bumped in 0.10.1.0 and
-    subsequently bumped in 2.0.0
+    Test upgrading Kafka Streams (all possible version combination)
+    Directly upgrading from 2.3 or below is no longer supported as
+    of version 4.0
     """
 
     def __init__(self, test_context):

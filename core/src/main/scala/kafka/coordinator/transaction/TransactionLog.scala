@@ -21,6 +21,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.coordinator.transaction.{TransactionState, TxnTransitMetadata}
 import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordType, TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
@@ -61,11 +62,11 @@ object TransactionLog {
     */
   private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
                                         transactionVersionLevel: TransactionVersion): Array[Byte] = {
-    if (txnMetadata.txnState == Empty && txnMetadata.topicPartitions.nonEmpty)
+    if (txnMetadata.txnState == TransactionState.EMPTY && !txnMetadata.topicPartitions.isEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
-      val transactionPartitions = if (txnMetadata.txnState == Empty) null
-      else txnMetadata.topicPartitions
+      val transactionPartitions = if (txnMetadata.txnState == TransactionState.EMPTY) null
+      else txnMetadata.topicPartitions.asScala
         .groupBy(_.topic)
         .map { case (topic, partitions) =>
           new TransactionLogValue.PartitionsSchema()
@@ -90,19 +91,15 @@ object TransactionLog {
   /**
     * Decodes the transaction log messages' key
     *
-    * @return the key
+    * @return left with the version if the key is not a transaction log key, right with the transactional id otherwise
     */
-  def readTxnRecordKey(buffer: ByteBuffer): BaseKey = {
+  def readTxnRecordKey(buffer: ByteBuffer): Either[Short, String] = {
     val version = buffer.getShort
-    if (version == CoordinatorRecordType.TRANSACTION_LOG.id) {
-      val value = new TransactionLogKey(new ByteBufferAccessor(buffer), 0.toShort)
-      TxnKey(
-        version = version,
-        transactionalId = value.transactionalId
-      )
-    } else {
-      UnknownKey(version)
-    }
+    Either.cond(
+      version == CoordinatorRecordType.TRANSACTION_LOG.id,
+      new TransactionLogKey(new ByteBufferAccessor(buffer), 0.toShort).transactionalId,
+      version
+    )
   }
 
   /**
@@ -131,7 +128,7 @@ object TransactionLog {
           txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs,
           clientTransactionVersion = TransactionVersion.fromFeatureLevel(value.clientTransactionVersion))
 
-        if (!transactionMetadata.state.equals(Empty))
+        if (!transactionMetadata.state.equals(TransactionState.EMPTY))
           value.transactionPartitions.forEach(partitionsSchema =>
             transactionMetadata.addPartitions(partitionsSchema.partitionIds
               .asScala
@@ -143,18 +140,3 @@ object TransactionLog {
     }
   }
 }
-
-sealed trait BaseKey{
-  def version: Short
-  def transactionalId: String
-}
-
-case class TxnKey(version: Short, transactionalId: String) extends BaseKey {
-  override def toString: String = transactionalId
-}
-
-case class UnknownKey(version: Short) extends BaseKey {
-  override def transactionalId: String = null
-  override def toString: String = transactionalId
-}
-

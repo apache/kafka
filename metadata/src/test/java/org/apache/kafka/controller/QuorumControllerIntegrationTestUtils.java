@@ -35,7 +35,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -53,10 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class QuorumControllerIntegrationTestUtils {
     private static final Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
-
-    BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
-        return brokerFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting());
-    }
 
     /**
      * Create a broker features collection for use in a registration request. We only set MV. here.
@@ -93,10 +88,10 @@ public class QuorumControllerIntegrationTestUtils {
                 .setName(MetadataVersion.FEATURE_NAME)
                 .setMinSupportedVersion(minVersion.featureLevel())
                 .setMaxSupportedVersion(maxVersion.featureLevel()));
-        featureMaxVersions.entrySet().forEach(entry -> {
+        featureMaxVersions.forEach((key, value) -> {
             features.add(new BrokerRegistrationRequestData.Feature()
-                .setName(entry.getKey())
-                .setMaxSupportedVersion(entry.getValue())
+                .setName(key)
+                .setMaxSupportedVersion(value)
                 .setMinSupportedVersion((short) 0));
         });
         return features;
@@ -124,11 +119,11 @@ public class QuorumControllerIntegrationTestUtils {
                     .setFeatures(brokerFeaturesPlusFeatureVersions(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting(),
                         Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel())))
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
-                    .setLogDirs(Collections.singletonList(
+                    .setLogDirs(List.of(
                         Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")
                     ))
                     .setListeners(new ListenerCollection(
-                        Collections.singletonList(
+                        List.of(
                             new Listener()
                                 .setName("PLAINTEXT")
                                 .setHost("localhost")

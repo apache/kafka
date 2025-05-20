@@ -24,7 +24,7 @@ import java.util.concurrent.ExecutionException
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.utils._
 import org.apache.kafka.clients.admin.Admin
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords, GroupProtocol}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
@@ -170,9 +170,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   /**
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProduceConsumeViaAssign(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeViaAssign(groupProtocol: String): Unit = {
     setAclsAndProduce(tp)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -199,9 +199,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       ._2.asInstanceOf[Gauge[Double]]
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProduceConsumeViaSubscribe(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeViaSubscribe(groupProtocol: String): Unit = {
     setAclsAndProduce(tp)
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
@@ -209,9 +209,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProduceConsumeWithWildcardAcls(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeWithWildcardAcls(groupProtocol: String): Unit = {
     setWildcardResourceAcls()
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -221,9 +221,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProduceConsumeWithPrefixedAcls(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeWithPrefixedAcls(groupProtocol: String): Unit = {
     setPrefixedResourceAcls()
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -233,9 +233,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProduceConsumeTopicAutoCreateTopicCreateAcl(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeTopicAutoCreateTopicCreateAcl(groupProtocol: String): Unit = {
     // topic2 is not created on setup()
     val tp2 = new TopicPartition("topic2", 0)
     setAclsAndProduce(tp2)
@@ -251,8 +251,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclWildcardGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardTopicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardGroupResource)
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, wildcardTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, wildcardGroupResource)
     }
   }
 
@@ -262,8 +262,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclPrefixedGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, prefixedTopicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, prefixedGroupResource)
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, prefixedTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, prefixedGroupResource)
     }
   }
 
@@ -276,9 +276,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get,
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get,
         new ResourcePattern(TOPIC, tp.topic, LITERAL))
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
   }
 
@@ -292,7 +292,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val superuserAdminClient = createSuperuserAdminClient()
     superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
   }
 
@@ -301,14 +301,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * messages and describe topics respectively when the describe ACL isn't set.
     * Also verifies that subsequent publish, consume and describe to authorized topic succeeds.
     */
-  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isIdempotenceEnabled={2}")
+  @ParameterizedTest(name = "{displayName}.groupProtocol={0}.isIdempotenceEnabled={1}")
   @CsvSource(value = Array(
-    "kraft, classic, true",
-    //"kraft, consumer, true",
-    "kraft, classic, false",
-    //"kraft, consumer, false",
+    "classic, true",
+    //"consumer, true",
+    "classic, false",
+    //"consumer, false",
   ))
-  def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(quorum:String, groupProtocol:String, isIdempotenceEnabled:Boolean): Unit = {
+  def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(groupProtocol:String, isIdempotenceEnabled:Boolean): Unit = {
     // Set consumer group acls since we are testing topic authorization
     setConsumerGroupAcls()
 
@@ -374,15 +374,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "kraft, true",
-    "kraft, false",
+    "true",
+    "false",
   ))
-  def testNoProduceWithDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
+  def testNoProduceWithDescribeAcl(isIdempotenceEnabled:Boolean): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
     superuserAdminClient.createAcls(List(AclTopicDescribe()).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
     }
 
     val prop = new Properties()
@@ -403,9 +403,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testNoConsumeWithoutDescribeAclViaAssign(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoConsumeWithoutDescribeAclViaAssign(groupProtocol: String): Unit = {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -414,9 +414,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testNoConsumeWithoutDescribeAclViaSubscribe(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoConsumeWithoutDescribeAclViaSubscribe(groupProtocol: String): Unit = {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
@@ -430,7 +430,18 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // Verify that records are consumed if all topics are authorized
     consumer.subscribe(List(topic).asJava)
-    consumeRecordsIgnoreOneAuthorizationException(consumer)
+    if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
+      consumeRecordsIgnoreOneAuthorizationException(consumer)
+    } else {
+      TestUtils.waitUntilTrue(() => {
+        try {
+          consumeRecords(consumer, numRecords, 0, topic)
+          true
+        } catch {
+          case _: TopicAuthorizationException => false
+        }
+      }, "Consumer didn't manage to consume the records within timeout.")
+    }
   }
 
   private def noConsumeWithoutDescribeAclSetup(): Unit = {
@@ -439,8 +450,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
 
     val producer = createProducer()
@@ -450,14 +461,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.deleteAcls(List(AclTopicWrite().toFilter).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testNoConsumeWithDescribeAclViaAssign(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoConsumeWithDescribeAclViaAssign(groupProtocol: String): Unit = {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -467,9 +478,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testNoConsumeWithDescribeAclViaSubscribe(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoConsumeWithDescribeAclViaSubscribe(groupProtocol: String): Unit = {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
@@ -485,8 +496,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -496,13 +507,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testNoGroupAcl(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoGroupAcl(groupProtocol: String): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
     superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
     }
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)

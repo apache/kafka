@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class StreamsGroupHeartbeatRequest extends AbstractRequest {
 
@@ -81,8 +79,8 @@ public class StreamsGroupHeartbeatRequest extends AbstractRequest {
         return data;
     }
 
-    public static StreamsGroupHeartbeatRequest parse(ByteBuffer buffer, short version) {
+    public static StreamsGroupHeartbeatRequest parse(Readable readable, short version) {
         return new StreamsGroupHeartbeatRequest(new StreamsGroupHeartbeatRequestData(
-            new ByteBufferAccessor(buffer), version), version);
+            readable, version), version);
     }
 }

@@ -179,8 +179,8 @@ public class ShareSessionHandler {
 
         return ShareFetchRequest.Builder.forConsumer(
                 groupId, nextMetadata, fetchConfig.maxWaitMs,
-                fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.fetchSize, fetchConfig.maxPollRecords,
-                added, removed, acknowledgementBatches);
+                fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.maxPollRecords,
+                fetchConfig.maxPollRecords, added, removed, acknowledgementBatches);
     }
 
     public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, FetchConfig fetchConfig) {
@@ -219,7 +219,8 @@ public class ShareSessionHandler {
      */
     public boolean handleResponse(ShareFetchResponse response, short version) {
         if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
-                (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH)) {
+                (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH) ||
+                (response.error() == Errors.SHARE_SESSION_LIMIT_REACHED)) {
             log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
                     node, nextMetadata, response.error());
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();

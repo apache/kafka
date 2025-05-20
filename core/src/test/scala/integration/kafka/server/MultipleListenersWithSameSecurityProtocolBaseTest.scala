@@ -132,7 +132,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
 
     servers.head.config.listeners.foreach { endPoint =>
-      val listenerName = endPoint.listenerName
+      val listenerName = ListenerName.normalised(endPoint.listener)
 
       val trustStoreFile =
         if (JaasTestUtils.usesSslTransportLayer(endPoint.securityProtocol)) Some(this.trustStoreFile)
@@ -155,7 +155,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       }
 
       if (JaasTestUtils.usesSaslAuthentication(endPoint.securityProtocol)) {
-        kafkaServerSaslMechanisms(endPoint.listenerName.value).foreach { mechanism =>
+        kafkaServerSaslMechanisms(endPoint.listener).foreach { mechanism =>
           addProducerConsumer(listenerName, mechanism, Some(kafkaClientSaslProperties(mechanism, dynamicJaasConfig = true)))
         }
       } else {
@@ -179,9 +179,9 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     * Tests that we can produce and consume to/from all broker-defined listeners and security protocols. We produce
     * with acks=-1 to ensure that replication is also working.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProduceConsume(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsume(groupProtocol: String): Unit = {
     producers.foreach { case (clientMetadata, producer) =>
       val producerRecords = (1 to 10).map(i => new ProducerRecord(clientMetadata.topic, s"key$i".getBytes,
         s"value$i".getBytes))

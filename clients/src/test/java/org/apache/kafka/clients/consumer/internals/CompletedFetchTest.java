@@ -26,7 +26,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -221,14 +220,13 @@ public class CompletedFetchTest {
         FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(TP));
 
         return new CompletedFetch(
-                logContext,
+                logContext.logger(CompletedFetch.class),
                 subscriptions,
                 BufferSupplier.create(),
                 TP,
                 partitionData,
                 metricAggregator,
-                fetchOffset,
-                ApiKeys.FETCH.latestVersion());
+                fetchOffset);
     }
 
     private static Deserializers<UUID, UUID> newUuidDeserializers() {

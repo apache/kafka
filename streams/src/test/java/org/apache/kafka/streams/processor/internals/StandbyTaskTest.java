@@ -178,7 +178,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws IOException {
+    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() {
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(false);
         when(stateManager.taskType()).thenReturn(TaskType.STANDBY);
@@ -213,7 +213,7 @@ public class StandbyTaskTest {
         task.suspend();
         task.closeClean();
 
-        assertThrows(IllegalStateException.class, task::prepareCommit);
+        assertThrows(IllegalStateException.class, () -> task.prepareCommit(true));
     }
 
     @Test
@@ -261,13 +261,13 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
         task.initializeIfNeeded();
-        task.prepareCommit();
+        task.prepareCommit(true);
         task.postCommit(false);  // this should not checkpoint
 
-        task.prepareCommit();
+        task.prepareCommit(true);
         task.postCommit(false);  // this should checkpoint
 
-        task.prepareCommit();
+        task.prepareCommit(true);
         task.postCommit(false);  // this should not checkpoint
 
         verify(stateManager).checkpoint();
@@ -322,7 +322,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
         task.suspend();
-        task.prepareCommit();
+        task.prepareCommit(true);
         task.postCommit(true);
         task.closeClean();
 
@@ -360,7 +360,7 @@ public class StandbyTaskTest {
         // could commit if the offset advanced beyond threshold
         assertTrue(task.commitNeeded());
 
-        task.prepareCommit();
+        task.prepareCommit(true);
         task.postCommit(true);
     }
 
@@ -389,7 +389,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        task.prepareCommit();
+        task.prepareCommit(true);
         assertThrows(RuntimeException.class, () -> task.postCommit(true));
 
         assertEquals(RUNNING, task.state());

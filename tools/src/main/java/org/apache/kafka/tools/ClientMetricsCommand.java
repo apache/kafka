@@ -49,6 +49,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 
@@ -119,7 +120,7 @@ public class ClientMetricsCommand {
             String entityName = opts.hasGenerateNameOption() ? Uuid.randomUuid().toString() : opts.name().get();
 
             Map<String, String> configsToBeSet = new HashMap<>();
-            opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal.toString()));
+            opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal));
             opts.metrics().map(metricslist -> configsToBeSet.put("metrics", String.join(",", metricslist)));
             opts.match().map(matchlist -> configsToBeSet.put("match", String.join(",", matchlist)));
 
@@ -210,7 +211,7 @@ public class ClientMetricsCommand {
 
         private final OptionSpecBuilder generateNameOpt;
 
-        private final ArgumentAcceptingOptionSpec<Integer> intervalOpt;
+        private final ArgumentAcceptingOptionSpec<String> intervalOpt;
 
         private final ArgumentAcceptingOptionSpec<String> matchOpt;
 
@@ -237,30 +238,35 @@ public class ClientMetricsCommand {
                 .describedAs("name")
                 .ofType(String.class);
             generateNameOpt = parser.accepts("generate-name", "Generate a UUID to use as the name.");
-            intervalOpt = parser.accepts("interval", "The metrics push interval in milliseconds.")
+            String nl = System.lineSeparator();
+
+            intervalOpt = parser.accepts("interval", "The metrics push interval in milliseconds." + nl + "Leave empty to reset the interval.")
                 .withRequiredArg()
                 .describedAs("push interval")
-                .ofType(java.lang.Integer.class);
+                .ofType(String.class);
 
-            String nl = System.lineSeparator();
 
             String[] matchSelectors = new String[] {
                 "client_id", "client_instance_id", "client_software_name",
                 "client_software_version", "client_source_address", "client_source_port"
             };
             String matchSelectorNames = Arrays.stream(matchSelectors).map(config -> "\t" + config).collect(Collectors.joining(nl));
-            matchOpt = parser.accepts("match",  "Matching selector 'k1=v1,k2=v2'. The following is a list of valid selector names: " + nl + matchSelectorNames)
+            matchOpt = parser.accepts("match", "Matching selector 'k1=v1,k2=v2'. The following is a list of valid selector names: " + nl + matchSelectorNames)
                 .withRequiredArg()
                 .describedAs("k1=v1,k2=v2")
                 .ofType(String.class)
                 .withValuesSeparatedBy(',');
-            metricsOpt = parser.accepts("metrics",  "Telemetry metric name prefixes 'm1,m2'.")
+            metricsOpt = parser.accepts("metrics", "Telemetry metric name prefixes 'm1,m2'.")
                 .withRequiredArg()
                 .describedAs("m1,m2")
                 .ofType(String.class)
                 .withValuesSeparatedBy(',');
 
-            options = parser.parse(args);
+            try {
+                options = parser.parse(args);
+            } catch (OptionException oe) {
+                CommandLineUtils.printUsageAndExit(parser, oe.getMessage());
+            }
 
             checkArgs();
         }
@@ -329,7 +335,7 @@ public class ClientMetricsCommand {
             return valuesAsOption(metricsOpt);
         }
 
-        public Optional<Integer> interval() {
+        public Optional<String> interval() {
             return valueAsOption(intervalOpt);
         }
 
@@ -362,6 +368,18 @@ public class ClientMetricsCommand {
             if (has(alterOpt)) {
                 if ((isNamePresent && has(generateNameOpt)) || (!isNamePresent && !has(generateNameOpt)))
                     throw new IllegalArgumentException("One of --name or --generate-name must be specified with --alter.");
+
+                interval().ifPresent(intervalStr -> {
+                    if (!intervalStr.isEmpty()) {
+                        try {
+                            Integer.parseInt(intervalStr);
+                        } catch (NumberFormatException e) {
+                            throw new IllegalArgumentException(
+                                    "Invalid interval value. Enter an integer, or leave empty to reset.");
+                        }
+                    }
+
+                });
             }
 
             if (has(deleteOpt) && !isNamePresent)

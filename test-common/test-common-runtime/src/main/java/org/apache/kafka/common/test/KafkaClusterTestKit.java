@@ -40,6 +40,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.storage.Formatter;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.DynamicVoters;
+import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -114,6 +115,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         private final String controllerListenerName;
         private final String brokerSecurityProtocol;
         private final String controllerSecurityProtocol;
+        private boolean deleteOnClose;
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
@@ -121,6 +123,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             this.controllerListenerName = nodes.controllerListenerName().value();
             this.brokerSecurityProtocol = nodes.brokerListenerProtocol().name;
             this.controllerSecurityProtocol = nodes.controllerListenerProtocol().name;
+            this.deleteOnClose = true;
         }
 
         public Builder setConfigProp(String key, Object value) {
@@ -140,11 +143,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     Integer.toString(node.id()));
             // In combined mode, always prefer the metadata log directory of the controller node.
             if (controllerNode != null) {
-                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
+                props.put(MetadataLogConfig.METADATA_LOG_DIR_CONFIG,
                         controllerNode.metadataDirectory());
                 setSecurityProtocolProps(props, controllerSecurityProtocol);
             } else {
-                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
+                props.put(MetadataLogConfig.METADATA_LOG_DIR_CONFIG,
                         node.metadataDirectory());
             }
             if (brokerNode != null) {
@@ -226,6 +229,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 return Optional.of(file);
             }
             return Optional.empty();
+        }
+
+        public Builder setDeleteOnClose(boolean deleteOnClose) {
+            this.deleteOnClose = deleteOnClose;
+            return this;
         }
 
         public KafkaClusterTestKit build() throws Exception {
@@ -315,7 +323,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     baseDirectory,
                     faultHandlerFactory,
                     socketFactoryManager,
-                    jaasFile);
+                    jaasFile,
+                    deleteOnClose);
         }
 
         private String listeners(int node) {
@@ -360,6 +369,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final PreboundSocketFactoryManager socketFactoryManager;
     private final String controllerListenerName;
     private final Optional<File> jaasFile;
+    private final boolean deleteOnClose;
 
     private KafkaClusterTestKit(
         TestKitNodes nodes,
@@ -368,7 +378,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
         File baseDirectory,
         SimpleFaultHandlerFactory faultHandlerFactory,
         PreboundSocketFactoryManager socketFactoryManager,
-        Optional<File> jaasFile
+        Optional<File> jaasFile,
+        boolean deleteOnClose
     ) {
         /*
           Number of threads = Total number of brokers + Total number of controllers + Total number of Raft Managers
@@ -385,22 +396,19 @@ public class KafkaClusterTestKit implements AutoCloseable {
         this.socketFactoryManager = socketFactoryManager;
         this.controllerListenerName = nodes.controllerListenerName().value();
         this.jaasFile = jaasFile;
+        this.deleteOnClose = deleteOnClose;
     }
 
     public void format() throws Exception {
         List<Future<?>> futures = new ArrayList<>();
         try {
             for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(() -> {
-                    formatNode(controller.sharedServer().metaPropsEnsemble(), true);
-                }));
+                futures.add(executorService.submit(() -> formatNode(controller.sharedServer().metaPropsEnsemble(), true)));
             }
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 BrokerServer broker = entry.getValue();
-                futures.add(executorService.submit(() -> {
-                    formatNode(broker.sharedServer().metaPropsEnsemble(),
-                        !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()));
-                }));
+                futures.add(executorService.submit(() -> formatNode(broker.sharedServer().metaPropsEnsemble(),
+                    !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()))));
             }
             for (Future<?> future: futures) {
                 future.get();
@@ -496,12 +504,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         // make sure metadata cache in each broker server is up-to-date
         TestUtils.waitForCondition(() ->
-                brokers().values().stream().allMatch(brokerServer -> brokerServer.metadataCache().getAliveBrokers().size() == brokers.size()),
+                brokers.values().stream().map(BrokerServer::metadataCache)
+                    .allMatch(cache -> brokers.values().stream().map(b -> b.config().brokerId()).allMatch(cache::hasAliveBroker)),
             "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
     public class ClientPropertiesBuilder {
-        private Properties properties;
+        private final Properties properties;
         private boolean usingBootstrapControllers = false;
 
         public ClientPropertiesBuilder() {
@@ -647,9 +656,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();
-            Utils.delete(baseDirectory);
-            if (jaasFile.isPresent()) {
-                Utils.delete(jaasFile.get());
+            if (deleteOnClose) {
+                Utils.delete(baseDirectory);
+                if (jaasFile.isPresent()) {
+                    Utils.delete(jaasFile.get());
+                }
             }
         } catch (Exception e) {
             for (Entry<String, Future<?>> entry : futureEntries) {

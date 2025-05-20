@@ -16,13 +16,8 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * Options for {@link AdminClient#describeFeatures(DescribeFeaturesOptions)}.
- *
- * The API of this class is evolving. See {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeFeaturesOptions extends AbstractOptions<DescribeFeaturesOptions> {
 }

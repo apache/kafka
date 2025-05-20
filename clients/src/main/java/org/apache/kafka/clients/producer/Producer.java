@@ -42,7 +42,14 @@ public interface Producer<K, V> extends Closeable {
     /**
      * See {@link KafkaProducer#initTransactions()}
      */
-    void initTransactions();
+    default void initTransactions() {
+        initTransactions(false);
+    }
+
+    /**
+     * See {@link KafkaProducer#initTransactions(boolean)}
+     */
+    void initTransactions(boolean keepPreparedTxn);
 
     /**
      * See {@link KafkaProducer#beginTransaction()}
@@ -54,6 +61,11 @@ public interface Producer<K, V> extends Closeable {
      */
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                   ConsumerGroupMetadata groupMetadata) throws ProducerFencedException;
+
+    /**
+     * See {@link KafkaProducer#prepareTransaction()}
+     */
+    PreparedTxnState prepareTransaction() throws ProducerFencedException;
 
     /**
      * See {@link KafkaProducer#commitTransaction()}

@@ -40,9 +40,9 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     properties.setProperty(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollRecords(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testMaxPollRecords(groupProtocol: String): Unit = {
     val maxPollRecords = 2
     val numRecords = 10000
 
@@ -57,9 +57,9 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
       startingTimestamp = startingTimestamp)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollIntervalMs(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testMaxPollIntervalMs(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -85,9 +85,9 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testMaxPollIntervalMsDelayInRevocation(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -129,9 +129,56 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     assertTrue(commitCompleted)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollIntervalMsDelayInAssignment(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerRecoveryOnPollAfterDelayedRebalance(groupProtocol: String): Unit = {
+    val rebalanceTimeout = 1000
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, rebalanceTimeout.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
+
+    val producer = createProducer()
+    val numMessages = 10
+    createTopicAndSendRecords(producer, "otherTopic", 1, numMessages)
+    sendRecords(producer, numMessages, tp)
+
+    var rebalanceTimeoutExceeded = false
+
+    // Subscribe consumer that will reconcile in time on the first rebalance, but will
+    // take longer than the allowed timeout in the second rebalance (onPartitionsRevoked) to get fenced by the broker.
+    // The consumer should recover after being fenced (automatically rejoin the group on the next call to poll)
+    val consumer = createConsumer()
+    val listener = new TestConsumerReassignmentListener {
+
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+        if (!partitions.isEmpty && partitions.contains(tp)) {
+          // on the second rebalance (after we have joined the group initially), sleep longer
+          // than rebalance timeout to get fenced.
+          Utils.sleep(rebalanceTimeout + 500)
+          rebalanceTimeoutExceeded = true
+        }
+        super.onPartitionsRevoked(partitions)
+      }
+    }
+
+    // Subscribe to get first assignment (no delays) and verify consumption
+    consumer.subscribe(List(topic).asJava, listener)
+    var records = awaitNonEmptyRecords(consumer, tp, 0L)
+    assertEquals(numMessages, records.count())
+
+    // Subscribe to different topic. This will trigger the delayed revocation exceeding rebalance timeout and get fenced
+    consumer.subscribe(List("otherTopic").asJava, listener)
+    TestUtils.pollUntilTrue(consumer, () => rebalanceTimeoutExceeded, "Timeout waiting for delayed callback to complete")
+
+    // Verify consumer recovers after being fenced, being able to continue consuming.
+    // (The member should automatically rejoin on the next poll, with the new topic as subscription)
+    val tpOther = new TopicPartition("otherTopic", 0)
+    records = awaitNonEmptyRecords(consumer, tpOther, 0L)
+    assertEquals(numMessages, records.count())
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testMaxPollIntervalMsDelayInAssignment(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -156,9 +203,9 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     ensureNoRebalance(consumer, listener)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollIntervalMsShorterThanPollTimeout(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testMaxPollIntervalMsShorterThanPollTimeout(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -183,9 +230,9 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     assertEquals(callsToAssignedAfterFirstRebalance, listener.callsToAssigned)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testPerPartitionLeadWithMaxPollRecords(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testPerPartitionLeadWithMaxPollRecords(groupProtocol: String): Unit = {
     val numMessages = 1000
     val maxPollRecords = 10
     val producer = createProducer()
@@ -206,9 +253,9 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     assertEquals(maxPollRecords, lead.metricValue().asInstanceOf[Double], s"The lead should be $maxPollRecords")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testPerPartitionLagWithMaxPollRecords(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testPerPartitionLagWithMaxPollRecords(groupProtocol: String): Unit = {
     val numMessages = 1000
     val maxPollRecords = 10
     val producer = createProducer()
@@ -230,21 +277,21 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     assertEquals(numMessages - records.count, lag.metricValue.asInstanceOf[Double], epsilon, s"The lag should be ${numMessages - records.count}")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testMultiConsumerSessionTimeoutOnStopPolling(groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMultiConsumerSessionTimeoutOnClose(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testMultiConsumerSessionTimeoutOnClose(groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testPollEventuallyReturnsRecordsWithZeroTimeout(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testPollEventuallyReturnsRecordsWithZeroTimeout(groupProtocol: String): Unit = {
     val numMessages = 100
     val producer = createProducer()
     sendRecords(producer, numMessages, tp)
@@ -255,9 +302,9 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     assertEquals(numMessages, records.count())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testNoOffsetForPartitionExceptionOnPollZero(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoOffsetForPartitionExceptionOnPollZero(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
 

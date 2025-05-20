@@ -67,7 +67,6 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.query.FailureReason;
@@ -518,7 +517,7 @@ public class KafkaStreams implements AutoCloseable {
                 break;
             case SHUTDOWN_CLIENT:
                 log.error(
-                    "Encountered the following exception during processing and the registered exception handler" +
+                    "Encountered the following exception during processing and the registered exception handler " +
                         "opted to {}. The streams client is going to shut down now.",
                     action,
                     throwable
@@ -542,7 +541,7 @@ public class KafkaStreams implements AutoCloseable {
                     closeToError();
                     break;
                 }
-                processStreamThread(thread -> thread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED));
+                processStreamThread(StreamThread::sendShutdownRequest);
                 log.error("Encountered the following exception during processing " +
                         "and sent shutdown request for the entire application.", throwable);
                 break;
@@ -994,7 +993,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addCommitIdMetric(streamsMetrics);
         ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
-        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
+        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state.name());
         ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, (metricsConfig, now) -> state.ordinal());
         ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, calculateMetricsRecordingLevel());
         threads = Collections.synchronizedList(new LinkedList<>());

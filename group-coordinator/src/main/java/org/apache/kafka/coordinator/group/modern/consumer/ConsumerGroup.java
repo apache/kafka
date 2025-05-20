@@ -644,7 +644,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
     ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
@@ -1151,7 +1151,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // We should accept the empty assignment.
             Map<Uuid, Set<Integer>> assignedPartitions;
             if (Arrays.equals(classicGroupMember.assignment(), EMPTY_ASSIGNMENT)) {
-                assignedPartitions = Collections.emptyMap();
+                assignedPartitions = Map.of();
             } else {
                 ConsumerProtocolAssignment assignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(
                     ByteBuffer.wrap(classicGroupMember.assignment())
@@ -1210,7 +1210,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), 0));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
@@ -1287,7 +1287,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
             for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
                 Uuid topicId = entry.getKey();
-                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Collections.emptySet());
+                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Set.of());
 
                 for (int partition : entry.getValue()) {
                     if (!assignedPartitions.contains(partition) && currentPartitionEpoch(topicId, partition) != -1) {

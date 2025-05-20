@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Objects;
 
-@InterfaceStability.Evolving
 public class TransactionListing {
     private final String transactionalId;
     private final long producerId;

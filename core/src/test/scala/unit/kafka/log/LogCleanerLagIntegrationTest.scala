@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
@@ -62,7 +63,7 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
 
     val activeSegAtT0 = log.activeSegment
     debug(s"active segment at T0 has base offset: ${activeSegAtT0.baseOffset}")
-    val sizeUpToActiveSegmentAtT0 = log.logSegments(0L, activeSegAtT0.baseOffset).map(_.size).sum
+    val sizeUpToActiveSegmentAtT0 = log.logSegments(0L, activeSegAtT0.baseOffset).asScala.map(_.size).sum
     debug(s"log size up to base offset of active segment at T0: $sizeUpToActiveSegmentAtT0")
 
     cleaner.startup()
@@ -83,15 +84,15 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
     val firstBlock1SegmentBaseOffset = activeSegAtT0.baseOffset
 
     // the first block should get cleaned
-    cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT0.baseOffset)
+    cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT0.baseOffset, 60000L)
 
     // check the data is the same
     val read1 = readFromLog(log)
     assertEquals(appends1.toMap, read1.toMap, "Contents of the map shouldn't change.")
 
-    val compactedSize = log.logSegments(0L, activeSegAtT0.baseOffset).map(_.size).sum
+    val compactedSize = log.logSegments(0L, activeSegAtT0.baseOffset).asScala.map(_.size).sum
     debug(s"after cleaning the compacted size up to active segment at T0: $compactedSize")
-    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(new TopicPartition("log", 0))
     assertTrue(lastCleaned >= firstBlock1SegmentBaseOffset, s"log cleaner should have processed up to offset $firstBlock1SegmentBaseOffset, but lastCleaned=$lastCleaned")
     assertTrue(sizeUpToActiveSegmentAtT0 > compactedSize, s"log should have been compacted: size up to offset of active segment at T0=$sizeUpToActiveSegmentAtT0 compacted size=$compactedSize")
   }
@@ -108,7 +109,7 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val count = counter
       log.appendAsLeader(TestUtils.singletonRecords(value = counter.toString.getBytes, codec = codec,
-              key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
+              key = key.toString.getBytes, timestamp = timestamp), 0)
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
       incCounter()
