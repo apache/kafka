@@ -23,10 +23,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -76,8 +75,8 @@ public class KafkaClusterTestKitTest {
     @Test
     public void testCreateClusterWithBadPerServerProperties() {
         Map<Integer, Map<String, String>> perServerProperties = new HashMap<>();
-        perServerProperties.put(100, Collections.singletonMap("foo", "foo1"));
-        perServerProperties.put(200, Collections.singletonMap("bar", "bar1"));
+        perServerProperties.put(100, Map.of("foo", "foo1"));
+        perServerProperties.put(200, Map.of("bar", "bar1"));
 
         IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder()
@@ -105,9 +104,9 @@ public class KafkaClusterTestKitTest {
 
             nodes.brokerNodes().forEach((brokerId, node) -> {
                 assertEquals(2, node.logDataDirectories().size());
-                Set<String> expected = new HashSet<>(Arrays.asList(String.format("broker_%d_data0", brokerId), String.format("broker_%d_data1", brokerId)));
+                Set<String> expected = new HashSet<>(List.of(String.format("broker_%d_data0", brokerId), String.format("broker_%d_data1", brokerId)));
                 if (nodes.isCombined(node.id())) {
-                    expected = new HashSet<>(Arrays.asList(String.format("combined_%d_0", brokerId), String.format("combined_%d_1", brokerId)));
+                    expected = new HashSet<>(List.of(String.format("combined_%d_0", brokerId), String.format("combined_%d_1", brokerId)));
                 }
                 assertEquals(
                         expected,

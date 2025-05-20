@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import java.lang.reflect.Method;
-import java.util.Collections;
 import java.util.List;
 
 import static org.mockito.Mockito.mock;
@@ -34,7 +33,7 @@ import static org.mockito.Mockito.when;
 public class ClusterTestExtensionsUnitTest {
 
     static List<ClusterConfig> cfgEmpty() {
-        return Collections.emptyList();
+        return List.of();
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

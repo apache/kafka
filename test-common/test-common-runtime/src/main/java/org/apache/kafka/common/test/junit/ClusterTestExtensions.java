@@ -268,7 +268,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
 
         ClusterConfig config = ClusterConfig.builder()
-            .setTypes(new HashSet<>(Arrays.asList(types)))
+            .setTypes(new HashSet<>(List.of(types)))
             .setBrokers(clusterTest.brokers() == 0 ? defaults.brokers() : clusterTest.brokers())
             .setControllers(clusterTest.controllers() == 0 ? defaults.controllers() : clusterTest.controllers())
             .setDisksPerBroker(clusterTest.disksPerBroker() == 0 ? defaults.disksPerBroker() : clusterTest.disksPerBroker())
@@ -280,7 +280,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .setServerProperties(serverProperties)
             .setPerServerProperties(perServerProperties)
             .setMetadataVersion(clusterTest.metadataVersion())
-            .setTags(Arrays.asList(clusterTest.tags()))
+            .setTags(List.of(clusterTest.tags()))
             .setFeatures(features)
             .build();
 
