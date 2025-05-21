@@ -190,7 +190,7 @@ public class ShareGroupOffset {
         }
 
         public Builder setStateBatches(List<PersisterStateBatch> stateBatches) {
-            this.stateBatches = stateBatches == null ? Collections.emptyList() : stateBatches.stream().toList();
+            this.stateBatches = stateBatches == null ? List.of() : stateBatches.stream().toList();
             return this;
         }
 
