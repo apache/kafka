@@ -4930,8 +4930,6 @@ public class GroupMetadataManager {
             consumerGroup.removeMember(memberId);
         }
 
-        System.out.println("oldSubscribedTopicNames: " + oldSubscribedTopicNames);
-        System.out.println("subscribedTopicNames: " + consumerGroup.subscribedTopicNames().keySet());
         updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames().keySet());
     }
 
