@@ -208,7 +208,7 @@ public class Protocol {
             // Responses
             b.append("<b>Responses:</b><br>\n");
             Schema[] responses = key.messageType.responseSchemas();
-            for (int version = key.oldestVersion(); version < key.latestVersion(); version++) {
+            for (int version = key.oldestVersion(); version <= key.latestVersion(); version++) {
                 Schema schema = responses[version];
                 if (schema == null)
                     throw new IllegalStateException("Unexpected null schema for " + key + " with version " + version);
