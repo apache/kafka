@@ -82,7 +82,7 @@ import scala.jdk.javaapi.CollectionConverters;
 
 import static kafka.server.share.PendingRemoteFetches.RemoteFetch;
 import static kafka.server.share.SharePartitionManagerTest.DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL;
-import static kafka.server.share.SharePartitionManagerTest.REMOTE_STORAGE_REQUEST_WAIT_TIME_MS;
+import static kafka.server.share.SharePartitionManagerTest.REMOTE_FETCH_MAX_WAIT_MS;
 import static kafka.server.share.SharePartitionManagerTest.buildLogReadResult;
 import static kafka.server.share.SharePartitionManagerTest.mockReplicaManagerDelayedShareFetch;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShareAcquiredRecords;
@@ -1859,6 +1859,7 @@ public class DelayedShareFetchTest {
         assertEquals(Set.of(tp0), future.join().keySet());
         // Verify the locks are released for tp0.
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0));
+        assertTrue(delayedShareFetch.outsidePurgatoryCallbackLock());
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
     }
@@ -1939,6 +1940,7 @@ public class DelayedShareFetchTest {
         assertEquals(Set.of(tp0), future.join().keySet());
         // Verify the locks are released for tp0.
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0));
+        assertTrue(delayedShareFetch.outsidePurgatoryCallbackLock());
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
     }
@@ -2077,7 +2079,7 @@ public class DelayedShareFetchTest {
                 time,
                 pendingRemoteFetches,
                 fetchId,
-                REMOTE_STORAGE_REQUEST_WAIT_TIME_MS);
+                REMOTE_FETCH_MAX_WAIT_MS);
         }
     }
 }

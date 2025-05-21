@@ -110,7 +110,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private Optional<PendingRemoteFetches> pendingRemoteFetchesOpt;
     private Optional<Exception> remoteStorageFetchException;
     private final AtomicBoolean outsidePurgatoryCallbackLock;
-    private final long remoteStorageRequestWaitTimeMs;
+    private final long remoteFetchMaxWaitMs;
 
     /**
      * This function constructs an instance of delayed share fetch operation for completing share fetch
@@ -122,7 +122,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * @param sharePartitions The share partitions referenced in the share fetch request.
      * @param shareGroupMetrics The share group metrics to record the metrics.
      * @param time The system time.
-     * @param remoteStorageRequestWaitTimeMs The max wait time for a share fetch request having remote storage fetch.
+     * @param remoteFetchMaxWaitMs The max wait time for a share fetch request having remote storage fetch.
      */
     public DelayedShareFetch(
             ShareFetch shareFetch,
@@ -131,7 +131,7 @@ public class DelayedShareFetch extends DelayedOperation {
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
             ShareGroupMetrics shareGroupMetrics,
             Time time,
-            long remoteStorageRequestWaitTimeMs
+            long remoteFetchMaxWaitMs
     ) {
         this(shareFetch,
             replicaManager,
@@ -142,7 +142,7 @@ public class DelayedShareFetch extends DelayedOperation {
             time,
             Optional.empty(),
             Uuid.randomUuid(),
-            remoteStorageRequestWaitTimeMs
+            remoteFetchMaxWaitMs
         );
     }
 
@@ -158,7 +158,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * @param shareGroupMetrics The share group metrics to record the metrics.
      * @param time The system time.
      * @param pendingRemoteFetchesOpt Optional containing an in-flight remote fetch object or an empty optional.
-     * @param remoteStorageRequestWaitTimeMs The max wait time for a share fetch request having remote storage fetch.
+     * @param remoteFetchMaxWaitMs The max wait time for a share fetch request having remote storage fetch.
      */
     DelayedShareFetch(
         ShareFetch shareFetch,
@@ -170,7 +170,7 @@ public class DelayedShareFetch extends DelayedOperation {
         Time time,
         Optional<PendingRemoteFetches> pendingRemoteFetchesOpt,
         Uuid fetchId,
-        long remoteStorageRequestWaitTimeMs
+        long remoteFetchMaxWaitMs
     ) {
         super(shareFetch.fetchParams().maxWaitMs, Optional.empty());
         this.shareFetch = shareFetch;
@@ -187,7 +187,7 @@ public class DelayedShareFetch extends DelayedOperation {
         this.remoteStorageFetchException = Optional.empty();
         this.fetchId = fetchId;
         this.outsidePurgatoryCallbackLock = new AtomicBoolean(false);
-        this.remoteStorageRequestWaitTimeMs = remoteStorageRequestWaitTimeMs;
+        this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
         // Register metrics for DelayedShareFetch.
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "DelayedShareFetchMetrics");
         this.expiredRequestMeter = metricsGroup.newMeter(EXPIRES_PER_SEC, "requests", TimeUnit.SECONDS);
@@ -643,6 +643,11 @@ public class DelayedShareFetch extends DelayedOperation {
         return pendingRemoteFetchesOpt.orElse(null);
     }
 
+    // Visible for testing.
+    boolean outsidePurgatoryCallbackLock() {
+        return outsidePurgatoryCallbackLock.get();
+    }
+
     // Only used for testing purpose.
     void updatePartitionsAcquired(LinkedHashMap<TopicIdPartition, Long> partitionsAcquired) {
         this.partitionsAcquired = partitionsAcquired;
@@ -691,7 +696,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private boolean maybeRegisterCallbackPendingRemoteFetch() {
         log.trace("Registering callback pending remote fetch");
         PendingRemoteFetches pendingFetch = pendingRemoteFetchesOpt.get();
-        if (!pendingFetch.isDone() && shareFetch.fetchParams().maxWaitMs < remoteStorageRequestWaitTimeMs) {
+        if (!pendingFetch.isDone() && shareFetch.fetchParams().maxWaitMs < remoteFetchMaxWaitMs) {
             TimerTask timerTask = new PendingRemoteFetchTimerTask();
             pendingFetch.invokeCallbackOnCompletion(((ignored, throwable) -> {
                 timerTask.cancel();
@@ -950,19 +955,15 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private void completeRemoteShareFetchRequestOutsidePurgatory() {
-        try {
-            if (outsidePurgatoryCallbackLock.compareAndSet(false, true)) {
-                completeRemoteStorageShareFetchRequest();
-            }
-        } finally {
-            outsidePurgatoryCallbackLock.set(false);
+        if (outsidePurgatoryCallbackLock.compareAndSet(false, true)) {
+            completeRemoteStorageShareFetchRequest();
         }
     }
 
     private class PendingRemoteFetchTimerTask extends TimerTask {
 
         public PendingRemoteFetchTimerTask() {
-            super(remoteStorageRequestWaitTimeMs - shareFetch.fetchParams().maxWaitMs);
+            super(remoteFetchMaxWaitMs - shareFetch.fetchParams().maxWaitMs);
         }
 
         @Override
