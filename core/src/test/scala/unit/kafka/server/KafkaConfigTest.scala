@@ -1350,14 +1350,14 @@ class KafkaConfigTest {
     props.remove(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, incorrectListeners)
     var expectedExceptionContainsText = """The listeners config must only contain KRaft controller listeners from
-    |controller.listener.names when process.roles=controller""".stripMargin.replaceAll("\n", " ")
+    |controller.listener.names when process.roles=controller""".stripMargin.replaceAll(System.lineSeparator(), " ")
     assertBadConfigContainingMessage(props, expectedExceptionContainsText)
 
     // Invalid if listeners doesn't contain every name in controller.listener.names
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, correctListeners)
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, correctControllerListenerNames + ",SASL_SSL")
     expectedExceptionContainsText = """controller.listener.names must only contain values appearing in the 'listeners'
-    |configuration when running the KRaft controller role""".stripMargin.replaceAll("\n", " ")
+    |configuration when running the KRaft controller role""".stripMargin.replaceAll(System.lineSeparator(), " ")
     assertBadConfigContainingMessage(props, expectedExceptionContainsText)
 
     // Valid now
@@ -1378,7 +1378,7 @@ class KafkaConfigTest {
 
     val expectedExceptionContainsText =
       """controller.listener.names must not contain an explicitly set inter.broker.listener.name configuration value
-        |when process.roles=controller""".stripMargin.replaceAll("\n", " ")
+        |when process.roles=controller""".stripMargin.replaceAll(System.lineSeparator(), " ")
     assertBadConfigContainingMessage(props, expectedExceptionContainsText)
   }
 
