@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
+package org.apache.kafka.server;
 
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.metrics.QuotaViolationException;
