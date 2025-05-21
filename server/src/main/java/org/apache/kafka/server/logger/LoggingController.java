@@ -20,14 +20,13 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
  * An MBean that allows the user to dynamically alter log4j levels at runtime.
  * The companion object contains the singleton instance of this class and
- * registers the MBean. The [[kafka.utils.Logging]] trait forces initialization
+ * registers the MBean. The {@code kafka.utils.Logging} trait forces initialization
  * of the companion object.
  */
 public class LoggingController implements LoggingControllerMBean {
@@ -36,8 +35,8 @@ public class LoggingController implements LoggingControllerMBean {
 
     /**
      * Note: In Log4j 1, the root logger's name was "root" and Kafka also followed that name for dynamic logging control feature.
-     * The root logger's name is changed in log4j2 to empty string (see: [[LogManager.ROOT_LOGGER_NAME]]) but for backward-
-     * compatibility. Kafka keeps its original root logger name. It is why here is a dedicated definition for the root logger name.
+     * The root logger's name is changed in log4j2 to empty string (see: {@link LogManager#ROOT_LOGGER_NAME}) but for backward-compatibility.
+     * Kafka keeps its original root logger name. It is why here is a dedicated definition for the root logger name.
      */
     public static final String ROOT_LOGGER = "root";
 
@@ -69,7 +68,7 @@ public class LoggingController implements LoggingControllerMBean {
      * Sets the log level of a particular logger. If the given logLevel is not an available level
      * (i.e., one of OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL) it falls back to DEBUG.
      *
-     * @see Level#toLevel
+     * @see Level#toLevel(String, Level)
      */
     public static boolean logLevel(String loggerName, String logLevel) {
         return DELEGATE.logLevel(loggerName, logLevel);
@@ -85,11 +84,11 @@ public class LoggingController implements LoggingControllerMBean {
 
     @Override
     public List<String> getLoggers() {
-        List<String> result = new ArrayList<>();
-        for (Map.Entry<String, String> entry : LoggingController.loggers().entrySet()) {
-            result.add(entry.getKey() + "=" + entry.getValue());
-        }
-        return result;
+        return LoggingController.loggers()
+                .entrySet()
+                .stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .toList();
     }
 
     @Override
