@@ -213,7 +213,7 @@ class KafkaConfigTest {
       propertiesFile,
       """If using process.roles, either controller.quorum.bootstrap.servers
       |must contain the set of bootstrap controllers or controller.quorum.voters must contain a
-      |parseable set of controllers.""".stripMargin.replace("\n", " ")
+      |parseable set of controllers.""".stripMargin.replace(System.lineSeparator(), " ")
     )
   }
 
