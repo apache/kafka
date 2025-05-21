@@ -602,7 +602,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         throw new ConfigException(
           s"""If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
           |contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
-          |set of controllers.""".stripMargin.replace("\n", " ")
+          |set of controllers.""".stripMargin.replace(System.lineSeparator(), " ")
         )
       }
     }
