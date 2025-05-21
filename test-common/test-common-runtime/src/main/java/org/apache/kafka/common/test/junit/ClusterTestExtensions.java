@@ -42,7 +42,6 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -268,7 +267,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
 
         ClusterConfig config = ClusterConfig.builder()
-            .setTypes(new HashSet<>(List.of(types)))
+            .setTypes(Set.of(types))
             .setBrokers(clusterTest.brokers() == 0 ? defaults.brokers() : clusterTest.brokers())
             .setControllers(clusterTest.controllers() == 0 ? defaults.controllers() : clusterTest.controllers())
             .setDisksPerBroker(clusterTest.disksPerBroker() == 0 ? defaults.disksPerBroker() : clusterTest.disksPerBroker())
