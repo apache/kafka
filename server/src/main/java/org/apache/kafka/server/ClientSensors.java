@@ -1,12 +1,12 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,13 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.metrics.Sensor;
+
 import java.util.Map;
 
+/**
+ * Represents the sensors aggregated per client
+ * @param metricTags Quota metric tags for the client
+ * @param quotaSensor @Sensor that tracks the quota
+ * @param throttleTimeSensor @Sensor that tracks the throttle time
+ */
 public record ClientSensors(Map<String, String> metricTags,
                             Sensor quotaSensor,
                             Sensor throttleTimeSensor) {
