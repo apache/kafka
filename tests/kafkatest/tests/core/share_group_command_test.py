@@ -76,9 +76,9 @@ class ShareGroupCommandTest(Test):
         if group:
             if describe_members:
                 def has_expected_share_group_member():
-                    output = self.kafka.describe_share_group_members(group=group,node=kafka_node,command_config=command_config_file)
+                    output = self.kafka.describe_share_group_members(group=group, node=kafka_node, command_config=command_config_file)
                     return len(output) == 1 and all("test-share-group" in line for line in output)
-                wait_until(has_expected_share_group_member,timeout_sec=10, err_msg="Timed out waiting to describe members of the share group.")
+                wait_until(has_expected_share_group_member, timeout_sec=10, err_msg="Timed out waiting to describe members of the share group.")
             else:
                 wait_until(lambda: re.search("topic-share-group-command",self.kafka.describe_share_group(group=group, node=kafka_node, command_config=command_config_file)), timeout_sec=10,
                         err_msg="Timed out waiting to describe expected share groups.")
