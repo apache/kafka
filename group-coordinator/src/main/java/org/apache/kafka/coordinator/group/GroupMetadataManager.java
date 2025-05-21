@@ -147,6 +147,8 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStatePartitionMetadataInfo;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
@@ -505,27 +507,6 @@ public class GroupMetadataManager {
      * The share group partition assignor.
      */
     private final ShareGroupPartitionAssignor shareGroupAssignor;
-
-    /**
-     * A record class to hold the value representing ShareGroupStatePartitionMetadata for the TimelineHashmap
-     * keyed on share group id.
-     *
-     * @param initializedTopics Map of set of partition ids keyed on the topic id.
-     * @param deletingTopics    Set of topic ids.
-     */
-    private record ShareGroupStatePartitionMetadataInfo(
-        Map<Uuid, InitMapValue> initializingTopics,
-        Map<Uuid, InitMapValue> initializedTopics,
-        Set<Uuid> deletingTopics
-    ) {
-    }
-
-    public record InitMapValue(
-        String name,
-        Set<Integer> partitions,
-        long timestamp
-    ) {
-    }
 
     /**
      * The authorizer to validate the regex subscription topics.
@@ -2691,11 +2672,12 @@ public class GroupMetadataManager {
 
         // Fresh initializing only
         long curTimestamp = time.milliseconds();
+        long delta = config.offsetCommitTimeoutMs() * 2L;
         Map<Uuid, InitMapValue> alreadyInitialized = info == null ? new HashMap<>() :
             combineInitMaps(
                 info.initializedTopics(),
                 info.initializingTopics().entrySet().stream()
-                    .filter(entry -> curTimestamp - entry.getValue().timestamp() < 30_000)
+                    .filter(entry -> curTimestamp - entry.getValue().timestamp() < delta)
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
             );
 
@@ -2814,26 +2796,6 @@ public class GroupMetadataManager {
                 name = initializing.get(topicId).name();
             }
             finalInitMap.putIfAbsent(topicId, new InitMapValue(name, finalPartitions, timestamp));
-        }
-
-        return finalInitMap;
-    }
-
-    // Visibility for tests
-    static Map<Uuid, Set<Integer>> mergeShareGroupInitMaps(
-        Map<Uuid, Set<Integer>> existingShareGroupInitMap,
-        Map<Uuid, Set<Integer>> newShareGroupInitMap
-    ) {
-        Map<Uuid, Set<Integer>> finalInitMap = new HashMap<>();
-        Set<Uuid> combinedTopicIdSet = new HashSet<>(existingShareGroupInitMap.keySet());
-        combinedTopicIdSet.addAll(newShareGroupInitMap.keySet());
-
-        for (Uuid topicId : combinedTopicIdSet) {
-            Set<Integer> partitions = new HashSet<>(existingShareGroupInitMap.getOrDefault(topicId, new HashSet<>()));
-            if (newShareGroupInitMap.containsKey(topicId)) {
-                partitions.addAll(newShareGroupInitMap.get(topicId));
-            }
-            finalInitMap.putIfAbsent(topicId, partitions);
         }
 
         return finalInitMap;
@@ -4792,7 +4754,8 @@ public class GroupMetadataManager {
         Map<Uuid, InitMapValue> finalInitializedMap = combineInitMaps(currentMap.initializedTopics(), enrichedTopicPartitionMap);
 
         // Fetch initializing info from state metadata.
-        Map<Uuid, InitMapValue> finalInitializingMap = new HashMap<>(currentMap.initializingTopics());
+        Map<Uuid, InitMapValue> finalInitializingMap = new HashMap<>();
+        currentMap.initializingTopics().forEach((k, v) -> finalInitializingMap.put(k, new InitMapValue(v.name(), new HashSet<>(v.partitions()), v.timestamp())));
 
         // Remove any entries which are already initialized.
         for (Map.Entry<Uuid, Set<Integer>> entry : topicPartitionMap.entrySet()) {
@@ -5696,17 +5659,18 @@ public class GroupMetadataManager {
             // Tombstone!
             shareGroupPartitionMetadata.remove(groupId);
         } else {
+            long timestamp = time.milliseconds();
             ShareGroupStatePartitionMetadataInfo info = new ShareGroupStatePartitionMetadataInfo(
                 value.initializingTopics().stream()
                     .map(topicPartitionInfo -> Map.entry(
                         topicPartitionInfo.topicId(),
-                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), topicPartitionInfo.createTimestamp())))
+                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), timestamp)))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
 
                 value.initializedTopics().stream()
                     .map(topicPartitionInfo -> Map.entry(
                         topicPartitionInfo.topicId(),
-                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), topicPartitionInfo.createTimestamp())))
+                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), timestamp)))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
 
                 value.deletingTopics().stream()
@@ -8456,5 +8420,10 @@ public class GroupMetadataManager {
      */
     static String consumerGroupSyncKey(String groupId, String memberId) {
         return "sync-" + groupId + "-" + memberId;
+    }
+
+    // Visibility for testing
+    Map<String, ShareGroupStatePartitionMetadataInfo> shareGroupPartitionMetadata() {
+        return shareGroupPartitionMetadata;
     }
 }

@@ -776,7 +776,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return Optional.of(getWriteErrorCoordinatorResult(Errors.FENCED_LEADER_EPOCH, null, topicId, partitionId));
         }
         if (partitionData.stateEpoch() != -1 && stateEpochMap.containsKey(mapKey) && stateEpochMap.get(mapKey) > partitionData.stateEpoch()) {
-            log.error("Request state epoch smaller than last recorded.");
+            log.error("Request state epoch smaller than last recorded current: {}, requested:{}.", stateEpochMap.get(mapKey), partitionData.stateEpoch());
             return Optional.of(getWriteErrorCoordinatorResult(Errors.FENCED_STATE_EPOCH, null, topicId, partitionId));
         }
         if (metadataImage == null) {
@@ -915,7 +915,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicId, partitionId);
         if (partitionData.stateEpoch() != -1 && stateEpochMap.containsKey(key) && stateEpochMap.get(key) > partitionData.stateEpoch()) {
-            log.error("Initialize request state epoch smaller than last recorded.");
+            log.error("Initialize request state epoch smaller than last recorded current: {}, requested:{}.", stateEpochMap.get(key), partitionData.stateEpoch());
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.FENCED_STATE_EPOCH, Errors.FENCED_STATE_EPOCH.exception(), topicId, partitionId));
         }
 
