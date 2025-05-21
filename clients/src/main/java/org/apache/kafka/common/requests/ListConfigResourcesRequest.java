@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
+import java.util.HashSet;
 import java.util.Set;
 
 public class ListConfigResourcesRequest extends AbstractRequest {
@@ -40,10 +41,10 @@ public class ListConfigResourcesRequest extends AbstractRequest {
             if (version == 0) {
                 // The v0 only supports CLIENT_METRICS resource type.
                 // Empty resource types means all supported resource types. In v0, it means CLIENT_METRICS, so it's acceptable.
-                if ((data.resourceTypes().size() == 1 && !data.resourceTypes().contains(ConfigResource.Type.CLIENT_METRICS.id())) ||
-                    data.resourceTypes().size() >= 2) {
-                    throw new UnsupportedVersionException("The broker only supports ListConfigResources " +
-                        "v0, but we need v1 or newer to request config resources other than CLIENT_METRICS.");
+                Set<Byte> resourceTypes = new HashSet<>(data.resourceTypes());
+                if ((resourceTypes.size() == 1 && !resourceTypes.contains(ConfigResource.Type.CLIENT_METRICS.id())) ||
+                    resourceTypes.size() >= 2) {
+                    throw new UnsupportedVersionException("The v0 ListConfigResources only supports CLIENT_METRICS");
                 }
             }
             return new ListConfigResourcesRequest(data, version);
