@@ -10664,6 +10664,7 @@ public class KafkaAdminClientTest {
                                           member.memberEpoch());
     }
 
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testListClientMetricsResources() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -10697,6 +10698,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testListClientMetricsResourcesEmpty() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -10714,6 +10716,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testListClientMetricsResourcesNotSupported() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {

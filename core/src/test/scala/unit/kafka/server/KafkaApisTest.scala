@@ -11207,7 +11207,8 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testListConfigResourcesV0(): Unit = {
-    val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()).build(0))
+    val request = buildRequest(new ListConfigResourcesRequest.Builder(
+      new ListConfigResourcesRequestData().setResourceTypes(util.List.of(ConfigResource.Type.CLIENT_METRICS.id))).build(0))
     metadataCache = mock(classOf[KRaftMetadataCache])
 
     val resources = util.Set.of("client-metric1", "client-metric2")

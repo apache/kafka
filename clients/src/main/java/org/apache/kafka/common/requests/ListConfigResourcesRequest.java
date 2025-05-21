@@ -44,6 +44,8 @@ public class ListConfigResourcesRequest extends AbstractRequest {
                 if (resourceTypes.size() != 1 || !resourceTypes.contains(ConfigResource.Type.CLIENT_METRICS.id())) {
                     throw new UnsupportedVersionException("The v0 ListConfigResources only supports CLIENT_METRICS");
                 }
+                // The v0 request does not have resource types field, so creating a new request data.
+                return new ListConfigResourcesRequest(new ListConfigResourcesRequestData(), version);
             }
             return new ListConfigResourcesRequest(data, version);
         }
