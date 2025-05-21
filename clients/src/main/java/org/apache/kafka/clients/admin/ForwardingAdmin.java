@@ -305,7 +305,7 @@ public class ForwardingAdmin implements Admin {
         return delegate.listConfigResources(configResourceTypes, options);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"deprecation", "removal"})
     @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
         return delegate.listClientMetricsResources(options);

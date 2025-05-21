@@ -443,7 +443,7 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
         return adminDelegate.listConfigResources(configResourceTypes, options);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"deprecation", "removal"})
     @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(final ListClientMetricsResourcesOptions options) {
         return adminDelegate.listClientMetricsResources(options);

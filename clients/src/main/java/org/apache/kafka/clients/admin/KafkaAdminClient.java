@@ -4913,7 +4913,7 @@ public class KafkaAdminClient extends AdminClient {
         return new ListConfigResourcesResult(future);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"deprecation", "removal"})
     @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
         final long now = time.milliseconds();

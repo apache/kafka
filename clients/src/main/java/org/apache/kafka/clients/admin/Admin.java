@@ -1804,7 +1804,7 @@ public interface Admin extends AutoCloseable {
      * @return The ListClientMetricsResourcesResult.
      * @deprecated Since 4.1. Use {@link #listConfigResources(Set, ListConfigResourcesOptions)} instead.
      */
-    @Deprecated(since = "4.1")
+    @Deprecated(since = "4.1", forRemoval = true)
     ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options);
 
     /**
@@ -1816,7 +1816,7 @@ public interface Admin extends AutoCloseable {
      * @return The ListClientMetricsResourcesResult.
      * @deprecated Since 4.1. Use {@link #listConfigResources()} instead.
      */
-    @Deprecated(since = "4.1")
+    @Deprecated(since = "4.1", forRemoval = true)
     default ListClientMetricsResourcesResult listClientMetricsResources() {
         return listClientMetricsResources(new ListClientMetricsResourcesOptions());
     }
