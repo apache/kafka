@@ -22016,6 +22016,47 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedResult, context.groupMetadataManager.maybeCleanupShareGroupState(Set.of(t1Id, t2Id)));
     }
 
+    @Test
+    public void testCombineInitMaps() {
+        // Both empty.
+        Map<Uuid, InitMapValue> m1 = Map.of();
+        Map<Uuid, InitMapValue> m2 = Map.of();
+
+        assertEquals(Map.of(), GroupMetadataManager.combineInitMaps(m1, m2));
+
+        Uuid t1Id = Uuid.randomUuid();
+        String t1Name = "t1";
+        Uuid t2Id = Uuid.randomUuid();
+        String t2Name = "t2";
+
+        // m1 non-empty, m2 empty.
+        m1 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
+        assertEquals(m1, GroupMetadataManager.combineInitMaps(m1, m2));
+
+        // m1 empty, m2 non-empty.
+        m1 = Map.of();
+        m2 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
+        assertEquals(m2, GroupMetadataManager.combineInitMaps(m1, m2));
+
+        // m1 non-empty, m2 non-empty.
+        m1 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
+        m2 = Map.of(t2Id, new InitMapValue(t2Name, Set.of(0), 1));
+        assertEquals(Map.of(
+            t1Id, new InitMapValue(t1Name, Set.of(0), 1),
+            t2Id, new InitMapValue(t2Name, Set.of(0), 1)
+        ), GroupMetadataManager.combineInitMaps(m1, m2));
+
+        // m1 non-empty, m2 non-empty (differ by partition)
+        m1 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
+        m2 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(1), 1));
+        assertEquals(Map.of(t1Id, new InitMapValue(t1Name, Set.of(0, 1), 1)), GroupMetadataManager.combineInitMaps(m1, m2));
+
+        // m1 and m2 exactly same
+        m1 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
+        m2 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
+        assertEquals(Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1)), GroupMetadataManager.combineInitMaps(m1, m2));
+    }
+
     private static void checkJoinGroupResponse(
         JoinGroupResponseData expectedResponse,
         JoinGroupResponseData actualResponse,

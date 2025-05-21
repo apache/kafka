@@ -2773,7 +2773,8 @@ public class GroupMetadataManager {
         );
     }
 
-    Map<Uuid, InitMapValue> combineInitMaps(
+    // Visibility for testing
+    static Map<Uuid, InitMapValue> combineInitMaps(
         Map<Uuid, InitMapValue> initialized,
         Map<Uuid, InitMapValue> initializing
     ) {
