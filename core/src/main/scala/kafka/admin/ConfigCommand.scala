@@ -86,13 +86,13 @@ object ConfigCommand extends Logging {
       opts.checkArgs()
       processCommand(opts)
     } catch {
-      case e @ (_: IllegalArgumentException | _: InvalidConfigurationException | _: OptionException) =>
-        logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)
+      case e: UnsupportedVersionException =>
+        logger.debug(s"Unsupported API encountered in server when executing config command with args '${args.mkString(" ")}'")
         System.err.println(e.getMessage)
         Exit.exit(1)
 
-      case e: UnsupportedVersionException =>
-        logger.debug(s"Unsupported API encountered in server when executing config command with args '${args.mkString(" ")}'")
+      case e @ (_: IllegalArgumentException | _: InvalidConfigurationException | _: OptionException) =>
+        logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)
         System.err.println(e.getMessage)
         Exit.exit(1)
 

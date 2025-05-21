@@ -127,7 +127,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Set(topic), produceException.asInstanceOf[TopicAuthorizationException].unauthorizedTopics.asScala)
 
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
-    consumer.assign(List(topicPartition).asJava)
+    consumer.assign(java.util.List.of(topicPartition))
     val consumeException = assertThrows(classOf[TopicAuthorizationException],
       () => TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1))
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
@@ -160,7 +160,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     props.put(ConsumerConfig.GROUP_ID_CONFIG, group)
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = createConsumer(configOverrides = props)
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
 
     removeAndVerifyAcls(
@@ -198,7 +198,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     props.put(ConsumerConfig.GROUP_ID_CONFIG, group)
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = createConsumer(configOverrides = props)
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
 
     removeAndVerifyAcls(
@@ -231,7 +231,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
     )
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
-    consumer.assign(List(topicPartition).asJava)
+    consumer.assign(java.util.List.of(topicPartition))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
   }
 
