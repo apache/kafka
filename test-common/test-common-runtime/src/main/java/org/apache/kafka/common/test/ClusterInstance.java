@@ -352,14 +352,14 @@ public interface ClusterInstance {
 
             // Ensure that the topic directories are soft-deleted
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                    CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                    broker.config().logDirs().stream().allMatch(logDir ->
                         topicPartitions.stream().noneMatch(tp ->
                             new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
                 "Failed to soft-delete the data to a delete directory");
 
             // Ensure that the topic directories are hard-deleted
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                broker.config().logDirs().stream().allMatch(logDir ->
                     topicPartitions.stream().allMatch(tp ->
                         Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
                             partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&

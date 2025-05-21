@@ -55,6 +55,7 @@ import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.ConsumerWrapper;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
@@ -550,11 +551,16 @@ public class StreamThread extends Thread implements ProcessingThread {
             );
             final ByteArrayDeserializer keyDeserializer = new ByteArrayDeserializer();
             final ByteArrayDeserializer valueDeserializer = new ByteArrayDeserializer();
+
             return new MainConsumerSetup(
-                new AsyncKafkaConsumer<>(
-                    new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(consumerConfigs, keyDeserializer, valueDeserializer)),
-                    keyDeserializer,
-                    valueDeserializer,
+                maybeWrapConsumer(
+                    consumerConfigs,
+                    new AsyncKafkaConsumer<>(
+                        new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(consumerConfigs, keyDeserializer, valueDeserializer)),
+                        keyDeserializer,
+                        valueDeserializer,
+                        streamsRebalanceData
+                    ),
                     streamsRebalanceData
                 ),
                 streamsRebalanceData
@@ -565,6 +571,32 @@ public class StreamThread extends Thread implements ProcessingThread {
                 Optional.empty()
             );
         }
+    }
+
+    private static Consumer<byte[], byte[]> maybeWrapConsumer(final Map<String, Object> config,
+                                                              final AsyncKafkaConsumer<byte[], byte[]> consumer,
+                                                              final Optional<StreamsRebalanceData> streamsRebalanceData) {
+        final Object o = config.get(InternalConfig.INTERNAL_CONSUMER_WRAPPER);
+        if (o == null) {
+            return consumer;
+        }
+
+        final ConsumerWrapper wrapper;
+        if (o instanceof String) {
+            try {
+                wrapper = Utils.newInstance((String) o, ConsumerWrapper.class);
+            } catch (final ClassNotFoundException e) {
+                throw new IllegalArgumentException(e);
+            }
+        } else if (o instanceof Class<?>) {
+            wrapper = (ConsumerWrapper) Utils.newInstance((Class<?>) o);
+        } else {
+            throw new IllegalArgumentException("Internal config " + InternalConfig.INTERNAL_CONSUMER_WRAPPER + " must be a class or class name");
+        }
+
+        wrapper.wrapConsumer(consumer, config, streamsRebalanceData);
+
+        return wrapper;
     }
 
     private static class MainConsumerSetup {
@@ -1105,7 +1137,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
             if (streamsRebalanceData.isPresent()) {
-                ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
+                final AsyncKafkaConsumer<byte[], byte[]> consumer = mainConsumer instanceof ConsumerWrapper
+                    ? ((ConsumerWrapper) mainConsumer).consumer()
+                    : (AsyncKafkaConsumer<byte[], byte[]>) mainConsumer;
+                consumer.subscribe(
                     topologyMetadata.allFullSourceTopicNames(),
                     new DefaultStreamsRebalanceListener(
                         log,

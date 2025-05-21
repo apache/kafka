@@ -55,6 +55,8 @@ import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpress
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -68,6 +70,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
@@ -720,11 +723,19 @@ public class GroupCoordinatorRecordHelpersTest {
     @Test
     public void testOffsetCommitValueVersion() {
         assertEquals((short) 1, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(true));
-        assertEquals((short) 3, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false));
+        assertEquals((short) 4, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false));
     }
 
-    @Test
-    public void testNewOffsetCommitRecord() {
+    private static Stream<Uuid> uuids() {
+        return Stream.of(
+            Uuid.ZERO_UUID,
+            Uuid.randomUuid()
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testNewOffsetCommitRecord(Uuid topicId) {
         OffsetCommitKey key = new OffsetCommitKey()
             .setGroup("group-id")
             .setTopic("foo")
@@ -734,7 +745,8 @@ public class GroupCoordinatorRecordHelpersTest {
             .setLeaderEpoch(10)
             .setMetadata("metadata")
             .setCommitTimestamp(1234L)
-            .setExpireTimestamp(-1L);
+            .setExpireTimestamp(-1L)
+            .setTopicId(topicId);
 
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             key,
@@ -749,11 +761,14 @@ public class GroupCoordinatorRecordHelpersTest {
             "foo",
             1,
             new OffsetAndMetadata(
+                -1L,
                 100L,
                 OptionalInt.of(10),
                 "metadata",
                 1234L,
-                OptionalLong.empty())
+                OptionalLong.empty(),
+                topicId
+            )
         ));
 
         value.setLeaderEpoch(-1);
@@ -767,7 +782,9 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.empty(),
                 "metadata",
                 1234L,
-                OptionalLong.empty())
+                OptionalLong.empty(),
+                topicId
+            )
         ));
     }
 
@@ -798,7 +815,9 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.of(10),
                 "metadata",
                 1234L,
-                OptionalLong.of(5678L))
+                OptionalLong.of(5678L),
+                Uuid.ZERO_UUID
+            )
         ));
     }
 
