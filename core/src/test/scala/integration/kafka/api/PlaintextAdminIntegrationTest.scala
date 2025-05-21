@@ -1933,9 +1933,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         TestUtils.waitUntilTrue(() => {
           val options = new ListConsumerGroupsOptions().withTypes(util.Set.of(groupType))
             .inGroupStates(util.Set.of(GroupState.STABLE))
-          val options = new ListConsumerGroupsOptions()
-            .withTypes(Set(groupType).asJava)
-            .inGroupStates(Set(GroupState.STABLE).asJava)
           val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
             group.groupId == testGroupId && group.groupState.get == GroupState.STABLE)
           matching.size == 1
@@ -1950,9 +1947,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         TestUtils.waitUntilTrue(() => {
           val options = new ListConsumerGroupsOptions().inGroupStates(util.Set.of(GroupState.EMPTY))
-          val matching = client.listConsumerGroups(options).all.get.asScala.filter(
-              _.groupId == testGroupId)
-          val options = new ListConsumerGroupsOptions().inGroupStates(Set(GroupState.EMPTY).asJava)
           val matching = client.listConsumerGroups(options).all.get.asScala.filter(_.groupId == testGroupId)
           matching.isEmpty
         }, "Expected to find zero groups")
