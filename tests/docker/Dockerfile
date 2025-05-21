@@ -117,7 +117,7 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.5.2-test.jar" -o /opt/kafka-3.5.2/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.6.2-test.jar" -o /opt/kafka-3.6.2/libs/kafka-streams-3.6.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.7.2-test.jar" -o /opt/kafka-3.7.2/libs/kafka-streams-3.7.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.8.1-test.jar" -o /opt/kafka-3.8.1/libs/kafka-streams-3.8.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.9.1-test.jar" -o /opt/kafka-3.9.0/libs/kafka-streams-3.9.1-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.9.1-test.jar" -o /opt/kafka-3.9.1/libs/kafka-streams-3.9.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.0.0-test.jar" -o /opt/kafka-4.0.0/libs/kafka-streams-4.0.0-test.jar
 
 # To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper 
