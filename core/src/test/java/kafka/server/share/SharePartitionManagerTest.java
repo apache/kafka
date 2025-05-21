@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.InvalidShareSessionEpochException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.errors.ShareSessionLimitReachedException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
@@ -118,6 +119,7 @@ import scala.jdk.javaapi.CollectionConverters;
 import static kafka.server.share.DelayedShareFetchTest.mockTopicIdPartitionToReturnDataEqualToMinBytes;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShareAcquiredRecords;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedListEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -274,6 +276,91 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testNewContextThrowsErrorWhenShareSessionNotFoundOnFinalEpoch() {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+        assertThrows(ShareSessionNotFoundException.class, () -> sharePartitionManager.newContext("grp", List.of(), List.of(),
+            new ShareRequestMetadata(Uuid.randomUuid(), ShareRequestMetadata.FINAL_EPOCH), false, CONNECTION_ID));
+    }
+
+    @Test
+    public void testNewContextThrowsErrorWhenAcknowledgeDataPresentOnInitialEpoch() {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+        Uuid tpId0 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
+
+        assertThrows(InvalidRequestException.class, () -> sharePartitionManager.newContext("grp", List.of(tp0, tp1), List.of(),
+            new ShareRequestMetadata(Uuid.randomUuid(), ShareRequestMetadata.INITIAL_EPOCH), true, CONNECTION_ID));
+    }
+
+    @Test
+    public void testNewContextThrowsErrorWhenShareSessionCacheIsFullOnInitialEpoch() {
+        // Define a cache with max size 1
+        ShareSessionCache cache = new ShareSessionCache(1);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+
+        Uuid tpId0 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
+
+        String groupId = "grp";
+        Uuid memberId1 = Uuid.randomUuid();
+        Uuid memberId2 = Uuid.randomUuid();
+
+        // Create a new share session with an initial share fetch request
+        List<TopicIdPartition> reqData = List.of(tp0, tp1);
+
+        ShareRequestMetadata reqMetadata1 = new ShareRequestMetadata(memberId1, ShareRequestMetadata.INITIAL_EPOCH);
+        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, reqData, EMPTY_PART_LIST, reqMetadata1, false, CONNECTION_ID);
+        assertInstanceOf(ShareSessionContext.class, context1);
+        assertFalse(((ShareSessionContext) context1).isSubsequent());
+
+        // Trying to create a new share session, but since cache is already full, it should throw an exception
+        ShareRequestMetadata reqMetadata2 = new ShareRequestMetadata(memberId2, ShareRequestMetadata.INITIAL_EPOCH);
+        assertThrows(ShareSessionLimitReachedException.class, () -> sharePartitionManager.newContext("grp", reqData, EMPTY_PART_LIST,
+            reqMetadata2, false, "id-2"));
+    }
+
+    @Test
+    public void testNewContextExistingSessionNewRequestWithInitialEpoch() {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+
+        Uuid tpId0 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
+
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+        List<TopicIdPartition> reqData = List.of(tp0, tp1);
+
+        ShareRequestMetadata reqMetadata = new ShareRequestMetadata(memberId, ShareRequestMetadata.INITIAL_EPOCH);
+
+        // Create a new share session with an initial share fetch request
+        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, reqData, EMPTY_PART_LIST, reqMetadata, false, CONNECTION_ID);
+        assertInstanceOf(ShareSessionContext.class, context1);
+        assertFalse(((ShareSessionContext) context1).isSubsequent());
+        assertEquals(1, cache.size());
+
+        // Sending another request with INITIAL_EPOCH and same share session key. This should return a new ShareSessionContext
+        // and delete the older one.
+        ShareFetchContext context2 = sharePartitionManager.newContext(groupId, reqData, EMPTY_PART_LIST, reqMetadata, false, CONNECTION_ID);
+        assertInstanceOf(ShareSessionContext.class, context2);
+        assertFalse(((ShareSessionContext) context1).isSubsequent());
+        assertEquals(1, cache.size());
+    }
+
+    @Test
     public void testNewContext() {
         ShareSessionCache cache = new ShareSessionCache(10);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
@@ -370,6 +457,110 @@ public class SharePartitionManagerTest {
         assertTrue(releaseResponse.isDone());
         assertFalse(releaseResponse.isCompletedExceptionally());
         assertEquals(0, cache.size());
+    }
+
+    @Test
+    public void testAcknowledgeSessionUpdateThrowsOnInitialEpoch() {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+
+        assertThrows(InvalidShareSessionEpochException.class,
+            () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
+                new ShareRequestMetadata(Uuid.randomUuid(), ShareRequestMetadata.INITIAL_EPOCH)));
+    }
+
+    @Test
+    public void testAcknowledgeSessionUpdateThrowsWhenShareSessionNotFound() {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+
+        // The share session corresponding to this memberId has not been created yet. This should throw an exception.
+        assertThrows(ShareSessionNotFoundException.class,
+            () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
+                new ShareRequestMetadata(Uuid.randomUuid(), ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))));
+    }
+
+    @Test
+    public void testAcknowledgeSessionUpdateThrowsInvalidShareSessionEpochException() {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+
+        Uuid tpId0 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
+
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+
+        // Create a new share session with an initial share fetch request
+        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, List.of(tp0, tp1), EMPTY_PART_LIST,
+            new ShareRequestMetadata(memberId, ShareRequestMetadata.INITIAL_EPOCH), false, CONNECTION_ID);
+        assertInstanceOf(ShareSessionContext.class, context1);
+        assertFalse(((ShareSessionContext) context1).isSubsequent());
+
+        // The expected epoch from the share session should be 1, but we are passing 2. This should throw an exception.
+        assertThrows(InvalidShareSessionEpochException.class,
+            () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
+                new ShareRequestMetadata(memberId,
+                    ShareRequestMetadata.nextEpoch(ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)))));
+    }
+
+    @Test
+    public void testAcknowledgeSessionUpdateSuccessOnSubsequentEpoch() {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+
+        Uuid tpId0 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
+
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+
+        // Create a new share session with an initial share fetch request
+        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, List.of(tp0, tp1), EMPTY_PART_LIST,
+            new ShareRequestMetadata(memberId, ShareRequestMetadata.INITIAL_EPOCH), false, CONNECTION_ID);
+        assertInstanceOf(ShareSessionContext.class, context1);
+        assertFalse(((ShareSessionContext) context1).isSubsequent());
+
+        // The expected epoch from the share session should be 1, but we are passing 2. This should throw an exception.
+        assertDoesNotThrow(
+            () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
+                new ShareRequestMetadata(memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))));
+    }
+
+    @Test
+    public void testAcknowledgeSessionUpdateSuccessOnFinalEpoch() {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+
+        Uuid tpId0 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
+
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+
+        // Create a new share session with an initial share fetch request
+        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, List.of(tp0, tp1), EMPTY_PART_LIST,
+            new ShareRequestMetadata(memberId, ShareRequestMetadata.INITIAL_EPOCH), false, CONNECTION_ID);
+        assertInstanceOf(ShareSessionContext.class, context1);
+        assertFalse(((ShareSessionContext) context1).isSubsequent());
+
+        // The expected epoch from the share session should be 1, but we are passing 2. This should throw an exception.
+        assertDoesNotThrow(
+            () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
+                new ShareRequestMetadata(memberId, ShareRequestMetadata.FINAL_EPOCH)));
     }
 
     @Test
