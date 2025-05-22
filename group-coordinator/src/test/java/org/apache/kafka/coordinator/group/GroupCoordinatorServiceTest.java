@@ -5375,6 +5375,7 @@ public class GroupCoordinatorServiceTest {
             .setPersister(mockPersister)
             .build(true);
 
+        String groupId = "share-group";
         Uuid topicId = Uuid.randomUuid();
         MetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId, "topic-name", 1)
@@ -5393,9 +5394,27 @@ public class GroupCoordinatorServiceTest {
 
         AlterShareGroupOffsetsResponseData defaultResponse = new AlterShareGroupOffsetsResponseData();
         InitializeShareGroupStateParameters params = new InitializeShareGroupStateParameters.Builder()
-            .build();
+            .setGroupTopicPartitionData(
+                new GroupTopicPartitionData<>(groupId,
+                    List.of(
+                        new TopicData<>(topicId, List.of(PartitionFactory.newPartitionStateData(0, 0, 0)))
+                    ))
+            ).build();
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
 
         assertEquals(defaultResponse, service.persisterInitialize(params, defaultResponse).getNow(null));
+        verify(runtime, times(1)).scheduleWriteOperation(
+            ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
         verify(mockPersister, times(1)).initializeState(ArgumentMatchers.any());
     }
 
