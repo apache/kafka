@@ -3778,7 +3778,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(exception))
         } else {
-          requestHelper.sendMaybeThrottle(request, responseBuilder.merge(response).build())
+          requestHelper.sendMaybeThrottle(request, responseBuilder.merge(response, metadataCache.topicNamesToIds()).build())
         }
       }
     }

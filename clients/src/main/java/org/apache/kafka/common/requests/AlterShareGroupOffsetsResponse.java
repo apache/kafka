@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -82,6 +83,12 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
             return topicData;
         }
 
+        private AlterShareGroupOffsetsResponseTopic getOrCreateTopic(String topic, Uuid topicId) {
+            AlterShareGroupOffsetsResponseTopic topicData = getOrCreateTopic(topic);
+            topicData.setTopicId(topicId);
+            return topicData;
+        }
+
         public Builder addPartition(String topic, int partition, Errors error) {
             AlterShareGroupOffsetsResponseTopic topicData = getOrCreateTopic(topic);
             topicData.partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
@@ -96,9 +103,9 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
             return new AlterShareGroupOffsetsResponse(data);
         }
 
-        public Builder merge(AlterShareGroupOffsetsResponseData data) {
+        public Builder merge(AlterShareGroupOffsetsResponseData data, Map<String, Uuid> topicIdsToNames) {
             data.responses().forEach(topic -> {
-                AlterShareGroupOffsetsResponseTopic newTopic = getOrCreateTopic(topic.topicName());
+                AlterShareGroupOffsetsResponseTopic newTopic = getOrCreateTopic(topic.topicName(), topicIdsToNames.get(topic.topicName()));
                 topic.partitions().forEach(partition -> newTopic.partitions().add(
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())

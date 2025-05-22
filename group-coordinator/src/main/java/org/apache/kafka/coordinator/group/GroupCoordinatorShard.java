@@ -808,8 +808,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         );
     }
 
-
-
     /**
      * Fetch offsets for a given set of partitions and a given group.
      *
