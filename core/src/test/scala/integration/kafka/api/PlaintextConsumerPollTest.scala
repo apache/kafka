@@ -52,7 +52,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
 
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumeAndVerifyRecords(consumer, numRecords = numRecords, startingOffset = 0, maxPollRecords = maxPollRecords,
       startingTimestamp = startingTimestamp)
   }
@@ -69,7 +69,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     val consumer = createConsumer()
 
     val listener = new TestConsumerReassignmentListener()
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
@@ -109,20 +109,20 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
           // so the commit should succeed
           Utils.sleep(1500)
           committedPosition = consumer.position(tp)
-          consumer.commitSync(Map(tp -> new OffsetAndMetadata(committedPosition)).asJava)
+          consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(committedPosition)))
           commitCompleted = true
         }
         super.onPartitionsRevoked(partitions)
       }
     }
 
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
 
     // force a rebalance to trigger an invocation of the revocation callback while in the group
-    consumer.subscribe(List("otherTopic").asJava, listener)
+    consumer.subscribe(java.util.List.of("otherTopic"), listener)
     awaitRebalance(consumer, listener)
 
     assertEquals(0, committedPosition)
@@ -194,7 +194,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
         super.onPartitionsAssigned(partitions)
       }
     }
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
@@ -213,7 +213,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
 
     val consumer = createConsumer()
     val listener = new TestConsumerReassignmentListener
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
@@ -242,7 +242,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLeadWithMaxPollRecords")
     consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     awaitNonEmptyRecords(consumer, tp)
 
     val tags = new util.HashMap[String, String]()
@@ -265,7 +265,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagWithMaxPollRecords")
     consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     val records = awaitNonEmptyRecords(consumer, tp)
 
     val tags = new util.HashMap[String, String]()
@@ -297,7 +297,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     sendRecords(producer, numMessages, tp)
 
     val consumer = createConsumer()
-    consumer.subscribe(Set(topic).asJava)
+    consumer.subscribe(java.util.Set.of(topic))
     val records = awaitNonEmptyRecords(consumer, tp, 0L)
     assertEquals(numMessages, records.count())
   }
@@ -308,7 +308,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
 
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     // continuous poll should eventually fail because there is no offset reset strategy set (fail only when resetting positions after coordinator is known)
     TestUtils.tryUntilNoAssertionError() {

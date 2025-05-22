@@ -26,7 +26,7 @@ import org.junit.jupiter.params.provider.MethodSource
 
 import java.nio.ByteBuffer
 import java.util
-import java.util.{Collections, Optional}
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTest {
@@ -90,7 +90,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
 
     // Test negative target time
     assertThrows(classOf[IllegalArgumentException],
-      () => consumer.offsetsForTimes(Collections.singletonMap(t1p0, -1)))
+      () => consumer.offsetsForTimes(util.Map.of(t1p0, -1)))
 
     val timestampsToSearch = util.Map.of[TopicPartition, java.lang.Long](
       t1p0, 0L,
@@ -134,7 +134,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
   def testEarliestOrLatestOffsets(groupProtocol: String): Unit = {
     setupTopics()
 
-    val partitions = Set(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1).asJava
+    val partitions = util.Set.of(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1)
     val consumer = createConsumer()
 
     val earliests = consumer.beginningOffsets(partitions)

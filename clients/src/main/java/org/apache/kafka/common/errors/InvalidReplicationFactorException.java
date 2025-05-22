@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class InvalidReplicationFactorException extends ApiException {
+public class InvalidReplicationFactorException extends InvalidConfigurationException {
 
     private static final long serialVersionUID = 1L;
 
