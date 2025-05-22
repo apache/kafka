@@ -509,7 +509,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(QuotaTypes.NoQuotas, clientQuotaManager.getQuotaTypesEnabled)
       assertFalse(clientQuotaManager.quotasEnabled)
 
-      // Add a client-id quota and quotaTypesEnabled should be QuotaTypes.ClientIdQuotaEnabled
+      // Add a client-id quota, quotaTypesEnabled should be QuotaTypes.ClientIdQuotaEnabled
       clientQuotaManager.updateQuota(
         None,
         Some(ClientQuotaManager.ClientIdEntity("client1")),
@@ -518,7 +518,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
       assertTrue(clientQuotaManager.quotasEnabled)
 
-      // Add a user quota and quotaTypesEnabled should be QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled
+      // Add a user quota, quotaTypesEnabled should be QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
         None,
@@ -527,11 +527,29 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
       assertTrue(clientQuotaManager.quotasEnabled)
 
-      // Add a user-client-id quota and quotaTypesEnabled should
-      // be QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserQuotaEnabled
+      // Add a duplicate client-id quota, quotaTypesEnabled should remain unchanged
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.ClientIdEntity("client2")),
+        Some(new Quota(5, true))
+      )
+      assertEquals(QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Add duplicate user quota, quotaTypesEnabled should remain unchanged
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userB")),
-        Some(ClientQuotaManager.ClientIdEntity("client2")),
+        None,
+        Some(new Quota(5, true))
+      )
+      assertEquals(QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Add a user-client-id quota, quotaTypesEnabled should
+      // be QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserQuotaEnabled
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
         Some(new Quota(10, true))
       )
       assertEquals(
@@ -540,28 +558,67 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       )
       assertTrue(clientQuotaManager.quotasEnabled)
 
-      // Remove the user quota and quotaTypesEnabled should be QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled
+      // Add Duplicate user-client-id quota, quotaTypesEnabled should remain unchanged
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
+        Some(new Quota(12, true))
+      )
+      assertEquals(
+        QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserQuotaEnabled,
+        clientQuotaManager.getQuotaTypesEnabled
+      )
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Remove the first user quota, quotaTypesEnabled should remain unchanged
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        None,
+        None
+      )
+      assertEquals(QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Remove the second user quota, quotaTypesEnabled should be QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userB")),
         None,
         None
       )
       assertEquals(QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
       assertTrue(clientQuotaManager.quotasEnabled)
 
-      // Remove the client-id quota and quotaTypesEnabled should be QuotaTypes.UserClientIdQuotaEnabled
+      // Remove the first client-id quota, quotaTypesEnabled should remain unchanged
       clientQuotaManager.updateQuota(
         None,
         Some(ClientQuotaManager.ClientIdEntity("client1")),
         None
       )
+      assertEquals(QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      // Remove the second client-id quota, quotaTypesEnabled should be QuotaTypes.UserClientIdQuotaEnabled
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.ClientIdEntity("client2")),
+        None
+      )
       assertEquals(QuotaTypes.UserClientIdQuotaEnabled, clientQuotaManager.getQuotaTypesEnabled)
       assertTrue(clientQuotaManager.quotasEnabled)
 
-      // Remove the user-client-id quota and quotaTypesEnabled should be QuotaTypes.NoQuotas and quotasEnabled should be false
+      // Remove the first user-client-id quota, quotaTypesEnabled should be noQuotas as both user-client-id quotas has the same user client but different quota
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userB")),
-        Some(ClientQuotaManager.ClientIdEntity("client2")),
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
+        None
+      )
+      assertEquals(QuotaTypes.NoQuotas, clientQuotaManager.getQuotaTypesEnabled)
+      assertFalse(clientQuotaManager.quotasEnabled)
+
+      // Remove the second user-client-id quota, quotaTypesEnabled should be QuotaTypes.NoQuotas and quotasEnabled should be false
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
         None
       )
       assertEquals(QuotaTypes.NoQuotas, clientQuotaManager.getQuotaTypesEnabled)
