@@ -1018,7 +1018,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      */
     private void maybeHandleElectionLoss(NomineeState state, long currentTimeMs) {
         if (state instanceof CandidateState candidate) {
-            if (candidate.epochElection().isVoteRejected()){
+            if (candidate.epochElection().isVoteRejected()) {
                 logger.info(
                     "Insufficient remaining votes to become leader. Candidate will wait the remaining election " +
                         "timeout ({}) before transitioning back to Prospective. Current epoch election state is {}.",
@@ -3140,8 +3140,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logger.info("Election was not granted, transitioning to prospective");
             transitionToProspective(currentTimeMs);
             return 0L;
-        } else if (state.epochElection().isVoteRejected()) {
-            return state.remainingElectionTimeMs(currentTimeMs);
         } else {
             long minVoteRequestBackoffMs = maybeSendVoteRequests(state, currentTimeMs);
             return Math.min(minVoteRequestBackoffMs, state.remainingElectionTimeMs(currentTimeMs));

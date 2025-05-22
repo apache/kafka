@@ -480,6 +480,8 @@ public class QuorumState {
         int epoch,
         ReplicaKey candidateKey
     ) {
+        // Verify the current state is prospective, this method should only be used to add voted state to
+        // prospective state. Transitions from other states to prospective use transitionToProspective instead.
         prospectiveStateOrThrow();
         int currentEpoch = state.epoch();
         if (localId.isPresent() && candidateKey.id() == localId.getAsInt()) {
