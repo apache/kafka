@@ -21,7 +21,7 @@ import joptsimple._
 import kafka.server.DynamicConfig
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListGroupsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
@@ -86,13 +86,13 @@ object ConfigCommand extends Logging {
       opts.checkArgs()
       processCommand(opts)
     } catch {
-      case e @ (_: IllegalArgumentException | _: InvalidConfigurationException | _: OptionException) =>
-        logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)
+      case e: UnsupportedVersionException =>
+        logger.debug(s"Unsupported API encountered in server when executing config command with args '${args.mkString(" ")}'")
         System.err.println(e.getMessage)
         Exit.exit(1)
 
-      case e: UnsupportedVersionException =>
-        logger.debug(s"Unsupported API encountered in server when executing config command with args '${args.mkString(" ")}'")
+      case e @ (_: IllegalArgumentException | _: InvalidConfigurationException | _: OptionException) =>
+        logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)
         System.err.println(e.getMessage)
         Exit.exit(1)
 
@@ -352,7 +352,7 @@ object ConfigCommand extends Logging {
         case ClientMetricsType =>
           adminClient.listClientMetricsResources().all().get().asScala.map(_.name).toSeq
         case GroupType =>
-          adminClient.listGroups(ListGroupsOptions.forConsumerGroups()).all.get.asScala.map(_.groupId).toSeq
+          adminClient.listGroups().all.get.asScala.map(_.groupId).toSeq
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 

@@ -459,7 +459,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
-        verify(activeTaskToClose).prepareCommit();
+        verify(activeTaskToClose).prepareCommit(false);
         verify(activeTaskToClose).suspend();
         verify(activeTaskToClose).closeDirty();
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -500,7 +500,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
-        verify(standbyTaskToClose).prepareCommit();
+        verify(standbyTaskToClose).prepareCommit(false);
         verify(standbyTaskToClose).suspend();
         verify(standbyTaskToClose).closeDirty();
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -996,7 +996,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
-        verify(activeTaskToRecycle).prepareCommit();
+        verify(activeTaskToRecycle).prepareCommit(true);
         verify(tasks).addPendingTasksToInit(Set.of(standbyTask));
         verify(tasks).removeTask(activeTaskToRecycle);
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -1019,7 +1019,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
-        verify(activeTaskToRecycle).prepareCommit();
+        verify(activeTaskToRecycle).prepareCommit(true);
         verify(tasks).replaceActiveWithStandby(standbyTask);
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
@@ -1059,7 +1059,7 @@ public class TaskManagerTest {
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        verify(activeTaskToClose).prepareCommit();
+        verify(activeTaskToClose).prepareCommit(true);
         verify(activeTaskToClose).closeClean();
         verify(tasks).removeTask(activeTaskToClose);
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
@@ -1536,10 +1536,10 @@ public class TaskManagerTest {
 
         taskManager.handleLostAll();
 
-        verify(task1).prepareCommit();
+        verify(task1).prepareCommit(false);
         verify(task1).suspend();
         verify(task1).closeDirty();
-        verify(task2).prepareCommit();
+        verify(task2).prepareCommit(false);
         verify(task2).suspend();
         verify(task2).closeDirty();
     }
@@ -1569,7 +1569,7 @@ public class TaskManagerTest {
 
         verify(task1).suspend();
         verify(task1).closeClean();
-        verify(task2).prepareCommit();
+        verify(task2).prepareCommit(false);
         verify(task2).suspend();
         verify(task2).closeDirty();
         verify(task3).suspend();
@@ -1678,7 +1678,7 @@ public class TaskManagerTest {
         );
 
         assertEquals(exception, thrown);
-        assertEquals(statefulTask.id(), thrown.taskId().get());
+        assertEquals(statefulTask.id(), thrown.taskId().orElseThrow());
     }
 
     @Test
@@ -2149,7 +2149,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksWhenHandlingLostTasks() throws Exception {
+    public void shouldCloseActiveTasksWhenHandlingLostTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager);
 
@@ -2386,10 +2386,10 @@ public class TaskManagerTest {
         taskManager.handleCorruption(Set.of(taskId02));
 
         verify(activeRestoringTask, never()).commitNeeded();
-        verify(activeRestoringTask, never()).prepareCommit();
+        verify(activeRestoringTask, never()).prepareCommit(true);
         verify(activeRestoringTask, never()).postCommit(anyBoolean());
         verify(standbyTask, never()).commitNeeded();
-        verify(standbyTask, never()).prepareCommit();
+        verify(standbyTask, never()).prepareCommit(true);
         verify(standbyTask, never()).postCommit(anyBoolean());
     }
 
@@ -2418,9 +2418,9 @@ public class TaskManagerTest {
         taskManager.handleCorruption(Set.of(taskId02));
 
         verify(activeRestoringTask, never()).commitNeeded();
-        verify(activeRestoringTask, never()).prepareCommit();
+        verify(activeRestoringTask, never()).prepareCommit(true);
         verify(activeRestoringTask, never()).postCommit(anyBoolean());
-        verify(standbyTask).prepareCommit();
+        verify(standbyTask).prepareCommit(true);
         verify(standbyTask).postCommit(anyBoolean());
     }
 
@@ -2431,7 +2431,7 @@ public class TaskManagerTest {
         final StateMachineTask corruptedStandby = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
         final StateMachineTask runningNonCorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
                 throw new TaskMigratedException("You dropped out of the group!", new RuntimeException());
             }
         };
@@ -3394,7 +3394,7 @@ public class TaskManagerTest {
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
                 throw new RuntimeException("task 0_1 prepare commit boom!");
             }
         };
@@ -3560,7 +3560,7 @@ public class TaskManagerTest {
 
         verify(activeTaskCreator).close();
         verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        verify(failedStatefulTask).prepareCommit();
+        verify(failedStatefulTask).prepareCommit(false);
         verify(failedStatefulTask).suspend();
         verify(failedStatefulTask).closeDirty();
     }
@@ -3634,16 +3634,16 @@ public class TaskManagerTest {
         verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
         verify(tasks).addTask(removedStatefulTask);
         verify(tasks).addTask(removedStandbyTask);
-        verify(removedFailedStatefulTask).prepareCommit();
+        verify(removedFailedStatefulTask).prepareCommit(false);
         verify(removedFailedStatefulTask).suspend();
         verify(removedFailedStatefulTask).closeDirty();
-        verify(removedFailedStandbyTask).prepareCommit();
+        verify(removedFailedStandbyTask).prepareCommit(false);
         verify(removedFailedStandbyTask).suspend();
         verify(removedFailedStandbyTask).closeDirty();
-        verify(removedFailedStatefulTaskDuringRemoval).prepareCommit();
+        verify(removedFailedStatefulTaskDuringRemoval).prepareCommit(false);
         verify(removedFailedStatefulTaskDuringRemoval).suspend();
         verify(removedFailedStatefulTaskDuringRemoval).closeDirty();
-        verify(removedFailedStandbyTaskDuringRemoval).prepareCommit();
+        verify(removedFailedStandbyTaskDuringRemoval).prepareCommit(false);
         verify(removedFailedStandbyTaskDuringRemoval).suspend();
         verify(removedFailedStandbyTaskDuringRemoval).closeDirty();
     }
@@ -3869,7 +3869,7 @@ public class TaskManagerTest {
     public void shouldPropagateExceptionFromActiveCommit() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
                 throw new RuntimeException("opsh.");
             }
         };
@@ -3893,7 +3893,7 @@ public class TaskManagerTest {
     public void shouldPropagateExceptionFromStandbyCommit() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
                 throw new RuntimeException("opsh.");
             }
         };
@@ -4689,7 +4689,7 @@ public class TaskManagerTest {
         final StandbyTask standbyTask = mock(StandbyTask.class);
         when(standbyTask.id()).thenReturn(taskId00);
         when(standbyTask.isActive()).thenReturn(false);
-        when(standbyTask.prepareCommit()).thenReturn(Collections.emptyMap());
+        when(standbyTask.prepareCommit(true)).thenReturn(Collections.emptyMap());
 
         final StreamTask activeTask = mock(StreamTask.class);
         when(activeTask.id()).thenReturn(taskId00);
@@ -4939,10 +4939,13 @@ public class TaskManagerTest {
         }
 
         @Override
-        public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+        public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
             commitPrepared = true;
 
             if (commitNeeded) {
+                if (!clean) {
+                    return null;
+                }
                 return committableOffsets;
             } else {
                 return Collections.emptyMap();

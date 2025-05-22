@@ -174,7 +174,7 @@ class ControllerServer(
         sharedServer.socketFactory)
 
       val listenerInfo = ListenerInfo
-        .create(config.effectiveAdvertisedControllerListeners.map(_.toPublic).asJava)
+        .create(config.effectiveAdvertisedControllerListeners.asJava)
         .withWildcardHostnamesResolved()
         .withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
@@ -224,7 +224,7 @@ class ControllerServer(
 
         val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
 
-        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time)
+        quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.brokerSessionTimeoutMs)
 
         new QuorumController.Builder(config.nodeId, sharedServer.clusterId).
           setTime(time).

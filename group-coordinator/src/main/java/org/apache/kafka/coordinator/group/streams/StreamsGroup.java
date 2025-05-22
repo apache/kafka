@@ -205,6 +205,12 @@ public class StreamsGroup implements Group {
      */
     private Optional<String> shutdownRequestMemberId = Optional.empty();
 
+    /**
+     * The current epoch for endpoint information, this is used to determine when to send
+     * updated endpoint information to members of the group.
+     */
+    private int endpointInformationEpoch = -1;
+
     public StreamsGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -1074,5 +1080,13 @@ public class StreamsGroup implements Group {
             log.info("[GroupId {}] Clearing shutdown requested for the streams application.", groupId);
             shutdownRequestMemberId = Optional.empty();
         }
+    }
+
+    public int endpointInformationEpoch() {
+        return endpointInformationEpoch;
+    }
+
+    public void setEndpointInformationEpoch(int endpointInformationEpoch) {
+        this.endpointInformationEpoch = endpointInformationEpoch;
     }
 }

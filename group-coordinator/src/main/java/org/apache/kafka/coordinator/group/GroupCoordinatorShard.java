@@ -526,15 +526,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Reconcile initializing and initialized tps in share group state metadata records.
-     *
-     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
-     */
-    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
-        return groupMetadataManager.reconcileShareGroupStateInitializingState(offset);
-    }
-
-    /**
      * Returns the set of share-partitions whose share-group state has been initialized in the persister.
      *
      * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
@@ -662,7 +653,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param groupIds - A list of groupIds as string
      * @return A result object containing a map keyed on groupId and value pair (req, error) and related coordinator records.
      */
-    public CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> sharePartitionDeleteRequests(List<String> groupIds) {
+    public CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> sharePartitionDeleteRequests(
+        List<String> groupIds
+    ) {
         Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>> responseMap = new HashMap<>();
         List<CoordinatorRecord> records = new ArrayList<>();
         for (String groupId : groupIds) {
@@ -682,20 +675,23 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Does the following checks to make sure that a DeleteShareGroupOffsets request is valid and can be processed further
+     * Ensure the following checks are true to make sure that a DeleteShareGroupOffsets request is valid and can be processed further
      * 1. Checks whether the provided group is empty
      * 2. Checks the requested topics are presented in the metadataImage
      * 3. Checks the requested share partitions are initialized for the group
+     * Once these checks are passed, an appropriate ShareGroupStatePartitionMetadataRecord is created by adding the topics to
+     * deleting topics list and removing them from the initialized topics list.
      *
      * @param groupId - The group ID
      * @param requestData - The request data for DeleteShareGroupOffsetsRequest
      * @return {@link DeleteShareGroupOffsetsResultHolder} an object containing top level error code, list of topic responses
      *                                               and persister deleteState request parameters
      */
-    public DeleteShareGroupOffsetsResultHolder shareGroupDeleteOffsetsRequest(
+    public CoordinatorResult<DeleteShareGroupOffsetsResultHolder, CoordinatorRecord> initiateDeleteShareGroupOffsets(
         String groupId,
         DeleteShareGroupOffsetsRequestData requestData
     ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
         try {
             ShareGroup group = groupMetadataManager.shareGroup(groupId);
             group.validateDeleteGroup();
@@ -705,31 +701,79 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(
                     groupId,
                     requestData,
-                    errorTopicResponseList
+                    errorTopicResponseList,
+                    records
                 );
 
             if (deleteShareGroupStateRequestTopicsData.isEmpty()) {
-                return new DeleteShareGroupOffsetsResultHolder(Errors.NONE.code(), null, errorTopicResponseList);
+                return new CoordinatorResult<>(
+                    records,
+                    new DeleteShareGroupOffsetsResultHolder(Errors.NONE.code(), null, errorTopicResponseList)
+                );
             }
 
             DeleteShareGroupStateRequestData deleteShareGroupStateRequestData = new DeleteShareGroupStateRequestData()
                 .setGroupId(requestData.groupId())
                 .setTopics(deleteShareGroupStateRequestTopicsData);
 
-            return new DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE.code(),
-                null,
-                errorTopicResponseList,
-                DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
+            return new CoordinatorResult<>(
+                records,
+                new DeleteShareGroupOffsetsResultHolder(
+                    Errors.NONE.code(),
+                    null,
+                    errorTopicResponseList,
+                    DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
+                )
             );
 
         } catch (GroupIdNotFoundException exception) {
             log.error("groupId {} not found", groupId, exception);
-            return new DeleteShareGroupOffsetsResultHolder(Errors.GROUP_ID_NOT_FOUND.code(), exception.getMessage());
+            return new CoordinatorResult<>(
+                records,
+                new DeleteShareGroupOffsetsResultHolder(Errors.GROUP_ID_NOT_FOUND.code(), exception.getMessage())
+            );
         } catch (GroupNotEmptyException exception) {
             log.error("Provided group {} is not empty", groupId);
-            return new DeleteShareGroupOffsetsResultHolder(Errors.NON_EMPTY_GROUP.code(), exception.getMessage());
+            return new CoordinatorResult<>(
+                records,
+                new DeleteShareGroupOffsetsResultHolder(Errors.NON_EMPTY_GROUP.code(), exception.getMessage())
+            );
         }
+    }
+
+    /**
+     * Completes the share group offset deletion by creating a ShareGroupStatePartitionMetadataRecord removing the
+     * deleted topics from deletingTopics set. Returns the final response for DeleteShareGroupOffsetsRequest
+     *
+     * @param groupId - The group ID
+     * @param topics - The set of topics which were deleted successfully by the persister
+     * @return the final response {@link DeleteShareGroupOffsetsResponseData} for the DeleteShareGroupOffsetsRequest
+     */
+    public CoordinatorResult<DeleteShareGroupOffsetsResponseData, CoordinatorRecord> completeDeleteShareGroupOffsets(
+        String groupId,
+        Map<Uuid, String> topics,
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> topicResponseList = new ArrayList<>();
+
+        topicResponseList.addAll(
+            groupMetadataManager.completeDeleteShareGroupOffsets(
+                groupId,
+                topics,
+                records
+            )
+        );
+
+        topicResponseList.addAll(errorTopicResponseList);
+
+        return new CoordinatorResult<>(
+            records,
+            new DeleteShareGroupOffsetsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(null)
+                .setResponses(topicResponseList)
+        );
     }
 
     /**
@@ -973,6 +1017,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             records.size(), time.milliseconds() - startTimeMs, topicPartitions);
 
         return new CoordinatorResult<>(records, false);
+    }
+
+    public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
+        Set<Uuid> deletedTopicIds
+    ) {
+        return groupMetadataManager.maybeCleanupShareGroupState(deletedTopicIds);
     }
 
     /**

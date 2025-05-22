@@ -103,7 +103,7 @@ public class GlobalStreamThreadTest {
             );
 
         final ProcessorSupplier<Object, Object, Void, Void> processorSupplier = () ->
-            new ContextualProcessor<Object, Object, Void, Void>() {
+            new ContextualProcessor<>() {
                 @Override
                 public void process(final Record<Object, Object> record) {
                 }
@@ -163,7 +163,7 @@ public class GlobalStreamThreadTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
-        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 throw new RuntimeException("KABOOM!");

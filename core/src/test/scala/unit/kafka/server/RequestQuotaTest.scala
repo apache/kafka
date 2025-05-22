@@ -43,9 +43,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, A
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.net.InetAddress
 import java.util
@@ -133,32 +131,28 @@ class RequestQuotaTest extends BaseRequestTest {
     finally super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testResponseThrottleTime(quorum: String): Unit = {
+  @Test
+  def testResponseThrottleTime(): Unit = {
     for (apiKey <- clientActions ++ clusterActionsWithThrottleForBroker)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated(quorum: String): Unit = {
+  @Test
+  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated(): Unit = {
     submitTest(ApiKeys.PRODUCE, () => checkSmallQuotaProducerRequestThrottleTime())
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated(quorum: String): Unit = {
+  @Test
+  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated(): Unit = {
     submitTest(ApiKeys.FETCH, () => checkSmallQuotaConsumerRequestThrottleTime())
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUnthrottledClient(quorum: String): Unit = {
+  @Test
+  def testUnthrottledClient(): Unit = {
     for (apiKey <- clientActions) {
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
     }
@@ -166,9 +160,8 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testExemptRequestTime(quorum: String): Unit = {
+  @Test
+  def testExemptRequestTime(): Unit = {
     // Exclude `DESCRIBE_QUORUM`, maybe it shouldn't be a cluster action
     val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope -- RequestQuotaTest.ShareGroupState - ApiKeys.DESCRIBE_QUORUM
     for (apiKey <- actions) {
@@ -178,9 +171,8 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUnauthorizedThrottle(quorum: String): Unit = {
+  @Test
+  def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
     val apiKeys = ApiKeys.brokerApis
@@ -243,7 +235,7 @@ class RequestQuotaTest extends BaseRequestTest {
           requests.ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
               Collections.singletonList(new ProduceRequestData.TopicProduceData()
-                .setName(tp.topic()).setPartitionData(Collections.singletonList(
+                .setTopicId(getTopicIds().get(tp.topic()).get).setPartitionData(Collections.singletonList(
                 new ProduceRequestData.PartitionProduceData()
                   .setIndex(tp.partition())
                   .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
@@ -292,7 +284,19 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder(Map("test-group"-> List(tp).asJava).asJava, false, false)
+          OffsetFetchRequest.Builder.forTopicNames(
+            new OffsetFetchRequestData()
+              .setGroups(List(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                  .setGroupId("test-group")
+                  .setTopics(List(
+                    new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                      .setName(tp.topic)
+                      .setPartitionIndexes(List[Integer](tp.partition).asJava)
+                  ).asJava)
+              ).asJava),
+            false
+          )
 
         case ApiKeys.FIND_COORDINATOR =>
           new FindCoordinatorRequest.Builder(
@@ -637,8 +641,8 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.ASSIGN_REPLICAS_TO_DIRS =>
           new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData())
 
-        case ApiKeys.LIST_CLIENT_METRICS_RESOURCES =>
-          new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData())
+        case ApiKeys.LIST_CONFIG_RESOURCES =>
+          new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData())
 
         case ApiKeys.DESCRIBE_TOPIC_PARTITIONS =>
           new DescribeTopicPartitionsRequest.Builder(new DescribeTopicPartitionsRequestData())

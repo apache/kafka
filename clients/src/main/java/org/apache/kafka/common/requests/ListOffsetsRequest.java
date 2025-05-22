@@ -66,7 +66,7 @@ public class ListOffsetsRequest extends AbstractRequest {
                                           boolean requireMaxTimestamp,
                                           boolean requireEarliestLocalTimestamp,
                                           boolean requireTieredStorageTimestamp) {
-            short minVersion = 0;
+            short minVersion = ApiKeys.LIST_OFFSETS.oldestVersion();
             if (requireTieredStorageTimestamp)
                 minVersion = 9;
             else if (requireEarliestLocalTimestamp)
@@ -81,7 +81,7 @@ public class ListOffsetsRequest extends AbstractRequest {
         }
 
         public static Builder forReplica(short allowedVersion, int replicaId) {
-            return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
+            return new Builder(ApiKeys.LIST_OFFSETS.oldestVersion(), allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
         }
 
         private Builder(short oldestAllowedVersion,

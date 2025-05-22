@@ -17,17 +17,28 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InvalidRegularExpression;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import com.dynatrace.hash4j.hashing.HashStream64;
+import com.dynatrace.hash4j.hashing.Hashing;
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
+
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -234,5 +245,183 @@ public class Utils {
         } else {
             return apiMessageAndVersion.message();
         }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is non-null and empty.
+     * A string containing only whitespaces is also considered empty.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfEmptyString(
+        String value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null && value.trim().isEmpty()) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is null or non-empty.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNotEmptyCollection(
+        Collection<?> value,
+        String error
+    ) throws InvalidRequestException {
+        if (value == null || !value.isEmpty()) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is non-null.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNotNull(
+        Object value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is null.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNull(
+        Object value,
+        String error
+    ) throws InvalidRequestException {
+        if (value == null) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Validates if the provided regular expression is valid.
+     *
+     * @param regex The regular expression to validate.
+     * @throws InvalidRegularExpression if the regular expression is invalid.
+     */
+    static void throwIfRegularExpressionIsInvalid(
+        String regex
+    ) throws InvalidRegularExpression {
+        try {
+            Pattern.compile(regex);
+        } catch (PatternSyntaxException ex) {
+            throw new InvalidRegularExpression(
+                String.format("SubscribedTopicRegex `%s` is not a valid regular expression: %s.",
+                    regex, ex.getDescription()));
+        }
+    }
+
+    /**
+     * The magic byte used to identify the version of topic hash function.
+     */
+    static final byte TOPIC_HASH_MAGIC_BYTE = 0x00;
+
+    /**
+     * Computes the hash of the topics in a group.
+     * <p>
+     * The computed hash value is stored as the metadata hash in the *GroupMetadataValue.
+     * <p>
+     * If there is no topic, the hash value is set to 0.
+     * The hashing process involves the following steps:
+     * 1. Sort the topic hashes by topic name.
+     * 2. Write each topic hash in order.
+     *
+     * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
+     * @return The hash of the group.
+     */
+    static long computeGroupHash(Map<String, Long> topicHashes) {
+        if (topicHashes.isEmpty()) {
+            return 0;
+        }
+
+        // Sort entries by topic name
+        List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>(topicHashes.entrySet());
+        sortedEntries.sort(Map.Entry.comparingByKey());
+
+        HashStream64 hasher = Hashing.xxh3_64().hashStream();
+        for (Map.Entry<String, Long> entry : sortedEntries) {
+            hasher.putLong(entry.getValue());
+        }
+
+        return hasher.getAsLong();
+    }
+
+    /**
+     * Computes the hash of the topic id, name, number of partitions, and partition racks by streaming XXH3.
+     * <p>
+     * The computed hash value for the topic is utilized in conjunction with the {@link #computeGroupHash(Map)}
+     * method and is stored as part of the metadata hash in the *GroupMetadataValue.
+     * It is important to note that if the hash algorithm is changed, the magic byte must be updated to reflect the
+     * new hash version.
+     * <p>
+     * For non-existent topics, the hash value is set to 0.
+     * For existent topics, the hashing process involves the following steps:
+     * 1. Write a magic byte to denote the version of the hash function.
+     * 2. Write the hash code of the topic ID with mostSignificantBits and leastSignificantBits.
+     * 3. Write the topic name.
+     * 4. Write the number of partitions associated with the topic.
+     * 5. For each partition, write the partition ID and a sorted list of rack identifiers.
+     * - Rack identifiers are formatted as "<length1><value1><length2><value2>" to prevent issues with simple separators.
+     *
+     * @param topicName     The topic image.
+     * @param metadataImage The cluster image.
+     * @return The hash of the topic.
+     */
+    static long computeTopicHash(String topicName, MetadataImage metadataImage) {
+        TopicImage topicImage = metadataImage.topics().getTopic(topicName);
+        if (topicImage == null) {
+            return 0;
+        }
+
+        HashStream64 hasher = Hashing.xxh3_64().hashStream();
+        hasher = hasher
+            .putByte(TOPIC_HASH_MAGIC_BYTE)
+            .putLong(topicImage.id().getMostSignificantBits())
+            .putLong(topicImage.id().getLeastSignificantBits())
+            .putString(topicImage.name())
+            .putInt(topicImage.partitions().size());
+
+        ClusterImage clusterImage = metadataImage.cluster();
+        List<String> racks = new ArrayList<>();
+        for (int i = 0; i < topicImage.partitions().size(); i++) {
+            hasher = hasher.putInt(i);
+            racks.clear(); // Clear the list for reuse
+            for (int replicaId : topicImage.partitions().get(i).replicas) {
+                BrokerRegistration broker = clusterImage.broker(replicaId);
+                if (broker != null) {
+                    broker.rack().ifPresent(racks::add);
+                }
+            }
+
+            Collections.sort(racks);
+            for (String rack : racks) {
+                // Format: "<length><value>"
+                // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
+                // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
+                // Add length before the rack string to avoid the edge case.
+                hasher = hasher.putInt(rack.length()).putString(rack);
+            }
+        }
+
+        return hasher.getAsLong();
     }
 }

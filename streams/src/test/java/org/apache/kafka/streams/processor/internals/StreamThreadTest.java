@@ -45,6 +45,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -52,6 +53,7 @@ import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
@@ -67,6 +69,7 @@ import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.ConsumerWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -82,7 +85,6 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
@@ -178,6 +180,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -640,7 +643,7 @@ public class StreamThreadTest {
         thread.setState(State.PARTITIONS_REVOKED);
         thread.runOnceWithoutProcessingThreads();
 
-        Mockito.verify(taskManager, Mockito.never()).process(Mockito.anyInt(), Mockito.any());
+        Mockito.verify(taskManager, never()).process(Mockito.anyInt(), Mockito.any());
     }
 
     @ParameterizedTest
@@ -2236,7 +2239,7 @@ public class StreamThreadTest {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
         final ProcessorSupplier<Object, Object, Void, Void> punctuateProcessor =
-            () -> new ContextualProcessor<Object, Object, Void, Void>() {
+            () -> new ContextualProcessor<>() {
                 @Override
                 public void init(final ProcessorContext<Void, Void> context) {
                     context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
@@ -2504,7 +2507,7 @@ public class StreamThreadTest {
 
         if (stateUpdaterEnabled) {
             TestUtils.waitForCondition(
-                () -> mockRestoreConsumer.assignment().size() == 0,
+                () -> mockRestoreConsumer.assignment().isEmpty(),
                 "Never get the assignment");
         } else {
             TestUtils.waitForCondition(
@@ -3442,7 +3445,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
 
@@ -3558,7 +3561,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldTimeOutOnProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldTimeOutOnProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         producer.setClientInstanceId(Uuid.randomUuid());
         producer.injectTimeoutException(-1);
@@ -3800,9 +3803,14 @@ public class StreamThreadTest {
             Map.of(),
             Map.of()
         );
-        final AtomicInteger assignmentErrorCode = new AtomicInteger(0);
+        final Runnable shutdownErrorHook = mock(Runnable.class);
 
         final Properties props = configProps(false, false, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
         final StreamsConfig config = new StreamsConfig(props);
         thread = new StreamThread(
             new MockTime(1),
@@ -3819,23 +3827,27 @@ public class StreamThreadTest {
             PROCESS_ID,
             CLIENT_ID,
             new LogContext(""),
-            assignmentErrorCode,
+            null,
             new AtomicLong(Long.MAX_VALUE),
             new LinkedList<>(),
-            null,
+            shutdownErrorHook,
             HANDLER,
             null,
             Optional.of(streamsRebalanceData),
-            null
+            streamsMetadataState
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
         thread.runOnceWithoutProcessingThreads();
-        assertEquals(0, assignmentErrorCode.get());
+        verify(shutdownErrorHook, never()).run();
 
-        streamsRebalanceData.requestShutdown();
+        streamsRebalanceData.setStatuses(List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
+                .setStatusDetail("Shutdown requested")
+        ));
         thread.runOnceWithoutProcessingThreads();
-        assertEquals(AssignorError.SHUTDOWN_REQUESTED.code(), assignmentErrorCode.get());
+        verify(shutdownErrorHook).run();
     }
 
     @Test
@@ -3850,10 +3862,15 @@ public class StreamThreadTest {
             Map.of(),
             Map.of()
         );
-        final AtomicInteger assignmentErrorCode = new AtomicInteger(0);
 
         final Properties props = configProps(false, false, false);
+        final Runnable shutdownErrorHook = mock(Runnable.class);
         final StreamsConfig config = new StreamsConfig(props);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, config),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
         thread = new StreamThread(
             new MockTime(1),
             config,
@@ -3869,23 +3886,27 @@ public class StreamThreadTest {
             PROCESS_ID,
             CLIENT_ID,
             new LogContext(""),
-            assignmentErrorCode,
+            null,
             new AtomicLong(Long.MAX_VALUE),
             new LinkedList<>(),
-            null,
+            shutdownErrorHook,
             HANDLER,
             null,
             Optional.of(streamsRebalanceData),
-            null
+            streamsMetadataState
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
         thread.runOnceWithProcessingThreads();
-        assertEquals(0, assignmentErrorCode.get());
+        verify(shutdownErrorHook, never()).run();
 
-        streamsRebalanceData.requestShutdown();
+        streamsRebalanceData.setStatuses(List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
+                .setStatusDetail("Shutdown requested")
+        ));
         thread.runOnceWithProcessingThreads();
-        assertEquals(AssignorError.SHUTDOWN_REQUESTED.code(), assignmentErrorCode.get());
+        verify(shutdownErrorHook).run();
     }
 
     @Test
@@ -3904,6 +3925,38 @@ public class StreamThreadTest {
             )
         );
     }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldWrapMainConsumerFromClassConfig(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        streamsConfigProps.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsConfigProps.put(InternalConfig.INTERNAL_CONSUMER_WRAPPER, TestWrapper.class);
+
+        thread = createStreamThread("clientId", new StreamsConfig(streamsConfigProps));
+
+        assertInstanceOf(
+            AsyncKafkaConsumer.class,
+            assertInstanceOf(TestWrapper.class, thread.mainConsumer()).consumer()
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldWrapMainConsumerFromStringConfig(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        streamsConfigProps.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsConfigProps.put(InternalConfig.INTERNAL_CONSUMER_WRAPPER, TestWrapper.class.getName());
+
+        thread = createStreamThread("clientId", new StreamsConfig(streamsConfigProps));
+
+        assertInstanceOf(
+            AsyncKafkaConsumer.class,
+            assertInstanceOf(TestWrapper.class, thread.mainConsumer()).consumer()
+        );
+    }
+
+    public static final class TestWrapper extends ConsumerWrapper { }
 
     private StreamThread setUpThread(final Properties streamsConfigProps) {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);

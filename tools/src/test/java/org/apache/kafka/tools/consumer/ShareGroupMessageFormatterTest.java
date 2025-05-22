@@ -60,7 +60,8 @@ public class ShareGroupMessageFormatterTest extends CoordinatorRecordMessageForm
     private static final ShareGroupMetadataKey SHARE_GROUP_METADATA_KEY = new ShareGroupMetadataKey()
         .setGroupId("group-id");
     private static final ShareGroupMetadataValue SHARE_GROUP_METADATA_VALUE = new ShareGroupMetadataValue()
-        .setEpoch(1);
+        .setEpoch(1)
+        .setMetadataHash(1);
     private static final ShareGroupTargetAssignmentMetadataKey SHARE_GROUP_TARGET_ASSIGNMENT_METADATA_KEY = new ShareGroupTargetAssignmentMetadataKey()
         .setGroupId("group-id");
     private static final ShareGroupTargetAssignmentMetadataValue SHARE_GROUP_TARGET_ASSIGNMENT_METADATA_VALUE = new ShareGroupTargetAssignmentMetadataValue()
@@ -154,7 +155,8 @@ public class ShareGroupMessageFormatterTest extends CoordinatorRecordMessageForm
                 """
                     {"key":{"type":11,"data":{"groupId":"group-id"}},
                      "value":{"version":0,
-                              "data":{"epoch":1}}}
+                              "data":{"epoch":1,
+                                      "metadataHash":1}}}
                 """
             ),
             Arguments.of(

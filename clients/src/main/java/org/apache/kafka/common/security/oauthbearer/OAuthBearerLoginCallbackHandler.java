@@ -24,12 +24,13 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetrieverFactory;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -179,55 +180,48 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private Map<String, Object> moduleOptions;
 
-    private AccessTokenRetriever accessTokenRetriever;
+    private JwtRetriever jwtRetriever;
 
-    private AccessTokenValidator accessTokenValidator;
-
-    private boolean isInitialized = false;
+    private JwtValidator jwtValidator;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(configs, saslMechanism, moduleOptions);
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism);
-        init(accessTokenRetriever, accessTokenValidator);
-    }
-
-    public void init(AccessTokenRetriever accessTokenRetriever, AccessTokenValidator accessTokenValidator) {
-        this.accessTokenRetriever = accessTokenRetriever;
-        this.accessTokenValidator = accessTokenValidator;
-
-        try {
-            this.accessTokenRetriever.init();
-        } catch (IOException e) {
-            throw new KafkaException("The OAuth login configuration encountered an error when initializing the AccessTokenRetriever", e);
-        }
-
-        isInitialized = true;
+        Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+        JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, saslMechanism, moduleOptions);
+        JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism);
+        init(moduleOptions, jwtRetriever, jwtValidator);
     }
 
     /*
      * Package-visible for testing.
      */
+    void init(Map<String, Object> moduleOptions, JwtRetriever jwtRetriever, JwtValidator jwtValidator) {
+        this.moduleOptions = moduleOptions;
+        this.jwtRetriever = jwtRetriever;
+        this.jwtValidator = jwtValidator;
 
-    AccessTokenRetriever getAccessTokenRetriever() {
-        return accessTokenRetriever;
-    }
+        try {
+            this.jwtRetriever.init();
+        } catch (IOException e) {
+            throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtRetriever", e);
+        }
 
-    @Override
-    public void close() {
-        if (accessTokenRetriever != null) {
-            try {
-                this.accessTokenRetriever.close();
-            } catch (IOException e) {
-                log.warn("The OAuth login configuration encountered an error when closing the AccessTokenRetriever", e);
-            }
+        try {
+            this.jwtValidator.init();
+        } catch (IOException e) {
+            throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtValidator", e);
         }
     }
 
     @Override
+    public void close() {
+        Utils.closeQuietly(jwtRetriever, "JWT retriever");
+        Utils.closeQuietly(jwtValidator, "JWT validator");
+    }
+
+    @Override
     public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-        checkInitialized();
+        checkConfigured();
 
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerTokenCallback) {
@@ -241,11 +235,11 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     }
 
     private void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
-        checkInitialized();
-        String accessToken = accessTokenRetriever.retrieve();
+        checkConfigured();
+        String accessToken = jwtRetriever.retrieve();
 
         try {
-            OAuthBearerToken token = accessTokenValidator.validate(accessToken);
+            OAuthBearerToken token = jwtValidator.validate(accessToken);
             callback.token(token);
         } catch (ValidateException e) {
             log.warn(e.getMessage(), e);
@@ -254,7 +248,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     }
 
     private void handleExtensionsCallback(SaslExtensionsCallback callback) {
-        checkInitialized();
+        checkConfigured();
 
         Map<String, String> extensions = new HashMap<>();
 
@@ -286,9 +280,9 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         callback.extensions(saslExtensions);
     }
 
-    private void checkInitialized() {
-        if (!isInitialized)
-            throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
+    private void checkConfigured() {
+        if (moduleOptions == null || jwtRetriever == null || jwtValidator == null)
+            throw new IllegalStateException(String.format("To use %s, first call the configure method", getClass().getSimpleName()));
     }
 
 }

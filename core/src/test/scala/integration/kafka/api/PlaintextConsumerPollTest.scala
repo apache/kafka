@@ -52,7 +52,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
 
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumeAndVerifyRecords(consumer, numRecords = numRecords, startingOffset = 0, maxPollRecords = maxPollRecords,
       startingTimestamp = startingTimestamp)
   }
@@ -69,7 +69,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     val consumer = createConsumer()
 
     val listener = new TestConsumerReassignmentListener()
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
@@ -109,24 +109,71 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
           // so the commit should succeed
           Utils.sleep(1500)
           committedPosition = consumer.position(tp)
-          consumer.commitSync(Map(tp -> new OffsetAndMetadata(committedPosition)).asJava)
+          consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(committedPosition)))
           commitCompleted = true
         }
         super.onPartitionsRevoked(partitions)
       }
     }
 
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
 
     // force a rebalance to trigger an invocation of the revocation callback while in the group
-    consumer.subscribe(List("otherTopic").asJava, listener)
+    consumer.subscribe(java.util.List.of("otherTopic"), listener)
     awaitRebalance(consumer, listener)
 
     assertEquals(0, committedPosition)
     assertTrue(commitCompleted)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerRecoveryOnPollAfterDelayedRebalance(groupProtocol: String): Unit = {
+    val rebalanceTimeout = 1000
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, rebalanceTimeout.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
+
+    val producer = createProducer()
+    val numMessages = 10
+    createTopicAndSendRecords(producer, "otherTopic", 1, numMessages)
+    sendRecords(producer, numMessages, tp)
+
+    var rebalanceTimeoutExceeded = false
+
+    // Subscribe consumer that will reconcile in time on the first rebalance, but will
+    // take longer than the allowed timeout in the second rebalance (onPartitionsRevoked) to get fenced by the broker.
+    // The consumer should recover after being fenced (automatically rejoin the group on the next call to poll)
+    val consumer = createConsumer()
+    val listener = new TestConsumerReassignmentListener {
+
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+        if (!partitions.isEmpty && partitions.contains(tp)) {
+          // on the second rebalance (after we have joined the group initially), sleep longer
+          // than rebalance timeout to get fenced.
+          Utils.sleep(rebalanceTimeout + 500)
+          rebalanceTimeoutExceeded = true
+        }
+        super.onPartitionsRevoked(partitions)
+      }
+    }
+
+    // Subscribe to get first assignment (no delays) and verify consumption
+    consumer.subscribe(List(topic).asJava, listener)
+    var records = awaitNonEmptyRecords(consumer, tp, 0L)
+    assertEquals(numMessages, records.count())
+
+    // Subscribe to different topic. This will trigger the delayed revocation exceeding rebalance timeout and get fenced
+    consumer.subscribe(List("otherTopic").asJava, listener)
+    TestUtils.pollUntilTrue(consumer, () => rebalanceTimeoutExceeded, "Timeout waiting for delayed callback to complete")
+
+    // Verify consumer recovers after being fenced, being able to continue consuming.
+    // (The member should automatically rejoin on the next poll, with the new topic as subscription)
+    val tpOther = new TopicPartition("otherTopic", 0)
+    records = awaitNonEmptyRecords(consumer, tpOther, 0L)
+    assertEquals(numMessages, records.count())
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -147,7 +194,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
         super.onPartitionsAssigned(partitions)
       }
     }
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
@@ -166,7 +213,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
 
     val consumer = createConsumer()
     val listener = new TestConsumerReassignmentListener
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
@@ -195,7 +242,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLeadWithMaxPollRecords")
     consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     awaitNonEmptyRecords(consumer, tp)
 
     val tags = new util.HashMap[String, String]()
@@ -218,7 +265,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagWithMaxPollRecords")
     consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     val records = awaitNonEmptyRecords(consumer, tp)
 
     val tags = new util.HashMap[String, String]()
@@ -250,7 +297,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     sendRecords(producer, numMessages, tp)
 
     val consumer = createConsumer()
-    consumer.subscribe(Set(topic).asJava)
+    consumer.subscribe(java.util.Set.of(topic))
     val records = awaitNonEmptyRecords(consumer, tp, 0L)
     assertEquals(numMessages, records.count())
   }
@@ -261,7 +308,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
 
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     // continuous poll should eventually fail because there is no offset reset strategy set (fail only when resetting positions after coordinator is known)
     TestUtils.tryUntilNoAssertionError() {
