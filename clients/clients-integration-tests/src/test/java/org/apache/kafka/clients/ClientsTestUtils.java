@@ -280,7 +280,6 @@ public class ClientsTestUtils {
                 assertEquals(0, consumer.assignment().size());
                 consumer.assign(List.of(TP));
                 assertEquals(1, consumer.assignment().size());
-
                 consumer.seek(TP, 0);
                 consumeAndVerifyRecords(consumer, TP, numRecords, 0, 0, startingTimestamp);
                 // check async commit callbacks
