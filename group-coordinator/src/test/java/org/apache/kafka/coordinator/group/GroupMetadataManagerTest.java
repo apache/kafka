@@ -21716,7 +21716,7 @@ public class GroupMetadataManagerTest {
         assertNull(result.response());
         assertEquals(List.of(record), result.records());
         // Make sure the timeline map is not modified yet.
-        assertEquals(snapshotMetadataInitializeRecordMap, context.groupMetadataManager.shareGroupPartitionMetadata().get(groupId).initializingTopics());
+        assertEquals(snapshotMetadataInitializeRecordMap, context.groupMetadataManager.shareGroupStatePartitionMetadata().get(groupId).initializingTopics());
     }
 
     @Test
@@ -22048,8 +22048,8 @@ public class GroupMetadataManagerTest {
 
         // m1 non-empty, m2 non-empty (differ by partition)
         m1 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
-        m2 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(1), 1));
-        assertEquals(Map.of(t1Id, new InitMapValue(t1Name, Set.of(0, 1), 1)), GroupMetadataManager.combineInitMaps(m1, m2));
+        m2 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(1), 2));
+        assertEquals(Map.of(t1Id, new InitMapValue(t1Name, Set.of(0, 1), 2)), GroupMetadataManager.combineInitMaps(m1, m2));
 
         // m1 and m2 exactly same
         m1 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));

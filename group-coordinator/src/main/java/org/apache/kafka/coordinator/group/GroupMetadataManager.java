@@ -471,7 +471,7 @@ public class GroupMetadataManager {
     /**
      * The share group partition metadata info keyed by group id.
      */
-    private final TimelineHashMap<String, ShareGroupStatePartitionMetadataInfo> shareGroupPartitionMetadata;
+    private final TimelineHashMap<String, ShareGroupStatePartitionMetadataInfo> shareGroupStatePartitionMetadata;
 
     /**
      * The group manager.
@@ -543,7 +543,7 @@ public class GroupMetadataManager {
         this.defaultConsumerGroupAssignor = config.consumerGroupAssignors().get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.shareGroupPartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.shareGroupStatePartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
         this.authorizerPlugin = authorizerPlugin;
@@ -2630,7 +2630,7 @@ public class GroupMetadataManager {
     }
 
     private boolean initializedAssignmentPending(ShareGroup group) {
-        if (!shareGroupPartitionMetadata.containsKey(group.groupId())) {
+        if (!shareGroupStatePartitionMetadata.containsKey(group.groupId())) {
             // No initialized share partitions for the group so nothing can be assigned.
             return false;
         }
@@ -2641,7 +2641,7 @@ public class GroupMetadataManager {
         }
 
         // We need to check if all the group initialized share partitions are part of the group assignment.
-        Map<Uuid, Set<Integer>> initializedTps = stripInitValue(shareGroupPartitionMetadata.get(group.groupId()).initializedTopics());
+        Map<Uuid, Set<Integer>> initializedTps = stripInitValue(shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics());
         Map<Uuid, Set<Integer>> currentAssigned = new HashMap<>();
         for (Assignment assignment : group.targetAssignment().values()) {
             for (Map.Entry<Uuid, Set<Integer>> tps : assignment.partitions().entrySet()) {
@@ -2668,9 +2668,11 @@ public class GroupMetadataManager {
         }
 
         Map<Uuid, InitMapValue> topicPartitionChangeMap = new HashMap<>();
-        ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
 
-        // Fresh initializing only
+        // We must only consider initializing topics whose timestamp is fresher than delta elapsed.
+        // Any initializing topics which are older than delta and are part of the subscribed topics
+        // must be returned so that they can be retried.
         long curTimestamp = time.milliseconds();
         long delta = config.offsetCommitTimeoutMs() * 2L;
         Map<Uuid, InitMapValue> alreadyInitialized = info == null ? new HashMap<>() :
@@ -2681,13 +2683,15 @@ public class GroupMetadataManager {
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
             );
 
+        // Here will add any topics which are subscribed but not initialized and initializing
+        // topics whose timestamp indicates that they are older than delta elapsed.
         subscriptionMetadata.forEach((topicName, topicMetadata) -> {
             Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicMetadata.id()) ? alreadyInitialized.get(topicMetadata.id()).partitions() : Set.of();
             if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.numPartitions()) {
                 Set<Integer> partitionSet = IntStream.range(0, topicMetadata.numPartitions()).boxed().collect(Collectors.toSet());
                 partitionSet.removeAll(alreadyInitializedPartSet);
-                // alreadyInitialized contains all initialized topics and less than delta seconds old initializing topics
-                // which means we are putting subscribed topics which are unseen or initializing for more than delta seconds. But, we
+                // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
+                // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
                 // are also updating the timestamp here which means, old initializing will not be included repeatedly.
                 topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> new InitMapValue(topicMetadata.name(), partitionSet, curTimestamp));
             }
@@ -2743,7 +2747,7 @@ public class GroupMetadataManager {
             return;
         }
 
-        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         if (currentMap == null) {
             records.add(newShareGroupStatePartitionMetadataRecord(groupId, topicPartitionMap, Map.of(), Map.of()));
             return;
@@ -3719,8 +3723,8 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         try {
-            Map<Uuid, Set<Integer>> initializedTopicPartitions = shareGroupPartitionMetadata.containsKey(group.groupId()) ?
-                stripInitValue(shareGroupPartitionMetadata.get(group.groupId()).initializedTopics()) :
+            Map<Uuid, Set<Integer>> initializedTopicPartitions = shareGroupStatePartitionMetadata.containsKey(group.groupId()) ?
+                stripInitValue(shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics()) :
                 Map.of();
 
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
@@ -4741,7 +4745,7 @@ public class GroupMetadataManager {
         }
         ShareGroup group = (ShareGroup) groups.get(groupId);
 
-        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, InitMapValue> enrichedTopicPartitionMap = attachInitValue(topicPartitionMap);
         if (currentMap == null) {
             return new CoordinatorResult<>(
@@ -4793,7 +4797,7 @@ public class GroupMetadataManager {
         String groupId,
         Map<Uuid, Set<Integer>> topicPartitionMap
     ) {
-        ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
         if (info == null || info.initializingTopics().isEmpty() || topicPartitionMap.isEmpty()) {
             return new CoordinatorResult<>(List.of(), null);
         }
@@ -4864,7 +4868,7 @@ public class GroupMetadataManager {
     ) {
         Map<Uuid, Set<Integer>> resultMap = new HashMap<>();
 
-        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         if (currentMap != null) {
             currentMap.initializedTopics().forEach((topicId, initMapValue) -> {
                 resultMap.put(topicId, new HashSet<>(initMapValue.partitions()));
@@ -5658,7 +5662,7 @@ public class GroupMetadataManager {
         // Update timeline structures with info about initialized/deleted topics.
         if (value == null) {
             // Tombstone!
-            shareGroupPartitionMetadata.remove(groupId);
+            shareGroupStatePartitionMetadata.remove(groupId);
         } else {
             long timestamp = time.milliseconds();
             ShareGroupStatePartitionMetadataInfo info = new ShareGroupStatePartitionMetadataInfo(
@@ -5680,7 +5684,7 @@ public class GroupMetadataManager {
             );
 
             // Init java record.
-            shareGroupPartitionMetadata.put(groupId, info);
+            shareGroupStatePartitionMetadata.put(groupId, info);
         }
     }
 
@@ -7938,13 +7942,13 @@ public class GroupMetadataManager {
      * @return Optional of object representing the share group state delete request.
      */
     public Optional<DeleteShareGroupStateParameters> shareGroupBuildPartitionDeleteRequest(String shareGroupId, List<CoordinatorRecord> records) {
-        if (!shareGroupPartitionMetadata.containsKey(shareGroupId)) {
+        if (!shareGroupStatePartitionMetadata.containsKey(shareGroupId)) {
             return Optional.empty();
         }
 
         Map<Uuid, InitMapValue> deleteCandidates = combineInitMaps(
-            shareGroupPartitionMetadata.get(shareGroupId).initializedTopics(),
-            shareGroupPartitionMetadata.get(shareGroupId).initializingTopics()
+            shareGroupStatePartitionMetadata.get(shareGroupId).initializedTopics(),
+            shareGroupStatePartitionMetadata.get(shareGroupId).initializingTopics()
         );
 
         // Ideally the deleting should be empty - if it is not then it implies
@@ -7953,7 +7957,7 @@ public class GroupMetadataManager {
         // a retry for the same is possible. Since this is part of an admin operation
         // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
-        Map<Uuid, InitMapValue> deletingTopics = shareGroupPartitionMetadata.get(shareGroupId).deletingTopics().stream()
+        Map<Uuid, InitMapValue> deletingTopics = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics().stream()
             .map(tid -> {
                 TopicImage image = metadataImage.topics().getTopic(tid);
                 return Map.entry(tid, new InitMapValue(image.name(), image.partitions().keySet(), -1));
@@ -8015,7 +8019,7 @@ public class GroupMetadataManager {
     ) {
         List<DeleteShareGroupStateRequestData.DeleteStateData> deleteShareGroupStateRequestTopicsData = new ArrayList<>();
 
-        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
 
         if (currentMap == null) {
             return deleteShareGroupStateRequestTopicsData;
@@ -8104,7 +8108,7 @@ public class GroupMetadataManager {
             return new CoordinatorResult<>(List.of());
         }
         List<CoordinatorRecord> records = new ArrayList<>();
-        shareGroupPartitionMetadata.forEach((groupId, metadata) -> {
+        shareGroupStatePartitionMetadata.forEach((groupId, metadata) -> {
             Set<Uuid> initializingDeletedCurrent = new HashSet<>(metadata.initializingTopics().keySet());
             Set<Uuid> initializedDeletedCurrent = new HashSet<>(metadata.initializedTopics().keySet());
 
@@ -8156,7 +8160,7 @@ public class GroupMetadataManager {
         Map<Uuid, String> topics,
         List<CoordinatorRecord> records
     ) {
-        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
 
         if (currentMap == null) {
             return List.of();
@@ -8424,7 +8428,7 @@ public class GroupMetadataManager {
     }
 
     // Visibility for testing
-    Map<String, ShareGroupStatePartitionMetadataInfo> shareGroupPartitionMetadata() {
-        return shareGroupPartitionMetadata;
+    Map<String, ShareGroupStatePartitionMetadataInfo> shareGroupStatePartitionMetadata() {
+        return shareGroupStatePartitionMetadata;
     }
 }
