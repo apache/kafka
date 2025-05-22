@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.raft.internals.RequestType;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,15 +27,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Random;
-import java.util.Set;
 
 /**
- * The request manager keeps tracks of the connection with remote replicas.
+ * The request manager keeps track of the pending requests with remote replicas. The manager supports
+ * one pending request per type per node, except for FETCH and FETCH_SNAPSHOT requests. For those,
+ * the manager allows at most one pending request across all nodes to prevent writing the same offset twice.
  *
- * When sending a request update this type by calling {@code onRequestSent(Node, long, long)}. When
- * the RPC returns a response, update this manager with {@code onResponseResult(Node, long, boolean, long)}.
+ * When sending a request update this type by calling {@code onRequestSent(Node, long, long, ApiKeys)}.
+ * When the RPC returns a response, update this manager with {@code onResponseResult(Node, long, boolean, long, ApiKeys)}.
  *
- * Connections start in the ready state ({@code isReady(Node, long)} returns true).
+ * Requests start in the ready state ({@code isReady(Node, long, ApiKeys)} returns true).
  *
  * When a request times out or completes successfully the collection will transition back to the
  * ready state.
@@ -43,9 +45,9 @@ import java.util.Set;
  * {@code retryBackoffMs}.
  */
 public class RequestManager {
-    private record NodeAndRequestKey(String nodeId, ApiKeys requestKey) {
-        private static NodeAndRequestKey of(Node node, ApiKeys requestKey) {
-            return new NodeAndRequestKey(node.idString(), requestKey);
+    private record NodeAndRequestKey(String nodeId, RequestType requestType) {
+        private static NodeAndRequestKey of(Node node, ApiKeys requestType) {
+            return new NodeAndRequestKey(node.idString(), RequestType.of(requestType));
         }
     }
     private final Map<NodeAndRequestKey, RequestState> inflightRequests = new HashMap<>();
@@ -68,7 +70,7 @@ public class RequestManager {
     }
 
     /**
-     * Returns true if there are any in-flight requests for a set of request types.
+     * Returns true if there are any in-flight requests for a request type.
      *
      * This is useful for satisfying the invariant that there is only one pending Fetch
      * and FetchSnapshot request.
@@ -76,10 +78,10 @@ public class RequestManager {
      * the same offset twice.
      *
      * @param currentTimeMs the current time
-     * @param requestKeys the set request types check for pending requests
-     * @return true if the request manager is tracking at least one request of the given types
+     * @param requestKey the request type to check for pending requests
+     * @return true if the request manager is tracking at least one request of the given type
      */
-    public boolean hasAnyInflightRequest(long currentTimeMs, Set<ApiKeys> requestKeys) {
+    public boolean hasAnyInflightRequest(long currentTimeMs, ApiKeys requestKey) {
         boolean result = false;
 
         final var iterator = inflightRequests.entrySet().iterator();
@@ -93,7 +95,7 @@ public class RequestManager {
             } else if (requestState.isBackoffComplete(currentTimeMs)) {
                 // Mark the node as ready after completed backoff
                 iterator.remove();
-            } else if (requestKeys.contains(nodeAndRequestKey.requestKey) &&
+            } else if (nodeAndRequestKey.requestType().apiKey() == requestKey &&
                 requestState.hasInflightRequest(currentTimeMs)) {
                 // If there is at least one inflight request, it is enough
                 // to stop checking the rest of the inflightRequests
@@ -118,7 +120,7 @@ public class RequestManager {
     public Optional<Node> findReadyBootstrapServer(long currentTimeMs) {
         // Check that there are no inflight fetch or fetch snapshot requests
         // across any of the known nodes not just the bootstrap servers
-        if (hasAnyInflightRequest(currentTimeMs, Set.of(ApiKeys.FETCH, ApiKeys.FETCH_SNAPSHOT))) {
+        if (hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH)) {
             return Optional.empty();
         }
 
@@ -128,8 +130,7 @@ public class RequestManager {
             int index = (startIndex + i) % bootstrapServers.size();
             Node node = bootstrapServers.get(index);
 
-            if (isReady(node, currentTimeMs, ApiKeys.FETCH) &&
-                isReady(node, currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
+            if (isReady(node, currentTimeMs, ApiKeys.FETCH)) {
                 result = Optional.of(node);
                 break;
             }
@@ -160,7 +161,7 @@ public class RequestManager {
         final var iterator = inflightRequests.entrySet().iterator();
         while (iterator.hasNext()) {
             final var entry = iterator.next();
-            final var requestType = entry.getKey().requestKey;
+            final var requestType = entry.getKey().requestType().apiKey();
             final var requestState = entry.getValue();
             if (requestState.hasRequestTimedOut(currentTimeMs)) {
                 // Mark the node as ready after request timeout
@@ -168,11 +169,11 @@ public class RequestManager {
             } else if (requestState.isBackoffComplete(currentTimeMs)) {
                 // Mark the node as ready after completed backoff
                 iterator.remove();
-            } else if ((requestType == ApiKeys.FETCH || requestType == ApiKeys.FETCH_SNAPSHOT) &&
+            } else if (requestType == ApiKeys.FETCH &&
                 requestState.hasInflightRequest(currentTimeMs)) {
                 // There can be at most one inflight fetch or fetch snapshot request
                 return requestState.remainingRequestTimeMs(currentTimeMs);
-            } else if ((requestType == ApiKeys.FETCH || requestType == ApiKeys.FETCH_SNAPSHOT) &&
+            } else if (requestType == ApiKeys.FETCH &&
                 requestState.isBackingOff(currentTimeMs)) {
                 minBackoffMs = Math.min(minBackoffMs, requestState.remainingBackoffMs(currentTimeMs));
             }
@@ -180,8 +181,7 @@ public class RequestManager {
 
         // There are no inflight fetch requests so check if there is a ready bootstrap server
         for (Node node : bootstrapServers) {
-            if (isReady(node, currentTimeMs, ApiKeys.FETCH) &&
-                isReady(node, currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
+            if (isReady(node, currentTimeMs, ApiKeys.FETCH)) {
                 return 0L;
             }
         }

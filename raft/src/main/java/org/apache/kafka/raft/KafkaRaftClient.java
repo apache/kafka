@@ -3296,17 +3296,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // voter in order to discover if there has been a leader change.
         final long backoffMs;
         Node leaderNode = state.leaderNode(channel.listenerName());
-        if (requestManager.hasRequestTimedOut(leaderNode, currentTimeMs, ApiKeys.FETCH) ||
-            requestManager.hasRequestTimedOut(leaderNode, currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
+        if (requestManager.hasRequestTimedOut(leaderNode, currentTimeMs, ApiKeys.FETCH)) {
             // Once the request has timed out backoff the connection
             requestManager.reset(leaderNode, ApiKeys.FETCH);
-            requestManager.reset(leaderNode, ApiKeys.FETCH_SNAPSHOT);
             backoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
-        } else if (requestManager.isBackingOff(leaderNode, currentTimeMs, ApiKeys.FETCH) ||
-            requestManager.isBackingOff(leaderNode, currentTimeMs, ApiKeys.FETCH_SNAPSHOT)) {
+        } else if (requestManager.isBackingOff(leaderNode, currentTimeMs, ApiKeys.FETCH)) {
             backoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
-        } else if (!requestManager.hasAnyInflightRequest(currentTimeMs,
-            Set.of(ApiKeys.FETCH, ApiKeys.FETCH_SNAPSHOT))) {
+        } else if (!requestManager.hasAnyInflightRequest(currentTimeMs, ApiKeys.FETCH)) {
             backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
         } else {
             backoffMs = requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs);
