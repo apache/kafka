@@ -39,7 +39,6 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertInstanceOf, assertT
 
 import java.time.Duration
 import java.util
-import java.util.Collections
 import java.util.concurrent.ExecutionException
 import java.util.stream.{Collectors, IntStream, StreamSupport}
 import scala.concurrent.duration.DurationInt
@@ -95,7 +94,7 @@ class ProducerIntegrationTest {
       new ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2))),
   ))
   def testTransactionWithInvalidSendAndEndTxnRequestSent(cluster: ClusterInstance): Unit = {
-    val topic = new NewTopic("foobar", 1, 1.toShort).configs(Collections.singletonMap(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "100"))
+    val topic = new NewTopic("foobar", 1, 1.toShort).configs(util.Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "100"))
     val txnId = "test-txn"
     val properties = new util.HashMap[String, Object]
     properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, txnId)
@@ -105,7 +104,7 @@ class ProducerIntegrationTest {
     val admin = cluster.admin()
     val producer: Producer[Array[Byte], Array[Byte]] = cluster.producer(properties)
     try {
-      admin.createTopics(List(topic).asJava)
+      admin.createTopics(util.List.of(topic))
 
       producer.initTransactions()
       producer.beginTransaction()
@@ -162,7 +161,7 @@ class ProducerIntegrationTest {
         records.count == 5
       }, "poll records size not match")
       val lastRecord = StreamSupport.stream(records.spliterator, false).reduce((_, second) => second).orElse(null)
-      val offsets = Collections.singletonMap(
+      val offsets = util.Map.of(
         new TopicPartition(lastRecord.topic, lastRecord.partition), new OffsetAndMetadata(lastRecord.offset + 1))
       producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata)
       producer.commitTransaction()
