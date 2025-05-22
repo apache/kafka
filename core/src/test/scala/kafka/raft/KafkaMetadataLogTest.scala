@@ -43,7 +43,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.{AbstractConfig, ConfigException}
 import org.apache.kafka.server.common.OffsetAndEpoch
 
 import java.io.File
@@ -688,7 +688,7 @@ final class KafkaMetadataLogTest {
     val leaderEpoch = 5
     val maxBatchSizeInBytes = 16384
     val recordSize = 64
-    val config = new MetadataLogConfig(
+    val config = createMetadataLogConfig(
       DefaultMetadataLogConfig.logSegmentBytes,
       DefaultMetadataLogConfig.logSegmentMillis,
       DefaultMetadataLogConfig.retentionMaxBytes,
@@ -907,7 +907,7 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testAdvanceLogStartOffsetAfterCleaning(): Unit = {
-    val config = new MetadataLogConfig(
+    val config = createMetadataLogConfig(
       512,
       10 * 1000,
       256,
@@ -943,7 +943,7 @@ final class KafkaMetadataLogTest {
   @Test
   def testDeleteSnapshots(): Unit = {
     // Generate some logs and a few snapshots, set retention low and verify that cleaning occurs
-    val config = new MetadataLogConfig(
+    val config = createMetadataLogConfig(
       1024,
       10 * 1000,
       1024,
@@ -976,7 +976,7 @@ final class KafkaMetadataLogTest {
   @Test
   def testSoftRetentionLimit(): Unit = {
     // Set retention equal to the segment size and generate slightly more than one segment of logs
-    val config = new MetadataLogConfig(
+    val config = createMetadataLogConfig(
       10240,
       10 * 1000,
       10240,
@@ -1019,7 +1019,7 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testSegmentsLessThanLatestSnapshot(): Unit = {
-    val config = new MetadataLogConfig(
+    val config = createMetadataLogConfig(
       10240,
       10 * 1000,
       10240,
@@ -1077,7 +1077,7 @@ object KafkaMetadataLogTest {
     override def read(input: protocol.Readable, size: Int): Array[Byte] = input.readArray(size)
   }
 
-  val DefaultMetadataLogConfig = new MetadataLogConfig(
+  val DefaultMetadataLogConfig = createMetadataLogConfig(
     100 * 1024,
     10 * 1000,
     100 * 1024,
@@ -1160,5 +1160,26 @@ object KafkaMetadataLogTest {
       Files.createDirectories(dir.toPath)
     }
     dir
+  }
+  
+  private def createMetadataLogConfig(
+    internalLogSegmentBytes: Int, 
+    logSegmentMillis: Long, 
+    retentionMaxBytes: Long, 
+    retentionMillis: Long, 
+    maxBatchSizeInBytes: Int, 
+    maxFetchSizeInBytes: Int, 
+    deleteDelayMillis: Long
+  ): MetadataLogConfig = {
+    val config = util.Map.of(
+        MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
+        MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
+        MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
+        MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
+        MetadataLogConfig.INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG, maxBatchSizeInBytes,
+        MetadataLogConfig.INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG, maxFetchSizeInBytes,
+        MetadataLogConfig.INTERNAL_DELETE_DELAY_MILLIS_CONFIG, deleteDelayMillis,
+    )
+    new MetadataLogConfig(new AbstractConfig(MetadataLogConfig.CONFIG_DEF, config, false))
   }
 }

@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.server.config.ServerLogConfigs;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -55,6 +56,9 @@ public class MetadataLogConfig {
     public static final String METADATA_LOG_SEGMENT_BYTES_DOC = "The maximum size of a single metadata log file.";
     public static final int METADATA_LOG_SEGMENT_BYTES_DEFAULT = 1024 * 1024 * 1024;
 
+    public static final String INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG = "internal.metadata.log.segment.bytes";
+    public static final String INTERNAL_METADATA_LOG_SEGMENT_BYTES_DOC = "The maximum size of a single metadata log file, only for testing.";
+
     public static final String METADATA_LOG_SEGMENT_MILLIS_CONFIG = "metadata.log.segment.ms";
     public static final String METADATA_LOG_SEGMENT_MILLIS_DOC = "The maximum time before a new metadata log file is rolled out (in milliseconds).";
     public static final long METADATA_LOG_SEGMENT_MILLIS_DEFAULT = 24 * 7 * 60 * 60 * 1000L;
@@ -75,6 +79,15 @@ public class MetadataLogConfig {
             "controller should write no-op records to the metadata partition. If the value is 0, no-op records " +
             "are not appended to the metadata partition. The default value is " + METADATA_MAX_IDLE_INTERVAL_MS_DEFAULT;
 
+    public static final String INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG = "internal.max.batch.size.in.bytes";
+    public static final String INTERNAL_MAX_BATCH_SIZE_IN_BYTES_DOC = "The largest record batch size allowed in the metadata log, only for testing.";
+
+    public static final String INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG = "internal.max.fetch.size.in.bytes";
+    public static final String INTERNAL_MAX_FETCH_SIZE_IN_BYTES_DOC = "The maximum number of bytes to read when fetching from the metadata log, only for testing.";
+
+    public static final String INTERNAL_DELETE_DELAY_MILLIS_CONFIG = "internal.delete.delay.millis";
+    public static final String INTERNAL_DELETE_DELAY_MILLIS_DOC = "The amount of time to wait before deleting a file from the filesystem, only for testing.";
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG, LONG, METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES, atLeast(1), HIGH, METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_DOC)
             .define(METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, LONG, METADATA_SNAPSHOT_MAX_INTERVAL_MS_DEFAULT, atLeast(0), HIGH, METADATA_SNAPSHOT_MAX_INTERVAL_MS_DOC)
@@ -83,9 +96,14 @@ public class MetadataLogConfig {
             .define(METADATA_LOG_SEGMENT_MILLIS_CONFIG, LONG, METADATA_LOG_SEGMENT_MILLIS_DEFAULT, null, HIGH, METADATA_LOG_SEGMENT_MILLIS_DOC)
             .define(METADATA_MAX_RETENTION_BYTES_CONFIG, LONG, METADATA_MAX_RETENTION_BYTES_DEFAULT, null, HIGH, METADATA_MAX_RETENTION_BYTES_DOC)
             .define(METADATA_MAX_RETENTION_MILLIS_CONFIG, LONG, METADATA_MAX_RETENTION_MILLIS_DEFAULT, null, HIGH, METADATA_MAX_RETENTION_MILLIS_DOC)
-            .define(METADATA_MAX_IDLE_INTERVAL_MS_CONFIG, INT, METADATA_MAX_IDLE_INTERVAL_MS_DEFAULT, atLeast(0), LOW, METADATA_MAX_IDLE_INTERVAL_MS_DOC);
+            .define(METADATA_MAX_IDLE_INTERVAL_MS_CONFIG, INT, METADATA_MAX_IDLE_INTERVAL_MS_DEFAULT, atLeast(0), LOW, METADATA_MAX_IDLE_INTERVAL_MS_DOC)
+            .defineInternal(INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_METADATA_LOG_SEGMENT_BYTES_DOC)
+            .defineInternal(INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_MAX_BATCH_SIZE_IN_BYTES_DOC)
+            .defineInternal(INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_MAX_FETCH_SIZE_IN_BYTES_DOC)
+            .defineInternal(INTERNAL_DELETE_DELAY_MILLIS_CONFIG, LONG, null, null, LOW, INTERNAL_DELETE_DELAY_MILLIS_DOC);
 
     private final int logSegmentBytes;
+    private final Integer internalSegmentBytes;
     private final long logSegmentMillis;
     private final long retentionMaxBytes;
     private final long retentionMillis;
@@ -93,44 +111,23 @@ public class MetadataLogConfig {
     private final int maxFetchSizeInBytes;
     private final long deleteDelayMillis;
 
-    /**
-     * Configuration for the metadata log, the constructor only for testing.
-     * @param internalLogSegmentBytes The maximum size of a single metadata log file
-     * @param logSegmentMillis The maximum time before a new metadata log file is rolled out
-     * @param retentionMaxBytes The size of the metadata log and snapshots before deleting old snapshots and log files
-     * @param retentionMillis The time to keep a metadata log file or snapshot before deleting it
-     * @param maxBatchSizeInBytes The largest record batch size allowed in the metadata log
-     * @param maxFetchSizeInBytes The maximum number of bytes to read when fetching from the metadata log
-     * @param deleteDelayMillis The amount of time to wait before deleting a file from the filesystem
-     */
-    public MetadataLogConfig(int internalLogSegmentBytes,
-                             long logSegmentMillis,
-                             long retentionMaxBytes,
-                             long retentionMillis,
-                             int maxBatchSizeInBytes,
-                             int maxFetchSizeInBytes,
-                             long deleteDelayMillis) {
-        this.logSegmentBytes = internalLogSegmentBytes;
-        this.logSegmentMillis = logSegmentMillis;
-        this.retentionMaxBytes = retentionMaxBytes;
-        this.retentionMillis = retentionMillis;
-        this.maxBatchSizeInBytes = maxBatchSizeInBytes;
-        this.maxFetchSizeInBytes = maxFetchSizeInBytes;
-        this.deleteDelayMillis = deleteDelayMillis;
-    }
-
     public MetadataLogConfig(AbstractConfig config) {
         this.logSegmentBytes = config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG);
+        this.internalSegmentBytes = config.getInt(INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG);
         this.logSegmentMillis = config.getLong(METADATA_LOG_SEGMENT_MILLIS_CONFIG);
         this.retentionMaxBytes = config.getLong(METADATA_MAX_RETENTION_BYTES_CONFIG);
         this.retentionMillis = config.getLong(METADATA_MAX_RETENTION_MILLIS_CONFIG);
-        this.maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
-        this.maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES;
-        this.deleteDelayMillis = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT;
+        this.maxBatchSizeInBytes = Objects.requireNonNullElse(config.getInt(INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG), KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        this.maxFetchSizeInBytes = Objects.requireNonNullElse(config.getInt(INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG), KafkaRaftClient.MAX_FETCH_SIZE_BYTES);
+        this.deleteDelayMillis = Objects.requireNonNullElse(config.getLong(INTERNAL_DELETE_DELAY_MILLIS_CONFIG), ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT);
     }
 
     public int logSegmentBytes() {
-        return logSegmentBytes;
+        return Objects.requireNonNullElse(internalSegmentBytes, logSegmentBytes);
+    }
+    
+    public Integer internalSegmentBytes() {
+        return internalSegmentBytes;
     }
 
     public long logSegmentMillis() {

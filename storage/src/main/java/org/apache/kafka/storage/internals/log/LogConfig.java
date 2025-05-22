@@ -447,7 +447,7 @@ public class LogConfig extends AbstractConfig {
         return CONFIG.names().stream().sorted().toList();
     }
 
-    public static List<String> excludeInternalConfigNames() {
+    public static List<String> nonInternalConfigNames() {
         return CONFIG.configKeys().entrySet()
                 .stream()
                 .filter(entry -> !entry.getValue().internalConfig)

@@ -589,9 +589,10 @@ object KafkaMetadataLog extends Logging {
   ): KafkaMetadataLog = {
     val props = new Properties()
     props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
-    // Since MetadataLogConfig validates the log segment size using a minimum allowed value,
-    // we can safely use `internal.segment.bytes` to configure it instead of relying on `segment.bytes`.
-    props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
+    if (config.internalSegmentBytes() != null)
+      props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
+    else
+      props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
     props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT.toString)
 
     // Disable time and byte retention when deleting segments

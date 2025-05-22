@@ -33,7 +33,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor, MessageUtil, ObjectSerializationCache}
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
@@ -544,7 +544,7 @@ class DumpLogSegmentsTest {
       logDir,
       time,
       time.scheduler,
-      new MetadataLogConfig(
+      createMetadataLogConfig(
         100 * 1024,
         10 * 1000,
         100 * 1024,
@@ -1153,5 +1153,26 @@ class DumpLogSegmentsTest {
         )
       ))
     )
+  }
+
+  private def createMetadataLogConfig(
+    internalLogSegmentBytes: Int,
+    logSegmentMillis: Long,
+    retentionMaxBytes: Long,
+    retentionMillis: Long,
+    maxBatchSizeInBytes: Int,
+    maxFetchSizeInBytes: Int,
+    deleteDelayMillis: Long
+  ): MetadataLogConfig = {
+    val config = util.Map.of(
+      MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
+      MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
+      MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
+      MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
+      MetadataLogConfig.INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG, maxBatchSizeInBytes,
+      MetadataLogConfig.INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG, maxFetchSizeInBytes,
+      MetadataLogConfig.INTERNAL_DELETE_DELAY_MILLIS_CONFIG, deleteDelayMillis,
+    )
+    new MetadataLogConfig(new AbstractConfig(MetadataLogConfig.CONFIG_DEF, config, false))
   }
 }
