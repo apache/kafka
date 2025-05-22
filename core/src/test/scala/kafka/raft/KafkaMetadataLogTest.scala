@@ -1171,14 +1171,14 @@ object KafkaMetadataLogTest {
     maxFetchSizeInBytes: Int, 
     deleteDelayMillis: Long
   ): MetadataLogConfig = {
-    val config = util.Map.of(
-        MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
-        MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
-        MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
-        MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
-        MetadataLogConfig.INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG, maxBatchSizeInBytes,
-        MetadataLogConfig.INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG, maxFetchSizeInBytes,
-        MetadataLogConfig.INTERNAL_DELETE_DELAY_MILLIS_CONFIG, deleteDelayMillis,
+    val config: util.Map[String, Any] = util.Map.of(
+      MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
+      MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
+      MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
+      MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
+      MetadataLogConfig.INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG, maxBatchSizeInBytes,
+      MetadataLogConfig.INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG, maxFetchSizeInBytes,
+      MetadataLogConfig.INTERNAL_DELETE_DELAY_MILLIS_CONFIG, deleteDelayMillis,
     )
     new MetadataLogConfig(new AbstractConfig(MetadataLogConfig.CONFIG_DEF, config, false))
   }

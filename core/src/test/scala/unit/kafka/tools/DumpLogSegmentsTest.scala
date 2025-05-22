@@ -1164,7 +1164,7 @@ class DumpLogSegmentsTest {
     maxFetchSizeInBytes: Int,
     deleteDelayMillis: Long
   ): MetadataLogConfig = {
-    val config = util.Map.of(
+    val config: util.Map[String, Any] = util.Map.of(
       MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
       MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
       MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
