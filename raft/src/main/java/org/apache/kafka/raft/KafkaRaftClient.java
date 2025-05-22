@@ -83,6 +83,7 @@ import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
 import org.apache.kafka.raft.internals.RemoveVoterHandler;
 import org.apache.kafka.raft.internals.RequestSendResult;
+import org.apache.kafka.raft.internals.RequestSupplier;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.raft.internals.UpdateVoterHandler;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -3757,24 +3758,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private boolean isInitialized() {
         return partitionState != null && quorum != null && requestManager != null && kafkaRaftMetrics != null;
-    }
-
-    private record RequestSupplier(Supplier<ApiMessage> supplier, ApiKeys apiKey) {
-        private static RequestSupplier of(
-            Supplier<ApiMessage> supplier,
-            ApiKeys apiKey
-        ) {
-            return new RequestSupplier(supplier, apiKey);
-        }
-
-        private ApiMessage request() {
-            ApiMessage request = supplier.get();
-            if (request.apiKey() != apiKey.id) {
-                throw new IllegalStateException("Request type mismatch: expected " + apiKey +
-                    " but got " + request.apiKey());
-            }
-            return request;
-        }
     }
 
     private class GracefulShutdown {
