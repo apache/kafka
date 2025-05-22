@@ -89,12 +89,12 @@ public class PlaintextConsumerPollTest {
     public PlaintextConsumerPollTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
-    
+
     @BeforeEach
     public void setup() throws InterruptedException {
         cluster.createTopic(topic, 2, (short) BROKER_COUNT);
     }
-    
+
     @ClusterTest
     public void testClassicConsumerMaxPollRecords() throws InterruptedException {
         testMaxPollRecords(GroupProtocol.CLASSIC);
@@ -290,7 +290,7 @@ public class PlaintextConsumerPollTest {
             // rebalance to get the initial assignment
             awaitRebalance(consumer, listener);
             var callsToAssignedAfterFirstRebalance = listener.callsToAssigned;
-            
+
             consumer.poll(Duration.ofMillis(2000));
             // If the poll above times out, it would trigger a rebalance.
             // Leave some time for the rebalance to happen and check for the rebalance event.
@@ -472,13 +472,13 @@ public class PlaintextConsumerPollTest {
         int numMessages = 100;
         Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
         sendRecords(cluster, tp, numMessages);
-        
+
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
             consumer.subscribe(List.of(topic));
             var records = awaitNonEmptyRecords(consumer, tp, 0L);
             assertEquals(numMessages, records.count());
         }
-        
+
     }
 
     @ClusterTest
@@ -493,13 +493,13 @@ public class PlaintextConsumerPollTest {
 
     private void testNoOffsetForPartitionExceptionOnPollZero(GroupProtocol groupProtocol) throws InterruptedException {
         Map<String, Object> config = Map.of(
-            GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT), 
+            GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
             AUTO_OFFSET_RESET_CONFIG, "none"
         );
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
             consumer.assign(List.of(tp));
 
-            // continuous poll should eventually fail because there is no offset reset strategy set 
+            // continuous poll should eventually fail because there is no offset reset strategy set
             // (fail only when resetting positions after coordinator is known)
             TestUtils.waitForCondition(() -> {
                 try {
@@ -521,7 +521,7 @@ public class PlaintextConsumerPollTest {
     public void testAsyncConsumerRecoveryOnPollAfterDelayedRebalance() throws InterruptedException {
         testConsumerRecoveryOnPollAfterDelayedRebalance(GroupProtocol.CONSUMER);
     }
-    
+
     public void testConsumerRecoveryOnPollAfterDelayedRebalance(GroupProtocol groupProtocol) throws InterruptedException {
         var rebalanceTimeout = 1000;
         Map<String, Object> config = Map.of(
@@ -576,7 +576,7 @@ public class PlaintextConsumerPollTest {
     }
 
     private void awaitRebalance(
-        Consumer<byte[], byte[]> consumer, 
+        Consumer<byte[], byte[]> consumer,
         TestConsumerReassignmentListener rebalanceListener
     ) throws InterruptedException {
         var numReassignments = rebalanceListener.callsToAssigned;
@@ -588,7 +588,7 @@ public class PlaintextConsumerPollTest {
     }
 
     private void ensureNoRebalance(
-        Consumer<byte[], byte[]> consumer, 
+        Consumer<byte[], byte[]> consumer,
         TestConsumerReassignmentListener rebalanceListener
     ) throws InterruptedException {
         // The best way to verify that the current membership is still active is to commit offsets.
@@ -651,7 +651,7 @@ public class PlaintextConsumerPollTest {
         var allNonEmptyAssignments = assignments
             .stream()
             .noneMatch(Set::isEmpty);
-        
+
         if (!allNonEmptyAssignments) {
             // at least one consumer got empty assignment
             return false;
@@ -676,7 +676,7 @@ public class PlaintextConsumerPollTest {
         for (var assignment : assignments) {
             uniqueAssignedPartitions.addAll(assignment);
         }
-        
+
         return uniqueAssignedPartitions.equals(partitions);
     }
 
@@ -699,7 +699,7 @@ public class PlaintextConsumerPollTest {
                 assignments.add(poller.consumerAssignment());
             }
             return isPartitionAssignmentValid(assignments, subscriptions);
-        }, GROUP_MAX_SESSION_TIMEOUT_MS * 3, 
+        }, GROUP_MAX_SESSION_TIMEOUT_MS * 3,
             msg != null ? msg : "Did not get valid assignment for partitions " + subscriptions + ". Instead, got " + assignments
         );
     }
@@ -737,11 +737,11 @@ public class PlaintextConsumerPollTest {
         public boolean isComplete = false;
         public Optional<Exception> error = Optional.empty();
         java.util.function.Consumer<OffsetCommitCallback> sendAsyncCommit;
-        
+
         public RetryCommitCallback(java.util.function.Consumer<OffsetCommitCallback> sendAsyncCommit) {
             this.sendAsyncCommit = sendAsyncCommit;
         }
-        
+
         @Override
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
             if (exception instanceof RetriableCommitFailedException) {
