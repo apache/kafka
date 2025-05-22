@@ -355,7 +355,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 if (anyPartitionHasLogReadError(replicaManagerReadResponse) || isMinBytesSatisfied(topicPartitionData, partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, topicPartitionData.keySet(), topicPartitionData.size()))) {
                     partitionsAcquired = topicPartitionData;
                     localPartitionsAlreadyFetched = replicaManagerReadResponse;
-                    return forceCompleteRequest();
+                    return forceComplete();
                 } else {
                     log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
                             "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
@@ -378,10 +378,8 @@ public class DelayedShareFetch extends DelayedOperation {
                 releasePartitionLocks(topicPartitionData.keySet());
                 partitionsAcquired.clear();
                 localPartitionsAlreadyFetched.clear();
-                return forceCompleteRequest();
-            } else {
-                return forceCompleteRequest();
             }
+            return forceComplete();
         }
     }
 
@@ -782,7 +780,7 @@ public class DelayedShareFetch extends DelayedOperation {
         }
 
         if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case d
-            return forceCompleteRequest();
+            return forceComplete();
         } else
             return false;
     }
@@ -939,16 +937,6 @@ public class DelayedShareFetch extends DelayedOperation {
             log.debug("Remote fetch task for RemoteStorageFetchInfo: {} could not be cancelled and its isDone value is {}",
                 remoteFetch.remoteFetchInfo(), remoteFetch.remoteFetchTask().isDone());
         }
-    }
-
-    private boolean forceCompleteRequest() {
-        boolean completedByMe = forceComplete();
-        // If the delayed operation is completed by me, the acquired locks are already released in onComplete().
-        // Otherwise, we need to release the acquired locks.
-        if (!completedByMe) {
-            releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet());
-        }
-        return completedByMe;
     }
 
     private void completeRemoteShareFetchRequestOutsidePurgatory() {
