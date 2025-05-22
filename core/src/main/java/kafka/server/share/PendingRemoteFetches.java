@@ -23,10 +23,12 @@ import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.function.BiConsumer;
 
 /**
  * This class is used to store the remote storage fetch information for topic partitions in a share fetch request.
@@ -46,6 +48,12 @@ public class PendingRemoteFetches {
                 return false;
         }
         return true;
+    }
+
+    public void invokeCallbackOnCompletion(BiConsumer<Void, Throwable> callback) {
+        List<CompletableFuture<RemoteLogReadResult>> remoteFetchResult = new ArrayList<>();
+        remoteFetches.forEach(remoteFetch -> remoteFetchResult.add(remoteFetch.remoteFetchResult()));
+        CompletableFuture.allOf(remoteFetchResult.toArray(new CompletableFuture<?>[0])).whenComplete(callback);
     }
 
     public List<RemoteFetch> remoteFetches() {
