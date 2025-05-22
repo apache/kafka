@@ -73,24 +73,19 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
         HashMap<String, AlterShareGroupOffsetsResponseTopic> topics = new HashMap<>();
 
-        private AlterShareGroupOffsetsResponseTopic getOrCreateTopic(String topic) {
+        private AlterShareGroupOffsetsResponseTopic getOrCreateTopic(String topic, Uuid topicId) {
             AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = topics.get(topic);
             if (topicData == null) {
                 topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                    .setTopicName(topic);
+                    .setTopicName(topic)
+                    .setTopicId(topicId == null ? Uuid.ZERO_UUID : topicId);
                 topics.put(topic, topicData);
             }
             return topicData;
         }
 
-        private AlterShareGroupOffsetsResponseTopic getOrCreateTopic(String topic, Uuid topicId) {
-            AlterShareGroupOffsetsResponseTopic topicData = getOrCreateTopic(topic);
-            topicData.setTopicId(topicId);
-            return topicData;
-        }
-
-        public Builder addPartition(String topic, int partition, Errors error) {
-            AlterShareGroupOffsetsResponseTopic topicData = getOrCreateTopic(topic);
+        public Builder addPartition(String topic, int partition, Map<String, Uuid> topicIdsToNames,  Errors error) {
+            AlterShareGroupOffsetsResponseTopic topicData = getOrCreateTopic(topic, topicIdsToNames.get(topic));
             topicData.partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                 .setPartitionIndex(partition)
                 .setErrorCode(error.code())

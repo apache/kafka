@@ -13214,6 +13214,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid
     val topicName2 = "bar"
     val topicId2 = Uuid.randomUuid
+    val topicName3 = "zoo"
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
@@ -13235,11 +13236,19 @@ class KafkaApisTest extends Logging {
           new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
             .setPartitionIndex(0)
             .setStartOffset(0L)
-        ).asJava)))
+        ).asJava),
+      new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+        .setTopicName(topicName3)
+        setPartitions(List(
+        new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+          .setPartitionIndex(0)
+          .setStartOffset(0L)
+        ).asJava))
+    )
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
-      .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava, Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
+      .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava, Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
 
     val alterRequestData = new AlterShareGroupOffsetsRequestData()
       .setGroupId(groupId)
@@ -13257,13 +13266,34 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val alterShareGroupOffsetsResponse = new AlterShareGroupOffsetsResponseData()
+      .setResponses(List(
+        new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName2)
+          .setTopicId(topicId2)
+          .setPartitions(List(
+            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code())
+              .setErrorMessage(Errors.NONE.message())
+          ).asJava)
+      ).asJava)
     resultFuture.complete(alterShareGroupOffsetsResponse)
     val response = verifyNoThrottling[AlterShareGroupOffsetsResponse](requestChannelRequest)
 
     assertNotNull(response.data)
+    assertEquals(1, response.errorCounts().get(Errors.UNKNOWN_TOPIC_OR_PARTITION))
     assertEquals(2, response.errorCounts().get(Errors.TOPIC_AUTHORIZATION_FAILED))
-    assertEquals(1, response.data().responses().size())
-    val foo = response.data().responses().get(0)
+    assertEquals(3, response.data().responses().size())
+
+    val bar = response.data().responses().get(0)
+    val foo = response.data().responses().get(1)
+    val zoo = response.data().responses().get(2)
+    assertEquals(topicName1, foo.topicName())
+    assertEquals(topicId1, foo.topicId())
+    assertEquals(topicName2, bar.topicName())
+    assertEquals(topicId2, bar.topicId())
+    assertEquals(topicName3, zoo.topicName())
+    assertEquals(Uuid.ZERO_UUID, zoo.topicId())
     foo.partitions().forEach(partition => {
       assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), partition.errorCode())
     })
