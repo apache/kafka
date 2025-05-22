@@ -261,7 +261,7 @@ public class ClientsTestUtils {
      * we should use the test cases provided in this class.
      */
     public static final class BaseConsumerTestcase {
-        
+
         public static final int BROKER_COUNT = 3;
         public static final String TOPIC = "topic";
         public static final TopicPartition TP = new TopicPartition(TOPIC, 0);
