@@ -3637,7 +3637,10 @@ public class RequestResponseTest {
     }
 
     private ListConfigResourcesRequest createListConfigResourcesRequest(short version) {
-        return new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()).build(version);
+        return version == 0 ?
+            new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()
+                .setResourceTypes(List.of(ConfigResource.Type.CLIENT_METRICS.id()))).build(version) :
+            new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()).build(version);
     }
 
     private ListConfigResourcesResponse createListConfigResourcesResponse() {
