@@ -654,8 +654,8 @@ public class ShareConsumerTest {
             Map<TopicPartition, Exception> partitionExceptionMap1 = new HashMap<>();
             shareConsumer1.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
 
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer1, 2500L, 3);
-            assertEquals(3, records.count());
+            List<ConsumerRecord<byte[], byte[]>> records = waitedPollMultipleRecords(shareConsumer1, 2500L, 3);
+            assertEquals(3, records.size());
             Iterator<ConsumerRecord<byte[], byte[]>> iterator = records.iterator();
 
             // Acknowledging 2 out of the 3 records received via commitAsync.
@@ -710,8 +710,8 @@ public class ShareConsumerTest {
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
             shareConsumer1.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
 
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer1, 2500L, 3);
-            assertEquals(3, records.count());
+            List<ConsumerRecord<byte[], byte[]>> records = waitedPollMultipleRecords(shareConsumer1, 2500L, 3);
+            assertEquals(3, records.size());
             Iterator<ConsumerRecord<byte[], byte[]>> iterator = records.iterator();
 
             // Acknowledging 2 out of the 3 records received via commitAsync.
@@ -737,9 +737,9 @@ public class ShareConsumerTest {
             shareConsumer1.commitAsync();
 
             // The next poll() will not throw an exception, it would continue to fetch more records.
-            records = shareConsumer1.poll(Duration.ofMillis(5000));
-            assertEquals(1, records.count());
-            iterator = records.iterator();
+            ConsumerRecords<byte[], byte[]> records2 = shareConsumer1.poll(Duration.ofMillis(5000));
+            assertEquals(1, records2.count());
+            iterator = records2.iterator();
             ConsumerRecord<byte[], byte[]> fourthRecord = iterator.next();
             assertEquals(3L, fourthRecord.offset());
 
@@ -916,8 +916,8 @@ public class ShareConsumerTest {
 
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
 
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 3);
-            assertEquals(3, records.count());
+            List<ConsumerRecord<byte[], byte[]>> records = waitedPollMultipleRecords(shareConsumer, 2500L, 3);
+            assertEquals(3, records.size());
 
             // Implicitly acknowledging all the records received.
             shareConsumer.commitAsync();
@@ -996,8 +996,8 @@ public class ShareConsumerTest {
 
             shareConsumer.subscribe(Set.of(tp.topic()));
 
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
-            assertEquals(2, records.count());
+            List<ConsumerRecord<byte[], byte[]>> records = waitedPollMultipleRecords(shareConsumer, 2500L, 2);
+            assertEquals(2, records.size());
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -2025,10 +2025,10 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
-            assertEquals(2, records.count());
+            List<ConsumerRecord<byte[], byte[]>> records = waitedPollMultipleRecords(shareConsumer, 2500L, 2);
+            assertEquals(2, records.size());
             // Acknowledge the first record with AcknowledgeType.RELEASE
-            shareConsumer.acknowledge(records.records(tp).get(0), AcknowledgeType.RELEASE);
+            shareConsumer.acknowledge(records.get(0), AcknowledgeType.RELEASE);
             Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
             assertEquals(1, result.size());
         }
@@ -2244,9 +2244,9 @@ public class ShareConsumerTest {
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 8);
+            List<ConsumerRecord<byte[], byte[]>> records = waitedPollMultipleRecords(shareConsumer, 5000L, 8);
             // 5th and 10th message transaction was aborted, hence they won't be included in the fetched records.
-            assertEquals(8, records.count());
+            assertEquals(8, records.size());
             int messageCounter = 1;
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 assertEquals(tp.topic(), record.topic());
@@ -2268,9 +2268,9 @@ public class ShareConsumerTest {
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 10);
+            List<ConsumerRecord<byte[], byte[]>> records = waitedPollMultipleRecords(shareConsumer, 5000L, 10);
             // Even though 5th and 10th message transaction was aborted, they will be included in the fetched records since IsolationLevel is READ_UNCOMMITTED.
-            assertEquals(10, records.count());
+            assertEquals(10, records.size());
             int messageCounter = 1;
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 assertEquals(tp.topic(), record.topic());
@@ -2316,18 +2316,25 @@ public class ShareConsumerTest {
 
                 // Third transaction is committed.
                 produceCommittedTransaction(transactionalProducer, "Message 3");
-                // Fourth transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 4");
 
-                records = waitedPoll(shareConsumer, 5000L, 2);
-                // Message 3 and Message 4 would be returned by this poll.
-                assertEquals(2, records.count());
+                records = waitedPoll(shareConsumer, 2500L, 1);
+                // Message 3 would be returned by this poll.
+                assertEquals(1, records.count());
                 Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
                 record = recordIterator.next();
                 assertEquals("Message 3", new String(record.value()));
+                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
+
+                // Fourth transaction is aborted.
+                produceAbortedTransaction(transactionalProducer, "Message 4");
+
+                records = waitedPoll(shareConsumer, 2500L, 1);
+                // Message 4 would be returned by this poll.
+                assertEquals(1, records.count());
+                recordIterator = records.iterator();
                 record = recordIterator.next();
                 assertEquals("Message 4", new String(record.value()));
-                // We will make Message 3 and Message 4 available for re-consumption.
+                // We will make Message 4 available for re-consumption.
                 records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
                 shareConsumer.commitSync();
 
@@ -2975,6 +2982,28 @@ public class ShareConsumerTest {
         int recordCount
     ) {
         return waitedPoll(shareConsumer, pollMs, recordCount, false, "", List.of());
+    }
+
+    private List<ConsumerRecord<byte[], byte[]>> waitedPollMultipleRecords(ShareConsumer<byte[], byte[]> shareConsumer,
+                                                                     long pollMs,
+                                                                     int recordCount) {
+        List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        try {
+            waitForCondition(() -> {
+                    ConsumerRecords<byte[], byte[]> recs = shareConsumer.poll(Duration.ofMillis(pollMs));
+                    for (ConsumerRecord<byte[], byte[]> record : recs) {
+                        records.add(record);
+                    }
+                    return records.size() == recordCount;
+                },
+                DEFAULT_MAX_WAIT_MS,
+                500L,
+                () -> "failed to get records"
+            );
+            return records;
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private ConsumerRecords<byte[], byte[]> waitedPoll(
