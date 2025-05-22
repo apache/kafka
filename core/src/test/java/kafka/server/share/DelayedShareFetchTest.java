@@ -48,6 +48,7 @@ import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
@@ -81,6 +82,7 @@ import scala.jdk.javaapi.CollectionConverters;
 
 import static kafka.server.share.PendingRemoteFetches.RemoteFetch;
 import static kafka.server.share.SharePartitionManagerTest.DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL;
+import static kafka.server.share.SharePartitionManagerTest.REMOTE_FETCH_MAX_WAIT_MS;
 import static kafka.server.share.SharePartitionManagerTest.buildLogReadResult;
 import static kafka.server.share.SharePartitionManagerTest.mockReplicaManagerDelayedShareFetch;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShareAcquiredRecords;
@@ -1427,6 +1429,13 @@ public class DelayedShareFetchTest {
         when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
         when(replicaManager.getPartitionOrException(tp2.topicPartition())).thenThrow(mock(KafkaStorageException.class));
 
+        // Mock the behaviour of replica manager such that remote storage fetch completion timer task completes on adding it to the watch queue.
+        doAnswer(invocationOnMock -> {
+            TimerTask timerTask = invocationOnMock.getArgument(0);
+            timerTask.run();
+            return null;
+        }).when(replicaManager).addShareFetchTimerRequest(any());
+
         Uuid fetchId = Uuid.randomUuid();
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
@@ -1777,6 +1786,165 @@ public class DelayedShareFetchTest {
         delayedShareFetch.lock().unlock();
     }
 
+    @Test
+    public void testRemoteStorageFetchCompletionPostRegisteringCallbackByPendingFetchesCompletion() {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartition sp0 = mock(SharePartition.class);
+
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.nextFetchOffset()).thenReturn(10L);
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
+            future, List.of(tp0), BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        PendingRemoteFetches pendingRemoteFetches = mock(PendingRemoteFetches.class);
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withReplicaManager(replicaManager)
+            .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
+            .withPendingRemoteFetches(pendingRemoteFetches)
+            .withFetchId(fetchId)
+            .build());
+
+        LinkedHashMap<TopicIdPartition, Long> partitionsAcquired = new LinkedHashMap<>();
+        partitionsAcquired.put(tp0, 10L);
+
+        // Manually update acquired partitions.
+        delayedShareFetch.updatePartitionsAcquired(partitionsAcquired);
+
+        // Mock remote fetch result.
+        RemoteFetch remoteFetch = mock(RemoteFetch.class);
+        when(remoteFetch.topicIdPartition()).thenReturn(tp0);
+        when(remoteFetch.remoteFetchResult()).thenReturn(CompletableFuture.completedFuture(
+            new RemoteLogReadResult(Optional.of(REMOTE_FETCH_INFO), Optional.empty()))
+        );
+        when(remoteFetch.logReadResult()).thenReturn(new LogReadResult(
+            REMOTE_FETCH_INFO,
+            Option.empty(),
+            -1L,
+            -1L,
+            -1L,
+            -1L,
+            -1L,
+            Option.empty(),
+            Option.empty(),
+            Option.empty()
+        ));
+        when(pendingRemoteFetches.remoteFetches()).thenReturn(List.of(remoteFetch));
+        when(pendingRemoteFetches.isDone()).thenReturn(false);
+
+        // Make sure that the callback is called to complete remote storage share fetch result.
+        doAnswer(invocationOnMock -> {
+            BiConsumer<Void, Throwable> callback = invocationOnMock.getArgument(0);
+            callback.accept(mock(Void.class), null);
+            return null;
+        }).when(pendingRemoteFetches).invokeCallbackOnCompletion(any());
+
+        when(sp0.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class), any())).thenReturn(
+            createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
+
+        assertFalse(delayedShareFetch.isCompleted());
+        delayedShareFetch.forceComplete();
+        assertTrue(delayedShareFetch.isCompleted());
+        // the future of shareFetch completes.
+        assertTrue(shareFetch.isCompleted());
+        assertEquals(Set.of(tp0), future.join().keySet());
+        // Verify the locks are released for tp0.
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0));
+        assertTrue(delayedShareFetch.outsidePurgatoryCallbackLock());
+        assertTrue(delayedShareFetch.lock().tryLock());
+        delayedShareFetch.lock().unlock();
+    }
+
+    @Test
+    public void testRemoteStorageFetchCompletionPostRegisteringCallbackByTimerTaskCompletion() {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartition sp0 = mock(SharePartition.class);
+
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.nextFetchOffset()).thenReturn(10L);
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
+            future, List.of(tp0), BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        PendingRemoteFetches pendingRemoteFetches = mock(PendingRemoteFetches.class);
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withReplicaManager(replicaManager)
+            .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
+            .withPendingRemoteFetches(pendingRemoteFetches)
+            .withFetchId(fetchId)
+            .build());
+
+        LinkedHashMap<TopicIdPartition, Long> partitionsAcquired = new LinkedHashMap<>();
+        partitionsAcquired.put(tp0, 10L);
+
+        // Manually update acquired partitions.
+        delayedShareFetch.updatePartitionsAcquired(partitionsAcquired);
+
+        // Mock remote fetch result.
+        RemoteFetch remoteFetch = mock(RemoteFetch.class);
+        when(remoteFetch.topicIdPartition()).thenReturn(tp0);
+        when(remoteFetch.remoteFetchResult()).thenReturn(CompletableFuture.completedFuture(
+            new RemoteLogReadResult(Optional.of(REMOTE_FETCH_INFO), Optional.empty()))
+        );
+        when(remoteFetch.logReadResult()).thenReturn(new LogReadResult(
+            REMOTE_FETCH_INFO,
+            Option.empty(),
+            -1L,
+            -1L,
+            -1L,
+            -1L,
+            -1L,
+            Option.empty(),
+            Option.empty(),
+            Option.empty()
+        ));
+        when(pendingRemoteFetches.remoteFetches()).thenReturn(List.of(remoteFetch));
+        when(pendingRemoteFetches.isDone()).thenReturn(false);
+
+        // Make sure that the callback to complete remote storage share fetch result is not called.
+        doAnswer(invocationOnMock -> null).when(pendingRemoteFetches).invokeCallbackOnCompletion(any());
+
+        // Mock the behaviour of replica manager such that remote storage fetch completion timer task completes on adding it to the watch queue.
+        doAnswer(invocationOnMock -> {
+            TimerTask timerTask = invocationOnMock.getArgument(0);
+            timerTask.run();
+            return null;
+        }).when(replicaManager).addShareFetchTimerRequest(any());
+
+        when(sp0.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class), any())).thenReturn(
+            createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
+
+        assertFalse(delayedShareFetch.isCompleted());
+        delayedShareFetch.forceComplete();
+        assertTrue(delayedShareFetch.isCompleted());
+        // the future of shareFetch completes.
+        assertTrue(shareFetch.isCompleted());
+        assertEquals(Set.of(tp0), future.join().keySet());
+        // Verify the locks are released for tp0.
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0));
+        assertTrue(delayedShareFetch.outsidePurgatoryCallbackLock());
+        assertTrue(delayedShareFetch.lock().tryLock());
+        delayedShareFetch.lock().unlock();
+    }
+
     static void mockTopicIdPartitionToReturnDataEqualToMinBytes(ReplicaManager replicaManager, TopicIdPartition topicIdPartition, int minBytes) {
         LogOffsetMetadata hwmOffsetMetadata = new LogOffsetMetadata(1, 1, minBytes);
         LogOffsetSnapshot endOffsetSnapshot = new LogOffsetSnapshot(1, mock(LogOffsetMetadata.class),
@@ -1847,7 +2015,7 @@ public class DelayedShareFetchTest {
         private LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = mock(LinkedHashMap.class);
         private PartitionMaxBytesStrategy partitionMaxBytesStrategy = mock(PartitionMaxBytesStrategy.class);
         private Time time = new MockTime();
-        private final Optional<PendingRemoteFetches> pendingRemoteFetches = Optional.empty();
+        private Optional<PendingRemoteFetches> pendingRemoteFetches = Optional.empty();
         private ShareGroupMetrics shareGroupMetrics = mock(ShareGroupMetrics.class);
         private Uuid fetchId = Uuid.randomUuid();
 
@@ -1886,6 +2054,11 @@ public class DelayedShareFetchTest {
             return this;
         }
 
+        private DelayedShareFetchBuilder withPendingRemoteFetches(PendingRemoteFetches pendingRemoteFetches) {
+            this.pendingRemoteFetches = Optional.of(pendingRemoteFetches);
+            return this;
+        }
+
         private DelayedShareFetchBuilder withFetchId(Uuid fetchId) {
             this.fetchId = fetchId;
             return this;
@@ -1905,7 +2078,8 @@ public class DelayedShareFetchTest {
                 shareGroupMetrics,
                 time,
                 pendingRemoteFetches,
-                fetchId);
+                fetchId,
+                REMOTE_FETCH_MAX_WAIT_MS);
         }
     }
 }

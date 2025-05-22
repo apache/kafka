@@ -49,7 +49,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 
@@ -72,7 +72,7 @@ final class KafkaMetadataLogTest {
   @Test
   def testConfig(): Unit = {
     val props = new Properties()
-    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, util.Arrays.asList("broker"))
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, util.List.of("broker"))
     props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9093")
     props.put(KRaftConfigs.NODE_ID_CONFIG, Int.box(2))
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -742,7 +742,7 @@ final class KafkaMetadataLogTest {
     )
 
     val serializationCache = new ObjectSerializationCache
-    val records = Collections.singletonList(new Array[Byte](recordSize))
+    val records = util.List.of(new Array[Byte](recordSize))
     while (!batchBuilder.bytesNeeded(records, serializationCache).isPresent) {
       batchBuilder.appendRecord(records.get(0), serializationCache)
     }

@@ -19,12 +19,17 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.PartitionRegistration;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * The subscribed topic metadata class is used by the {@link PartitionAssignor} to obtain
@@ -32,28 +37,26 @@ import java.util.stream.IntStream;
  */
 public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     /**
-     * The topic Ids mapped to their corresponding {@link TopicMetadata}
-     * object, which contains topic and partition metadata.
+     * The map of topic Ids to the set of allowed partitions for each topic.
+     * If this is empty, all partitions are allowed.
      */
-    private final Map<Uuid, TopicMetadata> topicMetadata;
-    private final Map<Uuid, Set<Integer>> topicPartitionAllowedMap;
-
-    public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata) {
-        this(topicMetadata, null);
-    }
-
-    public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata, Map<Uuid, Set<Integer>> topicPartitionAllowedMap) {
-        this.topicMetadata = Objects.requireNonNull(topicMetadata);
-        this.topicPartitionAllowedMap = topicPartitionAllowedMap;
-    }
+    private final Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap;
 
     /**
-     * Map of topic Ids to topic metadata.
-     *
-     * @return The map of topic Ids to topic metadata.
+     * The metadata image that contains the latest metadata information.
      */
-    public Map<Uuid, TopicMetadata> topicMetadata() {
-        return this.topicMetadata;
+    private final MetadataImage metadataImage;
+
+    public SubscribedTopicDescriberImpl(MetadataImage metadataImage) {
+        this(metadataImage, Optional.empty());
+    }
+
+    public SubscribedTopicDescriberImpl(
+        MetadataImage metadataImage,
+        Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
+    ) {
+        this.metadataImage = Objects.requireNonNull(metadataImage);
+        this.topicPartitionAllowedMap = Objects.requireNonNull(topicPartitionAllowedMap);
     }
 
     /**
@@ -65,8 +68,8 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public int numPartitions(Uuid topicId) {
-        TopicMetadata topic = this.topicMetadata.get(topicId);
-        return topic == null ? -1 : topic.numPartitions();
+        TopicImage topicImage = this.metadataImage.topics().getTopic(topicId);
+        return topicImage == null ? -1 : topicImage.partitions().size();
     }
 
     /**
@@ -79,13 +82,28 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
+        TopicImage topic = metadataImage.topics().getTopic(topicId);
+        if (topic != null) {
+            PartitionRegistration partitionRegistration = topic.partitions().get(partition);
+            if (partitionRegistration != null) {
+                Set<String> racks = new HashSet<>();
+                for (int replica : partitionRegistration.replicas) {
+                    // Only add the rack if it is available for the broker/replica.
+                    BrokerRegistration brokerRegistration = metadataImage.cluster().broker(replica);
+                    if (brokerRegistration != null) {
+                        brokerRegistration.rack().ifPresent(racks::add);
+                    }
+                }
+                return Collections.unmodifiableSet(racks);
+            }
+        }
         return Set.of();
     }
 
     /**
-     * Returns a set of assignable partitions from the topic metadata.
-     * If the allowed partition map is null, all the partitions in the corresponding
-     * topic metadata are returned for the argument topic id. If allowed map is empty,
+     * Returns a set of assignable partitions from the metadata image.
+     * If the allowed partition map is Optional.empty(), all the partitions in the corresponding
+     * topic image are returned for the argument topic id. If allowed map is empty,
      * empty set is returned.
      *
      * @param topicId The uuid of the topic
@@ -93,16 +111,16 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public Set<Integer> assignablePartitions(Uuid topicId) {
-        TopicMetadata topic = this.topicMetadata.get(topicId);
+        TopicImage topic = metadataImage.topics().getTopic(topicId);
         if (topic == null) {
             return Set.of();
         }
 
-        if (topicPartitionAllowedMap == null) {
-            return IntStream.range(0, topic.numPartitions()).boxed().collect(Collectors.toUnmodifiableSet());
+        if (topicPartitionAllowedMap.isEmpty()) {
+            return Collections.unmodifiableSet(topic.partitions().keySet());
         }
 
-        return topicPartitionAllowedMap.getOrDefault(topicId, Set.of());
+        return topicPartitionAllowedMap.get().getOrDefault(topicId, Set.of());
     }
 
     @Override
@@ -110,18 +128,22 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         SubscribedTopicDescriberImpl that = (SubscribedTopicDescriberImpl) o;
-        return topicMetadata.equals(that.topicMetadata);
+        if (!topicPartitionAllowedMap.equals(that.topicPartitionAllowedMap)) return false;
+        return metadataImage.equals(that.metadataImage);
     }
 
     @Override
     public int hashCode() {
-        return topicMetadata.hashCode();
+        int result = metadataImage.hashCode();
+        result = 31 * result + topicPartitionAllowedMap.hashCode();
+        return result;
     }
 
     @Override
     public String toString() {
         return "SubscribedTopicMetadata(" +
-            "topicMetadata=" + topicMetadata +
+            "metadataImage=" + metadataImage +
+            ", topicPartitionAllowedMap=" + topicPartitionAllowedMap +
             ')';
     }
 }

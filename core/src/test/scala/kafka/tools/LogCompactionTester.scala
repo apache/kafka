@@ -142,8 +142,8 @@ object LogCompactionTester {
     val adminClient = Admin.create(adminConfig)
 
     try {
-      val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)
-      val newTopics = topics.map(name => new NewTopic(name, 1, 1.toShort).configs(topicConfigs.asJava)).asJava
+      val topicConfigs = java.util.Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+      val newTopics = topics.map(name => new NewTopic(name, 1, 1.toShort).configs(topicConfigs)).asJava
       adminClient.createTopics(newTopics).all.get
 
       var pendingTopics: Seq[String] = Seq()

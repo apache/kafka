@@ -75,9 +75,9 @@ object CoreUtils {
 
   /**
    * Recursively delete the list of files/directories and any subfiles (if any exist)
-   * @param files sequence of files to be deleted
+   * @param files list of files to be deleted
    */
-  def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
+  def delete(files: java.util.List[String]): Unit = files.forEach(f => Utils.delete(new File(f)))
 
   /**
    * Register the given mbean with the platform mbean server,

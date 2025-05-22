@@ -2108,7 +2108,7 @@ public class ShareConsumerTest {
 
         ClientState prodState = new ClientState();
 
-        // produce messages until we want
+        // Produce messages until we want.
         service.execute(() -> {
             try (Producer<byte[], byte[]> producer = createProducer()) {
                 while (!prodState.done().get()) {
@@ -2120,13 +2120,14 @@ public class ShareConsumerTest {
             }
         });
 
-        // init a complex share consumer
+        // Init a complex share consumer.
         ComplexShareConsumer<byte[], byte[]> complexCons1 = new ComplexShareConsumer<>(
             cluster.bootstrapServers(),
             topicName,
             groupId,
             Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT)
         );
+        alterShareAutoOffsetReset(groupId, "earliest");
 
         service.schedule(
             complexCons1,
@@ -2134,13 +2135,14 @@ public class ShareConsumerTest {
             TimeUnit.MILLISECONDS
         );
 
-        // let the complex consumer read the messages
-        service.schedule(() -> prodState.done().set(true), 10L, TimeUnit.SECONDS);
+        // Let the complex consumer read the messages.
+        service.schedule(() -> prodState.done().set(true), 5L, TimeUnit.SECONDS);
 
-        // all messages which can be read are read, some would be redelivered
+        // All messages which can be read are read, some would be redelivered (roughly 3 times the records produced).
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
+        int delta = complexCons1.recordsRead() - (int) (prodState.count().get() * 3 * 0.95);    // 3 times with margin of error (5%).
 
-        assertTrue(prodState.count().get() < complexCons1.recordsRead(),
+        assertTrue(delta > 0,
             String.format("Producer (%d) and share consumer (%d) record count mismatch.", prodState.count().get(), complexCons1.recordsRead()));
 
         shutdownExecutorService(service);
@@ -2197,6 +2199,41 @@ public class ShareConsumerTest {
         shareConsumer2.close();
         shareConsumer3.close();
         shareConsumer4.close();
+    }
+
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = "group.share.max.size", value = "1"), // Setting max group size to 1
+            @ClusterConfigProperty(key = "group.share.max.share.sessions", value = "1") // Setting max share sessions value to 1
+        }
+    )
+    public void testShareGroupShareSessionCacheIsFull() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group2")) {
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.flush();
+            shareConsumer1.subscribe(Set.of(tp.topic()));
+            shareConsumer2.subscribe(Set.of(tp.topic()));
+
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer1, 2500L, 1);
+            assertEquals(1, records.count());
+
+            producer.send(record);
+            producer.flush();
+
+            // The second share consumer should not throw any exception, but should not receive any records as well.
+            records = shareConsumer2.poll(Duration.ofMillis(1000));
+
+            assertEquals(0, records.count());
+
+            shareConsumer1.close();
+            shareConsumer2.close();
+        }
     }
 
     @ClusterTest

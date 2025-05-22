@@ -126,7 +126,9 @@ public class CommonClientConfigs {
             "\n" +
             "TRACE level records all possible metrics, capturing every detail about the system's performance and operation. It's best for controlled environments where in-depth analysis is required, though it can introduce significant overhead.";
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
-    public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation.";
+    public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. " +
+            "Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. " +
+            "When custom reporters are set and <code>org.apache.kafka.common.metrics.JmxReporter</code> is needed, it has to be explicitly added to the list.";
 
     public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
 
@@ -209,7 +211,7 @@ public class CommonClientConfigs {
                                                         + "then the broker will remove this client from the group and initiate a rebalance. Note that the value "
                                                         + "must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> "
                                                         + "and <code>group.max.session.timeout.ms</code>. Note that this client configuration is not supported when <code>group.protocol</code> "
-                                                        + "is set to \"consumer\". In that case, session timeout is controlled by the broker config <code>group.consumer.session.timeout.ms<code>.";
+                                                        + "is set to \"consumer\". In that case, session timeout is controlled by the broker config <code>group.consumer.session.timeout.ms</code>.";
 
     public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
     public static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the consumer "

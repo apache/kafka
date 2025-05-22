@@ -59,8 +59,6 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -760,7 +758,7 @@ class ShareCoordinatorShardTest {
         //        -Share coordinator writes the snapshot with startOffset 110 and batch 3.
         //        -batch2 should NOT be lost
         ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder()
-            .setConfigOverrides(Collections.singletonMap(ShareCoordinatorConfig.SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, "0"))
+            .setConfigOverrides(Map.of(ShareCoordinatorConfig.SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, "0"))
             .build();
 
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
@@ -775,7 +773,7 @@ class ShareCoordinatorShardTest {
                     .setStartOffset(100)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
-                    .setStateBatches(Arrays.asList(
+                    .setStateBatches(List.of(
                         new WriteShareGroupStateRequestData.StateBatch()    //b1
                             .setFirstOffset(100)
                             .setLastOffset(109)
@@ -862,7 +860,7 @@ class ShareCoordinatorShardTest {
             .setLeaderEpoch(0)
             .setStateEpoch(0)
             .setSnapshotEpoch(2)    // since 2nd share snapshot
-            .setStateBatches(Arrays.asList(
+            .setStateBatches(List.of(
                 new PersisterStateBatch(110, 119, (byte) 1, (short) 2),  // b2 not lost
                 new PersisterStateBatch(120, 129, (byte) 2, (short) 1)
             ))
