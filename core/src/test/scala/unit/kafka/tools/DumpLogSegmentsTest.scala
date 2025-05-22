@@ -533,7 +533,7 @@ class DumpLogSegmentsTest {
       new EndTransactionMarker(ControlRecordType.COMMIT, 100)
     ), 0, AppendOrigin.COORDINATOR)
 
-    log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(0, 0L, 0, ByteBuffer.allocate(4),
+    log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(0L, 0L, 0, ByteBuffer.allocate(4),
       new LeaderChangeMessage()
     ), 0, AppendOrigin.COORDINATOR)
 
@@ -541,16 +541,16 @@ class DumpLogSegmentsTest {
       new SnapshotHeaderRecord()
     ), 0, AppendOrigin.COORDINATOR)
 
-    log.appendAsLeader(MemoryRecords.withSnapshotFooterRecord(0, 0L, 0, ByteBuffer.allocate(4),
+    log.appendAsLeader(MemoryRecords.withSnapshotFooterRecord(0L, 0L, 0, ByteBuffer.allocate(4),
       new SnapshotFooterRecord()
         .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION)
     ), 0, AppendOrigin.COORDINATOR)
 
-    log.appendAsLeader(MemoryRecords.withKRaftVersionRecord(0, 0L, 0, ByteBuffer.allocate(4),
+    log.appendAsLeader(MemoryRecords.withKRaftVersionRecord(0L, 0L, 0, ByteBuffer.allocate(4),
       new KRaftVersionRecord()
     ), 0, AppendOrigin.COORDINATOR)
 
-    log.appendAsLeader(MemoryRecords.withVotersRecord(0, 0L, 0, ByteBuffer.allocate(4),
+    log.appendAsLeader(MemoryRecords.withVotersRecord(0L, 0L, 0, ByteBuffer.allocate(4),
       new VotersRecord()
     ), 0, AppendOrigin.COORDINATOR)
     log.flush(false)
