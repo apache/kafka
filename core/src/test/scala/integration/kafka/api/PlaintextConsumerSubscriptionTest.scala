@@ -24,7 +24,6 @@ import org.junit.jupiter.params.provider.MethodSource
 
 import java.time.Duration
 import java.util.regex.Pattern
-import scala.jdk.CollectionConverters._
 
 /**
  * Integration tests for the consumer that covers the subscribe and unsubscribe logic.
@@ -301,7 +300,7 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     assertEquals(0, consumer.assignment().size)
 
     // Subscribe to explicit topic names
-    consumer.subscribe(List(topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic2))
     val assignment = Set(
       new TopicPartition(topic2, 0),
       new TopicPartition(topic2, 1))
@@ -334,12 +333,12 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     val otherTopic = "other"
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     val consumer = createConsumer()
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     awaitAssignment(consumer, initialAssignment)
 
     createTopic(otherTopic, 2, brokerCount)
     val expandedAssignment = initialAssignment ++ Set(new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
-    consumer.subscribe(List(topic, otherTopic).asJava)
+    consumer.subscribe(java.util.List.of(topic, otherTopic))
     awaitAssignment(consumer, expandedAssignment)
   }
 
@@ -350,11 +349,11 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     createTopic(otherTopic, 2, brokerCount)
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
     val consumer = createConsumer()
-    consumer.subscribe(List(topic, otherTopic).asJava)
+    consumer.subscribe(java.util.List.of(topic, otherTopic))
     awaitAssignment(consumer, initialAssignment)
 
     val shrunkenAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     awaitAssignment(consumer, shrunkenAssignment)
   }
 
@@ -368,12 +367,12 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     val consumer = createConsumer()
 
     val listener = new TestConsumerReassignmentListener()
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // the initial subscription should cause a callback execution
     awaitRebalance(consumer, listener)
 
-    consumer.subscribe(List[String]().asJava)
+    consumer.subscribe(java.util.List.of[String]())
     assertEquals(0, consumer.assignment.size())
   }
 
@@ -407,7 +406,7 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
   def setupSubscribeInvalidTopic(consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
     // Invalid topic name due to space
     val invalidTopicName = "topic abc"
-    consumer.subscribe(List(invalidTopicName).asJava)
+    consumer.subscribe(java.util.List.of(invalidTopicName))
 
     var exception : InvalidTopicException = null
     TestUtils.waitUntilTrue(() => {
@@ -418,6 +417,6 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
       exception != null
     }, waitTimeMs = 5000, msg = "An InvalidTopicException should be thrown.")
 
-    assertEquals(s"Invalid topics: [${invalidTopicName}]", exception.getMessage)
+    assertEquals(s"Invalid topics: [$invalidTopicName]", exception.getMessage)
   }
 }

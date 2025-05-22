@@ -34,7 +34,7 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.util.Random
@@ -195,7 +195,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
       topicConfig = topicConfig)
 
     // 4. create a topic with `remote.log.copy.disable=false` and have different local.retention.ms and retention.ms value,
-    //    it should successfully creates the topic.
+    //    it should successfully create the topic.
     topicConfig.clear()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
@@ -207,7 +207,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     // 5. alter the config to `remote.log.copy.disable=true`, it should fail the config change
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
           AlterConfigOp.OpType.SET),
       ))
@@ -217,7 +217,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
     // 6. alter the config to `remote.log.copy.disable=true` and local.retention.ms == retention.ms, it should work without error
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
           AlterConfigOp.OpType.SET),
         new AlterConfigOp(new ConfigEntry(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "1000"),
@@ -260,7 +260,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
       topicConfig = topicConfig)
 
     // 4. create a topic with `remote.log.copy.disable=false` and have different local.retention.bytes and retention.bytes value,
-    //    it should successfully creates the topic.
+    //    it should successfully create the topic.
     topicConfig.clear()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "100")
@@ -272,7 +272,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     // 5. alter the config to `remote.log.copy.disable=true`, it should fail the config change
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
           AlterConfigOp.OpType.SET),
       ))
@@ -282,7 +282,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
     // 6. alter the config to `remote.log.copy.disable=true` and local.retention.bytes == retention.bytes, it should work without error
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
           AlterConfigOp.OpType.SET),
         new AlterConfigOp(new ConfigEntry(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1000"),
@@ -300,7 +300,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      Collections.singleton(
+      util.Set.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
         AlterConfigOp.OpType.SET))
     )
@@ -322,7 +322,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor)
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      Collections.singleton(
+      util.Set.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
           AlterConfigOp.OpType.SET))
     )
@@ -341,7 +341,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.RETENTION_MS_CONFIG, "200"),
           AlterConfigOp.OpType.SET),
         new AlterConfigOp(new ConfigEntry(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100"),
@@ -361,7 +361,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.RETENTION_BYTES_CONFIG, "200"),
           AlterConfigOp.OpType.SET),
         new AlterConfigOp(new ConfigEntry(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "100"),
@@ -382,7 +382,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     // inherited local retention ms is 1000
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.RETENTION_MS_CONFIG, "200"),
           AlterConfigOp.OpType.SET),
       ))
@@ -401,7 +401,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     // inherited local retention bytes is 1024
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.RETENTION_BYTES_CONFIG, "512"),
           AlterConfigOp.OpType.SET),
       ))
@@ -420,7 +420,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"),
           AlterConfigOp.OpType.SET),
       ))
@@ -440,7 +440,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"),
           AlterConfigOp.OpType.SET),
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, "true"),
@@ -598,7 +598,7 @@ class MyRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager {
       val timestamp = time.milliseconds()
       val startOffset = idx * recordsPerSegment
       val endOffset = startOffset + recordsPerSegment - 1
-      val segmentLeaderEpochs: util.Map[Integer, java.lang.Long] = Collections.singletonMap(0, 0L)
+      val segmentLeaderEpochs: util.Map[Integer, java.lang.Long] = util.Map.of(0, 0L)
       segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()), startOffset, endOffset, timestamp, 0, timestamp, segmentSize, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs))
     }
     segmentMetadataList.iterator()
