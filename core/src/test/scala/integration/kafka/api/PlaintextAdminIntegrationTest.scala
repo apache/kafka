@@ -60,6 +60,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 import org.slf4j.LoggerFactory
 
 import java.util.AbstractMap.SimpleImmutableEntry
@@ -2483,7 +2484,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         consumer.commitSync()
 
         // Test offset deletion while consuming
-        val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
+        val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, scala.collection.mutable.LinkedHashSet(tp1, tp2).asJava)
 
         // Top level error will equal to the first partition level error
         assertFutureThrows(classOf[GroupSubscribedToTopicException], offsetDeleteResult.all())
