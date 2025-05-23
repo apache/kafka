@@ -100,6 +100,9 @@ public interface ClientQuotaCallback extends Configurable {
      * brokers being added or removed, topics being created or deleted, or partition leadership updates.
      * This is useful if quota computation takes partitions into account.
      * Topics that are being deleted will not be included in `cluster`.
+     * <p>
+     * Note that in the cluster metadata, the {@link org.apache.kafka.common.Node} refers to the broker endpoint
+     * that comes first in lexicographical order among all of the broker's endpoints.
      *
      * @param cluster Cluster metadata including partitions and their leaders if known
      * @return true if quotas have changed and metric configs may need to be updated

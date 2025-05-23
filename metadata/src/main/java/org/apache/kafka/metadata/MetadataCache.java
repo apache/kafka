@@ -35,7 +35,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -148,31 +147,28 @@ public interface MetadataCache extends ConfigRepository {
         boolean ignoreTopicsWithExceptions);
 
     static Cluster toCluster(String clusterId, MetadataImage image) {
-        Map<Integer, List<Node>> brokerToNodes = new HashMap<>();
-        image.cluster().brokers().values().stream()
-            .filter(broker -> !broker.fenced())
-            .forEach(broker -> brokerToNodes.put(broker.id(), broker.nodes()));
+        Map<Integer, Node> nodesById = image.cluster().brokers().values().stream()
+            .collect(Collectors.toMap(BrokerRegistration::id, broker -> broker.nodes().get(0)));
 
         List<PartitionInfo> partitionInfos = new ArrayList<>();
         Set<String> internalTopics = new HashSet<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
 
         image.topics().topicsByName().values().forEach(topic -> {
+            topicIds.put(topic.name(), topic.id());
             topic.partitions().forEach((partitionId, partition) -> {
-                List<Node> nodes = brokerToNodes.get(partition.leader);
-                if (nodes != null) {
-                    nodes.forEach(node -> {
-                        partitionInfos.add(new PartitionInfo(
+                Node node = nodesById.get(partition.leader);
+                if (node != null) {
+                    partitionInfos.add(new PartitionInfo(
                             topic.name(),
                             partitionId,
                             node,
-                            toArray(partition.replicas, brokerToNodes),
-                            toArray(partition.isr, brokerToNodes),
+                            toArray(partition.replicas, nodesById),
+                            toArray(partition.isr, nodesById),
                             getOfflineReplicas(image, partition).stream()
-                                .map(brokerToNodes::get)
-                                .flatMap(Collection::stream)
-                                .toArray(Node[]::new)
-                        ));
-                    });
+                                    .map(nodesById::get)
+                                    .toArray(Node[]::new)
+                    ));
                     if (Topic.isInternal(topic.name())) {
                         internalTopics.add(topic.name());
                     }
@@ -180,24 +176,24 @@ public interface MetadataCache extends ConfigRepository {
             });
         });
 
-        Node controllerNode = Optional.ofNullable(brokerToNodes.get(getRandomAliveBroker(image).orElse(-1)))
-            .map(nodes -> nodes.get(0))
+        Node controllerNode = Optional.ofNullable(nodesById.get(getRandomAliveBroker(image).orElse(-1)))
             .orElse(Node.noNode());
 
         return new Cluster(
             clusterId,
-            brokerToNodes.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
+            nodesById.values(),
             partitionInfos,
             Collections.emptySet(),
+            Collections.emptySet(),
             internalTopics,
-            controllerNode
+            controllerNode,
+            topicIds
         );
     }
 
-    private static Node[] toArray(int[] replicas, Map<Integer, List<Node>> brokerToNodes) {
+    private static Node[] toArray(int[] replicas, Map<Integer, Node> nodesById) {
         return Arrays.stream(replicas)
-            .mapToObj(brokerToNodes::get)
-            .flatMap(Collection::stream)
+            .mapToObj(nodesById::get)
             .toArray(Node[]::new);
     }
 

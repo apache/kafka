@@ -237,7 +237,7 @@ public class BrokerRegistration {
     }
     
     public List<Node> nodes() {
-        return listeners.keySet().stream().flatMap(l -> node(l).stream()).toList();
+        return listeners.keySet().stream().sorted().flatMap(l -> node(l).stream()).toList();
     }
 
     public Map<String, VersionRange> supportedFeatures() {

@@ -24,9 +24,9 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiMessage, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
-import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache}
+import org.apache.kafka.common.{ClusterResource, DirectoryId, Endpoint, Node, TopicPartition, Uuid}
+import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImage, ConfigurationsImage, DelegationTokenImage, FeaturesImage, MetadataDelta, MetadataImage, MetadataProvenance, ProducerIdsImage, ScramImage, TopicImage, TopicsImage}
+import org.apache.kafka.metadata.{BrokerRegistration, ControllerRegistration, LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.server.common.KRaftVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -929,94 +929,87 @@ class MetadataCacheTest {
     ), offlinePartitions(brokers, partitions))
   }
 
+  @Test def testToCluster(): Unit = {
+    val brokerMap = new util.HashMap[Integer, BrokerRegistration]
+    brokerMap.put(0, new BrokerRegistration.Builder().setId(0).setEpoch(1000).setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
+      setListeners(util.List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092), new Endpoint("SASL", SecurityProtocol.SASL_PLAINTEXT, "localhost", 9192))).
+      setSupportedFeatures(util.Map.of).
+      setRack(util.Optional.empty).setFenced(false).setInControlledShutdown(false).build)
+    brokerMap.put(1, new BrokerRegistration.Builder().setId(1).setEpoch(1001).setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
+      setListeners(util.List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093), new Endpoint("SASL", SecurityProtocol.SASL_PLAINTEXT, "localhost", 9193))).
+      setSupportedFeatures(util.Map.of).
+      setRack(util.Optional.empty).setFenced(false).setInControlledShutdown(false).build)
+    // broker 2 is fenced
+    brokerMap.put(2, new BrokerRegistration.Builder().setId(2).setEpoch(123).setIncarnationId(Uuid.fromString("hr4TVh3YQiu3p16Awkka6w")).
+      setListeners(util.List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094), new Endpoint("SASL", SecurityProtocol.SASL_PLAINTEXT, "localhost", 9194))).
+      setSupportedFeatures(util.Map.of).
+      setRack(util.Optional.empty).setFenced(true).setInControlledShutdown(false).build)
+    val controllerMap = new util.HashMap[Integer, ControllerRegistration]
+    controllerMap.put(1000, new ControllerRegistration.Builder().setId(1000).setIncarnationId(Uuid.fromString("9ABu6HEgRuS-hjHLgC4cHw")).
+      setZkMigrationReady(false).setListeners(util.Map.of("PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19092))).
+      setSupportedFeatures(util.Map.of).build)
+    val clusterImage = new ClusterImage(brokerMap, controllerMap)
 
-  val oldRequestControllerEpoch: Int = 122
-  val newRequestControllerEpoch: Int = 123
+    val fooTopicImage = new TopicImage("foo", Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA"),
+      util.Map.of(
+        0, new PartitionRegistration.Builder().setReplicas(Array[Int](0, 1, 2)).
+          setDirectories(DirectoryId.migratingArray(3)).setIsr(Array[Int](0, 1)).setLeader(1).
+          setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build,
+        1, new PartitionRegistration.Builder().setReplicas(Array[Int](0, 1, 2)).
+          setDirectories(DirectoryId.migratingArray(3)).setIsr(Array[Int](0, 1)).setLeader(1).
+          setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(4).setPartitionEpoch(684).build))
+    val barTopicImage = new TopicImage("bar", Uuid.fromString("f62ptyETTjet8SL5ZeREiw"),
+      util.Map.of(
+        0, new PartitionRegistration.Builder().setReplicas(Array[Int](0)).
+          setDirectories(DirectoryId.migratingArray(1)).setIsr(Array[Int](0)).setLeader(0).
+          setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build))
+    val topicsImage = new TopicsImage(
+      TopicsImage.EMPTY.topicsById
+        .updated(fooTopicImage.id, fooTopicImage)
+        .updated(barTopicImage.id, barTopicImage),
+      TopicsImage.EMPTY.topicsByName
+        .updated(fooTopicImage.name, fooTopicImage)
+        .updated(barTopicImage.name, barTopicImage))
 
-  val fooTopicName: String = "foo"
-  val fooTopicId: Uuid = Uuid.fromString("HDceyWK0Ry-j3XLR8DvvGA")
-  val oldFooPart0 = new PartitionRecord().
-    setTopicId(fooTopicId).
-    setPartitionId(0).
-    setLeader(4).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
-  val newFooPart0 = new PartitionRecord().
-    setTopicId(fooTopicId).
-    setPartitionId(0).
-    setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
-  val oldFooPart1 = new PartitionRecord().
-    setTopicId(fooTopicId).
-    setPartitionId(1).
-    setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
-  val newFooPart1 = new PartitionRecord().
-    setTopicId(fooTopicId).
-    setPartitionId(1).
-    setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
-  val barTopicName: String = "bar"
-  val barTopicId: Uuid = Uuid.fromString("97FBD1g4QyyNNZNY94bkRA")
-  val recreatedBarTopicId: Uuid = Uuid.fromString("lZokxuaPRty7c5P4dNdTYA")
-  val oldBarPart0 = new PartitionRecord().
-    setTopicId(fooTopicId).
-    setPartitionId(0).
-    setLeader(7).
-    setIsr(java.util.Arrays.asList(7, 8)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
-  val newBarPart0 = new PartitionRecord().
-    setTopicId(barTopicId).
-    setPartitionId(0).
-    setLeader(7).
-    setIsr(java.util.Arrays.asList(7, 8)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
-  val deletedBarPart0 = new PartitionRecord().
-    setTopicId(barTopicId).
-    setPartitionId(0).
-    setLeader(-2).
-    setIsr(java.util.Arrays.asList(7, 8)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
-  val oldBarPart1 = new PartitionRecord().
-    setTopicId(barTopicId).
-    setPartitionId(1).
-    setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
-  val newBarPart1 = new PartitionRecord().
-    setTopicId(barTopicId).
-    setPartitionId(1).
-    setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
-  val deletedBarPart1 = new PartitionRecord().
-    setTopicId(barTopicId).
-    setPartitionId(1).
-    setLeader(-2).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
+    val metadataImage = new MetadataImage(
+      MetadataProvenance.EMPTY,
+      FeaturesImage.EMPTY,
+      clusterImage,
+      topicsImage,
+      ConfigurationsImage.EMPTY,
+      ClientQuotasImage.EMPTY,
+      ProducerIdsImage.EMPTY,
+      AclsImage.EMPTY,
+      ScramImage.EMPTY,
+      DelegationTokenImage.EMPTY)
 
-  val oldBarPart2 = new PartitionRecord().
-    setTopicId(barTopicId).
-    setPartitionId(2).
-    setLeader(9).
-    setIsr(java.util.Arrays.asList(7, 8, 9)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
+    val clusterId = "b3dGE68sQQKzfk80C_aLZw"
+    val cluster = MetadataCache.toCluster(clusterId, metadataImage)
 
-  val newBarPart2 = new PartitionRecord().
-    setTopicId(barTopicId).
-    setPartitionId(2).
-    setLeader(8).
-    setIsr(java.util.Arrays.asList(7, 8)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
+    val node0 = new Node(0, "localhost", 9092)
+    val node1 = new Node(1, "localhost", 9093)
+    val node2 = new Node(2, "localhost", 9094, null, true)
 
-  val deletedBarPart2 = new PartitionRecord().
-    setTopicId(barTopicId).
-    setPartitionId(2).
-    setLeader(-2).
-    setIsr(java.util.Arrays.asList(7, 8, 9)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
+    assertEquals(Seq(node0, node1, node2), cluster.nodes().asScala.toSeq.sortBy(_.id))
+
+    assertEquals(Seq(node0, node1, node2), cluster.partition(new TopicPartition("foo", 0)).replicas().toSeq.sortBy(_.id))
+    assertEquals(Seq(node0, node1, node2), cluster.partition(new TopicPartition("foo", 1)).replicas().toSeq.sortBy(_.id))
+    assertEquals(Seq(node0), cluster.partition(new TopicPartition("bar", 0)).replicas().toSeq)
+
+    assertEquals(Seq(node0, node1), cluster.partition(new TopicPartition("foo", 0)).inSyncReplicas().toSeq.sortBy(_.id))
+    assertEquals(Seq(node0, node1), cluster.partition(new TopicPartition("foo", 1)).inSyncReplicas().toSeq.sortBy(_.id))
+    assertEquals(Seq(node0), cluster.partition(new TopicPartition("bar", 0)).inSyncReplicas().toSeq)
+
+    assertEquals(Seq(node2), cluster.partition(new TopicPartition("foo", 0)).offlineReplicas().toSeq.sortBy(_.id))
+    assertEquals(Seq(node2), cluster.partition(new TopicPartition("foo", 1)).offlineReplicas().toSeq.sortBy(_.id))
+    assertEquals(0, cluster.partition(new TopicPartition("bar", 0)).offlineReplicas().length)
+
+    assertEquals(util.Set.of("foo", "bar"), cluster.topics())
+    assertEquals(util.Set.of(fooTopicImage.id, barTopicImage.id), util.Set.copyOf(cluster.topicIds()))
+    assertEquals(new ClusterResource(clusterId), cluster.clusterResource())
+    assertTrue(cluster.internalTopics().isEmpty)
+    assertTrue(cluster.invalidTopics().isEmpty)
+    assertFalse(cluster.isBootstrapConfigured)
+    assertTrue(util.Set.of(node0, node1, node2).contains(cluster.controller()))
+  }
 }
