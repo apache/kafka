@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.server.config.ServerLogConfigs;
 
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -98,18 +97,18 @@ public class MetadataLogConfig {
             .define(METADATA_MAX_RETENTION_MILLIS_CONFIG, LONG, METADATA_MAX_RETENTION_MILLIS_DEFAULT, null, HIGH, METADATA_MAX_RETENTION_MILLIS_DOC)
             .define(METADATA_MAX_IDLE_INTERVAL_MS_CONFIG, INT, METADATA_MAX_IDLE_INTERVAL_MS_DEFAULT, atLeast(0), LOW, METADATA_MAX_IDLE_INTERVAL_MS_DOC)
             .defineInternal(INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_METADATA_LOG_SEGMENT_BYTES_DOC)
-            .defineInternal(INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_MAX_BATCH_SIZE_IN_BYTES_DOC)
-            .defineInternal(INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_MAX_FETCH_SIZE_IN_BYTES_DOC)
-            .defineInternal(INTERNAL_DELETE_DELAY_MILLIS_CONFIG, LONG, null, null, LOW, INTERNAL_DELETE_DELAY_MILLIS_DOC);
+            .defineInternal(INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG, INT, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, null, LOW, INTERNAL_MAX_BATCH_SIZE_IN_BYTES_DOC)
+            .defineInternal(INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG, INT, KafkaRaftClient.MAX_FETCH_SIZE_BYTES, null, LOW, INTERNAL_MAX_FETCH_SIZE_IN_BYTES_DOC)
+            .defineInternal(INTERNAL_DELETE_DELAY_MILLIS_CONFIG, LONG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT, null, LOW, INTERNAL_DELETE_DELAY_MILLIS_DOC);
 
     private final int logSegmentBytes;
     private final Integer internalSegmentBytes;
     private final long logSegmentMillis;
     private final long retentionMaxBytes;
     private final long retentionMillis;
-    private final int maxBatchSizeInBytes;
-    private final int maxFetchSizeInBytes;
-    private final long deleteDelayMillis;
+    private final int internalMaxBatchSizeInBytes;
+    private final int internalMaxFetchSizeInBytes;
+    private final long internalDeleteDelayMillis;
 
     public MetadataLogConfig(AbstractConfig config) {
         this.logSegmentBytes = config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG);
@@ -117,13 +116,13 @@ public class MetadataLogConfig {
         this.logSegmentMillis = config.getLong(METADATA_LOG_SEGMENT_MILLIS_CONFIG);
         this.retentionMaxBytes = config.getLong(METADATA_MAX_RETENTION_BYTES_CONFIG);
         this.retentionMillis = config.getLong(METADATA_MAX_RETENTION_MILLIS_CONFIG);
-        this.maxBatchSizeInBytes = Objects.requireNonNullElse(config.getInt(INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG), KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
-        this.maxFetchSizeInBytes = Objects.requireNonNullElse(config.getInt(INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG), KafkaRaftClient.MAX_FETCH_SIZE_BYTES);
-        this.deleteDelayMillis = Objects.requireNonNullElse(config.getLong(INTERNAL_DELETE_DELAY_MILLIS_CONFIG), ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT);
+        this.internalMaxBatchSizeInBytes = config.getInt(INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG);
+        this.internalMaxFetchSizeInBytes = config.getInt(INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG);
+        this.internalDeleteDelayMillis = config.getLong(INTERNAL_DELETE_DELAY_MILLIS_CONFIG);
     }
 
     public int logSegmentBytes() {
-        return Objects.requireNonNullElse(internalSegmentBytes, logSegmentBytes);
+        return logSegmentBytes;
     }
     
     public Integer internalSegmentBytes() {
@@ -142,15 +141,15 @@ public class MetadataLogConfig {
         return retentionMillis;
     }
 
-    public int maxBatchSizeInBytes() {
-        return maxBatchSizeInBytes;
+    public int internalMaxBatchSizeInBytes() {
+        return internalMaxBatchSizeInBytes;
     }
 
-    public int maxFetchSizeInBytes() {
-        return maxFetchSizeInBytes;
+    public int internalMaxFetchSizeInBytes() {
+        return internalMaxFetchSizeInBytes;
     }
 
-    public long deleteDelayMillis() {
-        return deleteDelayMillis;
+    public long internalDeleteDelayMillis() {
+        return internalDeleteDelayMillis;
     }
 }

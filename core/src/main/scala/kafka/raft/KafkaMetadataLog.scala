@@ -73,7 +73,7 @@ final class KafkaMetadataLog private (
       case _ => throw new IllegalArgumentException(s"Unhandled read isolation $readIsolation")
     }
 
-    val fetchInfo = log.read(startOffset, config.maxFetchSizeInBytes, isolation, true)
+    val fetchInfo = log.read(startOffset, config.internalMaxFetchSizeInBytes, isolation, true)
 
     new LogFetchInfo(
       fetchInfo.records,
@@ -557,7 +557,7 @@ final class KafkaMetadataLog private (
       scheduler.scheduleOnce(
         "delete-snapshot-files",
         () => KafkaMetadataLog.deleteSnapshotFiles(log.dir.toPath, expiredSnapshots),
-        config.deleteDelayMillis
+        config.internalDeleteDelayMillis
       )
     }
   }
@@ -588,9 +588,9 @@ object KafkaMetadataLog extends Logging {
     nodeId: Int
   ): KafkaMetadataLog = {
     val props = new Properties()
-    props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
+    props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.internalMaxBatchSizeInBytes.toString)
     if (config.internalSegmentBytes() != null)
-      props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
+      props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.internalSegmentBytes().toString)
     else
       props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
     props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT.toString)

@@ -479,7 +479,7 @@ final class KafkaMetadataLogTest {
     assertEquals(log.earliestSnapshotId(), log.latestSnapshotId())
     log.close()
 
-    mockTime.sleep(config.deleteDelayMillis)
+    mockTime.sleep(config.internalDeleteDelayMillis)
     // Assert that the log dir doesn't contain any older snapshots
     Files
       .walk(logDir, 1)
@@ -650,7 +650,7 @@ final class KafkaMetadataLogTest {
     assertEquals(greaterSnapshotId, secondLog.latestSnapshotId().get)
     assertEquals(3 * numberOfRecords, secondLog.startOffset)
     assertEquals(epoch, secondLog.lastFetchedEpoch)
-    mockTime.sleep(config.deleteDelayMillis)
+    mockTime.sleep(config.internalDeleteDelayMillis)
 
     // Assert that the log dir doesn't contain any older snapshots
     Files
@@ -694,8 +694,8 @@ final class KafkaMetadataLogTest {
       DefaultMetadataLogConfig.retentionMaxBytes,
       DefaultMetadataLogConfig.retentionMillis,
       maxBatchSizeInBytes,
-      DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      DefaultMetadataLogConfig.deleteDelayMillis
+      DefaultMetadataLogConfig.internalMaxFetchSizeInBytes,
+      DefaultMetadataLogConfig.internalDeleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -913,7 +913,7 @@ final class KafkaMetadataLogTest {
       256,
       60 * 1000,
       512,
-      DefaultMetadataLogConfig.maxFetchSizeInBytes,
+      DefaultMetadataLogConfig.internalMaxFetchSizeInBytes,
       ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
@@ -949,8 +949,8 @@ final class KafkaMetadataLogTest {
       1024,
       60 * 1000,
       100,
-      DefaultMetadataLogConfig.maxBatchSizeInBytes,
-      DefaultMetadataLogConfig.maxFetchSizeInBytes
+      DefaultMetadataLogConfig.internalMaxBatchSizeInBytes,
+      DefaultMetadataLogConfig.internalMaxFetchSizeInBytes
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -982,8 +982,8 @@ final class KafkaMetadataLogTest {
       10240,
       60 * 1000,
       100,
-      DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      DefaultMetadataLogConfig.deleteDelayMillis
+      DefaultMetadataLogConfig.internalMaxFetchSizeInBytes,
+      DefaultMetadataLogConfig.internalDeleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -1025,8 +1025,8 @@ final class KafkaMetadataLogTest {
       10240,
       60 * 1000,
       200,
-      DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      DefaultMetadataLogConfig.deleteDelayMillis
+      DefaultMetadataLogConfig.internalMaxFetchSizeInBytes,
+      DefaultMetadataLogConfig.internalDeleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -1163,22 +1163,22 @@ object KafkaMetadataLogTest {
   }
   
   private def createMetadataLogConfig(
-    internalLogSegmentBytes: Int, 
-    logSegmentMillis: Long, 
-    retentionMaxBytes: Long, 
-    retentionMillis: Long, 
-    maxBatchSizeInBytes: Int, 
-    maxFetchSizeInBytes: Int, 
-    deleteDelayMillis: Long
+    internalLogSegmentBytes: Int,
+    logSegmentMillis: Long,
+    retentionMaxBytes: Long,
+    retentionMillis: Long,
+    internalMaxBatchSizeInBytes: Int,
+    internalMaxFetchSizeInBytes: Int,
+    internalDeleteDelayMillis: Long
   ): MetadataLogConfig = {
     val config: util.Map[String, Any] = util.Map.of(
       MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
       MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
       MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
       MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
-      MetadataLogConfig.INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG, maxBatchSizeInBytes,
-      MetadataLogConfig.INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG, maxFetchSizeInBytes,
-      MetadataLogConfig.INTERNAL_DELETE_DELAY_MILLIS_CONFIG, deleteDelayMillis,
+      MetadataLogConfig.INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG, internalMaxBatchSizeInBytes,
+      MetadataLogConfig.INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG, internalMaxFetchSizeInBytes,
+      MetadataLogConfig.INTERNAL_DELETE_DELAY_MILLIS_CONFIG, internalDeleteDelayMillis,
     )
     new MetadataLogConfig(new AbstractConfig(MetadataLogConfig.CONFIG_DEF, config, false))
   }
