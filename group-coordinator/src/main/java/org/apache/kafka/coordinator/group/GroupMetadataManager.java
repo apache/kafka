@@ -8163,7 +8163,7 @@ public class GroupMetadataManager {
             }
         });
 
-        addInitializingTopicsRecords(groupId, records, initializingTopics);
+        addInitializingTopicsRecords(groupId, records, attachInitValue(initializingTopics));
         return Map.entry(
             new AlterShareGroupOffsetsResponseData()
                 .setResponses(alterShareGroupOffsetsResponseTopics),
