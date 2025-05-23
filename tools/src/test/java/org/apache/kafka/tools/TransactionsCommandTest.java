@@ -265,7 +265,7 @@ public class TransactionsCommandTest {
         assertCommandFailure(new String[]{
             "--bootstrap-server",
             "localhost:9092",
-            "force-terminate"
+            "forceTerminateTransaction"
         });
     }
 

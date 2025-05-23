@@ -1776,11 +1776,35 @@ public interface Admin extends AutoCloseable {
                                         FenceProducersOptions options);
 
     /**
+     * List the configuration resources available in the cluster which matches config resource type.
+     * If no config resource types are specified, all configuration resources will be listed.
+     *
+     * @param configResourceTypes The set of configuration resource types to list.
+     * @param options The options to use when listing the configuration resources.
+     * @return The ListConfigurationResourcesResult.
+     */
+    ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options);
+
+    /**
+     * List all configuration resources available in the cluster with the default options.
+     * <p>
+     * This is a convenience method for {@link #listConfigResources(Set, ListConfigResourcesOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @return The ListConfigurationResourcesResult.
+     */
+    default ListConfigResourcesResult listConfigResources() {
+        return listConfigResources(Set.of(), new ListConfigResourcesOptions());
+    }
+
+    /**
      * List the client metrics configuration resources available in the cluster.
      *
      * @param options The options to use when listing the client metrics resources.
      * @return The ListClientMetricsResourcesResult.
+     * @deprecated Since 4.1. Use {@link #listConfigResources(Set, ListConfigResourcesOptions)} instead.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options);
 
     /**
@@ -1790,7 +1814,9 @@ public interface Admin extends AutoCloseable {
      * with default options. See the overload for more details.
      *
      * @return The ListClientMetricsResourcesResult.
+     * @deprecated Since 4.1. Use {@link #listConfigResources()} instead.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     default ListClientMetricsResourcesResult listClientMetricsResources() {
         return listClientMetricsResources(new ListClientMetricsResourcesOptions());
     }

@@ -14,21 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.clients.admin;
 
 /**
- * The message format version does not support the requested function. For example, if idempotence is
- * requested and the topic is using a message format older than 0.11.0.0, then this error will be returned.
+ * Options for {@link Admin#listConfigResources()}.
  */
-public class UnsupportedForMessageFormatException extends InvalidConfigurationException {
-    private static final long serialVersionUID = 1L;
-
-    public UnsupportedForMessageFormatException(String message) {
-        super(message);
-    }
-
-    public UnsupportedForMessageFormatException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
+public class ListConfigResourcesOptions extends AbstractOptions<ListConfigResourcesOptions> {
 }
