@@ -256,8 +256,8 @@ class TransactionStateManager(brokerId: Int,
     expiredForPartition: Iterable[TransactionalIdCoordinatorEpochAndMetadata],
     tombstoneRecords: MemoryRecords
   ): Unit = {
-    def removeFromCacheCallback(responses: collection.Map[TopicIdPartition, PartitionResponse]): Unit = {
-      responses.foreachEntry { (topicPartition, response) =>
+    def removeFromCacheCallback(responses: java.util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+      responses.forEach { (topicPartition, response) =>
         inReadLock(stateLock) {
           transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
             expiredForPartition.foreach { idCoordinatorEpochAndMetadata =>
@@ -667,13 +667,13 @@ class TransactionStateManager(brokerId: Int,
     val recordsPerPartition = Map(transactionStateTopicIdPartition -> records)
 
     // set the callback function to update transaction status in cache after log append completed
-    def updateCacheCallback(responseStatus: collection.Map[TopicIdPartition, PartitionResponse]): Unit = {
+    def updateCacheCallback(responseStatus: java.util.Map[TopicIdPartition, PartitionResponse]): Unit = {
       // the append response should only contain the topics partition
-      if (responseStatus.size != 1 || !responseStatus.contains(transactionStateTopicIdPartition))
+      if (responseStatus.size != 1 || !responseStatus.containsKey(transactionStateTopicIdPartition))
         throw new IllegalStateException("Append status %s should only have one partition %s"
           .format(responseStatus, transactionStateTopicPartition))
 
-      val status = responseStatus(transactionStateTopicIdPartition)
+      val status = responseStatus.get(transactionStateTopicIdPartition)
 
       var responseError = if (status.error == Errors.NONE) {
         Errors.NONE

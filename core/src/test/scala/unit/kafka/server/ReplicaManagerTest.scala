@@ -63,7 +63,7 @@ import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.{DelayedProduce, PartitionFetchState}
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets}
 import org.apache.kafka.server.share.SharePartitionKey
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchGroupKey, DelayedShareFetchKey, ShareFetch}
@@ -255,8 +255,8 @@ class ReplicaManagerTest {
       alterPartitionManager = alterPartitionManager,
       threadNamePrefix = Option(this.getClass.getName))
     try {
-      def callback(responseStatus: Map[TopicIdPartition, PartitionResponse]): Unit = {
-        assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS)
+      def callback(responseStatus: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+        assert(responseStatus.values().iterator().next().error == Errors.INVALID_REQUIRED_ACKS)
       }
       rm.appendRecords(
         timeout = 0,
@@ -2738,8 +2738,8 @@ class ReplicaManagerTest {
     numOfRecords: Int
   ): AtomicReference[PartitionResponse] = {
     val produceResult = new AtomicReference[PartitionResponse]()
-    def callback(response: Map[TopicIdPartition, PartitionResponse]): Unit = {
-      produceResult.set(response(topicPartition))
+    def callback(response: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+      produceResult.set(response.get(topicPartition))
     }
 
     val records = MemoryRecords.withRecords(
@@ -2990,9 +2990,9 @@ class ReplicaManagerTest {
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     val topicIdPartition = new TopicIdPartition(topicId, partition)
-    def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
-      val response = responses.get(topicIdPartition)
-      assertTrue(response.isDefined)
+    def appendCallback(responses: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+      val response = java.util.Optional.ofNullable(responses.get(topicIdPartition))
+      assertTrue(response.isPresent)
       result.fire(response.get)
     }
 

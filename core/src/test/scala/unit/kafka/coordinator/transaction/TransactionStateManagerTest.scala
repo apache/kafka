@@ -1109,7 +1109,7 @@ class TransactionStateManagerTest {
     capturedAppends: mutable.Map[TopicIdPartition, mutable.Buffer[MemoryRecords]]
   ): Unit = {
     val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] = ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
+    val callbackCapture: ArgumentCaptor[java.util.Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[java.util.Map[TopicIdPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
       anyLong(),
@@ -1133,7 +1133,7 @@ class TransactionStateManagerTest {
         batches += records
 
         topicPartition -> new PartitionResponse(appendError, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-      }.toMap
+      }.toMap.asJava
     ))
   }
 
@@ -1264,7 +1264,7 @@ class TransactionStateManagerTest {
   private def prepareForTxnMessageAppend(error: Errors): Unit = {
     reset(replicaManager)
 
-    val capturedArgument: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
+    val capturedArgument: ArgumentCaptor[java.util.Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[java.util.Map[TopicIdPartition, PartitionResponse] => Unit])
     when(replicaManager.appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
@@ -1277,7 +1277,7 @@ class TransactionStateManagerTest {
       any()
     )).thenAnswer(_ => capturedArgument.getValue.apply(
       Map(new TopicIdPartition(transactionTopicId, partitionId, TRANSACTION_STATE_TOPIC_NAME) ->
-        new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+        new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)).asJava)
     )
     when(replicaManager.topicIdPartition(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, 0))).thenReturn(new TopicIdPartition(transactionTopicId, 0, TRANSACTION_STATE_TOPIC_NAME))
     when(replicaManager.topicIdPartition(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, 1))).thenReturn(new TopicIdPartition(transactionTopicId, 1, TRANSACTION_STATE_TOPIC_NAME))

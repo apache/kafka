@@ -2814,7 +2814,7 @@ class KafkaApisTest extends Logging {
     val expectedErrors = Map(tp1 -> Errors.UNKNOWN_TOPIC_OR_PARTITION, tp2 -> Errors.NONE).asJava
 
     val capturedResponse: ArgumentCaptor[WriteTxnMarkersResponse] = ArgumentCaptor.forClass(classOf[WriteTxnMarkersResponse])
-    val responseCallback: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
+    val responseCallback: ArgumentCaptor[util.Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, PartitionResponse] => Unit])
 
     when(replicaManager.onlinePartition(tp1))
       .thenReturn(None)
@@ -2832,7 +2832,7 @@ class KafkaApisTest extends Logging {
       any(),
       ArgumentMatchers.eq(requestLocal),
       any()
-    )).thenAnswer(_ => responseCallback.getValue.apply(Map(new TopicIdPartition(topicId,tp2) -> new PartitionResponse(Errors.NONE))))
+    )).thenAnswer(_ => responseCallback.getValue.apply(Map(new TopicIdPartition(topicId,tp2) -> new PartitionResponse(Errors.NONE)).asJava))
     kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
     verify(requestChannel).sendResponse(
@@ -2953,8 +2953,8 @@ class KafkaApisTest extends Logging {
 
     val entriesPerPartition: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
       ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
-    val responseCallback: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
+    val responseCallback: ArgumentCaptor[util.Map[TopicIdPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
       ArgumentMatchers.eq(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT.toLong),
@@ -2971,7 +2971,7 @@ class KafkaApisTest extends Logging {
       responseCallback.getValue.apply(
         entriesPerPartition.getValue.keySet.map { tp =>
           tp -> new PartitionResponse(Errors.NONE)
-        }.toMap
+        }.toMap.asJava
       )
     }
     kafkaApis = createKafkaApis()
