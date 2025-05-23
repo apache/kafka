@@ -17,12 +17,14 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListConfigResourcesRequestData;
 import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
+import java.util.HashSet;
 import java.util.Set;
 
 public class ListConfigResourcesRequest extends AbstractRequest {
@@ -36,6 +38,15 @@ public class ListConfigResourcesRequest extends AbstractRequest {
 
         @Override
         public ListConfigResourcesRequest build(short version) {
+            if (version == 0) {
+                // The v0 only supports CLIENT_METRICS resource type.
+                Set<Byte> resourceTypes = new HashSet<>(data.resourceTypes());
+                if (resourceTypes.size() != 1 || !resourceTypes.contains(ConfigResource.Type.CLIENT_METRICS.id())) {
+                    throw new UnsupportedVersionException("The v0 ListConfigResources only supports CLIENT_METRICS");
+                }
+                // The v0 request does not have resource types field, so creating a new request data.
+                return new ListConfigResourcesRequest(new ListConfigResourcesRequestData(), version);
+            }
             return new ListConfigResourcesRequest(data, version);
         }
 
