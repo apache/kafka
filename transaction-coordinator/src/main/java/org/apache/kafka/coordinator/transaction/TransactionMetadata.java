@@ -35,7 +35,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 public class TransactionMetadata {
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(TransactionMetadata.class);
     private final String transactionalId;
     private long producerId;
     private long prevProducerId;
@@ -48,7 +48,6 @@ public class TransactionMetadata {
     private volatile long txnStartTimestamp;
     private volatile long txnLastUpdateTimestamp;
     private TransactionVersion clientTransactionVersion;
-    private static final Logger LOGGER = LoggerFactory.getLogger(TransactionMetadata.class);
 
     // pending state is used to indicate the state that this transaction is going to
     // transit to, and for blocking future attempts to transit it again if it is not legal;
@@ -166,8 +165,8 @@ public class TransactionMetadata {
             throw new IllegalStateException("Cannot allocate any more producer epochs for producerId " + producerId);
 
         short bumpedEpoch = (short) (producerEpoch + 1);
-        Short produceEpochResult;
-        Short lastProducerEpochResult;
+        short produceEpochResult;
+        short lastProducerEpochResult;
 
         if (expectedProducerEpoch.isEmpty()) {
             // If no expected epoch was provided by the producer, bump the current epoch and set the last epoch to -1

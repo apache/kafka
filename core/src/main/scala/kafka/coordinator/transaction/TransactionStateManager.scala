@@ -267,7 +267,7 @@ class TransactionStateManager(brokerId: Int,
               val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
               txnMetadata.inLock(() => {
                 if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
-                  && txnMetadata.pendingState.isPresent && txnMetadata.pendingState.get.equals(TransactionState.DEAD)
+                  && txnMetadata.pendingState.filter(s => s == TransactionState.DEAD).isPresent
                   && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
                   && response.error == Errors.NONE) {
                   txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)

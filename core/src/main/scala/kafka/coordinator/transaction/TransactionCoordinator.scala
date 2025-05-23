@@ -268,8 +268,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               }
             } else {
               try {
-                Right(txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(e => Short.box(e.epoch)).toJava,
-                  time.milliseconds()))
+                if (txnMetadata.isProducerEpochExhausted && expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch))
+                  Right(txnMetadata.prepareProducerIdRotation(producerIdManager.generateProducerId(), transactionTimeoutMs, time.milliseconds(),
+                    expectedProducerIdAndEpoch.isDefined))
+                else
+                  Right(txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(e => Short.box(e.epoch)).toJava,
+                    time.milliseconds()))
               } catch {
                 case e: Exception => Left(Errors.forException(e))
               }
@@ -576,7 +580,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 else
                   TransactionState.PREPARE_ABORT
 
-                if (nextState == TransactionState.PREPARE_ABORT && txnMetadata.pendingState.isPresent && txnMetadata.pendingState.get.equals(TransactionState.PREPARE_EPOCH_FENCE)) {
+                if (nextState == TransactionState.PREPARE_ABORT && txnMetadata.pendingState.filter(s => s == TransactionState.PREPARE_EPOCH_FENCE).isPresent) {
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
                   isEpochFence = true
@@ -788,7 +792,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             producerEpochCopy = txnMetadata.producerEpoch
             // PrepareEpochFence has slightly different epoch bumping logic so don't include it here.
             // Note that, it can only happen when the current state is Ongoing.
-            isEpochFence = txnMetadata.pendingState.isPresent && txnMetadata.pendingState.get.equals(TransactionState.PREPARE_EPOCH_FENCE)
+            isEpochFence = txnMetadata.pendingState.filter(s => s == TransactionState.PREPARE_EPOCH_FENCE).isPresent
             // True if the client retried a request that had overflowed the epoch, and a new producer ID is stored in the txnMetadata
             val retryOnOverflow = !isEpochFence && txnMetadata.prevProducerId == producerId &&
               producerEpoch == Short.MaxValue - 1 && txnMetadata.producerEpoch == 0
