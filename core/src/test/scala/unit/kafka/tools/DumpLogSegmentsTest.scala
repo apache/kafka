@@ -34,9 +34,10 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.message.{KRaftVersionRecord, LeaderChangeMessage, SnapshotFooterRecord, SnapshotHeaderRecord, VotersRecord}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor, MessageUtil, ObjectSerializationCache}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
+import org.apache.kafka.common.record.{ControlRecordType, ControlRecordUtils, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
@@ -522,6 +523,45 @@ class DumpLogSegmentsTest {
     assertTrue(output.contains("TOPIC_RECORD"))
     assertTrue(output.contains("BROKER_RECORD"))
     assertTrue(output.contains("skipping"))
+  }
+
+  @Test
+  def testDumpControlRecord(): Unit = {
+    log = createTestLog
+
+    log.appendAsLeader(MemoryRecords.withEndTransactionMarker(0L, 0.toShort,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 100)
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(0L, 0L, 0, ByteBuffer.allocate(4),
+      new LeaderChangeMessage()
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withSnapshotHeaderRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new SnapshotHeaderRecord()
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withSnapshotFooterRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new SnapshotFooterRecord()
+        .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION)
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withKRaftVersionRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new KRaftVersionRecord()
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withVotersRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new VotersRecord()
+    ), 0, AppendOrigin.COORDINATOR)
+    log.flush(false)
+
+    val output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
+    assertTrue(output.contains("endTxnMarker"), output)
+    assertTrue(output.contains("LeaderChange"), output)
+    assertTrue(output.contains("SnapshotHeader"), output)
+    assertTrue(output.contains("SnapshotFooter"), output)
+    assertTrue(output.contains("KRaftVersion"), output)
+    assertTrue(output.contains("KRaftVoters"), output)
   }
 
   @Test
