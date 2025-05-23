@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.test.TestUtils;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -226,4 +228,47 @@ public class ClientsTestUtils {
         producer.send(record);
         return record;
     }
+
+    public static void waitForPollThrowException(
+        Consumer<byte[], byte[]> consumer,
+        Class<? extends Exception> exceptedException
+    ) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            try {
+                consumer.poll(Duration.ZERO);
+                return false;
+            } catch (Exception e) {
+                return exceptedException.isInstance(e);
+            }
+        }, "Continuous poll not fail");
+    }
+
+    public static void awaitRebalance(
+        Consumer<byte[], byte[]> consumer,
+        TestConsumerReassignmentListener rebalanceListener
+    ) throws InterruptedException {
+        var numReassignments = rebalanceListener.callsToAssigned;
+        TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(100));
+                return rebalanceListener.callsToAssigned > numReassignments;
+            }, "Timed out before expected rebalance completed"
+        );
+    }
+
+    public static class TestConsumerReassignmentListener implements ConsumerRebalanceListener {
+        public int callsToAssigned = 0;
+        public int callsToRevoked = 0;
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            callsToAssigned += 1;
+        }
+
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            callsToRevoked += 1;
+        }
+    }
+    
+    
 }

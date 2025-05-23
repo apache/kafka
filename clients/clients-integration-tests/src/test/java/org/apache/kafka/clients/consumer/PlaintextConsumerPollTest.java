@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 
+import org.apache.kafka.clients.ClientsTestUtils.TestConsumerReassignmentListener;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -44,8 +45,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.clients.ClientsTestUtils.awaitRebalance;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
+import static org.apache.kafka.clients.ClientsTestUtils.waitForPollThrowException;
 import static org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
@@ -501,14 +504,7 @@ public class PlaintextConsumerPollTest {
 
             // continuous poll should eventually fail because there is no offset reset strategy set
             // (fail only when resetting positions after coordinator is known)
-            TestUtils.waitForCondition(() -> {
-                try {
-                    consumer.poll(Duration.ZERO);
-                    return false;
-                } catch (NoOffsetForPartitionException e) {
-                    return true;
-                }
-            }, "Continuous poll not fail");
+            waitForPollThrowException(consumer, NoOffsetForPartitionException.class);
         }
     }
 
@@ -573,18 +569,6 @@ public class PlaintextConsumerPollTest {
             records = awaitNonEmptyRecords(consumer, tpOther, 0L);
             assertEquals(numMessages, records.count());
         }
-    }
-
-    private void awaitRebalance(
-        Consumer<byte[], byte[]> consumer,
-        TestConsumerReassignmentListener rebalanceListener
-    ) throws InterruptedException {
-        var numReassignments = rebalanceListener.callsToAssigned;
-        TestUtils.waitForCondition(() -> {
-                consumer.poll(Duration.ofMillis(100));
-                return rebalanceListener.callsToAssigned > numReassignments;
-            }, "Timed out before expected rebalance completed"
-        );
     }
 
     private void ensureNoRebalance(
@@ -716,21 +700,6 @@ public class PlaintextConsumerPollTest {
             return !records.records(partition).isEmpty();
         }, "Consumer did not consume any messages for partition " + partition + " before timeout.");
         return result.get(result.size() - 1);
-    }
-
-    private static class TestConsumerReassignmentListener implements ConsumerRebalanceListener {
-        public int callsToAssigned = 0;
-        public int callsToRevoked = 0;
-
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            callsToAssigned += 1;
-        }
-
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            callsToRevoked += 1;
-        }
     }
 
     private static class RetryCommitCallback implements OffsetCommitCallback {
