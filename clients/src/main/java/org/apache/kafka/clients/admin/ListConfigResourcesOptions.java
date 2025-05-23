@@ -16,37 +16,8 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Objects;
-
-@Deprecated(since = "4.1")
-public class ClientMetricsResourceListing {
-    private final String name;
-
-    public ClientMetricsResourceListing(String name) {
-        this.name = name;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ClientMetricsResourceListing that = (ClientMetricsResourceListing) o;
-        return Objects.equals(name, that.name);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name);
-    }
-
-    @Override
-    public String toString() {
-        return "ClientMetricsResourceListing(" +
-            "name='" + name +
-            ')';
-    }
+/**
+ * Options for {@link Admin#listConfigResources()}.
+ */
+public class ListConfigResourcesOptions extends AbstractOptions<ListConfigResourcesOptions> {
 }

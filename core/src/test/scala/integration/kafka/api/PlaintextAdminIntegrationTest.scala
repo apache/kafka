@@ -2501,7 +2501,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         consumer.commitSync()
 
         // Test offset deletion while consuming
-        val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, util.Set.of(tp1, tp2))
+        val partitions = new util.LinkedHashSet[TopicPartition](util.List.of(tp1, tp2))
+        val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, partitions)
 
         // Top level error will equal to the first partition level error
         assertFutureThrows(classOf[GroupSubscribedToTopicException], offsetDeleteResult.all())
@@ -3917,6 +3918,92 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
       val exception = assertThrows(classOf[ExecutionException], () =>
         client.listClientMetricsResources(timeoutOption).all().get())
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
+  }
+
+  @Test
+  def testListConfigResources(): Unit = {
+    client = createAdminClient
+
+    // Alter group and client metric config to add group and client metric config resource
+    val clientMetric = "client-metrics"
+    val group = "group"
+    val clientMetricResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetric)
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, group)
+    val alterResult = client.incrementalAlterConfigs(util.Map.of(
+      clientMetricResource,
+      util.Set.of(new AlterConfigOp(new ConfigEntry("interval.ms", "111"), AlterConfigOp.OpType.SET)),
+      groupResource,
+      util.Set.of(new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000"), AlterConfigOp.OpType.SET))
+    ))
+    assertEquals(util.Set.of(clientMetricResource, groupResource), alterResult.values.keySet)
+    alterResult.all.get(15, TimeUnit.SECONDS)
+
+    ensureConsistentKRaftMetadata()
+
+    // non-specified config resource type retrieves all config resources
+    var configResources = client.listConfigResources().all().get()
+    assertEquals(9, configResources.size())
+    brokerServers.foreach(b => {
+      assertTrue(configResources.contains(new ConfigResource(ConfigResource.Type.BROKER, b.config.nodeId.toString)))
+      assertTrue(configResources.contains(new ConfigResource(ConfigResource.Type.BROKER_LOGGER, b.config.nodeId.toString)))
+    })
+    assertTrue(configResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, Topic.GROUP_METADATA_TOPIC_NAME)))
+    assertTrue(configResources.contains(groupResource))
+    assertTrue(configResources.contains(clientMetricResource))
+
+    // BROKER config resource type retrieves only broker config resources
+    configResources = client.listConfigResources(util.Set.of(ConfigResource.Type.BROKER), new ListConfigResourcesOptions()).all().get()
+    assertEquals(3, configResources.size())
+    brokerServers.foreach(b => {
+      assertTrue(configResources.contains(new ConfigResource(ConfigResource.Type.BROKER, b.config.nodeId.toString)))
+      assertFalse(configResources.contains(new ConfigResource(ConfigResource.Type.BROKER_LOGGER, b.config.nodeId.toString)))
+    })
+    assertFalse(configResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, Topic.GROUP_METADATA_TOPIC_NAME)))
+    assertFalse(configResources.contains(groupResource))
+    assertFalse(configResources.contains(clientMetricResource))
+
+    // BROKER_LOGGER config resource type retrieves only broker logger config resources
+    configResources = client.listConfigResources(util.Set.of(ConfigResource.Type.BROKER_LOGGER), new ListConfigResourcesOptions()).all().get()
+    assertEquals(3, configResources.size())
+    brokerServers.foreach(b => {
+      assertFalse(configResources.contains(new ConfigResource(ConfigResource.Type.BROKER, b.config.nodeId.toString)))
+      assertTrue(configResources.contains(new ConfigResource(ConfigResource.Type.BROKER_LOGGER, b.config.nodeId.toString)))
+    })
+    assertFalse(configResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, Topic.GROUP_METADATA_TOPIC_NAME)))
+    assertFalse(configResources.contains(groupResource))
+    assertFalse(configResources.contains(clientMetricResource))
+
+    // TOPIC config resource type retrieves only topic config resources
+    configResources = client.listConfigResources(util.Set.of(ConfigResource.Type.TOPIC), new ListConfigResourcesOptions()).all().get()
+    assertEquals(1, configResources.size())
+    assertTrue(configResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, Topic.GROUP_METADATA_TOPIC_NAME)))
+
+    // GROUP config resource type retrieves only group config resources
+    configResources = client.listConfigResources(util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions()).all().get()
+    assertEquals(1, configResources.size())
+    assertTrue(configResources.contains(groupResource))
+
+    // CLIENT_METRICS config resource type retrieves only client metric config resources
+    configResources = client.listConfigResources(util.Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions()).all().get()
+    assertEquals(1, configResources.size())
+    assertTrue(configResources.contains(clientMetricResource))
+
+    // UNKNOWN config resource type gets UNSUPPORTED_VERSION error
+    assertThrows(classOf[ExecutionException], () => {
+      client.listConfigResources(util.Set.of(ConfigResource.Type.UNKNOWN), new ListConfigResourcesOptions()).all().get()
+    })
+  }
+
+  @Test
+  @Timeout(30)
+  def testListConfigResourcesTimeoutMs(): Unit = {
+    client = createInvalidAdminClient()
+    try {
+      val timeoutOption = new ListConfigResourcesOptions().timeoutMs(0)
+      val exception = assertThrows(classOf[ExecutionException], () =>
+        client.listConfigResources(util.Set.of(), timeoutOption).all().get())
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally client.close(time.Duration.ZERO)
   }
