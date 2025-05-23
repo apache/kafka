@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.test.junit;
 
+import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 
 import org.junit.jupiter.api.Assertions;
@@ -24,11 +25,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import java.lang.reflect.Method;
+import java.util.List;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ClusterTestExtensionsUnitTest {
+
+    static List<ClusterConfig> cfgEmpty() {
+        return List.of();
+    }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private ExtensionContext buildExtensionContext(String methodName) throws Exception {
