@@ -56,6 +56,7 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -844,22 +845,22 @@ public class GroupCoordinatorRecordHelpers {
      */
     public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
         String groupId,
-        Map<Uuid, Map.Entry<String, Set<Integer>>> initializingTopics,
-        Map<Uuid, Map.Entry<String, Set<Integer>>> initializedTopics,
+        Map<Uuid, InitMapValue> initializingTopics,
+        Map<Uuid, InitMapValue> initializedTopics,
         Map<Uuid, String> deletingTopics
     ) {
         List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializingTopicPartitionInfo = initializingTopics.entrySet().stream()
             .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                 .setTopicId(entry.getKey())
-                .setTopicName(entry.getValue().getKey())
-                .setPartitions(entry.getValue().getValue().stream().toList()))
+                .setTopicName(entry.getValue().name())
+                .setPartitions(entry.getValue().partitions().stream().toList()))
             .toList();
 
         List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.entrySet().stream()
             .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                 .setTopicId(entry.getKey())
-                .setTopicName(entry.getValue().getKey())
-                .setPartitions(entry.getValue().getValue().stream().toList()))
+                .setTopicName(entry.getValue().name())
+                .setPartitions(entry.getValue().partitions().stream().toList()))
             .toList();
 
         List<ShareGroupStatePartitionMetadataValue.TopicInfo> deletingTopicsInfo = deletingTopics.entrySet().stream()
