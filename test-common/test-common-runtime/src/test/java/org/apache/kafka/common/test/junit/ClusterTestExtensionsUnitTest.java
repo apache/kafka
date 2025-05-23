@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.test.junit;
 
-import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 
 import org.junit.jupiter.api.Assertions;
@@ -25,16 +24,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import java.lang.reflect.Method;
-import java.util.List;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ClusterTestExtensionsUnitTest {
-
-    static List<ClusterConfig> cfgEmpty() {
-        return List.of();
-    }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private ExtensionContext buildExtensionContext(String methodName) throws Exception {
@@ -55,25 +49,25 @@ public class ClusterTestExtensionsUnitTest {
         when(annot.value()).thenReturn("").thenReturn(" ").thenReturn("cfgEmpty");
 
         Assertions.assertEquals(
-                "ClusterTemplate value can't be empty string.",
-                Assertions.assertThrows(IllegalStateException.class, () ->
-                        ext.processClusterTemplate(context, annot)
-                ).getMessage()
+            "ClusterTemplate value can't be empty string.",
+            Assertions.assertThrows(IllegalStateException.class, () ->
+                ext.processClusterTemplate(context, annot)
+            ).getMessage()
         );
 
 
         Assertions.assertEquals(
-                "ClusterTemplate value can't be empty string.",
-                Assertions.assertThrows(IllegalStateException.class, () ->
-                        ext.processClusterTemplate(context, annot)
-                ).getMessage()
+            "ClusterTemplate value can't be empty string.",
+            Assertions.assertThrows(IllegalStateException.class, () ->
+                ext.processClusterTemplate(context, annot)
+            ).getMessage()
         );
 
         Assertions.assertEquals(
-                "ClusterConfig generator method should provide at least one config",
-                Assertions.assertThrows(IllegalStateException.class, () ->
-                        ext.processClusterTemplate(context, annot)
-                ).getMessage()
+            "ClusterConfig generator method should provide at least one config",
+            Assertions.assertThrows(IllegalStateException.class, () ->
+                ext.processClusterTemplate(context, annot)
+            ).getMessage()
         );
     }
 }
