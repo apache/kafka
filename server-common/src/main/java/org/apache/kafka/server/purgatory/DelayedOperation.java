@@ -43,19 +43,10 @@ public abstract class DelayedOperation extends TimerTask {
 
     private final AtomicBoolean completed = new AtomicBoolean(false);
 
-    protected final Lock lock;
-
-    public DelayedOperation(long delayMs, Optional<Lock> lockOpt) {
-        this(delayMs, lockOpt.orElse(new ReentrantLock()));
-    }
+    protected final Lock lock = new ReentrantLock();
 
     public DelayedOperation(long delayMs) {
-        this(delayMs, new ReentrantLock());
-    }
-
-    public DelayedOperation(long delayMs, Lock lock) {
         super(delayMs);
-        this.lock = lock;
     }
 
     /*
