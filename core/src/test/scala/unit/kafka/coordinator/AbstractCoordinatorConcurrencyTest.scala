@@ -227,7 +227,7 @@ object AbstractCoordinatorConcurrencyTest {
         case (tp, _) =>
           (tp, ProducePartitionStatus(0L, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
       })
-      val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback, delayedProduceLock) {
+      val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback) {
         // Complete produce requests after a few attempts to trigger delayed produce from different threads
         val completeAttempts = new AtomicInteger
         override def tryComplete(): Boolean = {
