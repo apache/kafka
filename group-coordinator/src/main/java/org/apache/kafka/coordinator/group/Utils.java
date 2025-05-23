@@ -348,13 +348,19 @@ public class Utils {
      * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
      * @return The hash of the group.
      */
-    static long computeGroupHash(Map<String, Long> topicHashes) {
-        if (topicHashes.isEmpty()) {
-            return 0;
+    public static long computeGroupHash(Map<String, Long> topicHashes) {
+        // Sort entries by topic name
+        List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>();
+        for (Map.Entry<String, Long> entry : topicHashes.entrySet()) {
+            // Filter out entries with a hash value of 0, which indicates no topic
+            if (entry.getValue() != 0) {
+                sortedEntries.add(entry);
+            }
         }
 
-        // Sort entries by topic name
-        List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>(topicHashes.entrySet());
+        if (sortedEntries.isEmpty()) {
+            return 0;
+        }
         sortedEntries.sort(Map.Entry.comparingByKey());
 
         HashStream64 hasher = Hashing.xxh3_64().hashStream();
@@ -386,7 +392,7 @@ public class Utils {
      * @param metadataImage The cluster image.
      * @return The hash of the topic.
      */
-    static long computeTopicHash(String topicName, MetadataImage metadataImage) {
+    public static long computeTopicHash(String topicName, MetadataImage metadataImage) {
         TopicImage topicImage = metadataImage.topics().getTopic(topicName);
         if (topicImage == null) {
             return 0;
