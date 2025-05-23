@@ -45,7 +45,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,7 +89,7 @@ public class TargetAssignmentBuilderBenchmark {
 
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
 
-    private List<String> allTopicNames = Collections.emptyList();
+    private List<String> allTopicNames = List.of();
 
     private MetadataImage metadataImage;
 

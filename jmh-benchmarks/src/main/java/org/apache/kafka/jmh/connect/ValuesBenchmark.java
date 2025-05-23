@@ -38,9 +38,8 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -106,12 +105,12 @@ public class ValuesBenchmark {
         new SchemaAndValue(Schema.STRING_SCHEMA, "{\"1\": 2, \"3\": 4}"),
         new SchemaAndValue(SchemaBuilder.array(Schema.INT16_SCHEMA), new short[]{1, 2, 3}),
         new SchemaAndValue(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.BOOLEAN_SCHEMA),
-                Collections.singletonMap("key", true)),
+                Map.of("key", true)),
         new SchemaAndValue(STRUCT_SCHEMA, new Struct(STRUCT_SCHEMA)
                 .put("first", 1)
                 .put("second", "foo")
-                .put("array", Arrays.asList(1, 2, 3))
-                .put("map", Collections.singletonMap(1, "value"))
+                .put("array", List.of(1, 2, 3))
+                .put("map", Map.of(1, "value"))
                 .put("nested", new Struct(FLAT_STRUCT_SCHEMA).put("field", 12))),
     };
 

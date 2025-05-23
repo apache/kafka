@@ -48,7 +48,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -122,7 +121,7 @@ public class ServerSideAssignorBenchmark {
 
     private GroupSpec groupSpec;
 
-    private List<String> allTopicNames = Collections.emptyList();
+    private List<String> allTopicNames = List.of();
 
     private MetadataImage metadataImage = MetadataImage.EMPTY;
 
@@ -189,7 +188,7 @@ public class ServerSideAssignorBenchmark {
     private static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
         for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(Arrays.asList(
+            partitionRacks.put(i, new HashSet<>(List.of(
                 "rack" + i % NUMBER_OF_RACKS,
                 "rack" + (i + 1) % NUMBER_OF_RACKS,
                 "rack" + (i + 2) % NUMBER_OF_RACKS
@@ -209,7 +208,7 @@ public class ServerSideAssignorBenchmark {
         for (String memberId : groupSpec.memberIds()) {
             MemberAssignment memberAssignment = members.getOrDefault(
                 memberId,
-                new MemberAssignmentImpl(Collections.emptyMap())
+                new MemberAssignmentImpl(Map.of())
             );
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionAndAssignmentImpl(

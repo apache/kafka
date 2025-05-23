@@ -72,7 +72,7 @@ public class TestPurgatoryPerformance {
                 new DelayedOperationPurgatory<>("fake purgatory", 0, 1000);
         CompletionQueue queue = new CompletionQueue();
 
-        List<String> gcNames = gcMXBeans.stream().map(MemoryManagerMXBean::getName).collect(Collectors.toList());
+        List<String> gcNames = gcMXBeans.stream().map(MemoryManagerMXBean::getName).toList();
         CountDownLatch latch = new CountDownLatch(numRequests);
         long initialCpuTimeNano = getProcessCpuTimeNanos(osMXBean).orElseThrow();
         long start = System.currentTimeMillis();
@@ -313,7 +313,7 @@ public class TestPurgatoryPerformance {
         }
 
         public void printStats() {
-            List<Long> samples = this.samples.stream().sorted().collect(Collectors.toList());
+            List<Long> samples = this.samples.stream().sorted().toList();
 
             long p75 = samples.get((int) (samples.size() * 0.75d));
             long p50 = samples.get((int) (samples.size() * 0.5d));

@@ -55,7 +55,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -89,8 +88,8 @@ public class UpdateFollowerFetchStateBenchmark {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
         logManager = new LogManagerBuilder().
-            setLogDirs(Collections.singletonList(logDir)).
-            setInitialOfflineDirs(Collections.emptyList()).
+            setLogDirs(List.of(logDir)).
+            setInitialOfflineDirs(List.of()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
             setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
