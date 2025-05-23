@@ -8136,14 +8136,14 @@ public class GroupMetadataManager {
                     }
                 });
 
-                long curTimestamp = time.milliseconds();
+                long currentTimeMs = time.milliseconds();
                 initializingTopics.put(topicId, new InitMapValue(
                     topic.topicName(),
                     topic.partitions().stream()
                         .map(AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition::partitionIndex)
                         .filter(existingPartitions::contains)
                         .collect(Collectors.toSet()),
-                    curTimestamp
+                    currentTimeMs
                 ));
 
                 alterShareGroupOffsetsResponseTopics.add(
