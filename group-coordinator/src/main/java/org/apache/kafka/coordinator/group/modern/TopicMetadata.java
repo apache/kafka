@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 
 import java.util.Objects;
 
@@ -112,16 +111,6 @@ public class TopicMetadata {
 
     public static TopicMetadata fromRecord(
         ConsumerGroupPartitionMetadataValue.TopicMetadata record
-    ) {
-        return new TopicMetadata(
-            record.topicId(),
-            record.topicName(),
-            record.numPartitions()
-        );
-    }
-
-    public static TopicMetadata fromRecord(
-        ShareGroupPartitionMetadataValue.TopicMetadata record
     ) {
         return new TopicMetadata(
             record.topicId(),

@@ -341,6 +341,7 @@ public class Utils {
      * The computed hash value is stored as the metadata hash in the *GroupMetadataValue.
      * <p>
      * If there is no topic, the hash value is set to 0.
+     * If a topic hash is 0, ignore the topic.
      * The hashing process involves the following steps:
      * 1. Sort the topic hashes by topic name.
      * 2. Write each topic hash in order.
@@ -348,13 +349,20 @@ public class Utils {
      * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
      * @return The hash of the group.
      */
-    static long computeGroupHash(Map<String, Long> topicHashes) {
-        if (topicHashes.isEmpty()) {
+    public static long computeGroupHash(Map<String, Long> topicHashes) {
+        List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>();
+        for (Map.Entry<String, Long> entry : topicHashes.entrySet()) {
+            // Filter out entries with a hash value of 0, which indicates no topic
+            if (entry.getValue() != 0) {
+                sortedEntries.add(entry);
+            }
+        }
+
+        if (sortedEntries.isEmpty()) {
             return 0;
         }
 
         // Sort entries by topic name
-        List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>(topicHashes.entrySet());
         sortedEntries.sort(Map.Entry.comparingByKey());
 
         HashStream64 hasher = Hashing.xxh3_64().hashStream();
@@ -386,7 +394,7 @@ public class Utils {
      * @param metadataImage The cluster image.
      * @return The hash of the topic.
      */
-    static long computeTopicHash(String topicName, MetadataImage metadataImage) {
+    public static long computeTopicHash(String topicName, MetadataImage metadataImage) {
         TopicImage topicImage = metadataImage.topics().getTopic(topicName);
         if (topicImage == null) {
             return 0;

@@ -115,8 +115,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
@@ -201,6 +199,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -237,7 +236,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
@@ -491,6 +489,11 @@ public class GroupMetadataManager {
     private MetadataImage metadataImage;
 
     /**
+     * The topic hash value by topic name.
+     */
+    private final Map<String, Long> topicHashCache;
+
+    /**
      * This tracks the version (or the offset) of the last metadata image
      * with newly created topics.
      */
@@ -550,6 +553,7 @@ public class GroupMetadataManager {
         this.shareGroupAssignor = shareGroupAssignor;
         this.authorizerPlugin = authorizerPlugin;
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+        this.topicHashCache = new ConcurrentHashMap<>();
     }
 
     /**
@@ -2536,18 +2540,18 @@ public class GroupMetadataManager {
         ) || initializedAssignmentPending(group);
 
         int groupEpoch = group.groupEpoch();
-        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+        Map<String, SubscriptionCount> subscribedTopicNamesMap = group.subscribedTopicNames();
         SubscriptionType subscriptionType = group.subscriptionType();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
-            Map<String, SubscriptionCount> subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-            subscriptionMetadata = group.computeSubscriptionMetadata(
+            subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
+            long groupMetadataHash = group.computeMetadataHash(
                 subscribedTopicNamesMap,
-                metadataImage.topics(),
-                metadataImage.cluster()
+                topicHashCache,
+                metadataImage
             );
 
             int numMembers = group.numMembers();
@@ -2560,16 +2564,15 @@ public class GroupMetadataManager {
                 numMembers
             );
 
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
+            if (groupMetadataHash != group.metadataHash()) {
+                log.info("[GroupId {}] Computed new metadata hash: {}.",
+                    groupId, groupMetadataHash);
                 bumpGroupEpoch = true;
-                records.add(newShareGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
 
             if (bumpGroupEpoch) {
                 groupEpoch += 1;
-                records.add(newShareGroupEpochRecord(groupId, groupEpoch, 0));
+                records.add(newShareGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
                 log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             }
 
@@ -2626,7 +2629,7 @@ public class GroupMetadataManager {
             records,
             Map.entry(
                 response,
-                maybeCreateInitializeShareGroupStateRequest(groupId, groupEpoch, subscriptionMetadata, records)
+                maybeCreateInitializeShareGroupStateRequest(groupId, groupEpoch, subscribedTopicNamesMap.keySet(), records)
             )
         );
     }
@@ -2659,13 +2662,13 @@ public class GroupMetadataManager {
      * Computes the diff between the subscribed metadata and the initialized share topic
      * partitions corresponding to a share group.
      *
-     * @param groupId               The share group id for which diff is being calculated
-     * @param subscriptionMetadata  The subscription metadata corresponding to the share group.
+     * @param groupId                 The share group id for which diff is being calculated
+     * @param subscriptionTopicNames  The subscription topic names to the share group.
      * @return  A map of topic partitions which are subscribed by the share group but not initialized yet.
      */
     // Visibility for testing
-    Map<Uuid, InitMapValue> subscribedTopicsChangeMap(String groupId, Map<String, TopicMetadata> subscriptionMetadata) {
-        if (subscriptionMetadata == null || subscriptionMetadata.isEmpty()) {
+    Map<Uuid, InitMapValue> subscribedTopicsChangeMap(String groupId, Set<String> subscriptionTopicNames) {
+        if (subscriptionTopicNames == null || subscriptionTopicNames.isEmpty()) {
             return Map.of();
         }
 
@@ -2684,18 +2687,20 @@ public class GroupMetadataManager {
                     .filter(entry -> curTimestamp - entry.getValue().timestamp() < delta)
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
             );
-
         // Here will add any topics which are subscribed but not initialized and initializing
         // topics whose timestamp indicates that they are older than delta elapsed.
-        subscriptionMetadata.forEach((topicName, topicMetadata) -> {
-            Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicMetadata.id()) ? alreadyInitialized.get(topicMetadata.id()).partitions() : Set.of();
-            if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.numPartitions()) {
-                Set<Integer> partitionSet = IntStream.range(0, topicMetadata.numPartitions()).boxed().collect(Collectors.toSet());
-                partitionSet.removeAll(alreadyInitializedPartSet);
-                // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
-                // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
-                // are also updating the timestamp here which means, old initializing will not be included repeatedly.
-                topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> new InitMapValue(topicMetadata.name(), partitionSet, curTimestamp));
+        subscriptionTopicNames.forEach(topicName -> {
+            TopicImage topicImage = metadataImage.topics().getTopic(topicName);
+            if (topicImage != null) {
+                Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicImage.id()) ? alreadyInitialized.get(topicImage.id()).partitions() : Set.of();
+                if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicImage.partitions().size()) {
+                    Set<Integer> partitionSet = IntStream.range(0, topicImage.partitions().size()).boxed().collect(Collectors.toSet());
+                    partitionSet.removeAll(alreadyInitializedPartSet);
+                    // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
+                    // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
+                    // are also updating the timestamp here which means, old initializing will not be included repeatedly.
+                    topicPartitionChangeMap.computeIfAbsent(topicImage.id(), k -> new InitMapValue(topicImage.name(), partitionSet, curTimestamp));
+                }
             }
         });
         return topicPartitionChangeMap;
@@ -2705,22 +2710,22 @@ public class GroupMetadataManager {
      * Based on the diff between the subscribed topic partitions and the initialized topic partitions,
      * created initialize request for the non-initialized ones.
      *
-     * @param groupId               The share group id for which partitions need to be initialized.
-     * @param groupEpoch            The group epoch of the share group.
-     * @param subscriptionMetadata  The subscription metadata for the share group.
+     * @param groupId                 The share group id for which partitions need to be initialized.
+     * @param groupEpoch              The group epoch of the share group.
+     * @param subscriptionTopicNames  The subscription topic names for the share group.
      * @return An optional representing the persister initialize request.
      */
     private Optional<InitializeShareGroupStateParameters> maybeCreateInitializeShareGroupStateRequest(
         String groupId,
         int groupEpoch,
-        Map<String, TopicMetadata> subscriptionMetadata,
+        Set<String> subscriptionTopicNames,
         List<CoordinatorRecord> records
     ) {
-        if (subscriptionMetadata == null || subscriptionMetadata.isEmpty() || metadataImage.isEmpty()) {
+        if (subscriptionTopicNames == null || subscriptionTopicNames.isEmpty() || metadataImage.isEmpty()) {
             return Optional.empty();
         }
 
-        Map<Uuid, InitMapValue> topicPartitionChangeMap = subscribedTopicsChangeMap(groupId, subscriptionMetadata);
+        Map<Uuid, InitMapValue> topicPartitionChangeMap = subscribedTopicsChangeMap(groupId, subscriptionTopicNames);
 
         // Nothing to initialize.
         if (topicPartitionChangeMap.isEmpty()) {
@@ -4061,21 +4066,20 @@ public class GroupMetadataManager {
         records.add(newShareGroupMemberSubscriptionTombstoneRecord(group.groupId(), member.memberId()));
 
         // We update the subscription metadata without the leaving member.
-        Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+        long groupMetadataHash = group.computeMetadataHash(
             group.computeSubscribedTopicNames(member, null),
-            metadataImage.topics(),
-            metadataImage.cluster()
+            topicHashCache,
+            metadataImage
         );
 
-        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-            log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                group.groupId(), subscriptionMetadata);
-            records.add(newShareGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
+        if (groupMetadataHash != group.metadataHash()) {
+            log.info("[GroupId {}] Computed new metadata hash: {}.",
+                group.groupId(), groupMetadataHash);
         }
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, 0));
+        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
 
         cancelGroupSessionTimeout(group.groupId(), member.memberId());
 
@@ -5372,6 +5376,7 @@ public class GroupMetadataManager {
         if (value != null) {
             ShareGroup shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, true);
             shareGroup.setGroupEpoch(value.epoch());
+            shareGroup.setMetadataHash(value.metadataHash());
         } else {
             ShareGroup shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, false);
             if (!shareGroup.members().isEmpty()) {
@@ -5549,32 +5554,6 @@ public class GroupMetadataManager {
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
                 .build();
             streamsGroup.updateMember(newMember);
-        }
-    }
-
-    /**
-     * Replays ShareGroupPartitionMetadataKey/Value to update the hard state of
-     * the share group. It updates the subscription metadata of the share
-     * group.
-     *
-     * @param key   A ShareGroupPartitionMetadataKey key.
-     * @param value A ShareGroupPartitionMetadataValue record.
-     */
-    public void replay(
-        ShareGroupPartitionMetadataKey key,
-        ShareGroupPartitionMetadataValue value
-    ) {
-        String groupId = key.groupId();
-        ShareGroup group = getOrMaybeCreatePersistedShareGroup(groupId, false);
-
-        if (value != null) {
-            Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-            value.topics().forEach(topicMetadata ->
-                subscriptionMetadata.put(topicMetadata.topicName(), TopicMetadata.fromRecord(topicMetadata))
-            );
-            group.setSubscriptionMetadata(subscriptionMetadata);
-        } else {
-            group.setSubscriptionMetadata(Map.of());
         }
     }
 
