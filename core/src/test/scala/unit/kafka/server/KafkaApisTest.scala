@@ -226,7 +226,7 @@ class KafkaApisTest extends Logging {
 
   def initializeMetadataCacheWithShareGroupsEnabled(enableShareGroups: Boolean = true): MetadataCache = {
     val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-    val delta = new MetadataDelta(MetadataImage.EMPTY);
+    val delta = new MetadataDelta(MetadataImage.EMPTY)
     delta.replay(new FeatureLevelRecord()
       .setName(MetadataVersion.FEATURE_NAME)
       .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
@@ -6248,7 +6248,7 @@ class KafkaApisTest extends Logging {
 
     metadataCache = {
       val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      val delta = new MetadataDelta(MetadataImage.EMPTY)
       delta.replay(new FeatureLevelRecord()
         .setName(MetadataVersion.FEATURE_NAME)
         .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
@@ -6474,7 +6474,7 @@ class KafkaApisTest extends Logging {
 
     metadataCache = {
       val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      val delta = new MetadataDelta(MetadataImage.EMPTY)
       delta.replay(new FeatureLevelRecord()
         .setName(MetadataVersion.FEATURE_NAME)
         .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
@@ -7017,9 +7017,7 @@ class KafkaApisTest extends Logging {
           ))
       ))
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
-    val topicNames = new util.HashMap[Uuid, String]
-    topicNames.put(topicId1, "foo1")
-    topicNames.put(topicId2, "foo2")
+    val topicNames = util.Map.of(topicId1, "foo1", topicId2, "foo2")
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
     kafkaApis = createKafkaApis()
@@ -7080,8 +7078,7 @@ class KafkaApisTest extends Logging {
           ))
       ))
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
-    val topicIdNames = new util.HashMap[Uuid, String]
-    topicIdNames.put(topicId1, "foo1") // topicId2 is not present in topicIdNames
+    val topicIdNames = util.Map.of(topicId1, "foo1") // topicId2 is not present in topicIdNames
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
     kafkaApis = createKafkaApis()
@@ -7148,9 +7145,7 @@ class KafkaApisTest extends Logging {
       ))
 
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
-    val topicNames = new util.HashMap[Uuid, String]
-    topicNames.put(topicId1, "foo1")
-    topicNames.put(topicId2, "foo2")
+    val topicNames = util.Map.of(topicId1, "foo1", topicId2, "foo2")
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
     kafkaApis = createKafkaApis()
@@ -7212,8 +7207,7 @@ class KafkaApisTest extends Logging {
       ))
 
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
-    val topicIdNames = new util.HashMap[Uuid, String]
-    topicIdNames.put(topicId1, "foo1") // topicId2 not present in topicIdNames
+    val topicIdNames = util.Map.of(topicId1, "foo1") // topicId2 not present in topicIdNames
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
     kafkaApis = createKafkaApis()
@@ -9316,7 +9310,7 @@ class KafkaApisTest extends Logging {
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
     assertEquals(util.Set.copyOf(metadataCache.getAliveBrokerNodes(plaintextListener)),
-      new util.HashSet(describeClusterResponse.nodes.values))
+      util.Set.copyOf(describeClusterResponse.nodes.values))
   }
 
   /**
@@ -10577,11 +10571,11 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
-    val missingTopics = Map("test" -> new CreatableTopic())
+    val missingTopics = util.Map.of("test", new CreatableTopic())
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics.asJava))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.NONE.code, response.data.errorCode())
     assertEquals(null, response.data.errorMessage())
