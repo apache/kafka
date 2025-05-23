@@ -531,7 +531,7 @@ public class SharePartitionManagerTest {
         assertInstanceOf(ShareSessionContext.class, context1);
         assertFalse(((ShareSessionContext) context1).isSubsequent());
 
-        // The expected epoch from the share session should be 1, but we are passing 2. This should throw an exception.
+        // The expected epoch from the share session should be 1, and we are passing the same. So, execution should be successful.
         assertDoesNotThrow(
             () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
                 new ShareRequestMetadata(memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))));
@@ -557,7 +557,7 @@ public class SharePartitionManagerTest {
         assertInstanceOf(ShareSessionContext.class, context1);
         assertFalse(((ShareSessionContext) context1).isSubsequent());
 
-        // The expected epoch from the share session should be 1, but we are passing 2. This should throw an exception.
+        // The expected epoch from the share session should be 1, but we are passing the Final Epoch (-1). This should throw an exception.
         assertDoesNotThrow(
             () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
                 new ShareRequestMetadata(memberId, ShareRequestMetadata.FINAL_EPOCH)));
