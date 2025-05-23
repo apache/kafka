@@ -333,7 +333,7 @@ object DumpLogSegments {
     } finally fileRecords.closeHandlers()
   }
 
-  private[tools] def printControlRecord(record: Record): Unit = {
+  private def printControlRecord(record: Record): Unit = {
     val controlTypeId = ControlRecordType.parseTypeId(record.key)
     ControlRecordType.fromTypeId(controlTypeId) match {
       case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
