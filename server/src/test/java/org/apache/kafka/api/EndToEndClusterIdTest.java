@@ -73,6 +73,7 @@ public class EndToEndClusterIdTest {
     private static final TopicPartition TP = new TopicPartition(TOPIC, PARTITION);
     private final ClusterInstance clusterInstance;
     private String clusterBrokerId;
+    private String controllerId;
     private static final String PRODUCER_CLIENT_ID = "producerClientId";
     private static final String CONSUMER_CLIENT_ID = "consumerClientId";
 
@@ -84,26 +85,32 @@ public class EndToEndClusterIdTest {
     public void setup() throws InterruptedException {
         this.clusterInstance.createTopic(TOPIC, 2, (short) 1);
         clusterBrokerId = String.valueOf(clusterInstance.brokerIds().iterator().next());
+        controllerId = String.valueOf(clusterInstance.controllerIds().iterator().next());
         MockDeserializer.resetStaticVariables();
     }
 
     public static class MockCommonMetricsReporter extends MockMetricsReporter implements ClusterResourceListener {
         public static final Map<String, ClusterResource> CLUSTER_RESOURCE_MAP = new ConcurrentHashMap<>();
         public String brokerId;
+        public String controllerId;
 
         @Override
         public void configure(Map<String, ?> configs) {
             super.configure(configs);
+
             String roles = (String) configs.get("process.roles");
-            if (roles != null && roles.contains("broker")) {
-                brokerId = (String) configs.get(ServerConfigs.BROKER_ID_CONFIG);
-            }
+            if (roles == null) return;
+
+            String id = (String) configs.get(ServerConfigs.BROKER_ID_CONFIG);
+            controllerId = roles.contains("controller") ? id : null;
+            brokerId    = roles.contains("broker")    ? id : null;
         }
 
         @Override
         public void onUpdate(ClusterResource clusterMetadata) {
             if (clientId != null) CLUSTER_RESOURCE_MAP.put(clientId, clusterMetadata);
             if (brokerId != null) CLUSTER_RESOURCE_MAP.put(brokerId, clusterMetadata);
+            if (controllerId != null) CLUSTER_RESOURCE_MAP.put(controllerId, clusterMetadata);
         }
     }
 
@@ -124,6 +131,9 @@ public class EndToEndClusterIdTest {
         ClusterResource brokerClusterResource = MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(clusterBrokerId);
         assertNotNull(brokerClusterResource);
         isValidClusterId(brokerClusterResource.clusterId());
+        ClusterResource controllerClusterResource = MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(controllerId);
+        assertNotNull(controllerClusterResource);
+        isValidClusterId(controllerClusterResource.clusterId());
 
         Map<String, Object> producerConfig = Map.of(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName(),
             "mock.interceptor.append", "mock",
@@ -194,6 +204,7 @@ public class EndToEndClusterIdTest {
         assertEquals(id, MockDeserializer.clusterMeta.get().clusterId());
         assertEquals(id, MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(CONSUMER_CLIENT_ID).clusterId());
         assertEquals(id, MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(clusterBrokerId).clusterId());
+        assertEquals(id, MockCommonMetricsReporter.CLUSTER_RESOURCE_MAP.get(controllerId).clusterId());
 
         MockConsumerInterceptor.resetCounters();
         MockProducerInterceptor.resetCounters();
