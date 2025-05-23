@@ -247,9 +247,9 @@ License Version 2.0:
 - opentelemetry-proto-1.0.0-alpha
 - plexus-utils-3.5.1
 - rocksdbjni-9.7.3
-- scala-library-2.13.15
+- scala-library-2.13.16
 - scala-logging_2.13-3.9.5
-- scala-reflect-2.13.15
+- scala-reflect-2.13.16
 - snappy-java-1.1.10.5
 - snakeyaml-2.2
 - swagger-annotations-2.2.25
