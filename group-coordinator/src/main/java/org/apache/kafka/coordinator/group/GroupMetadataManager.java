@@ -8108,6 +8108,7 @@ public class GroupMetadataManager {
         AlterShareGroupOffsetsRequestData alterShareGroupOffsetsRequest,
         List<CoordinatorRecord> records
     ) {
+        final long currentTimeMs = time.milliseconds();
         Group group = groups.get(groupId);
         List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic> alterShareGroupOffsetsResponseTopics = new ArrayList<>();
 
@@ -8136,7 +8137,6 @@ public class GroupMetadataManager {
                     }
                 });
 
-                long currentTimeMs = time.milliseconds();
                 initializingTopics.put(topicId, new InitMapValue(
                     topic.topicName(),
                     topic.partitions().stream()
