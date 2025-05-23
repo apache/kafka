@@ -24,7 +24,7 @@ import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
-import org.apache.kafka.clients.admin.ListClientMetricsResourcesResult;
+import org.apache.kafka.clients.admin.ListConfigResourcesResult;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Exit;
@@ -254,8 +254,8 @@ public class ClientMetricsCommandTest {
         Admin adminClient = mock(Admin.class);
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
 
-        ListClientMetricsResourcesResult result = AdminClientTestUtils.listClientMetricsResourcesResult(clientMetricsName);
-        when(adminClient.listClientMetricsResources()).thenReturn(result);
+        ListConfigResourcesResult result = AdminClientTestUtils.listConfigResourcesResult(clientMetricsName);
+        when(adminClient.listConfigResources(any(), any())).thenReturn(result);
         ConfigResource cr = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName);
         Config cfg = new Config(Collections.singleton(new ConfigEntry("metrics", "org.apache.kafka.producer.")));
         DescribeConfigsResult describeResult = AdminClientTestUtils.describeConfigsResult(cr, cfg);
@@ -278,8 +278,8 @@ public class ClientMetricsCommandTest {
         Admin adminClient = mock(Admin.class);
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
 
-        ListClientMetricsResourcesResult result = AdminClientTestUtils.listClientMetricsResourcesResult("one", "two");
-        when(adminClient.listClientMetricsResources()).thenReturn(result);
+        ListConfigResourcesResult result = AdminClientTestUtils.listConfigResourcesResult("one", "two");
+        when(adminClient.listConfigResources(any(), any())).thenReturn(result);
 
         String capturedOutput = ToolsTestUtils.captureStandardOut(() -> {
             try {
@@ -296,8 +296,8 @@ public class ClientMetricsCommandTest {
         Admin adminClient = mock(Admin.class);
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
 
-        ListClientMetricsResourcesResult result = AdminClientTestUtils.listClientMetricsResourcesResult(Errors.UNSUPPORTED_VERSION.exception());
-        when(adminClient.listClientMetricsResources()).thenReturn(result);
+        ListConfigResourcesResult result = AdminClientTestUtils.listConfigResourcesResult(Errors.UNSUPPORTED_VERSION.exception());
+        when(adminClient.listConfigResources(any(), any())).thenReturn(result);
 
         assertThrows(ExecutionException.class, () -> service.listClientMetrics());
     }
