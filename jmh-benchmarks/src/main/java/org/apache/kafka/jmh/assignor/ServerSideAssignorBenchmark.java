@@ -48,7 +48,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -215,7 +214,7 @@ public class ServerSideAssignorBenchmark {
                 groupSpec.memberSubscription(memberId).rackId(),
                 Optional.empty(),
                 groupSpec.memberSubscription(memberId).subscribedTopicIds(),
-                new Assignment(Collections.unmodifiableMap(memberAssignment.partitions()))
+                new Assignment(Map.copyOf(memberAssignment.partitions()))
             ));
         }
 

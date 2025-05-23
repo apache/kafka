@@ -38,7 +38,6 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -73,7 +72,7 @@ public class MetadataResponseBenchmark {
         for (int i = 0; i < nodes; i++) {
             nodesById.put(i, new Node(i, "localhost", 1234));
         }
-        nodesById = Collections.unmodifiableMap(nodesById);
+        nodesById = Map.copyOf(nodesById);
     }
 
     @Benchmark
