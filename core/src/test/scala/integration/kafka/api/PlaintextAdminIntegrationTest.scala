@@ -2483,7 +2483,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         consumer.commitSync()
 
         // Test offset deletion while consuming
-        val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, util.Set.of(tp1, tp2))
+        val partitions = new util.LinkedHashSet[TopicPartition](util.List.of(tp1, tp2))
+        val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, partitions)
 
         // Top level error will equal to the first partition level error
         assertFutureThrows(classOf[GroupSubscribedToTopicException], offsetDeleteResult.all())

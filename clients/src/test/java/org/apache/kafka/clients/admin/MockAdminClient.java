@@ -1399,8 +1399,8 @@ public class MockAdminClient extends AdminClient {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @SuppressWarnings({"deprecation", "removal"})
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
         KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
         future.complete(clientMetricsConfigs.keySet().stream().map(ClientMetricsResourceListing::new).collect(Collectors.toList()));
