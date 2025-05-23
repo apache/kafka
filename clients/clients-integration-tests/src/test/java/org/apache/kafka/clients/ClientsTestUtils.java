@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientsTestUtils {
 
@@ -40,17 +41,48 @@ public class ClientsTestUtils {
 
     private ClientsTestUtils() {}
 
-    public static <K, V> List<ConsumerRecord<K, V>> consumeRecords(
-        Consumer<K, V> consumer,
+    public static List<ConsumerRecord<byte[], byte[]>> consumeRecords(
+        Consumer<byte[], byte[]> consumer,
         int numRecords
     ) throws InterruptedException {
-        List<ConsumerRecord<K, V>> records = new ArrayList<>();
+        return consumeRecords(consumer, numRecords, Integer.MAX_VALUE);
+    }
+
+    public static List<ConsumerRecord<byte[], byte[]>> consumeRecords(
+        Consumer<byte[], byte[]> consumer,
+        int numRecords,
+        int maxPollRecords
+    ) throws InterruptedException {
+        List<ConsumerRecord<byte[], byte[]>> consumedRecords = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
-            consumer.poll(Duration.ofMillis(100)).forEach(records::add);
-            return records.size() >= numRecords;
+            var records = consumer.poll(Duration.ofMillis(100));
+            records.forEach(consumedRecords::add);
+            assertTrue(records.count() <= maxPollRecords);
+            return consumedRecords.size() >= numRecords;
         }, 60000, "Timed out before consuming expected " + numRecords + " records.");
 
-        return records;
+        return consumedRecords;
+    }
+
+    public static void consumeAndVerifyRecords(
+        Consumer<byte[], byte[]> consumer,
+        TopicPartition tp,
+        int numRecords,
+        int startingOffset,
+        int startingKeyAndValueIndex,
+        long startingTimestamp,
+        long timestampIncrement
+    ) throws InterruptedException {
+        consumeAndVerifyRecords(
+            consumer,
+            tp,
+            numRecords,
+            Integer.MAX_VALUE,
+            startingOffset,
+            startingKeyAndValueIndex,
+            startingTimestamp,
+            timestampIncrement
+        );
     }
 
     public static void pollUntilTrue(Consumer<byte[], byte[]> consumer,
@@ -66,12 +98,13 @@ public class ClientsTestUtils {
         Consumer<byte[], byte[]> consumer,
         TopicPartition tp,
         int numRecords,
+        int maxPollRecords,
         int startingOffset,
         int startingKeyAndValueIndex,
         long startingTimestamp,
         long timestampIncrement
     ) throws InterruptedException {
-        var records = consumeRecords(consumer, numRecords);
+        var records = consumeRecords(consumer, numRecords, maxPollRecords);
         for (var i = 0; i < numRecords; i++) {
             var record = records.get(i);
             var offset = startingOffset + i;
