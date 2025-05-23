@@ -29,7 +29,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * <br/>
  * The logic upon completing a delayed operation is defined in onComplete() and will be called exactly once.
  * Once an operation is completed, isCompleted() will return true. onComplete() is called from forceComplete(),
- * which is triggered once by either expiration if the operation is not completed after delayMs, or tryComplete()
+ * which is triggered by either expiration, if the operation is not completed after delayMs; or tryComplete(),
  * if the operation can be completed now.
  * <br/>
  * A subclass of DelayedOperation needs to provide an implementation of both onComplete() and tryComplete().
