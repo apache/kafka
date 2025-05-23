@@ -21,9 +21,9 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
-import org.apache.kafka.clients.admin.ClientMetricsResourceListing;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.ListConfigResourcesOptions;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.utils.Exit;
@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -157,9 +158,11 @@ public class ClientMetricsCommand {
             if (entityNameOpt.isPresent()) {
                 entities = Collections.singletonList(entityNameOpt.get());
             } else {
-                Collection<ClientMetricsResourceListing> resources = adminClient.listClientMetricsResources()
-                        .all().get(30, TimeUnit.SECONDS);
-                entities = resources.stream().map(ClientMetricsResourceListing::name).collect(Collectors.toList());
+                Collection<ConfigResource> resources = adminClient
+                    .listConfigResources(Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions())
+                    .all()
+                    .get(30, TimeUnit.SECONDS);
+                entities = resources.stream().map(ConfigResource::name).toList();
             }
 
             for (String entity : entities) {
@@ -170,9 +173,11 @@ public class ClientMetricsCommand {
         }
 
         public void listClientMetrics() throws Exception {
-            Collection<ClientMetricsResourceListing> resources = adminClient.listClientMetricsResources()
-                    .all().get(30, TimeUnit.SECONDS);
-            String results = resources.stream().map(ClientMetricsResourceListing::name).collect(Collectors.joining("\n"));
+            Collection<ConfigResource> resources = adminClient
+                .listConfigResources(Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions())
+                .all()
+                .get(30, TimeUnit.SECONDS);
+            String results = resources.stream().map(ConfigResource::name).collect(Collectors.joining("\n"));
             System.out.println(results);
         }
 

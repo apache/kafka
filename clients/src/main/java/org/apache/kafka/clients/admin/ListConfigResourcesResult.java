@@ -14,41 +14,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Collection;
 
 /**
- * The result of the {@link Admin#listClientMetricsResources()} call.
+ * The result of the {@link Admin#listConfigResources()} call.
  * <p>
- * @deprecated Since 4.1. Use {@link ListConfigResourcesResult} instead.
  */
-@Deprecated(since = "4.1")
-public class ListClientMetricsResourcesResult {
-    private final KafkaFuture<Collection<ClientMetricsResourceListing>> future;
+public class ListConfigResourcesResult {
+    private final KafkaFuture<Collection<ConfigResource>> future;
 
-    ListClientMetricsResourcesResult(KafkaFuture<Collection<ClientMetricsResourceListing>> future) {
+    ListConfigResourcesResult(KafkaFuture<Collection<ConfigResource>> future) {
         this.future = future;
     }
 
     /**
-     * Returns a future that yields either an exception, or the full set of client metrics
-     * listings.
+     * Returns a future that yields either an exception, or the full set of config resources.
      *
      * In the event of a failure, the future yields nothing but the first exception which
      * occurred.
      */
-    public KafkaFuture<Collection<ClientMetricsResourceListing>> all() {
-        final KafkaFutureImpl<Collection<ClientMetricsResourceListing>> result = new KafkaFutureImpl<>();
-        future.whenComplete((listings, throwable) -> {
+    public KafkaFuture<Collection<ConfigResource>> all() {
+        final KafkaFutureImpl<Collection<ConfigResource>> result = new KafkaFutureImpl<>();
+        future.whenComplete((resources, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
             } else {
-                result.complete(listings);
+                result.complete(resources);
             }
         });
         return result;
