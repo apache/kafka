@@ -10664,6 +10664,7 @@ public class KafkaAdminClientTest {
                                           member.memberEpoch());
     }
 
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testListClientMetricsResources() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -10697,6 +10698,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testListClientMetricsResourcesEmpty() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -10714,6 +10716,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testListClientMetricsResourcesNotSupported() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -10724,6 +10727,70 @@ public class KafkaAdminClientTest {
             ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
 
             // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
+        }
+    }
+
+    @Test
+    public void testListConfigResources() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            List<ConfigResource> expected = List.of(
+                new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "client-metrics"),
+                new ConfigResource(ConfigResource.Type.BROKER, "1"),
+                new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "1"),
+                new ConfigResource(ConfigResource.Type.TOPIC, "topic"),
+                new ConfigResource(ConfigResource.Type.GROUP, "group")
+            );
+
+            ListConfigResourcesResponseData responseData =
+                new ListConfigResourcesResponseData().setErrorCode(Errors.NONE.code());
+
+            expected.forEach(c ->
+                responseData.configResources()
+                    .add(new ListConfigResourcesResponseData
+                        .ConfigResource()
+                        .setResourceName(c.name())
+                        .setResourceType(c.type().id())
+                    )
+            );
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(responseData));
+
+            ListConfigResourcesResult result = env.adminClient().listConfigResources();
+            assertEquals(expected.size(), result.all().get().size());
+            assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
+        }
+    }
+
+    @Test
+    public void testListConfigResourcesEmpty() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            ListConfigResourcesResponseData responseData =
+                new ListConfigResourcesResponseData().setErrorCode(Errors.NONE.code());
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(responseData));
+
+            ListConfigResourcesResult result = env.adminClient().listConfigResources();
+            assertTrue(result.all().get().isEmpty());
+        }
+    }
+
+    @Test
+    public void testListConfigResourcesNotSupported() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListConfigResourcesRequest,
+                new ListConfigResourcesResponse(new ListConfigResourcesResponseData()
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())));
+
+            ListConfigResourcesResult result = env.adminClient().listConfigResources(
+                Set.of(ConfigResource.Type.UNKNOWN), new ListConfigResourcesOptions());
+
             assertNotNull(result.all());
             TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
         }
