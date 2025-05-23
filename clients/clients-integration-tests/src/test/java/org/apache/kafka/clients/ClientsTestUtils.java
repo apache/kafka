@@ -50,9 +50,9 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientsTestUtils {
 
@@ -437,8 +437,8 @@ public class ClientsTestUtils {
     }
 
     public static class TestConsumerReassignmentListener implements ConsumerRebalanceListener {
-        int callsToAssigned = 0;
-        int callsToRevoked = 0;
+        public int callsToAssigned = 0;
+        public int callsToRevoked = 0;
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
