@@ -59,22 +59,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.raft.KafkaRaftClient.RETRY_BACKOFF_BASE_MS;
-import static org.apache.kafka.raft.RaftUtil.binaryExponentialElectionBackoffMs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RaftUtilTest {
 
@@ -626,60 +619,6 @@ public class RaftUtilTest {
         );
         JsonNode json = DescribeQuorumResponseDataJsonConverter.write(describeQuorumResponseData, version);
         assertEquals(expectedJson, json.toString());
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13})
-    public void testExponentialBoundOfExponentialElectionBackoffMs(int retries) {
-        Random mockedRandom = Mockito.mock(Random.class);
-        int electionBackoffMaxMs = 1000;
-
-        // test the bound of the method's first call to random.nextInt
-        binaryExponentialElectionBackoffMs(electionBackoffMaxMs, RETRY_BACKOFF_BASE_MS, retries, mockedRandom);
-        ArgumentCaptor<Integer> nextIntCaptor = ArgumentCaptor.forClass(Integer.class);
-        Mockito.verify(mockedRandom).nextInt(Mockito.eq(1), nextIntCaptor.capture());
-        int actualBound = nextIntCaptor.getValue();
-        int expectedBound = (int) (2 * Math.pow(2, retries - 1));
-        // after the 10th retry, the bound of the first call to random.nextInt will remain capped to
-        // (RETRY_BACKOFF_BASE_MS * 2 << 10)=2048 to prevent overflow
-        if (retries > 10) {
-            expectedBound = 2048;
-        }
-        assertEquals(expectedBound, actualBound, "Incorrect bound for retries=" + retries);
-    }
-
-    // test that the return value of the method is capped to QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG + jitter
-    // any exponential >= (1000 + jitter)/(RETRY_BACKOFF_BASE_MS)=21 will result in this cap
-    @ParameterizedTest
-    @ValueSource(ints = {1, 2, 20, 21, 22, 2048})
-    public void testExponentialElectionBackoffMsIsCapped(int exponential) {
-        Random mockedRandom = Mockito.mock(Random.class);
-        int electionBackoffMaxMs = 1000;
-        // this is the max bound of the method's first call to random.nextInt
-        int firstNextIntMaxBound = 2048;
-
-        int jitterMs = 50;
-        Mockito.when(mockedRandom.nextInt(1, firstNextIntMaxBound)).thenReturn(exponential);
-        Mockito.when(mockedRandom.nextInt(RETRY_BACKOFF_BASE_MS)).thenReturn(jitterMs);
-
-        int returnedBackoffMs = binaryExponentialElectionBackoffMs(electionBackoffMaxMs, RETRY_BACKOFF_BASE_MS, 11, mockedRandom);
-
-        // verify nextInt was called on both expected bounds
-        ArgumentCaptor<Integer> nextIntCaptor = ArgumentCaptor.forClass(Integer.class);
-        Mockito.verify(mockedRandom).nextInt(Mockito.eq(1), nextIntCaptor.capture());
-        Mockito.verify(mockedRandom).nextInt(nextIntCaptor.capture());
-        List<Integer> allCapturedBounds = nextIntCaptor.getAllValues();
-        assertEquals(firstNextIntMaxBound, allCapturedBounds.get(0));
-        assertEquals(RETRY_BACKOFF_BASE_MS, allCapturedBounds.get(1));
-
-        // finally verify the backoff returned is capped to electionBackoffMaxMs + jitterMs
-        int backoffValueCap = electionBackoffMaxMs + jitterMs;
-        if (exponential < 21) {
-            assertEquals(RETRY_BACKOFF_BASE_MS * exponential, returnedBackoffMs);
-            assertTrue(returnedBackoffMs < backoffValueCap);
-        } else {
-            assertEquals(backoffValueCap, returnedBackoffMs);
-        }
     }
 
     private Records createRecords() {

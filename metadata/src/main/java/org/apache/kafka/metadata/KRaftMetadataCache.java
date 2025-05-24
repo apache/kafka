@@ -408,6 +408,11 @@ public class KRaftMetadataCache implements MetadataCache {
     }
 
     @Override
+    public Map<String, Uuid> topicNamesToIds() {
+        return currentImage.topics().topicNameToIdView();
+    }
+
+    @Override
     public Optional<Node> getPartitionLeaderEndpoint(String topicName, int partitionId, ListenerName listenerName) {
         return Optional.ofNullable(currentImage.topics().getTopic(topicName))
             .flatMap(topic -> Optional.ofNullable(topic.partitions().get(partitionId)))

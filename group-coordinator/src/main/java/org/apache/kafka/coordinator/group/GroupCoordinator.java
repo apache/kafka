@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -237,6 +239,20 @@ public interface GroupCoordinator {
     CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> shareGroupDescribe(
         AuthorizableRequestContext context,
         List<String> groupIds
+    );
+
+    /**
+     * Alter Share Group Offsets for a given group.
+     *
+     * @param context     The request context.
+     * @param groupId     The group id.
+     * @param requestData The AlterShareGroupOffsetsRequest data.
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(
+        AuthorizableRequestContext context,
+        String groupId,
+        AlterShareGroupOffsetsRequestData requestData
     );
 
     /**
