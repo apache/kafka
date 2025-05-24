@@ -913,7 +913,7 @@ class LogCleanerTest extends Logging {
 
     // clean the log
     val stats = new CleanerStats(Time.SYSTEM)
-    cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head).asJava, map, 0L, stats, new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
+    cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), map, 0L, stats, new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
     val shouldRemain = LogTestUtils.keysInLog(log).filterNot(keys.contains)
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
   }
@@ -926,7 +926,7 @@ class LogCleanerTest extends Logging {
     val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
-    cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head).asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
+    cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
     val shouldRemain = LogTestUtils.keysInLog(log).filter(k => !offsetMap.map.containsKey(k.toString))
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
   }
@@ -945,7 +945,7 @@ class LogCleanerTest extends Logging {
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
     assertThrows(classOf[CorruptRecordException], () =>
-      cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head).asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
+      cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
     )
   }
 
@@ -962,7 +962,7 @@ class LogCleanerTest extends Logging {
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
     assertThrows(classOf[CorruptRecordException], () =>
-      cleaner.cleanSegments(log, Seq(log.logSegments.asScala.head).asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
+      cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
     )
   }
 
@@ -1636,7 +1636,7 @@ class LogCleanerTest extends Logging {
 
     // Try to clean segment with offset overflow. This will trigger log split and the cleaning itself must abort.
     assertThrows(classOf[LogCleaningAbortedException], () =>
-      cleaner.cleanSegments(log, Seq(segmentWithOverflow).asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM),
+      cleaner.cleanSegments(log, util.List.of(segmentWithOverflow), offsetMap, 0L, new CleanerStats(Time.SYSTEM),
         new CleanedTransactionMetadata, -1, segmentWithOverflow.readNextOffset)
     )
     assertEquals(numSegmentsInitial + 1, log.logSegments.size)
@@ -1646,7 +1646,7 @@ class LogCleanerTest extends Logging {
     // Clean each segment now that split is complete.
     val upperBoundOffset = log.logSegments.asScala.last.readNextOffset
     for (segmentToClean <- log.logSegments.asScala)
-      cleaner.cleanSegments(log, List(segmentToClean).asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM),
+      cleaner.cleanSegments(log, util.List.of(segmentToClean), offsetMap, 0L, new CleanerStats(Time.SYSTEM),
         new CleanedTransactionMetadata, -1, upperBoundOffset)
     assertEquals(expectedKeysAfterCleaning, LogTestUtils.keysInLog(log))
     assertFalse(LogTestUtils.hasOffsetOverflow(log))

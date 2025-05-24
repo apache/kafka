@@ -116,12 +116,12 @@ class KafkaConfigTest {
     // We should be also able to set completely new property
     val config3 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
     assertEquals(1, config3.nodeId)
-    assertEquals(util.Arrays.asList("compact"), config3.logCleanupPolicy)
+    assertEquals(util.List.of("compact"), config3.logCleanupPolicy)
 
     // We should be also able to set several properties
     val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "node.id=2")))
     assertEquals(2, config4.nodeId)
-    assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
+    assertEquals(util.List.of("compact","delete"), config4.logCleanupPolicy)
   }
 
   @Test

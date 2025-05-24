@@ -44,7 +44,7 @@ import org.junit.jupiter.api.Test
 
 import java.net.InetAddress
 import java.util
-import java.util.{Collections, Properties, UUID}
+import java.util.{Properties, UUID}
 import scala.jdk.CollectionConverters._
 
 class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
@@ -567,7 +567,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val acl3 = new AclBinding(resource2, new AccessControlEntry(principal.toString, WILDCARD_HOST, DESCRIBE, ALLOW))
     val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WILDCARD_HOST, READ, ALLOW))
 
-    authorizer1.createAcls(requestContext, List(acl1, acl2, acl3, acl4).asJava)
+    authorizer1.createAcls(requestContext, util.List.of(acl1, acl2, acl3, acl4))
     assertEquals(Set(acl1, acl2, acl3, acl4), authorizer1.acls(AclBindingFilter.ANY).asScala.toSet)
     assertEquals(Set(acl1, acl2), authorizer1.acls(new AclBindingFilter(resource1.toFilter, AccessControlEntryFilter.ANY)).asScala.toSet)
     assertEquals(Set(acl4), authorizer1.acls(new AclBindingFilter(prefixedResource.toFilter, AccessControlEntryFilter.ANY)).asScala.toSet)
@@ -632,7 +632,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   private def authorize(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
     val action = new Action(operation, resource, 1, true, true)
-    authorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
+    authorizer.authorize(requestContext, util.List.of(action)).asScala.head == AuthorizationResult.ALLOWED
   }
 
   private def getAcls(authorizer: Authorizer, resourcePattern: ResourcePattern): Set[AccessControlEntry] = {
@@ -669,7 +669,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
                                   pluginMetrics: PluginMetrics): Unit = {
     standardAuthorizer.configure(configs)
     standardAuthorizer.withPluginMetrics(pluginMetrics)
-    initializeStandardAuthorizer(standardAuthorizer, new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)))
+    initializeStandardAuthorizer(standardAuthorizer, new AuthorizerTestServerInfo(util.List.of(PLAINTEXT)))
   }
 
   def initializeStandardAuthorizer(standardAuthorizer: StandardAuthorizer,
