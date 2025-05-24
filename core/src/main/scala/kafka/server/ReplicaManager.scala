@@ -1008,8 +1008,9 @@ class ReplicaManager(val config: KafkaConfig,
       delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys.asJava)
     } else {
       // we can respond immediately
-      val produceResponseStatus = initialProduceStatus.map { case (k, status) => k -> status.responseStatus }
-      responseCallback(produceResponseStatus.asJava)
+      val produceResponseStatus = new util.HashMap[TopicIdPartition, PartitionResponse]
+      initialProduceStatus.foreach { case (k, status) => k -> produceResponseStatus.put(k, status.responseStatus) }
+      responseCallback(produceResponseStatus)
     }
   }
 
@@ -1018,15 +1019,16 @@ class ReplicaManager(val config: KafkaConfig,
     responseCallback: util.Map[TopicIdPartition, PartitionResponse] => Unit): Unit = {
     // If required.acks is outside accepted range, something is wrong with the client
     // Just return an error and don't handle the request at all
-    val responseStatus = entries.map { case (topicIdPartition, _) =>
-      topicIdPartition -> new PartitionResponse(
-        Errors.INVALID_REQUIRED_ACKS,
-        LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset,
-        RecordBatch.NO_TIMESTAMP,
-        LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset
-      )
+    val responseStatus = new util.HashMap[TopicIdPartition, PartitionResponse]
+    entries.foreach { case(topicIdPartition, _) =>
+        responseStatus.put(topicIdPartition, new PartitionResponse(
+          Errors.INVALID_REQUIRED_ACKS,
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset,
+          RecordBatch.NO_TIMESTAMP,
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset)
+        )
     }
-    responseCallback(responseStatus.asJava)
+    responseCallback(responseStatus)
   }
 
   /**
