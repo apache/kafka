@@ -21714,7 +21714,8 @@ public class GroupMetadataManagerTest {
         CoordinatorRecord record = newShareGroupStatePartitionMetadataRecord(groupId, Map.of(), snapshotMetadataInitializeRecordMap, Map.of());
 
         assertNull(result.response());
-        assertEquals(List.of(record), result.records());
+        assertEquals(1, result.records().size());
+        assertRecordEquals(record, result.records().get(0));
         // Make sure the timeline map is not modified yet.
         assertEquals(snapshotMetadataInitializeRecordMap, context.groupMetadataManager.shareGroupStatePartitionMetadata().get(groupId).initializingTopics());
     }
