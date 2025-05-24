@@ -596,10 +596,6 @@ public class TransactionMetadata {
         return prevProducerId;
     }
 
-    public long nextProducerId() {
-        return nextProducerId;
-    }
-
     public void setProducerEpoch(short producerEpoch) {
         this.producerEpoch = producerEpoch;
     }

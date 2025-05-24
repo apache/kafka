@@ -258,25 +258,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
         case TransactionState.COMPLETE_ABORT | TransactionState.COMPLETE_COMMIT | TransactionState.EMPTY =>
           val transitMetadataResult =
             // If the epoch is exhausted and the expected epoch (if provided) matches it, generate a new producer ID
-            if (txnMetadata.isProducerEpochExhausted &&
-                expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch)) {
-              try {
+            try {
+              if (txnMetadata.isProducerEpochExhausted &&
+                  expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch))
                 Right(txnMetadata.prepareProducerIdRotation(producerIdManager.generateProducerId(), transactionTimeoutMs, time.milliseconds(),
                   expectedProducerIdAndEpoch.isDefined))
-              } catch {
-                case e: Exception => Left(Errors.forException(e))
-              }
-            } else {
-              try {
-                if (txnMetadata.isProducerEpochExhausted && expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch))
-                  Right(txnMetadata.prepareProducerIdRotation(producerIdManager.generateProducerId(), transactionTimeoutMs, time.milliseconds(),
-                    expectedProducerIdAndEpoch.isDefined))
-                else
-                  Right(txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(e => Short.box(e.epoch)).toJava,
-                    time.milliseconds()))
-              } catch {
-                case e: Exception => Left(Errors.forException(e))
-              }
+              else
+                Right(txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(e => Short.box(e.epoch)).toJava,
+                  time.milliseconds()))
+            } catch {
+              case e: Exception => Left(Errors.forException(e))
             }
 
           transitMetadataResult match {
