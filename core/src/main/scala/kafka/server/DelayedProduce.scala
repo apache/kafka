@@ -17,16 +17,16 @@
 
 package kafka.server
 
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
 import kafka.utils.Logging
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.DelayedOperation
 
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
