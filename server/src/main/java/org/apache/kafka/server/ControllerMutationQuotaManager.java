@@ -38,16 +38,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * The ControllerMutationQuota trait defines a quota for a given user/clientId pair. Such
- * quota is not meant to be cached forever but rather during the lifetime of processing
- * a request.
- */
-interface ControllerMutationQuota {
-    boolean isExceeded();
-    void record(double permits);
-    int throttleTime();
-}
 
 /**
  * Default quota used when quota is disabled.
