@@ -16,19 +16,33 @@
  */
 package org.apache.kafka.server;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
+import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.network.Session;
+import org.apache.kafka.server.config.ClientQuotaManagerConfig;
+import org.apache.kafka.server.quota.ClientQuotaCallback;
+import org.apache.kafka.server.quota.QuotaType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * The ControllerMutationQuota trait defines a quota for a given user/clientId pair. Such
  * quota is not meant to be cached forever but rather during the lifetime of processing
  * a request.
  */
-
 interface ControllerMutationQuota {
     boolean isExceeded();
     void record(double permits);
@@ -62,7 +76,7 @@ class UnboundedControllerMutationQuota implements ControllerMutationQuota {
  * The AbstractControllerMutationQuota is the base class of StrictControllerMutationQuota and
  * PermissiveControllerMutationQuota.
  *
- * @param /time @Time object to use
+ * @param time @Time object to use
  */
 abstract class AbstractControllerMutationQuota implements ControllerMutationQuota {
     protected final Time time;
@@ -74,12 +88,15 @@ abstract class AbstractControllerMutationQuota implements ControllerMutationQuot
     }
 
     protected void updateThrottleTime(QuotaViolationException e, long timeMs) {
-        lastThrottleTimeMs = ControllerMutationQuotaManager.INSTANCE.throttleTimeMs(e);
+        lastThrottleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e);
         lastRecordedTimeMs = timeMs;
     }
 
     @Override
     public int throttleTime() {
+        // If a throttle time has been recorded, we adjust it by deducting the time elapsed
+        // between the recording and now. We do this because `throttleTime` may be called
+        // long after having recorded it, especially when a request waits in the purgatory.
         var deltaTimeMs = time.milliseconds() - lastRecordedTimeMs;
         return Math.max(0, (int) (lastThrottleTimeMs - deltaTimeMs));
     }
@@ -91,8 +108,8 @@ abstract class AbstractControllerMutationQuota implements ControllerMutationQuot
  * until it gets back to the defined rate; and 2) it does not throttle for any number of mutations
  * if quota is not already exhausted.
  *
- * @param /time @Time object to use
- * @param /quotaSensor @Sensor object with a defined quota for a given user/clientId pair
+ * @param time @Time object to use
+ * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
  */
 class StrictControllerMutationQuota extends AbstractControllerMutationQuota {
     private final Sensor quotaSensor;
@@ -100,7 +117,6 @@ class StrictControllerMutationQuota extends AbstractControllerMutationQuota {
     StrictControllerMutationQuota(Time time, Sensor quotaSensor) {
         super(time);
         this.quotaSensor = quotaSensor;
-
     }
 
     @Override
@@ -118,7 +134,7 @@ class StrictControllerMutationQuota extends AbstractControllerMutationQuota {
             }
         } catch (QuotaViolationException e) {
             updateThrottleTime(e, timeMs);
-            throw  new ThrottlingQuotaExceededException((int) lastThrottleTimeMs, Errors.THROTTLING_QUOTA_EXCEEDED.message());
+            throw new ThrottlingQuotaExceededException((int) lastThrottleTimeMs, Errors.THROTTLING_QUOTA_EXCEEDED.message());
         }
     }
 }
@@ -128,10 +144,9 @@ class StrictControllerMutationQuota extends AbstractControllerMutationQuota {
  * The quota is permissive meaning that 1) it does accept any mutations even if the quota is
  * exhausted; and 2) it does throttle as soon as the quota is exhausted.
  *
- * @param /time @Time object to use
- * @param /quotaSensor @Sensor object with a defined quota for a given user/clientId pair
+ * @param time @Time object to use
+ * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
  */
-
 class PermissiveControllerMutationQuota extends AbstractControllerMutationQuota {
     private final Sensor quotaSensor;
 
@@ -156,8 +171,149 @@ class PermissiveControllerMutationQuota extends AbstractControllerMutationQuota 
     }
 }
 
-public class ControllerMutationQuotaManager {
-    static final ControllerMutationQuotaManager INSTANCE = new ControllerMutationQuotaManager();
+/**
+ * The ControllerMutationQuotaManager is a specialized ClientQuotaManager used in the context
+ * of throttling controller's operations/mutations.
+ *
+ * @param config @ClientQuotaManagerConfig quota configs
+ * @param metrics @Metrics Metrics instance
+ * @param time @Time object to use
+ * @param threadNamePrefix The thread prefix to use
+ * @param quotaCallback @ClientQuotaCallback ClientQuotaCallback to use
+ */
+public class ControllerMutationQuotaManager extends ClientQuotaManager {
+
+    private static final Logger log = LoggerFactory.getLogger(ControllerMutationQuotaManager.class);
+
+    public ControllerMutationQuotaManager(ClientQuotaManagerConfig config,
+                                          Metrics metrics,
+                                          Time time,
+                                          String threadNamePrefix,
+                                          Optional<Plugin<ClientQuotaCallback>> quotaCallback) {
+        super(config, metrics, QuotaType.CONTROLLER_MUTATION, time, threadNamePrefix, quotaCallback);
+    }
+
+    @Override
+    protected MetricName clientQuotaMetricName(Map<String, String> quotaMetricTags) {
+        return metrics.metricName("tokens", QuotaType.CONTROLLER_MUTATION.toString(),
+                "Tracking remaining tokens in the token bucket per user/client-id",
+                quotaMetricTags);
+    }
+
+    private MetricName clientRateMetricName(Map<String, String> quotaMetricTags) {
+        return metrics.metricName("mutation-rate", QuotaType.CONTROLLER_MUTATION.toString(),
+                "Tracking mutation-rate per user/client-id",
+                quotaMetricTags);
+    }
+
+    @Override
+    protected void registerQuotaMetrics(Map<String, String> metricTags, Sensor sensor) {
+        sensor.add(
+                clientRateMetricName(metricTags),
+                new Rate()
+        );
+        sensor.add(
+                clientQuotaMetricName(metricTags),
+                new TokenBucket(),
+                getQuotaMetricConfig(metricTags)
+        );
+    }
+
+    /**
+     * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
+     * specified time, returns throttle time in milliseconds. The quota is strict meaning that it
+     * does not accept any mutations once the quota is exhausted until it gets back to the defined rate.
+     *
+     * @param session The session from which the user is extracted
+     * @param clientId The client id
+     * @param value The value to accumulate
+     * @param timeMs The time at which to accumulate the value
+     * @return The throttle time in milliseconds defines as the time to wait until the average
+     *         rate gets back to the defined quota
+     */
+    @Override
+    public int recordAndGetThrottleTimeMs(Session session, String clientId, double value, long timeMs) {
+        ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
+        Sensor quotaSensor = clientSensors.quotaSensor();
+
+        try {
+            synchronized (quotaSensor) {
+                quotaSensor.checkQuotas(timeMs);
+                quotaSensor.record(value, timeMs, false);
+            }
+            return 0;
+        } catch (QuotaViolationException e) {
+            int throttleTimeMs = (int) throttleTimeMs(e);
+            if (log.isDebugEnabled()) {
+                log.debug("Quota violated for sensor ({}). Delay time: ({})",
+                        quotaSensor.name(), throttleTimeMs);
+            }
+            return throttleTimeMs;
+        }
+    }
+
+    /**
+     * Returns a StrictControllerMutationQuota for the given user/clientId pair or
+     * a UnboundedControllerMutationQuota if the quota is disabled.
+     *
+     * @param session The session from which the user is extracted
+     * @param clientId The client id
+     * @return ControllerMutationQuota
+     */
+    public ControllerMutationQuota newStrictQuotaFor(Session session, String clientId) {
+        if (quotasEnabled()) {
+            ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
+            return new StrictControllerMutationQuota(time, clientSensors.quotaSensor());
+        } else {
+            return UnboundedControllerMutationQuota.INSTANCE;
+        }
+    }
+
+    public ControllerMutationQuota newStrictQuotaFor(Session session, RequestHeader header) {
+        return newStrictQuotaFor(session, header.clientId());
+    }
+
+    /**
+     * Returns a PermissiveControllerMutationQuota for the given user/clientId pair or
+     * a UnboundedControllerMutationQuota if the quota is disabled.
+     *
+     * @param session The session from which the user is extracted
+     * @param clientId The client id
+     * @return ControllerMutationQuota
+     */
+    public ControllerMutationQuota newPermissiveQuotaFor(Session session, String clientId) {
+        if (quotasEnabled()) {
+            ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
+            return new PermissiveControllerMutationQuota(time, clientSensors.quotaSensor());
+        } else {
+            return UnboundedControllerMutationQuota.INSTANCE;
+        }
+    }
+
+    public ControllerMutationQuota newPermissiveQuotaFor(Session session, RequestHeader header) {
+        return newPermissiveQuotaFor(session, header.clientId());
+    }
+
+    /**
+     * Returns a ControllerMutationQuota based on `strictSinceVersion`. It returns a strict
+     * quota if the version is equal to or above of the `strictSinceVersion`, a permissive
+     * quota if the version is below, and an unbounded quota if the quota is disabled.
+     *
+     * When the quota is strictly enforced. Any operation above the quota is not allowed
+     * and rejected with a THROTTLING_QUOTA_EXCEEDED error.
+     *
+     * @param session The session from which the user is extracted
+     * @param header The request header to extract the clientId and apiVersion from
+     * @param strictSinceVersion The version since quota is strict
+     * @return ControllerMutationQuota instance
+     */
+    public ControllerMutationQuota newQuotaFor(Session session, RequestHeader header, short strictSinceVersion) {
+        if (header.apiVersion() >= strictSinceVersion) {
+            return newStrictQuotaFor(session, header);
+        } else {
+            return newPermissiveQuotaFor(session, header);
+        }
+    }
 
     /**
      * This calculates the amount of time needed to bring the TokenBucket within quota
@@ -166,7 +322,7 @@ public class ControllerMutationQuotaManager {
      * Basically, if a value < 0 is observed, the time required to bring it to zero is
      * -value / refill rate (quota bound) * 1000.
      */
-    long throttleTimeMs(QuotaViolationException e) {
+    public static long throttleTimeMs(QuotaViolationException e) {
         if (e.metric().measurable() instanceof TokenBucket) {
             return Math.round(-e.value() / e.bound() * 1000);
         } else {

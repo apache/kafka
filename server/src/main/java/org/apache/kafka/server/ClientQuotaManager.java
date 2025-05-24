@@ -297,9 +297,9 @@ public class ClientQuotaManager {
      */
 
     private final ClientQuotaManagerConfig config;
-    private final Metrics metrics;
+    protected final Metrics metrics;
     private final QuotaType quotaType;
-    private final Time time;
+    protected final Time time;
     private final Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
@@ -341,6 +341,13 @@ public class ClientQuotaManager {
                 .orElse(new DefaultQuotaCallback());
 
         start(); // Use start method to keep spotbugs happy
+    }
+
+    protected Metrics metrics() {
+        return metrics;
+    }
+    protected Time time() {
+        return time;
     }
 
     private void start() {
