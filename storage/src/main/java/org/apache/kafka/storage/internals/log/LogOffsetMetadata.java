@@ -26,7 +26,6 @@ import org.apache.kafka.common.KafkaException;
  */
 public final class LogOffsetMetadata {
 
-    //TODO KAFKA-14484 remove once UnifiedLog has been moved to the storage module
     private static final int UNKNOWN_FILE_POSITION = -1;
 
     public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, UnifiedLog.UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
