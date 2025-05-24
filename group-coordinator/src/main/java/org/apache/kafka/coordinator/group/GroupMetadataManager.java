@@ -3313,14 +3313,11 @@ public class GroupMetadataManager {
                 ));
             }
 
-            Map<String, Long> topicHash = new HashMap<>(subscribedTopicNames.size());
-            subscribedTopicNames.keySet().forEach(topicName -> {
-                topicHash.put(
-                    topicName,
-                    topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
-                );
-            });
-            long groupMetadataHash = Utils.computeGroupHash(topicHash);
+            long groupMetadataHash = group.computeMetadataHash(
+                subscribedTopicNames,
+                topicHashCache,
+                metadataImage
+            );
 
             if (groupMetadataHash != group.metadataHash()) {
                 if (log.isDebugEnabled()) {
@@ -3621,14 +3618,11 @@ public class GroupMetadataManager {
             updatedMember
         );
 
-        Map<String, Long> topicHash = new HashMap<>(subscribedTopicNamesMap.size());
-        subscribedTopicNamesMap.keySet().forEach(topicName -> {
-            topicHash.put(
-                topicName,
-                topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
-            );
-        });
-        long groupMetadataHash = Utils.computeGroupHash(topicHash);
+        long groupMetadataHash = group.computeMetadataHash(
+            subscribedTopicNamesMap,
+            topicHashCache,
+            metadataImage
+        );
 
         int numMembers = group.numMembers();
         if (!group.hasMember(updatedMember.memberId()) && !group.hasStaticMember(updatedMember.instanceId())) {
@@ -4034,14 +4028,11 @@ public class GroupMetadataManager {
                 members,
                 deletedRegexes
             );
-            Map<String, Long> topicHash = new HashMap<>(subscribedTopicNamesMap.size());
-            subscribedTopicNamesMap.keySet().forEach(topicName -> {
-                topicHash.put(
-                    topicName,
-                    topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
-                );
-            });
-            long groupMetadataHash = Utils.computeGroupHash(topicHash);
+            long groupMetadataHash = group.computeMetadataHash(
+                subscribedTopicNamesMap,
+                topicHashCache,
+                metadataImage
+            );
 
             if (groupMetadataHash != group.metadataHash()) {
                 if (log.isDebugEnabled()) {

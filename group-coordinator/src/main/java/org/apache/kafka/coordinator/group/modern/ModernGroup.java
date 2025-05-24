@@ -20,8 +20,10 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -419,6 +421,21 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         });
 
         return Collections.unmodifiableMap(newSubscriptionMetadata);
+    }
+
+    public long computeMetadataHash(
+        Map<String, SubscriptionCount> subscribedTopicNames,
+        Map<String, Long> topicHashCache,
+        MetadataImage metadataImage
+    ) {
+        Map<String, Long> topicHash = new HashMap<>(subscribedTopicNames.size());
+        subscribedTopicNames.keySet().forEach(topicName -> {
+            topicHash.put(
+                topicName,
+                topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
+            );
+        });
+        return Utils.computeGroupHash(topicHash);
     }
 
     /**
