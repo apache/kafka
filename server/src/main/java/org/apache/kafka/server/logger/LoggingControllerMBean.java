@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.logger;
 
-package org.apache.kafka.clients.admin;
+import java.util.List;
 
-/**
- * Options for {@link Admin#listClientMetricsResources()}.
- * @deprecated Since 4.1. Use {@link ListConfigResourcesOptions} instead.
- */
-@Deprecated(since = "4.1")
-public class ListClientMetricsResourcesOptions extends AbstractOptions<ListClientMetricsResourcesOptions> {
+
+public interface LoggingControllerMBean {
+    List<String> getLoggers();
+    String getLogLevel(String logger);
+    boolean setLogLevel(String logger, String level);
 }

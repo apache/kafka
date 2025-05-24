@@ -14,39 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.server.logger;
 
-import java.util.Objects;
+import java.util.Map;
 
-@Deprecated(since = "4.1")
-public class ClientMetricsResourceListing {
-    private final String name;
+class NoOpController implements LoggingControllerDelegate {
 
-    public ClientMetricsResourceListing(String name) {
-        this.name = name;
-    }
-
-    public String name() {
-        return name;
+    @Override
+    public Map<String, String> loggers() {
+        return Map.of();
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ClientMetricsResourceListing that = (ClientMetricsResourceListing) o;
-        return Objects.equals(name, that.name);
+    public boolean logLevel(String loggerName, String logLevel) {
+        return false;
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(name);
-    }
-
-    @Override
-    public String toString() {
-        return "ClientMetricsResourceListing(" +
-            "name='" + name +
-            ')';
+    public boolean unsetLogLevel(String loggerName) {
+        return false;
     }
 }

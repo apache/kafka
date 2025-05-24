@@ -40,6 +40,7 @@ import org.apache.kafka.server.share.fetch.ShareFetchPartitionData;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
@@ -64,6 +65,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -107,6 +109,8 @@ public class DelayedShareFetch extends DelayedOperation {
     private LinkedHashMap<TopicIdPartition, LogReadResult> localPartitionsAlreadyFetched;
     private Optional<PendingRemoteFetches> pendingRemoteFetchesOpt;
     private Optional<Exception> remoteStorageFetchException;
+    private final AtomicBoolean outsidePurgatoryCallbackLock;
+    private final long remoteFetchMaxWaitMs;
 
     /**
      * This function constructs an instance of delayed share fetch operation for completing share fetch
@@ -118,6 +122,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * @param sharePartitions The share partitions referenced in the share fetch request.
      * @param shareGroupMetrics The share group metrics to record the metrics.
      * @param time The system time.
+     * @param remoteFetchMaxWaitMs The max wait time for a share fetch request having remote storage fetch.
      */
     public DelayedShareFetch(
             ShareFetch shareFetch,
@@ -125,7 +130,8 @@ public class DelayedShareFetch extends DelayedOperation {
             BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
             ShareGroupMetrics shareGroupMetrics,
-            Time time
+            Time time,
+            long remoteFetchMaxWaitMs
     ) {
         this(shareFetch,
             replicaManager,
@@ -135,7 +141,8 @@ public class DelayedShareFetch extends DelayedOperation {
             shareGroupMetrics,
             time,
             Optional.empty(),
-            Uuid.randomUuid()
+            Uuid.randomUuid(),
+            remoteFetchMaxWaitMs
         );
     }
 
@@ -151,6 +158,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * @param shareGroupMetrics The share group metrics to record the metrics.
      * @param time The system time.
      * @param pendingRemoteFetchesOpt Optional containing an in-flight remote fetch object or an empty optional.
+     * @param remoteFetchMaxWaitMs The max wait time for a share fetch request having remote storage fetch.
      */
     DelayedShareFetch(
         ShareFetch shareFetch,
@@ -161,7 +169,8 @@ public class DelayedShareFetch extends DelayedOperation {
         ShareGroupMetrics shareGroupMetrics,
         Time time,
         Optional<PendingRemoteFetches> pendingRemoteFetchesOpt,
-        Uuid fetchId
+        Uuid fetchId,
+        long remoteFetchMaxWaitMs
     ) {
         super(shareFetch.fetchParams().maxWaitMs, Optional.empty());
         this.shareFetch = shareFetch;
@@ -177,6 +186,8 @@ public class DelayedShareFetch extends DelayedOperation {
         this.pendingRemoteFetchesOpt = pendingRemoteFetchesOpt;
         this.remoteStorageFetchException = Optional.empty();
         this.fetchId = fetchId;
+        this.outsidePurgatoryCallbackLock = new AtomicBoolean(false);
+        this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
         // Register metrics for DelayedShareFetch.
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "DelayedShareFetchMetrics");
         this.expiredRequestMeter = metricsGroup.newMeter(EXPIRES_PER_SEC, "requests", TimeUnit.SECONDS);
@@ -205,6 +216,12 @@ public class DelayedShareFetch extends DelayedOperation {
             if (remoteStorageFetchException.isPresent()) {
                 completeErroneousRemoteShareFetchRequest();
             } else if (pendingRemoteFetchesOpt.isPresent()) {
+                if (maybeRegisterCallbackPendingRemoteFetch()) {
+                    log.trace("Registered remote storage fetch callback for group {}, member {}, "
+                            + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                        partitionsAcquired.keySet());
+                    return;
+                }
                 completeRemoteStorageShareFetchRequest();
             } else {
                 completeLocalLogShareFetchRequest();
@@ -627,6 +644,16 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     // Visible for testing.
+    boolean outsidePurgatoryCallbackLock() {
+        return outsidePurgatoryCallbackLock.get();
+    }
+
+    // Only used for testing purpose.
+    void updatePartitionsAcquired(LinkedHashMap<TopicIdPartition, Long> partitionsAcquired) {
+        this.partitionsAcquired = partitionsAcquired;
+    }
+
+    // Visible for testing.
     Meter expiredRequestMeter() {
         return expiredRequestMeter;
     }
@@ -664,6 +691,28 @@ public class DelayedShareFetch extends DelayedOperation {
         processRemoteFetchOrException(remoteStorageFetchInfoMap);
         // Check if remote fetch can be completed.
         return maybeCompletePendingRemoteFetch();
+    }
+
+    private boolean maybeRegisterCallbackPendingRemoteFetch() {
+        log.trace("Registering callback pending remote fetch");
+        PendingRemoteFetches pendingFetch = pendingRemoteFetchesOpt.get();
+        if (!pendingFetch.isDone() && shareFetch.fetchParams().maxWaitMs < remoteFetchMaxWaitMs) {
+            TimerTask timerTask = new PendingRemoteFetchTimerTask();
+            pendingFetch.invokeCallbackOnCompletion(((ignored, throwable) -> {
+                timerTask.cancel();
+                log.trace("Invoked remote storage fetch callback for group {}, member {}, "
+                        + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                    partitionsAcquired.keySet());
+                if (throwable != null) {
+                    log.error("Remote storage fetch failed for group {}, member {}, topic partitions {}",
+                        shareFetch.groupId(), shareFetch.memberId(), sharePartitions.keySet(), throwable);
+                }
+                completeRemoteShareFetchRequestOutsidePurgatory();
+            }));
+            replicaManager.addShareFetchTimerRequest(timerTask);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -903,5 +952,27 @@ public class DelayedShareFetch extends DelayedOperation {
             releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet());
         }
         return completedByMe;
+    }
+
+    private void completeRemoteShareFetchRequestOutsidePurgatory() {
+        if (outsidePurgatoryCallbackLock.compareAndSet(false, true)) {
+            completeRemoteStorageShareFetchRequest();
+        }
+    }
+
+    private class PendingRemoteFetchTimerTask extends TimerTask {
+
+        public PendingRemoteFetchTimerTask() {
+            super(remoteFetchMaxWaitMs - shareFetch.fetchParams().maxWaitMs);
+        }
+
+        @Override
+        public void run() {
+            log.trace("Expired remote storage fetch callback for group {}, member {}, "
+                    + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                partitionsAcquired.keySet());
+            expiredRequestMeter.mark();
+            completeRemoteShareFetchRequestOutsidePurgatory();
+        }
     }
 }
