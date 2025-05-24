@@ -38,7 +38,6 @@ import java.io.File
 import java.lang.{Long => JLong}
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicInteger
-import scala.jdk.CollectionConverters._
 
 object AbstractPartitionTest {
   val brokerId = 101
@@ -121,7 +120,7 @@ class AbstractPartitionTest {
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
     val controllerEpoch = 0
-    val replicas = List[Integer](brokerId, remoteReplicaId).asJava
+    val replicas = java.util.List.of[Integer](brokerId, remoteReplicaId)
     val isr = replicas
 
     if (isLeader) {

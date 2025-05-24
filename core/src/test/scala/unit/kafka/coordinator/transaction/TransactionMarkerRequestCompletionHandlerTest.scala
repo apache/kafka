@@ -17,7 +17,6 @@
 package kafka.coordinator.transaction
 
 import java.{lang, util}
-import java.util.Arrays.asList
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -46,10 +45,10 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val topicPartition = new TopicPartition("topic1", 0)
   private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
     producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, mutable.Set[TopicPartition](topicPartition), 0L, 0L, TransactionVersion.TV_2)
-  private val pendingCompleteTxnAndMarkers = asList(
+  private val pendingCompleteTxnAndMarkers = util.List.of(
     PendingCompleteTxnAndMarkerEntry(
       PendingCompleteTxn(transactionalId, coordinatorEpoch, txnMetadata, txnMetadata.prepareComplete(42)),
-      new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, asList(topicPartition))))
+      new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, util.List.of(topicPartition))))
 
   private val markerChannelManager: TransactionMarkerChannelManager =
     mock(classOf[TransactionMarkerChannelManager])

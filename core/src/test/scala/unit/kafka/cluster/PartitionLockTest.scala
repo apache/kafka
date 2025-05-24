@@ -139,8 +139,8 @@ class PartitionLockTest extends Logging {
   def testGetReplicaWithUpdateAssignmentAndIsr(): Unit = {
     val active = new AtomicBoolean(true)
     val replicaToCheck = 3
-    val firstReplicaSet = Seq[Integer](3, 4, 5).asJava
-    val secondReplicaSet = Seq[Integer](1, 2, 3).asJava
+    val firstReplicaSet = java.util.List.of[Integer](3, 4, 5)
+    val secondReplicaSet = java.util.List.of[Integer](1, 2, 3)
     def partitionState(replicas: java.util.List[Integer]) = new LeaderAndIsrRequest.PartitionState()
       .setControllerEpoch(1)
       .setLeader(replicas.get(0))

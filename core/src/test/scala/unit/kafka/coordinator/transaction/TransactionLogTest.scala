@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.transaction
 
-
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
@@ -30,7 +29,6 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue,
 import org.junit.jupiter.api.Test
 
 import java.nio.ByteBuffer
-import java.util.Collections
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -115,14 +113,14 @@ class TransactionLogTest {
 
   @Test
   def testSerializeTransactionLogValueToHighestNonFlexibleVersion(): Unit = {
-    val txnTransitMetadata = new TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, Collections.emptySet(), 500, 500, TV_0)
+    val txnTransitMetadata = new TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, java.util.Set.of, 500, 500, TV_0)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_0))
     assertEquals(0, txnLogValueBuffer.getShort)
   }
 
   @Test
   def testSerializeTransactionLogValueToFlexibleVersion(): Unit = {
-    val txnTransitMetadata = new TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, Collections.emptySet(), 500, 500, TV_2)
+    val txnTransitMetadata = new TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, java.util.Set.of, 500, 500, TV_2)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_2))
     assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_VERSION, txnLogValueBuffer.getShort)
   }
@@ -131,7 +129,7 @@ class TransactionLogTest {
   def testDeserializeHighestSupportedTransactionLogValue(): Unit = {
     val txnPartitions = new TransactionLogValue.PartitionsSchema()
       .setTopic("topic")
-      .setPartitionIds(java.util.Collections.singletonList(0))
+      .setPartitionIds(java.util.List.of(0))
 
     val txnLogValue = new TransactionLogValue()
       .setProducerId(100)
@@ -140,7 +138,7 @@ class TransactionLogTest {
       .setTransactionStartTimestampMs(750L)
       .setTransactionLastUpdateTimestampMs(1000L)
       .setTransactionTimeoutMs(500)
-      .setTransactionPartitions(java.util.Collections.singletonList(txnPartitions))
+      .setTransactionPartitions(java.util.List.of(txnPartitions))
 
     val serialized = MessageUtil.toVersionPrefixedByteBuffer(1, txnLogValue)
     val deserialized = TransactionLog.readTxnRecordValue("transactionId", serialized).get
