@@ -1567,7 +1567,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testDeleteRecordsAfterCorruptRecords(groupProtocol: String): Unit = {
     val config = new Properties()
-    config.put(TopicConfig.SEGMENT_BYTES_CONFIG, "200")
+    config.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "200")
     createTopic(topic, numPartitions = 1, replicationFactor = 1, config)
 
     client = createAdminClient
