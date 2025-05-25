@@ -18,7 +18,6 @@ package org.apache.kafka.server.purgatory;
 
 import org.apache.kafka.server.util.timer.TimerTask;
 
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
