@@ -156,10 +156,6 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
         }
     }
 
-    public ControllerMutationQuota newPermissiveQuotaFor(Session session, RequestHeader header) {
-        return newPermissiveQuotaFor(session, header.clientId());
-    }
-
     /**
      * Returns a ControllerMutationQuota based on `strictSinceVersion`. It returns a strict
      * quota if the version is equal to or above of the `strictSinceVersion`, a permissive
@@ -177,7 +173,7 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
         if (header.apiVersion() >= strictSinceVersion) {
             return newStrictQuotaFor(session, header);
         } else {
-            return newPermissiveQuotaFor(session, header);
+            return newPermissiveQuotaFor(session, header.clientId());
         }
     }
 

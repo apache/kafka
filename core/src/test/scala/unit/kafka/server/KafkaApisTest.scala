@@ -962,9 +962,10 @@ class KafkaApisTest extends Logging {
                                   request: RequestChannel.Request): ArgumentCaptor[Option[RequestContext]] = {
     val capturedRequest: ArgumentCaptor[Option[RequestContext]] = ArgumentCaptor.forClass(classOf[Option[RequestContext]])
     if (enableAutoTopicCreation) {
+
       when(clientControllerQuotaManager.newPermissiveQuotaFor(
         ArgumentMatchers.eq(request.session),
-        ArgumentMatchers.eq(request.header)
+        ArgumentMatchers.eq(request.header.clientId())
       )).thenReturn(UnboundedControllerMutationQuota.INSTANCE)
 
       when(autoTopicCreationManager.createTopics(
