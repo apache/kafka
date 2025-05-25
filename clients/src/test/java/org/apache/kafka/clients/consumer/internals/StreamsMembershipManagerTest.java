@@ -1686,7 +1686,7 @@ public class StreamsMembershipManagerTest {
 
         verifyInStateFatal(membershipManager);
         verify(memberStateListener).onMemberEpochUpdated(Optional.empty(), membershipManager.memberId());
-        verify(backgroundEventHandler, never()).add(any(StreamsOnAllTasksLostCallbackNeededEvent.class));
+        verify(backgroundEventHandler, times(1)).add(any(StreamsOnAllTasksLostCallbackNeededEvent.class));
         verify(subscriptionState, never()).assignFromSubscribed(Set.of());
     }
 
