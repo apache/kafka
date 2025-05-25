@@ -52,6 +52,7 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.Test;
@@ -333,7 +334,7 @@ public class GroupCoordinatorRecordHelpersTest {
             Map.of(),
             Map.of(
                 topicId1,
-                Map.entry(topicName1, partitions)
+                new InitMapValue(topicName1, partitions, 1)
             ),
             Map.of(
                 topicId2,
