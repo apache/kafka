@@ -369,7 +369,7 @@ public class ClientQuotaManager {
     /**
      * Reaper thread that triggers channel unmute callbacks on all throttled channels
      */
-    class ThrottledChannelReaper extends ShutdownableThread {
+    public class ThrottledChannelReaper extends ShutdownableThread {
         private final DelayQueue<ThrottledChannel> delayQueue;
 
         public ThrottledChannelReaper(DelayQueue<ThrottledChannel> delayQueue, String prefix) {

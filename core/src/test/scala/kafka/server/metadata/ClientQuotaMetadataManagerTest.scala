@@ -16,12 +16,11 @@
  */
 package kafka.server.metadata
 
-import kafka.server.ClientQuotaManager
+import org.apache.kafka.server.ClientQuotaManager
 import org.apache.kafka.image.ClientQuotaDelta
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
-
 
 class ClientQuotaMetadataManagerTest {
 
@@ -41,35 +40,35 @@ class ClientQuotaMetadataManagerTest {
     assertThrows(classOf[IllegalStateException],() => ClientQuotaMetadataManager.transferToClientQuotaEntity(IpEntity("a")))
     assertThrows(classOf[IllegalStateException],() => ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultIpEntity))
     assertEquals(
-      (Some(ClientQuotaManager.UserEntity("user")), None),
+      (Some(new ClientQuotaManager.UserEntity("user")), None),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(UserEntity("user"))
     )
     assertEquals(
-      (Some(ClientQuotaManager.DefaultUserEntity), None),
+      (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), None),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserEntity)
     )
     assertEquals(
-      (None, Some(ClientQuotaManager.ClientIdEntity("client"))),
+      (None, Some(new ClientQuotaManager.ClientIdEntity("client"))),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(ClientIdEntity("client"))
     )
     assertEquals(
-      (None, Some(ClientQuotaManager.DefaultClientIdEntity)),
+      (None, Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE)),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultClientIdEntity)
     )
     assertEquals(
-      (Some(ClientQuotaManager.UserEntity("user")), Some(ClientQuotaManager.ClientIdEntity("client"))),
+      (Some(new ClientQuotaManager.UserEntity("user")), Some(new ClientQuotaManager.ClientIdEntity("client"))),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(ExplicitUserExplicitClientIdEntity("user", "client"))
     )
     assertEquals(
-      (Some(ClientQuotaManager.UserEntity("user")), Some(ClientQuotaManager.DefaultClientIdEntity)),
+      (Some(new ClientQuotaManager.UserEntity("user")), Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE)),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(ExplicitUserDefaultClientIdEntity("user"))
     )
     assertEquals(
-      (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.ClientIdEntity("client"))),
+      (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), Some(new ClientQuotaManager.ClientIdEntity("client"))),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserExplicitClientIdEntity("client"))
     )
     assertEquals(
-      (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultClientIdEntity)),
+      (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE)),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserDefaultClientIdEntity)
     )
   }
