@@ -71,17 +71,22 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
         } catch {
           case _: KafkaStorageException => // Case d
             debug(s"Partition $topicPartition is in an offline log directory, satisfy $fetchParams immediately")
-            return forceComplete()
+            forceComplete()
+            return isCompleted
           case _: UnknownTopicOrPartitionException => // Case b
             debug(s"Broker no longer knows of partition $topicPartition, satisfy $fetchParams immediately")
-            return forceComplete()
+            forceComplete()
+            return isCompleted
           case _: NotLeaderOrFollowerException =>  // Case a
             debug("Broker is no longer the leader or follower of %s, satisfy %s immediately".format(topicPartition, fetchParams))
-            return forceComplete()
+            forceComplete()
+            return isCompleted
         }
     }
-    if (remoteFetchResult.isDone) // Case c
+    if (remoteFetchResult.isDone) { // Case c
       forceComplete()
+      isCompleted
+    }
     else
       false
   }

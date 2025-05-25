@@ -97,7 +97,8 @@ class DelayedFetch(
             if (fetchOffset.messageOffset > endOffset.messageOffset) {
               // Case F, this can happen when the new fetch operation is on a truncated leader
               debug(s"Satisfying fetch $this since it is fetching later segments of partition $topicIdPartition.")
-              return forceComplete()
+              forceComplete()
+              return isCompleted
             } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
               if (fetchOffset.onOlderSegment(endOffset)) {
                 // Case F, this can happen when the fetch operation is falling behind the current segment
@@ -105,7 +106,8 @@ class DelayedFetch(
                 debug(s"Satisfying fetch $this immediately since it is fetching older segments.")
                 // We will not force complete the fetch request if a replica should be throttled.
                 if (!params.isFromFollower || !replicaManager.shouldLeaderThrottle(quota, partition, params.replicaId))
-                  return forceComplete()
+                  forceComplete()
+                  return isCompleted
               } else if (fetchOffset.onSameSegment(endOffset)) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
@@ -121,35 +123,42 @@ class DelayedFetch(
                   || epochEndOffset.endOffset == UNDEFINED_EPOCH_OFFSET
                   || epochEndOffset.leaderEpoch == UNDEFINED_EPOCH) {
                 debug(s"Could not obtain last offset for leader epoch for partition $topicIdPartition, epochEndOffset=$epochEndOffset.")
-                return forceComplete()
+                forceComplete()
+                return isCompleted
               } else if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchStatus.fetchInfo.fetchOffset) {
                 debug(s"Satisfying fetch $this since it has diverging epoch requiring truncation for partition " +
                   s"$topicIdPartition epochEndOffset=$epochEndOffset fetchEpoch=$fetchEpoch fetchOffset=${fetchStatus.fetchInfo.fetchOffset}.")
-                return forceComplete()
+                forceComplete()
+                return isCompleted
               }
             }
           }
         } catch {
           case _: NotLeaderOrFollowerException =>  // Case A or Case B
             debug(s"Broker is no longer the leader or follower of $topicIdPartition, satisfy $this immediately")
-            return forceComplete()
+            forceComplete()
+            return isCompleted
           case _: UnknownTopicOrPartitionException => // Case C
             debug(s"Broker no longer knows of partition $topicIdPartition, satisfy $this immediately")
-            return forceComplete()
+            forceComplete()
+            return isCompleted
           case _: KafkaStorageException => // Case D
             debug(s"Partition $topicIdPartition is in an offline log directory, satisfy $this immediately")
-            return forceComplete()
+            forceComplete()
+            return isCompleted
           case _: FencedLeaderEpochException => // Case E
             debug(s"Broker is the leader of partition $topicIdPartition, but the requested epoch " +
               s"$fetchLeaderEpoch is fenced by the latest leader epoch, satisfy $this immediately")
-            return forceComplete()
+            forceComplete()
+            return isCompleted
         }
     }
 
     // Case G
-    if (accumulatedSize >= params.minBytes)
-       forceComplete()
-    else
+    if (accumulatedSize >= params.minBytes) {
+      forceComplete()
+      isCompleted
+    } else
       false
   }
 

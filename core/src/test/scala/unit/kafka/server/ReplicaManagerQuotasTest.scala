@@ -190,9 +190,7 @@ class ReplicaManagerQuotasTest {
         replicaManager = replicaManager,
         quota = null,
         responseCallback = null
-      ) {
-        override def forceComplete(): Boolean = true
-      }
+      ) 
     }
 
     assertTrue(setupDelayedFetch(isReplicaInSync = true).tryComplete(), "In sync replica should complete")
@@ -241,9 +239,7 @@ class ReplicaManagerQuotasTest {
         replicaManager = replicaManager,
         quota = null,
         responseCallback = null
-      ) {
-        override def forceComplete(): Boolean = true
-      }
+      )
     }
 
     assertTrue(setupDelayedFetch(isFetchFromOlderSegment = false).tryComplete(), "Consumer fetch replica should complete if reading from current segment")

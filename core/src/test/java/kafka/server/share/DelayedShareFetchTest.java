@@ -762,7 +762,7 @@ public class DelayedShareFetchTest {
 
         // Force complete the request as it's still pending. Return false from the share partition lock acquire.
         when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(false);
-        assertTrue(delayedShareFetch.forceComplete());
+        delayedShareFetch.forceComplete();
         assertTrue(delayedShareFetch.isCompleted());
 
         // Read from log and release partition locks should not be called as the request is errored out.
