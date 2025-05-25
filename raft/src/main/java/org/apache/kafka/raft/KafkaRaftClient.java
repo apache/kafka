@@ -1018,25 +1018,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      */
     private void maybeHandleElectionLoss(NomineeState state, long currentTimeMs) {
         if (state instanceof CandidateState candidate) {
-            if (candidate.epochElection().isVoteRejected() && !candidate.isBackingOff()) {
+            if (candidate.epochElection().isVoteRejected()) {
                 logger.info(
-                    "Insufficient remaining votes to become leader. We will backoff before retrying election again. " +
-                    "Current epoch election state is {}.",
+                    "Insufficient remaining votes to become leader. Candidate will wait the remaining election " +
+                        "timeout ({}) before transitioning back to Prospective. Current epoch election state is {}.",
+                    candidate.remainingElectionTimeMs(currentTimeMs),
                     candidate.epochElection()
-                );
-                // Go immediately to a random, exponential backoff. The backoff starts low to prevent
-                // needing to wait the entire election timeout when the vote result has already been
-                // determined. The randomness prevents the next election from being gridlocked with
-                // another nominee due to timing. The exponential aspect limits epoch churn when the
-                // replica has failed multiple elections in succession.
-                candidate.startBackingOff(
-                    currentTimeMs,
-                    RaftUtil.binaryExponentialElectionBackoffMs(
-                        quorumConfig.electionBackoffMaxMs(),
-                        RETRY_BACKOFF_BASE_MS,
-                        candidate.retries(),
-                        random
-                    )
                 );
             }
         } else if (state instanceof ProspectiveState prospective) {
@@ -3149,13 +3136,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             //  3) the shutdown timer expires
             long minRequestBackoffMs = maybeSendVoteRequests(state, currentTimeMs);
             return Math.min(shutdown.remainingTimeMs(), minRequestBackoffMs);
-        } else if (state.isBackingOff()) {
-            if (state.isBackoffComplete(currentTimeMs)) {
-                logger.info("Transition to prospective after election backoff has completed");
-                transitionToProspective(currentTimeMs);
-                return 0L;
-            }
-            return state.remainingBackoffMs(currentTimeMs);
         } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
             logger.info("Election was not granted, transitioning to prospective");
             transitionToProspective(currentTimeMs);

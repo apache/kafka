@@ -202,32 +202,29 @@ public class DelayedShareFetch extends DelayedOperation {
      * Complete the share fetch operation by fetching records for all partitions in the share fetch request irrespective
      * of whether they have any acquired records. This is called when the fetch operation is forced to complete either
      * because records can be acquired for some partitions or due to MaxWaitMs timeout.
+     * <p>
+     * On operation timeout, onComplete is invoked, last try occurs to acquire partitions and read
+     * from log, if acquired. The fetch will only happen from local log and not remote storage, on
+     * operation expiration.
      */
     @Override
     public void onComplete() {
-        // We are utilizing lock so that onComplete doesn't do a dirty read for instance variables -
-        // partitionsAcquired and localPartitionsAlreadyFetched, since these variables can get updated in a different tryComplete thread.
-        lock.lock();
         log.trace("Completing the delayed share fetch request for group {}, member {}, "
             + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
             partitionsAcquired.keySet());
 
-        try {
-            if (remoteStorageFetchException.isPresent()) {
-                completeErroneousRemoteShareFetchRequest();
-            } else if (pendingRemoteFetchesOpt.isPresent()) {
-                if (maybeRegisterCallbackPendingRemoteFetch()) {
-                    log.trace("Registered remote storage fetch callback for group {}, member {}, "
-                            + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
-                        partitionsAcquired.keySet());
-                    return;
-                }
-                completeRemoteStorageShareFetchRequest();
-            } else {
-                completeLocalLogShareFetchRequest();
+        if (remoteStorageFetchException.isPresent()) {
+            completeErroneousRemoteShareFetchRequest();
+        } else if (pendingRemoteFetchesOpt.isPresent()) {
+            if (maybeRegisterCallbackPendingRemoteFetch()) {
+                log.trace("Registered remote storage fetch callback for group {}, member {}, "
+                        + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                    partitionsAcquired.keySet());
+                return;
             }
-        } finally {
-            lock.unlock();
+            completeRemoteStorageShareFetchRequest();
+        } else {
+            completeLocalLogShareFetchRequest();
         }
     }
 
@@ -358,7 +355,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 if (anyPartitionHasLogReadError(replicaManagerReadResponse) || isMinBytesSatisfied(topicPartitionData, partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, topicPartitionData.keySet(), topicPartitionData.size()))) {
                     partitionsAcquired = topicPartitionData;
                     localPartitionsAlreadyFetched = replicaManagerReadResponse;
-                    return forceCompleteRequest();
+                    return forceComplete();
                 } else {
                     log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
                             "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
@@ -366,7 +363,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     releasePartitionLocks(topicPartitionData.keySet());
                 }
             } else {
-                log.trace("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
+                log.trace("Can't acquire any partitions in the share fetch request for group {}, member {}, " +
                         "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     sharePartitions.keySet());
             }
@@ -381,10 +378,8 @@ public class DelayedShareFetch extends DelayedOperation {
                 releasePartitionLocks(topicPartitionData.keySet());
                 partitionsAcquired.clear();
                 localPartitionsAlreadyFetched.clear();
-                return forceCompleteRequest();
-            } else {
-                return forceCompleteRequest();
             }
+            return forceComplete();
         }
     }
 
@@ -785,7 +780,7 @@ public class DelayedShareFetch extends DelayedOperation {
         }
 
         if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case d
-            return forceCompleteRequest();
+            return forceComplete();
         } else
             return false;
     }
@@ -942,16 +937,6 @@ public class DelayedShareFetch extends DelayedOperation {
             log.debug("Remote fetch task for RemoteStorageFetchInfo: {} could not be cancelled and its isDone value is {}",
                 remoteFetch.remoteFetchInfo(), remoteFetch.remoteFetchTask().isDone());
         }
-    }
-
-    private boolean forceCompleteRequest() {
-        boolean completedByMe = forceComplete();
-        // If the delayed operation is completed by me, the acquired locks are already released in onComplete().
-        // Otherwise, we need to release the acquired locks.
-        if (!completedByMe) {
-            releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet());
-        }
-        return completedByMe;
     }
 
     private void completeRemoteShareFetchRequestOutsidePurgatory() {
