@@ -17,14 +17,12 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.network.Session;
@@ -38,105 +36,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.Optional;
 
-
-/**
- * The AbstractControllerMutationQuota is the base class of StrictControllerMutationQuota and
- * PermissiveControllerMutationQuota.
- *
- * @param time @Time object to use
- */
-abstract class AbstractControllerMutationQuota implements ControllerMutationQuota {
-    protected final Time time;
-    protected long lastThrottleTimeMs = 0L;
-    private long lastRecordedTimeMs = 0L;
-
-    protected AbstractControllerMutationQuota(Time time) {
-        this.time = time;
-    }
-
-    protected void updateThrottleTime(QuotaViolationException e, long timeMs) {
-        lastThrottleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e);
-        lastRecordedTimeMs = timeMs;
-    }
-
-    @Override
-    public int throttleTime() {
-        // If a throttle time has been recorded, we adjust it by deducting the time elapsed
-        // between the recording and now. We do this because `throttleTime` may be called
-        // long after having recorded it, especially when a request waits in the purgatory.
-        var deltaTimeMs = time.milliseconds() - lastRecordedTimeMs;
-        return Math.max(0, (int) (lastThrottleTimeMs - deltaTimeMs));
-    }
-}
-
-/**
- * The StrictControllerMutationQuota defines a strict quota for a given user/clientId pair. The
- * quota is strict meaning that 1) it does not accept any mutations once the quota is exhausted
- * until it gets back to the defined rate; and 2) it does not throttle for any number of mutations
- * if quota is not already exhausted.
- *
- * @param time @Time object to use
- * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
- */
-class StrictControllerMutationQuota extends AbstractControllerMutationQuota {
-    private final Sensor quotaSensor;
-
-    StrictControllerMutationQuota(Time time, Sensor quotaSensor) {
-        super(time);
-        this.quotaSensor = quotaSensor;
-    }
-
-    @Override
-    public boolean isExceeded() {
-        return lastThrottleTimeMs > 0;
-    }
-
-    @Override
-    public void record(double permits) {
-        var timeMs = time.milliseconds();
-        try {
-            synchronized (quotaSensor) {
-                quotaSensor.checkQuotas(timeMs);
-                quotaSensor.record(permits, timeMs, false);
-            }
-        } catch (QuotaViolationException e) {
-            updateThrottleTime(e, timeMs);
-            throw new ThrottlingQuotaExceededException((int) lastThrottleTimeMs, Errors.THROTTLING_QUOTA_EXCEEDED.message());
-        }
-    }
-}
-
-/**
- * The PermissiveControllerMutationQuota defines a permissive quota for a given user/clientId pair.
- * The quota is permissive meaning that 1) it does accept any mutations even if the quota is
- * exhausted; and 2) it does throttle as soon as the quota is exhausted.
- *
- * @param time @Time object to use
- * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
- */
-class PermissiveControllerMutationQuota extends AbstractControllerMutationQuota {
-    private final Sensor quotaSensor;
-
-    PermissiveControllerMutationQuota(Time time, Sensor quotaSensor) {
-        super(time);
-        this.quotaSensor = quotaSensor;
-    }
-
-    @Override
-    public boolean isExceeded() {
-        return false;
-    }
-
-    @Override
-    public void record(double permits) {
-        var timeMs = time.milliseconds();
-        try {
-            quotaSensor.record(permits, timeMs, true);
-        } catch (QuotaViolationException e) {
-            updateThrottleTime(e, timeMs);
-        }
-    }
-}
 
 /**
  * The ControllerMutationQuotaManager is a specialized ClientQuotaManager used in the context
