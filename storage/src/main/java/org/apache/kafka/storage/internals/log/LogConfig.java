@@ -455,10 +455,6 @@ public class LogConfig extends AbstractConfig {
                 .sorted().toList();
     }
 
-    public static Optional<String> serverConfigName(String configName) {
-        return CONFIG.serverConfigName(configName);
-    }
-
     public static Map<String, ConfigKey> configKeys() {
         return Collections.unmodifiableMap(CONFIG.configKeys());
     }

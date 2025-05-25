@@ -693,9 +693,7 @@ final class KafkaMetadataLogTest {
       DefaultMetadataLogConfig.logSegmentMillis,
       DefaultMetadataLogConfig.retentionMaxBytes,
       DefaultMetadataLogConfig.retentionMillis,
-      maxBatchSizeInBytes,
-      DefaultMetadataLogConfig.internalMaxFetchSizeInBytes,
-      DefaultMetadataLogConfig.internalDeleteDelayMillis
+      maxBatchSizeInBytes
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -914,7 +912,6 @@ final class KafkaMetadataLogTest {
       60 * 1000,
       512,
       DefaultMetadataLogConfig.internalMaxFetchSizeInBytes,
-      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -949,8 +946,6 @@ final class KafkaMetadataLogTest {
       1024,
       60 * 1000,
       100,
-      DefaultMetadataLogConfig.internalMaxBatchSizeInBytes,
-      DefaultMetadataLogConfig.internalMaxFetchSizeInBytes
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -982,8 +977,6 @@ final class KafkaMetadataLogTest {
       10240,
       60 * 1000,
       100,
-      DefaultMetadataLogConfig.internalMaxFetchSizeInBytes,
-      DefaultMetadataLogConfig.internalDeleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -1025,8 +1018,6 @@ final class KafkaMetadataLogTest {
       10240,
       60 * 1000,
       200,
-      DefaultMetadataLogConfig.internalMaxFetchSizeInBytes,
-      DefaultMetadataLogConfig.internalDeleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -1082,9 +1073,6 @@ object KafkaMetadataLogTest {
     10 * 1000,
     100 * 1024,
     60 * 1000,
-    KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-    KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-    ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
   )
 
   def buildMetadataLogAndDir(
@@ -1167,9 +1155,9 @@ object KafkaMetadataLogTest {
     logSegmentMillis: Long,
     retentionMaxBytes: Long,
     retentionMillis: Long,
-    internalMaxBatchSizeInBytes: Int,
-    internalMaxFetchSizeInBytes: Int,
-    internalDeleteDelayMillis: Long
+    internalMaxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+    internalMaxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+    internalDeleteDelayMillis: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
   ): MetadataLogConfig = {
     val config: util.Map[String, Any] = util.Map.of(
       MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
