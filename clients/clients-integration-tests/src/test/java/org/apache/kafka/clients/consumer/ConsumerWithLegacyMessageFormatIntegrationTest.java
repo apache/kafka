@@ -35,7 +35,6 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,6 +46,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -103,13 +103,9 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
                 .forEach(b -> {
                     UnifiedLog unifiedLog = b.replicaManager().logManager().getLog(tp, false).get();
                     unifiedLog.appendAsLeaderWithRecordVersion(builder.build(), 0, RecordVersion.lookup(magicValue));
-                    try {
-                        // Default isolation.level is read_uncommitted. It makes Partition#fetchOffsetForTimestamp to return UnifiedLog#highWatermark,
-                        // so increasing high watermark to make it return the correct offset.
-                        unifiedLog.maybeIncrementHighWatermark(unifiedLog.logEndOffsetMetadata());
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
+                    // Default isolation.level is read_uncommitted. It makes Partition#fetchOffsetForTimestamp to return UnifiedLog#highWatermark,
+                    // so increasing high watermark to make it return the correct offset.
+                    assertDoesNotThrow(() -> unifiedLog.maybeIncrementHighWatermark(unifiedLog.logEndOffsetMetadata()));
                 });
     }
 
