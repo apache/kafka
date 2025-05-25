@@ -18,7 +18,6 @@ package org.apache.kafka.server.purgatory;
 
 import org.apache.kafka.server.util.timer.TimerTask;
 
-import java.util.Optional;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -41,19 +40,10 @@ public abstract class DelayedOperation extends TimerTask {
 
     private volatile boolean completed = false;
 
-    protected final Lock lock;
-
-    public DelayedOperation(long delayMs, Optional<Lock> lockOpt) {
-        this(delayMs, lockOpt.orElse(new ReentrantLock()));
-    }
+    protected final Lock lock = new ReentrantLock();
 
     public DelayedOperation(long delayMs) {
-        this(delayMs, new ReentrantLock());
-    }
-
-    public DelayedOperation(long delayMs, Lock lock) {
         super(delayMs);
-        this.lock = lock;
     }
 
     /*
