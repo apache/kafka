@@ -313,6 +313,10 @@ public class ClientQuotaManager {
     private final DelayQueue<ThrottledChannel> delayQueue = new DelayQueue<>();
     private final ThrottledChannelReaper throttledChannelReaper;
 
+    public void  processThrottledChannelReaperDoWork() {
+        throttledChannelReaper.doWork();
+    }
+
     public ClientQuotaManager(ClientQuotaManagerConfig config,
                               Metrics metrics,
                               QuotaType quotaType,
@@ -341,6 +345,14 @@ public class ClientQuotaManager {
                 .orElse(new DefaultQuotaCallback());
 
         start(); // Use start method to keep spotbugs happy
+    }
+
+    public ClientQuotaManager(ClientQuotaManagerConfig config,
+                              Metrics metrics,
+                              QuotaType quotaType,
+                              Time time,
+                              String threadNamePrefix) {
+        this(config, metrics, quotaType, time, threadNamePrefix, Optional.empty());
     }
 
     protected Metrics metrics() {

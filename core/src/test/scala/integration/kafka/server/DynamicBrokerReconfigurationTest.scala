@@ -62,6 +62,8 @@ import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.ClientQuotaManager
+import org.apache.kafka.server.quota.ClientQuotaEntity
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions._
@@ -73,6 +75,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 import scala.collection.Seq
 
 object DynamicBrokerReconfigurationTest {
@@ -964,9 +967,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val clientId = "test-client-1"
     servers.foreach { server =>
       server.quotaManagers.produce.updateQuota(
-        None,
-        Some(ClientQuotaManager.ClientIdEntity(clientId)),
-        Some(Quota.upperBound(10000000))
+        None.toJava,
+        Some(new ClientQuotaManager.ClientIdEntity(clientId): ClientQuotaEntity.ConfigEntity).toJava,
+        Some(Quota.upperBound(10000000)).toJava
       )
     }
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol, clientId)

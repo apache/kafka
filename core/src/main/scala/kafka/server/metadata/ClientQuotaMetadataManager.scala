@@ -18,21 +18,22 @@
 package kafka.server.metadata
 
 import kafka.network.ConnectionQuotas
-import kafka.server.ClientQuotaManager
-import kafka.server.ClientQuotaManager.BaseUserEntity
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.ClientQuotaMetadataManager.transferToClientQuotaEntity
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.server.quota.ClientQuotaEntity.{ConfigEntity => ClientQuotaConfigEntity} 
+import org.apache.kafka.server.quota.ClientQuotaEntity.{ConfigEntity => ClientQuotaConfigEntity}
+import org.apache.kafka.server.ClientQuotaManager
+import org.apache.kafka.server.ClientQuotaManager.BaseUserEntity
 
 import java.net.{InetAddress, UnknownHostException}
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
 import org.apache.kafka.server.config.QuotaConfig
 
 import scala.jdk.OptionConverters.RichOptionalDouble
+import scala.jdk.OptionConverters.RichOption
 
 
 
@@ -154,9 +155,9 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     val quotaValue = newValue.map(new Quota(_, true))
     try {
       manager.updateQuota(
-        userEntity = userEntity,
-        clientEntity = clientEntity,
-        quota = quotaValue
+        userEntity.toJava,     // Convert Scala Option to Java Optional
+        clientEntity.toJava,   // Convert Scala Option to Java Optional
+        quotaValue.toJava      // Convert Scala Option to Java Optional
       )
     } catch {
       case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
@@ -169,21 +170,21 @@ object ClientQuotaMetadataManager {
   def transferToClientQuotaEntity(quotaEntity: QuotaEntity): (Option[BaseUserEntity], Option[ClientQuotaConfigEntity]) = {
     quotaEntity match {
       case UserEntity(user) =>
-        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
+        (Some(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
       case DefaultUserEntity =>
-        (Some(ClientQuotaManager.DefaultUserEntity), None)
+        (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), None)
       case ClientIdEntity(clientId) =>
-        (None, Some(ClientQuotaManager.ClientIdEntity(clientId)))
+        (None, Some(new ClientQuotaManager.ClientIdEntity(clientId)))
       case DefaultClientIdEntity =>
-        (None, Some(ClientQuotaManager.DefaultClientIdEntity))
+        (None, Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE))
       case ExplicitUserExplicitClientIdEntity(user, clientId) =>
-        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.ClientIdEntity(clientId)))
+        (Some(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(new ClientQuotaManager.ClientIdEntity(clientId)))
       case ExplicitUserDefaultClientIdEntity(user) =>
-        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.DefaultClientIdEntity))
+        (Some(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE))
       case DefaultUserExplicitClientIdEntity(clientId) =>
-        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.ClientIdEntity(clientId)))
+        (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), Some(new ClientQuotaManager.ClientIdEntity(clientId)))
       case DefaultUserDefaultClientIdEntity =>
-        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultClientIdEntity))
+        (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE))
       case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
     }
   }

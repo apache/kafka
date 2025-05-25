@@ -40,29 +40,6 @@ import java.util.Optional;
 
 
 /**
- * Default quota used when quota is disabled.
- */
-class UnboundedControllerMutationQuota implements ControllerMutationQuota {
-
-    static final UnboundedControllerMutationQuota INSTANCE = new UnboundedControllerMutationQuota();
-    private UnboundedControllerMutationQuota() {}
-
-    @Override
-    public boolean isExceeded() {
-        return false;
-    }
-
-    @Override
-    public void record(double permits) {
-    }
-
-    @Override
-    public int throttleTime() {
-        return 0;
-    }
-}
-
-/**
  * The AbstractControllerMutationQuota is the base class of StrictControllerMutationQuota and
  * PermissiveControllerMutationQuota.
  *

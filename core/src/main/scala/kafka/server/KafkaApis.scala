@@ -480,7 +480,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // that the request quota is not enforced if acks == 0.
       val timeMs = time.milliseconds()
       val requestSize = request.sizeInBytes
-      val bandwidthThrottleTimeMs = quotas.produce.maybeRecordAndGetThrottleTimeMs(request, requestSize, timeMs)
+      val bandwidthThrottleTimeMs = quotas.produce.maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId(), requestSize, timeMs)
       val requestThrottleTimeMs =
         if (produceRequest.acks == 0) 0
         else quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
@@ -690,14 +690,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         val responseSize = fetchContext.getResponseSize(partitions, versionId)
         val timeMs = time.milliseconds()
         val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
-        val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
+        val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId(), responseSize, timeMs)
 
         val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
         val fetchResponse = if (maxThrottleTimeMs > 0) {
           request.apiThrottleTimeMs = maxThrottleTimeMs
           // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
           // from the fetch quota because we are going to return an empty response.
-          quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
+          quotas.fetch.unrecordQuotaSensor(request.session, request.header.clientId(), responseSize, timeMs)
           if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
             requestHelper.throttle(quotas.fetch, request, bandwidthThrottleTimeMs)
           } else {
@@ -842,7 +842,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val nonExistingTopics = topics.diff(topicResponses.asScala.map(_.name).toSet)
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
-        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
+        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request.session, request.header.clientId())
         autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request.context))
       } else {
         nonExistingTopics.map { topic =>
@@ -1261,7 +1261,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName).asJava, request.context.listenerName, false, false).asScala
 
       if (topicMetadata.headOption.isEmpty) {
-        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
+        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request.session, request.header.clientId)
         autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota, None)
         (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
       } else {
@@ -4061,14 +4061,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     val responseSize = shareFetchContext.responseSize(partitions, versionId)
     val timeMs = time.milliseconds()
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
-    val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
+    val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId(), responseSize, timeMs)
 
     val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
     if (maxThrottleTimeMs > 0) {
       request.apiThrottleTimeMs = maxThrottleTimeMs
       // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
       // from the fetch quota because we are going to return an empty response.
-      quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
+      quotas.fetch.unrecordQuotaSensor(request.session, request.header.clientId(), responseSize, timeMs)
       if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
         requestHelper.throttle(quotas.fetch, request, bandwidthThrottleTimeMs)
       } else {

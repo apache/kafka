@@ -25,16 +25,15 @@ import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.ClientQuotaManager;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.quota.QuotaUtils;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-
-import scala.jdk.javaapi.CollectionConverters;
-import scala.jdk.javaapi.OptionConverters;
 
 @SuppressWarnings("this-escape")
 public class ClientRequestQuotaManager extends ClientQuotaManager {
@@ -56,7 +55,7 @@ public class ClientRequestQuotaManager extends ClientQuotaManager {
             String threadNamePrefix, 
             Optional<Plugin<ClientQuotaCallback>> quotaCallbackPlugin
     ) {
-        super(config, metrics, QuotaType.REQUEST, time, threadNamePrefix, OptionConverters.toScala(quotaCallbackPlugin));
+        super(config, metrics, QuotaType.REQUEST, time, threadNamePrefix, quotaCallbackPlugin);
         this.maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(config.quotaWindowSizeSeconds);
         this.metrics = metrics;
         this.exemptMetricName = metrics.metricName("exempt-request-time", QuotaType.REQUEST.toString(), "Tracking exempt-request-time utilization percentage");
@@ -103,8 +102,8 @@ public class ClientRequestQuotaManager extends ClientQuotaManager {
     }
 
     @Override
-    public MetricName clientQuotaMetricName(scala.collection.immutable.Map<String, String> quotaMetricTags) {
-        return metrics.metricName("request-time", QuotaType.REQUEST.toString(), "Tracking request-time per user/client-id", CollectionConverters.asJava(quotaMetricTags));
+    public MetricName clientQuotaMetricName(Map<String, String> quotaMetricTags) {
+        return metrics.metricName("request-time", QuotaType.REQUEST.toString(), "Tracking request-time per user/client-id", quotaMetricTags);
     }
 
     private double nanosToPercentage(long nanos) {
