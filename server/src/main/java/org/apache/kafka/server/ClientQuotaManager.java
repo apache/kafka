@@ -590,7 +590,9 @@ public class ClientQuotaManager {
     }
 
     private String metricTagsToSensorSuffix(Map<String, String> metricTags) {
-        return String.join(":", metricTags.values());
+        String userValue = metricTags.get(DefaultTags.USER);
+        String clientIdValue = metricTags.get(DefaultTags.CLIENT_ID);
+        return userValue + ":" + clientIdValue;
     }
 
     private String getThrottleTimeSensorName(Map<String, String> metricTags) {
