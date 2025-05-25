@@ -246,7 +246,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             "RLMCopyThreadPool", "kafka-rlm-copy-thread-pool-%d");
         rlmExpirationThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerExpirationThreadPoolSize(),
             "RLMExpirationThreadPool", "kafka-rlm-expiration-thread-pool-%d");
-        followerThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize(),
+        followerThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerFollowerThreadPoolSize(),
             "RLMFollowerScheduledThreadPool", "kafka-rlm-follower-thread-pool-%d");
 
         metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC, rlmCopyThreadPool::getIdlePercent);
@@ -288,6 +288,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         int currentSize = rlmExpirationThreadPool.getCorePoolSize();
         LOGGER.info("Updating remote expiration thread pool size from {} to {}", currentSize, newSize);
         rlmExpirationThreadPool.setCorePoolSize(newSize);
+    }
+
+    public void resizeFollowerThreadPool(int newSize) {
+        int currentSize = followerThreadPool.getCorePoolSize();
+        LOGGER.info("Updating remote follower thread pool size from {} to {}", currentSize, newSize);
+        followerThreadPool.setCorePoolSize(newSize);
     }
 
     public void resizeReaderThreadPool(int newSize) {
