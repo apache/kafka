@@ -967,7 +967,6 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def maybeAddDelayedProduce(
     requiredAcks: Short,
-    delayedProduceLock: Option[Lock],
     timeoutMs: Long,
     entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
     initialAppendResults: Map[TopicIdPartition, LogAppendResult],

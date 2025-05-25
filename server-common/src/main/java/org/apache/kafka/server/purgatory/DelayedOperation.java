@@ -40,7 +40,7 @@ public abstract class DelayedOperation extends TimerTask {
 
     private volatile boolean completed = false;
 
-    protected final Lock lock = new ReentrantLock();
+    protected final ReentrantLock lock = new ReentrantLock();
 
     public DelayedOperation(long delayMs) {
         super(delayMs);
