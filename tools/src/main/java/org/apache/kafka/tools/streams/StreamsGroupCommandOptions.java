@@ -39,9 +39,9 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String GROUP_DOC = "The streams group we wish to act on.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
-    private static final String ALL_GROUPS_DOC = "Apply to all Streams groups.";
+    private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
     private static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
-        "over the entire Streams group. For instance --group g1 --group g2";
+        "over the entire streams group. For instance --group g1 --group g2";
     public static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
         "to specify the maximum amount of time in milliseconds to wait before the group stabilizes.";
     public static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";

@@ -351,9 +351,9 @@ public class StreamsGroupCommand {
          */
         private static void maybePrintEmptyGroupState(String group, GroupState state) {
             if (state == GroupState.DEAD) {
-                printError("Streams group '" + group + "' does not exist.", Optional.empty());
+                printError("streams group '" + group + "' does not exist.", Optional.empty());
             } else if (state == GroupState.EMPTY) {
-                printError("Streams group '" + group + "' has no active members.", Optional.empty());
+                printError("streams group '" + group + "' has no active members.", Optional.empty());
             }
         }
 
@@ -446,13 +446,13 @@ public class StreamsGroupCommand {
             }
 
             if (failed.isEmpty()) {
-                System.out.println("Deletion of requested Streams groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
+                System.out.println("Deletion of requested streams groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
             } else {
-                printError("Deletion of some Streams groups failed:", Optional.empty());
+                printError("Deletion of some streams groups failed:", Optional.empty());
                 failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty()) {
-                    System.out.println("\nThese Streams groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
+                    System.out.println("\nThese streams groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
                 }
             }
 
@@ -471,7 +471,7 @@ public class StreamsGroupCommand {
                     List<String> successfulGroups = deletedGroupIds.stream()
                         .filter(groupIdsWithInternalTopics::contains)
                         .collect(Collectors.toList());
-                    System.out.println("Deletion of associated internal topics of the Streams groups ('" +
+                    System.out.println("Deletion of associated internal topics of the streams groups ('" +
                         String.join(", ", successfulGroups) + "') was successful.");
                 } else {
                     System.out.println("Deletion of some associated internal topics failed:");
@@ -486,10 +486,16 @@ public class StreamsGroupCommand {
             try {
                 Map<String, StreamsGroupDescription> descriptionMap = adminClient.describeStreamsGroups(groupIds).all().get();
                 for (StreamsGroupDescription description : descriptionMap.values()) {
+
+                    List<String> sourceTopics = description.subtopologies().stream()
+                        .flatMap(subtopology -> subtopology.sourceTopics().stream())
+                        .toList();
+
                     List<String> internalTopics = description.subtopologies().stream()
                         .flatMap(subtopology -> Stream.concat(
                             subtopology.repartitionSourceTopics().keySet().stream(),
                             subtopology.stateChangelogTopics().keySet().stream()))
+                        .filter(topic -> !sourceTopics.contains(topic))
                         .collect(Collectors.toList());
                     if (!internalTopics.isEmpty()) {
                         groupToInternalTopics.put(description.groupId(), internalTopics);
