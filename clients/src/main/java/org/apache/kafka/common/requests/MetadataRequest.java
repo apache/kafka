@@ -27,7 +27,9 @@ import org.apache.kafka.common.protocol.Readable;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class MetadataRequest extends AbstractRequest {
@@ -49,33 +51,48 @@ public class MetadataRequest extends AbstractRequest {
 
         public Builder(List<String> topics, boolean allowAutoTopicCreation, short minVersion, short maxVersion) {
             super(ApiKeys.METADATA, minVersion, maxVersion);
+            this.data = requestTopicNamesOrAllTopics(topics, allowAutoTopicCreation);
+        }
+
+        private MetadataRequestData requestTopicNamesOrAllTopics(List<String> topics, boolean allowAutoTopicCreation) {
             MetadataRequestData data = new MetadataRequestData();
             if (topics == null)
                 data.setTopics(null);
             else {
                 topics.forEach(topic -> data.topics().add(new MetadataRequestTopic().setName(topic)));
             }
-
             data.setAllowAutoTopicCreation(allowAutoTopicCreation);
-            this.data = data;
+            return data;
         }
 
-        public Builder(List<String> topics, boolean allowAutoTopicCreation) {
-            this(topics, allowAutoTopicCreation, ApiKeys.METADATA.oldestVersion(),  ApiKeys.METADATA.latestVersion());
-        }
-
-        public Builder(List<Uuid> topicIds) {
-            super(ApiKeys.METADATA, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
+        private MetadataRequestData requestTopicIds(Set<Uuid> topicIds) {
             MetadataRequestData data = new MetadataRequestData();
             if (topicIds == null)
                 data.setTopics(null);
             else {
                 topicIds.forEach(topicId -> data.topics().add(new MetadataRequestTopic().setTopicId(topicId)));
             }
+            data.setAllowAutoTopicCreation(false); // can't auto-create without topic name
+            return data;
+        }
 
-            // It's impossible to create topic with topicId
-            data.setAllowAutoTopicCreation(false);
-            this.data = data;
+        public Builder(List<String> topics, boolean allowAutoTopicCreation) {
+            this(topics, allowAutoTopicCreation, ApiKeys.METADATA.oldestVersion(),  ApiKeys.METADATA.latestVersion());
+        }
+
+        public Builder(List<String> topicNames, Set<Uuid> topicIds, boolean allowAutoTopicCreation) {
+            super(ApiKeys.METADATA, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
+            // Use topic IDs if present. If not, fallback to the topic name path that will request the known topic names or all topics
+            if (topicIds != null && !topicIds.isEmpty()) {
+                this.data = requestTopicIds(topicIds);
+            } else {
+                this.data = requestTopicNamesOrAllTopics(topicNames, allowAutoTopicCreation);
+            }
+        }
+
+        public Builder(List<Uuid> topicIds) {
+            super(ApiKeys.METADATA, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
+            this.data = requestTopicIds(new HashSet<>(topicIds));
         }
 
         public static Builder allTopics() {
@@ -90,6 +107,13 @@ public class MetadataRequest extends AbstractRequest {
 
         public boolean isAllTopics() {
             return data.topics() == null;
+        }
+
+        public List<Uuid> topicIds() {
+            return data.topics()
+                .stream()
+                .map(MetadataRequestTopic::topicId)
+                .collect(Collectors.toList());
         }
 
         public List<String> topics() {

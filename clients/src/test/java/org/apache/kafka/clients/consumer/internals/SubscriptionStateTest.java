@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncati
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.LogContext;
@@ -273,6 +274,7 @@ public class SubscriptionStateTest {
         state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
+        assertEquals(singleton(tp0.topic()), state.subscription());
 
         // Simulate callback setting position to start fetching from
         state.seek(tp0, 100);
@@ -292,6 +294,7 @@ public class SubscriptionStateTest {
         state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
+        assertEquals(singleton(tp0.topic()), state.subscription());
 
         // Callback completed (without updating positions). Partition should require initializing
         // positions, and start fetching once a valid position is set.
@@ -309,6 +312,7 @@ public class SubscriptionStateTest {
         state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
+        assertEquals(singleton(tp0.topic()), state.subscription());
         state.enablePartitionsAwaitingCallback(singleton(tp0));
         state.seek(tp0, 100);
         assertTrue(state.isFetchable(tp0));
@@ -331,7 +335,6 @@ public class SubscriptionStateTest {
     private void assertAssignmentAppliedAwaitingCallback(TopicPartition topicPartition) {
         assertEquals(singleton(topicPartition), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
-        assertEquals(singleton(topicPartition.topic()), state.subscription());
 
         assertFalse(state.isFetchable(topicPartition));
         assertEquals(1, state.initializingPartitions().size());
@@ -404,6 +407,47 @@ public class SubscriptionStateTest {
         state.subscribe(new SubscriptionPattern(pattern), Optional.of(rebalanceListener));
         assertTrue(state.toString().contains("type=AUTO_PATTERN_RE2J"));
         assertTrue(state.toString().contains("subscribedPattern=" + pattern));
+        assertTrue(state.assignedTopicIds().isEmpty());
+    }
+
+    @Test
+    public void testIsAssignedFromRe2j() {
+        assertFalse(state.isAssignedFromRe2j(null));
+        Uuid assignedUuid = Uuid.randomUuid();
+        assertFalse(state.isAssignedFromRe2j(assignedUuid));
+
+        state.subscribe(new SubscriptionPattern("foo.*"), Optional.empty());
+        assertTrue(state.hasRe2JPatternSubscription());
+        assertFalse(state.isAssignedFromRe2j(assignedUuid));
+
+        state.setAssignedTopicIds(Set.of(assignedUuid));
+        assertTrue(state.isAssignedFromRe2j(assignedUuid));
+
+        state.unsubscribe();
+        assertFalse(state.isAssignedFromRe2j(assignedUuid));
+        assertFalse(state.hasRe2JPatternSubscription());
+
+    }
+
+    @Test
+    public void testAssignedPartitionsWithTopicIdsForRe2Pattern() {
+        state.subscribe(new SubscriptionPattern("t.*"), Optional.of(rebalanceListener));
+        assertTrue(state.assignedTopicIds().isEmpty());
+
+        TopicIdPartitionSet reconciledAssignmentFromRegex = new TopicIdPartitionSet();
+        reconciledAssignmentFromRegex.addAll(Uuid.randomUuid(), topic, Set.of(0));
+        state.assignFromSubscribedWithTopicIds(reconciledAssignmentFromRegex, singleton(tp0));
+        assertAssignmentAppliedAwaitingCallback(tp0);
+
+        // Simulate callback setting position to start fetching from
+        state.seek(tp0, 100);
+
+        // Callback completed. Partition should be fetchable, from the position previously defined
+        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        assertEquals(0, state.initializingPartitions().size());
+        assertTrue(state.isFetchable(tp0));
+        assertTrue(state.hasAllFetchPositions());
+        assertEquals(100L, state.position(tp0).offset);
     }
 
     @Test
