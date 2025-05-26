@@ -35,6 +35,7 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -456,7 +457,9 @@ public class StreamsGroupCommand {
                 }
             }
 
-            printInternalTopicErrors(internalTopicsDeletionFailures, success.keySet(), internalTopics.keySet());
+            if (!internalTopics.keySet().isEmpty()) {
+                printInternalTopicErrors(internalTopicsDeletionFailures, success.keySet(), internalTopics.keySet());
+            }
 
             failed.putAll(success);
             failed.putAll(internalTopicsDeletionFailures);
@@ -502,7 +505,12 @@ public class StreamsGroupCommand {
                     }
                 }
             } catch (InterruptedException | ExecutionException e) {
-                printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
+                if (e.getCause() instanceof UnsupportedVersionException) {
+                    printError("Retrieving internal topics is not supported by the broker version. " +
+                        "Please execute --delete --internal-topics <topic names> to delete the group's associated internal topics.", Optional.of(e.getCause()));
+                } else {
+                    printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
+                }
             }
             return groupToInternalTopics;
         }

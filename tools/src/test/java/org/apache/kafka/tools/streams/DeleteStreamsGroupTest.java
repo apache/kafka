@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.tools.streams;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.FeatureUpdate;
+import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -24,6 +27,7 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
@@ -56,6 +60,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import joptsimple.OptionException;
@@ -81,7 +86,7 @@ public class DeleteStreamsGroupTest {
     @BeforeAll
     public static void startCluster() {
         final Properties props = new Properties();
-        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
+        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,streams");
         cluster = new EmbeddedKafkaCluster(2, props);
         cluster.start();
 
@@ -150,7 +155,7 @@ public class DeleteStreamsGroupTest {
         final String appId2 = generateGroupAppId();
         final String appId3 = generateGroupAppId();
 
-        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups", appId1};
+        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups"};
 
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
         KafkaStreams streams1 = startKSApp(appId1, service);
@@ -222,6 +227,38 @@ public class DeleteStreamsGroupTest {
         assertEquals(2, allGrpsRes.size());
         assertNull(allGrpsRes.get(appId2));
         assertNull(allGrpsRes.get(appId3));
+    }
+
+    @Test
+    public void testDeleteAllGroupsAfterVersionDowngrade() throws Exception {
+        final String appId = generateGroupAppId();
+        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups"};
+
+        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+        try (KafkaStreams streams = startKSApp(appId, service)) {
+            stopKSApp(appId, streams, service);
+            downgradeStreamsGroupProtocol();
+            final Map<String, Throwable> emptyGrpRes = new HashMap<>();
+            String output = ToolsTestUtils.grabConsoleOutput(() -> emptyGrpRes.putAll(service.deleteGroups()));
+
+            assertTrue(output.contains("Deletion of requested streams groups ('" + appId + "') was successful."),
+                "The streams group could not be deleted as expected");
+            assertTrue(output.contains("Retrieving internal topics is not supported by the broker version. " +
+                "Please execute --delete --internal-topics <topic names> to delete the group's associated internal topics."));
+            assertEquals(1, emptyGrpRes.size());
+            assertTrue(emptyGrpRes.containsKey(appId));
+            assertNull(emptyGrpRes.get(appId), "The streams group could not be deleted as expected");
+        }
+    }
+
+    private void downgradeStreamsGroupProtocol() {
+        try (Admin admin = cluster.createAdminClient()) {
+            Map<String, FeatureUpdate> updates = Utils.mkMap(
+                Utils.mkEntry("streams.version", new FeatureUpdate((short) 0,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)));
+            admin.updateFeatures(updates, new UpdateFeaturesOptions()).all().get();
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static Properties createStreamsConfig(String bootstrapServers, String appId) {
