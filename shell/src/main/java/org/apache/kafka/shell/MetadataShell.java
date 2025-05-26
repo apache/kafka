@@ -114,7 +114,7 @@ public final class MetadataShell {
                     "directory before proceeding.");
             }
         } catch (Throwable e) {
-            fileLock.destroy();
+            fileLock.unlockAndClose();
             throw e;
         }
         return fileLock;
@@ -186,9 +186,9 @@ public final class MetadataShell {
         Utils.closeQuietly(snapshotFileReader, "snapshotFileReader");
         if (fileLock != null) {
             try {
-                fileLock.destroy();
+                fileLock.unlockAndClose();
             } catch (Exception e) {
-                log.error("Error destroying fileLock", e);
+                log.error("Error cleaning up fileLock", e);
             } finally {
                 fileLock = null;
             }
