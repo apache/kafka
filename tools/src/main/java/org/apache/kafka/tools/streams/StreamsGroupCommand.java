@@ -484,7 +484,8 @@ public class StreamsGroupCommand {
             }
         }
 
-        private Map<String, List<String>> retrieveInternalTopics(List<String> groupIds) {
+        // Visibility for testing
+        Map<String, List<String>> retrieveInternalTopics(List<String> groupIds) {
             Map<String, List<String>> groupToInternalTopics = new HashMap<>();
             try {
                 Map<String, StreamsGroupDescription> descriptionMap = adminClient.describeStreamsGroups(groupIds).all().get();
