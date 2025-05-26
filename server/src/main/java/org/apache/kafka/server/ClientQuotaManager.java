@@ -46,12 +46,7 @@ import org.apache.kafka.server.util.ShutdownableThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.TimeUnit;
@@ -556,7 +551,8 @@ public class ClientQuotaManager {
         if (quotaCallback instanceof DefaultQuotaCallback defaultCallback) {
             metricTags = defaultCallback.quotaMetricTags(session.sanitizedUser, clientId);
         } else {
-            metricTags = new HashMap<>(quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId));
+            // For custom callbacks, preserve whatever order they return
+            metricTags = quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId);
         }
 
         // Create the sensors
@@ -590,9 +586,7 @@ public class ClientQuotaManager {
     }
 
     private String metricTagsToSensorSuffix(Map<String, String> metricTags) {
-        String userValue = metricTags.get(DefaultTags.USER);
-        String clientIdValue = metricTags.get(DefaultTags.CLIENT_ID);
-        return userValue + ":" + clientIdValue;
+        return String.join(":", metricTags.values());
     }
 
     private String getThrottleTimeSensorName(Map<String, String> metricTags) {
@@ -892,20 +886,24 @@ public class ClientQuotaManager {
                     userTag = sanitizedUser;
                     clientIdTag = clientId;
 
-                    // Check each hierarchy level in order of precedence
+                    // Check each hierarchy level in order of precedence - exactly like Scala
                     // 1) /config/users/<user>/clients/<client-id>
                     if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, clientIdEntity))) {
                         // 2) /config/users/<user>/clients/<default>
+                        userTag = sanitizedUser;
+                        clientIdTag = clientId;
                         if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, DefaultClientIdEntity.INSTANCE))) {
                             // 3) /config/users/<user>
                             userTag = sanitizedUser;
                             clientIdTag = "";
                             if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, null))) {
                                 // 4) /config/users/<default>/clients/<client-id>
-                                userTag = sanitizedUser;
+                                userTag = sanitizedUser;  // Back to full tags like Scala
                                 clientIdTag = clientId;
                                 if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity))) {
                                     // 5) /config/users/<default>/clients/<default>
+                                    userTag = sanitizedUser;
+                                    clientIdTag = clientId;
                                     if (!overriddenQuotas.containsKey(DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY)) {
                                         // 6) /config/users/<default>
                                         userTag = sanitizedUser;
@@ -923,7 +921,10 @@ public class ClientQuotaManager {
                     break;
             }
 
-            return Map.of(DefaultTags.USER, userTag, DefaultTags.CLIENT_ID, clientIdTag);
+            Map<String, String> result = new LinkedHashMap<>();
+            result.put(DefaultTags.USER, userTag);
+            result.put(DefaultTags.CLIENT_ID, clientIdTag);
+            return result;
         }
 
         @Override
