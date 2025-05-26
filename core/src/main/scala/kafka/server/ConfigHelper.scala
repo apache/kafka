@@ -20,7 +20,7 @@ package kafka.server
 import kafka.network.RequestChannel
 
 import java.util.{Collections, Properties}
-import kafka.utils.{LoggingController, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
@@ -35,6 +35,7 @@ import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -130,7 +131,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             else if (resourceNameToBrokerId(resource.resourceName) != config.brokerId)
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.resourceName}")
             else
-              createResponseConfig(LoggingController.loggers,
+              createResponseConfig(LoggingController.loggers.asScala,
                 (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
