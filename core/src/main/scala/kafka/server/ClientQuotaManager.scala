@@ -155,7 +155,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     case None => new DefaultQuotaCallback
   }
   private val clientQuotaType = QuotaType.toClientQuotaType(quotaType)
-  private val activeQuotaEntities = new ConcurrentHashMap[ClientQuotaEntity, Boolean]()
+  private val activeQuotaEntities = new ConcurrentHashMap[KafkaQuotaEntity, Boolean]()
 
   @volatile
   private var quotaTypesEnabled = clientQuotaCallbackPlugin match {
