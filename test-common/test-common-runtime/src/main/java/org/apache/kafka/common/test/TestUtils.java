@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 import java.util.function.BiFunction;
@@ -180,7 +180,7 @@ public class TestUtils {
     }
 
     private static Integer getLeaderFromAdmin(Admin admin, String topic, int partition) throws Exception {
-        TopicDescription topicDescription = admin.describeTopics(Collections.singletonList(topic)).allTopicNames().get().get(topic);
+        TopicDescription topicDescription = admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic);
         return topicDescription.partitions().stream()
             .filter(partitionInfo -> partitionInfo.partition() == partition)
             .findFirst()
