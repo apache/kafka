@@ -87,150 +87,35 @@ class ShareConsumeBenchTest(Test):
                    timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
         share_consume_workload = self.trogdor.create_task("share_consume_workload", share_consume_spec)
         share_consume_workload.wait_for_done(timeout_sec=360)
-        self.logger.debug("Share Consume workload finished")
+        self.logger.debug("Share consume workload finished")
         tasks = self.trogdor.tasks()
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
-    # @cluster(num_nodes=10)
-    # @matrix(
-    #     metadata_quorum=[quorum.isolated_kraft],
-    #     use_share_groups=[True],
-    # )
-    # def test_single_partition(self, metadata_quorum, group_protocol=None):
-    #     """
-    #     Run a ShareConsumeBench against a single partition
-    #     """
-    #     active_topics = {"share_consume_bench_topic": {"numPartitions": 1, "replicationFactor": 3}}
-    #     self.produce_messages(active_topics, 5000)
-    #     consume_spec = ShareConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
-    #                                             self.consumer_workload_service.consumer_node,
-    #                                             self.consumer_workload_service.bootstrap_servers,
-    #                                             target_messages_per_sec=1000,
-    #                                             max_messages=2500,
-    #                                             consumer_conf={},
-    #                                             admin_client_conf={},
-    #                                             common_client_conf={},
-    #                                             active_topics=["share_consume_bench_topic"],
-    #                                             share_group=self.share_group)
-    #     wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
-    #                timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
-    #     consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
-    #     consume_workload.wait_for_done(timeout_sec=180)
-    #     self.logger.debug("Share consume workload finished")
-    #     tasks = self.trogdor.tasks()
-    #     self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
-
-    # @cluster(num_nodes=10)
-    # @matrix(
-    #     metadata_quorum=[quorum.isolated_kraft],
-    #     group_protocol=consumer_group.all_group_protocols
-    # )
-    # def test_multiple_consumers_random_group_topics(self, metadata_quorum, group_protocol=None):
-    #     """
-    #     Runs multiple consumers group to read messages from topics.
-    #     Since a consumerGroup isn't specified, each consumer should read from all topics independently
-    #     """
-    #     self.produce_messages(self.active_topics, max_messages=5000)
-    #     consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
-    #                                             self.consumer_workload_service.consumer_node,
-    #                                             self.consumer_workload_service.bootstrap_servers,
-    #                                             target_messages_per_sec=1000,
-    #                                             max_messages=5000, # all should read exactly 5k messages
-    #                                             consumer_conf=consumer_group.maybe_set_group_protocol(group_protocol),
-    #                                             admin_client_conf={},
-    #                                             common_client_conf={},
-    #                                             threads_per_worker=5,
-    #                                             active_topics=["consume_bench_topic[0-5]"])
-    #     consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
-    #     consume_workload.wait_for_done(timeout_sec=360)
-    #     self.logger.debug("Consume workload finished")
-    #     tasks = self.trogdor.tasks()
-    #     self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
-
-    # @cluster(num_nodes=10)
-    # @matrix(
-    #     metadata_quorum=[quorum.isolated_kraft],
-    #     group_protocol=consumer_group.all_group_protocols
-    # )
-    # def test_two_consumers_specified_group_topics(self, metadata_quorum, group_protocol=None):
-    #     """
-    #     Runs two consumers in the same consumer group to read messages from topics.
-    #     Since a consumerGroup is specified, each consumer should dynamically get assigned a partition from group
-    #     """
-    #     self.produce_messages(self.active_topics)
-    #     consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
-    #                                             self.consumer_workload_service.consumer_node,
-    #                                             self.consumer_workload_service.bootstrap_servers,
-    #                                             target_messages_per_sec=1000,
-    #                                             max_messages=2000, # both should read at least 2k messages
-    #                                             consumer_conf=consumer_group.maybe_set_group_protocol(group_protocol),
-    #                                             admin_client_conf={},
-    #                                             common_client_conf={},
-    #                                             threads_per_worker=2,
-    #                                             consumer_group="testGroup",
-    #                                             active_topics=["consume_bench_topic[0-5]"])
-    #     consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
-    #     consume_workload.wait_for_done(timeout_sec=360)
-    #     self.logger.debug("Consume workload finished")
-    #     tasks = self.trogdor.tasks()
-    #     self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
-
-    # @cluster(num_nodes=10)
-    # @matrix(
-    #     metadata_quorum=[quorum.isolated_kraft],
-    #     group_protocol=consumer_group.all_group_protocols
-    # )
-    # def test_multiple_consumers_random_group_partitions(self, metadata_quorum, group_protocol=None):
-    #     """
-    #     Runs multiple consumers in to read messages from specific partitions.
-    #     Since a consumerGroup isn't specified, each consumer will get assigned a random group
-    #     and consume from all partitions
-    #     """
-    #     self.produce_messages(self.active_topics, max_messages=20000)
-    #     consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
-    #                                             self.consumer_workload_service.consumer_node,
-    #                                             self.consumer_workload_service.bootstrap_servers,
-    #                                             target_messages_per_sec=1000,
-    #                                             max_messages=2000,
-    #                                             consumer_conf=consumer_group.maybe_set_group_protocol(group_protocol),
-    #                                             admin_client_conf={},
-    #                                             common_client_conf={},
-    #                                             threads_per_worker=4,
-    #                                             active_topics=["consume_bench_topic1:[0-4]"])
-    #     consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
-    #     consume_workload.wait_for_done(timeout_sec=360)
-    #     self.logger.debug("Consume workload finished")
-    #     tasks = self.trogdor.tasks()
-    #     self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
-
-    # @cluster(num_nodes=10)
-    # @matrix(
-    #     metadata_quorum=[quorum.isolated_kraft],
-    #     group_protocol=consumer_group.all_group_protocols
-    # )
-    # def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum, group_protocol=None):
-    #     """
-    #     Runs multiple consumers in the same group to read messages from specific partitions.
-    #     It is an invalid configuration to provide a consumer group and specific partitions.
-    #     """
-    #     expected_error_msg = 'explicit partition assignment'
-    #     self.produce_messages(self.active_topics, max_messages=20000)
-    #     consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
-    #                                             self.consumer_workload_service.consumer_node,
-    #                                             self.consumer_workload_service.bootstrap_servers,
-    #                                             target_messages_per_sec=1000,
-    #                                             max_messages=2000,
-    #                                             consumer_conf=consumer_group.maybe_set_group_protocol(group_protocol),
-    #                                             admin_client_conf={},
-    #                                             common_client_conf={},
-    #                                             threads_per_worker=4,
-    #                                             consumer_group="fail_group",
-    #                                             active_topics=["consume_bench_topic1:[0-4]"])
-    #     consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
-    #     try:
-    #         consume_workload.wait_for_done(timeout_sec=360)
-    #         raise Exception("Should have raised an exception due to an invalid configuration")
-    #     except RuntimeError as e:
-    #         if expected_error_msg not in str(e):
-    #             raise RuntimeError("Unexpected Exception - " + str(e))
-    #         self.logger.info(e)
+    @cluster(num_nodes=10)
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_share_groups=[True],
+    )
+    def test_two_share_consumers_in_a_group_topics(self, metadata_quorum, use_share_groups=True):
+        """
+        Runs two share consumers in the same share group to read messages from topics.
+        """
+        self.produce_messages(self.active_topics)
+        share_consume_spec = ShareConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
+                                                self.share_consumer_workload_service.share_consumer_node,
+                                                self.share_consumer_workload_service.bootstrap_servers,
+                                                target_messages_per_sec=1000,
+                                                max_messages=2000, # both should read at least 2k messages
+                                                consumer_conf={},
+                                                admin_client_conf={},
+                                                common_client_conf={},
+                                                threads_per_worker=2,
+                                                active_topics=["share_consume_bench_topic[0-5]"],
+                                                share_group=self.share_group)
+        wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+        share_consume_workload = self.trogdor.create_task("share_consume_workload", share_consume_spec)
+        share_consume_workload.wait_for_done(timeout_sec=360)
+        self.logger.debug("Share consume workload finished")
+        tasks = self.trogdor.tasks()
+        self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
