@@ -86,7 +86,7 @@ public class DeleteStreamsGroupTest {
     @BeforeAll
     public static void startCluster() {
         final Properties props = new Properties();
-        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,streams");
+        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
         cluster = new EmbeddedKafkaCluster(2, props);
         cluster.start();
 
@@ -219,9 +219,11 @@ public class DeleteStreamsGroupTest {
         final Map<String, Throwable> allGrpsRes = new HashMap<>();
         output = ToolsTestUtils.grabConsoleOutput(() -> allGrpsRes.putAll(service.deleteGroups()));
 
-        assertTrue(output.contains("Deletion of requested streams groups ('" + appId2 + ", " + appId3 + "') was successful."),
+        assertTrue(output.contains("Deletion of requested streams groups ('" + appId2 + ", " + appId3 + "') was successful.") |
+                output.contains("Deletion of requested streams groups ('" + appId3 + ", " + appId2 + "') was successful."),
             "The streams groups deletion did not work as expected");
-        assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId2 + ", " + appId3 + "') was successful."),
+        assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId2 + ", " + appId3 + "') was successful.") |
+                output.contains("Deletion of associated internal topics of the streams groups ('" + appId3 + ", " + appId2 + "') was successful."),
             "The internal topics could not be deleted as expected");
 
         assertEquals(2, allGrpsRes.size());
@@ -237,7 +239,8 @@ public class DeleteStreamsGroupTest {
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
         try (KafkaStreams streams = startKSApp(appId, service)) {
             stopKSApp(appId, streams, service);
-            downgradeStreamsGroupProtocol();
+            // downgrade the streams.version to 0
+            updateStreamsGroupProtocol((short) 0);
             final Map<String, Throwable> emptyGrpRes = new HashMap<>();
             String output = ToolsTestUtils.grabConsoleOutput(() -> emptyGrpRes.putAll(service.deleteGroups()));
 
@@ -248,13 +251,16 @@ public class DeleteStreamsGroupTest {
             assertEquals(1, emptyGrpRes.size());
             assertTrue(emptyGrpRes.containsKey(appId));
             assertNull(emptyGrpRes.get(appId), "The streams group could not be deleted as expected");
+        } finally {
+            // upgrade back the streams.version to 1
+            updateStreamsGroupProtocol((short) 1);
         }
     }
 
-    private void downgradeStreamsGroupProtocol() {
+    private void updateStreamsGroupProtocol(short version) {
         try (Admin admin = cluster.createAdminClient()) {
             Map<String, FeatureUpdate> updates = Utils.mkMap(
-                Utils.mkEntry("streams.version", new FeatureUpdate((short) 0,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)));
+                Utils.mkEntry("streams.version", new FeatureUpdate(version, version == 0 ? FeatureUpdate.UpgradeType.SAFE_DOWNGRADE : FeatureUpdate.UpgradeType.UPGRADE)));
             admin.updateFeatures(updates, new UpdateFeaturesOptions()).all().get();
         } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
