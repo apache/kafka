@@ -23,15 +23,11 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-
 public class AlterShareGroupOffsetsRequest extends AbstractRequest {
 
     private final AlterShareGroupOffsetsRequestData data;
 
-    public AlterShareGroupOffsetsRequest(AlterShareGroupOffsetsRequestData data, short version) {
+    private AlterShareGroupOffsetsRequest(AlterShareGroupOffsetsRequestData data, short version) {
         super(ApiKeys.ALTER_SHARE_GROUP_OFFSETS, version);
         this.data = data;
     }
@@ -58,17 +54,25 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic> results = new ArrayList<>();
-        data.topics().forEach(
-            topicResult -> results.add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                .setTopicName(topicResult.topicName())
-                .setPartitions(topicResult.partitions().stream()
-                    .map(partitionData -> new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partitionData.partitionIndex())
-                        .setErrorCode(Errors.forException(e).code()))
-                    .collect(Collectors.toList()))));
-        return new AlterShareGroupOffsetsResponse(new AlterShareGroupOffsetsResponseData()
-            .setResponses(results));
+        Errors error = Errors.forException(e);
+        return new AlterShareGroupOffsetsResponse(getErrorResponse(throttleTimeMs, error));
+    }
+
+    public static AlterShareGroupOffsetsResponseData getErrorResponse(int throttleTimeMs, Errors error) {
+        return new AlterShareGroupOffsetsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message());
+    }
+
+    public static AlterShareGroupOffsetsResponseData getErrorResponse(Errors error) {
+        return getErrorResponse(error.code(), error.message());
+    }
+
+    public static AlterShareGroupOffsetsResponseData getErrorResponse(short errorCode, String errorMessage) {
+        return new AlterShareGroupOffsetsResponseData()
+                .setErrorCode(errorCode)
+                .setErrorMessage(errorMessage);
     }
 
     public static AlterShareGroupOffsetsRequest parse(Readable readable, short version) {
