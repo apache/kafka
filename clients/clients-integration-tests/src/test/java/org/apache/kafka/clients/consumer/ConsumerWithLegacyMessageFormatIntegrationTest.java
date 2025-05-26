@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -35,10 +34,10 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 
+import org.junit.jupiter.api.BeforeEach;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -112,40 +111,20 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
     private void createTopicWithAssignment(String topic, Map<Integer, List<Integer>> assignment) throws InterruptedException {
         try (Admin admin = cluster.admin()) {
             NewTopic newTopic = new NewTopic(topic, assignment);
-            admin.createTopics(Collections.singletonList(newTopic));
+            admin.createTopics(List.of(newTopic));
             cluster.waitForTopic(topic, assignment.size());
         }
     }
 
-    private void sendRecords(int numRecords, TopicPartition topicPartition, long startingTimestamp) {
-        try (Producer<byte[], byte[]> producer = cluster.producer()) {
-            for (int i = 0; i < numRecords; i++) {
-                long timestamp = startingTimestamp + i;
-                byte[] key = ("key " + i).getBytes();
-                byte[] value = ("value " + i).getBytes();
-
-                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-                        topicPartition.topic(),
-                        topicPartition.partition(),
-                        timestamp,
-                        key,
-                        value
-                );
-                producer.send(record);
-            }
-            producer.flush();
-        }
-    }
-
-
-    private void setupTopics() throws InterruptedException {
+    @BeforeEach
+    public void setupTopics() throws InterruptedException {
         cluster.createTopic(topic1, 2, (short) 1);
         createTopicWithAssignment(topic2, Map.of(0, List.of(0), 1, List.of(1)));
         createTopicWithAssignment(topic3, Map.of(0, List.of(0), 1, List.of(1)));
 
         // v2 message format for topic1
-        sendRecords(100, t1p0, 0);
-        sendRecords(100, t1p1, 0);
+        ClientsTestUtils.sendRecords(cluster, t1p0, 100, 0);
+        ClientsTestUtils.sendRecords(cluster, t1p1, 100, 0);
         // v0 message format for topic2
         appendLegacyRecords(100, t2p0, 0, RecordBatch.MAGIC_VALUE_V0);
         appendLegacyRecords(100, t2p1, 1, RecordBatch.MAGIC_VALUE_V0);
@@ -155,7 +134,7 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
     }
 
     @ClusterTest
-    public void testOffsetsForTimesClassicConsumer() throws InterruptedException {
+    public void testOffsetsForTimesWithClassicConsumer() throws InterruptedException {
         testOffsetsForTimes(GroupProtocol.CLASSIC);
     }
 
@@ -165,8 +144,6 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
     }
 
     public void testOffsetsForTimes(GroupProtocol groupProtocol) throws InterruptedException {
-        setupTopics();
-
         try (Consumer<Object, Object> consumer = cluster.consumer(Map.of(
                 GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
         ) {
@@ -174,13 +151,14 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
             assertThrows(IllegalArgumentException.class, () ->
                     consumer.offsetsForTimes(Map.of(t1p0, -1L)));
 
-            Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
-            timestampsToSearch.put(t1p0, 0L);
-            timestampsToSearch.put(t1p1, 20L);
-            timestampsToSearch.put(t2p0, 40L);
-            timestampsToSearch.put(t2p1, 60L);
-            timestampsToSearch.put(t3p0, 80L);
-            timestampsToSearch.put(t3p1, 100L);
+            Map<TopicPartition, Long> timestampsToSearch = Map.of(
+                    t1p0, 0L,
+                    t1p1, 20L,
+                    t2p0, 40L,
+                    t2p1, 60L,
+                    t3p0, 80L,
+                    t3p1, 100L
+            );
 
             Map<TopicPartition, OffsetAndTimestamp> timestampOffsets = consumer.offsetsForTimes(timestampsToSearch);
 
@@ -223,8 +201,6 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
     }
 
     public void testEarliestOrLatestOffsets(GroupProtocol groupProtocol) throws InterruptedException {
-        setupTopics();
-
         Set<TopicPartition> partitions = Set.of(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1);
 
         try (Consumer<Object, Object> consumer = cluster.consumer(Map.of(
