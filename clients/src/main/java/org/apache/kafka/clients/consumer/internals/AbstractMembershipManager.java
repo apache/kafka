@@ -515,7 +515,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private void updateSubscriptionAwaitingCallback(TopicIdPartitionSet assignedPartitions,
                                                     SortedSet<TopicPartition> addedPartitions) {
-        subscriptions.assignFromSubscribedWithTopicIds(assignedPartitions, addedPartitions);
+        subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions.topicPartitions(), addedPartitions);
         notifyAssignmentChange(assignedPartitions.topicPartitions());
     }
 

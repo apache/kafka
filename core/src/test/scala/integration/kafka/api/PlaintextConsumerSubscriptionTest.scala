@@ -23,6 +23,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.time.Duration
+import java.util
 import java.util.regex.Pattern
 
 /**
@@ -270,6 +271,38 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
 
     val expandedAssignment = assignment ++ Set(new TopicPartition(topic2, 0), new TopicPartition(topic2, 1))
     awaitAssignment(consumer, expandedAssignment)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testTopicIdSubscriptionWithRe2JRegexAndOffsetsFetch(groupProtocol: String): Unit = {
+    val topic1 = "topic1" // matches subscribed pattern
+    createTopic(topic1, 2, brokerCount)
+
+    val consumer = createConsumer()
+    assertEquals(0, consumer.assignment().size)
+
+    val pattern = new SubscriptionPattern("topic.*")
+    consumer.subscribe(pattern)
+
+    val assignment = Set(
+      new TopicPartition(topic, 0),
+      new TopicPartition(topic, 1),
+      new TopicPartition(topic1, 0),
+      new TopicPartition(topic1, 1))
+    awaitAssignment(consumer, assignment)
+
+    val producer = createProducer()
+    val totalRecords = 10L
+    val startingTimestamp = System.currentTimeMillis()
+    val tp = new TopicPartition(topic1, 0)
+    sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
+    consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt, startingOffset = 0, startingTimestamp = startingTimestamp, tp = tp)
+
+    // Request offsets for known and unknown topics
+    val unassignedPartition = new TopicPartition(topic, 0)
+    val offsets = consumer.endOffsets(util.List.of(unassignedPartition, tp))
+    assertEquals(util.Map.of(unassignedPartition, 0, tp, totalRecords), offsets)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)

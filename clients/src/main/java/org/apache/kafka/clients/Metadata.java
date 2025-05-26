@@ -769,7 +769,7 @@ public class Metadata implements Closeable {
      * Based on the topic name and topic ID, check if the topic metadata should be kept when received in a metadata response.
      */
     protected boolean retainTopic(String topicName, Uuid topicId, boolean isInternal, long nowMs) {
-        return true;
+        return retainTopic(topicName, isInternal, nowMs);
     }
 
     public static class MetadataRequestAndVersion {

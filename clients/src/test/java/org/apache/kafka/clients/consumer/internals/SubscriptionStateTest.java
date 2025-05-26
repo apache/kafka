@@ -436,7 +436,7 @@ public class SubscriptionStateTest {
 
         TopicIdPartitionSet reconciledAssignmentFromRegex = new TopicIdPartitionSet();
         reconciledAssignmentFromRegex.addAll(Uuid.randomUuid(), topic, Set.of(0));
-        state.assignFromSubscribedWithTopicIds(reconciledAssignmentFromRegex, singleton(tp0));
+        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
 
         // Simulate callback setting position to start fetching from
@@ -448,6 +448,34 @@ public class SubscriptionStateTest {
         assertTrue(state.isFetchable(tp0));
         assertTrue(state.hasAllFetchPositions());
         assertEquals(100L, state.position(tp0).offset);
+    }
+
+    @Test
+    public void testAssignedTopicIdsPreservedWhenReconciliationCompletes() {
+        state.subscribe(new SubscriptionPattern("t.*"), Optional.of(rebalanceListener));
+        assertTrue(state.assignedTopicIds().isEmpty());
+
+        // First assignment received from coordinator
+        Uuid firstAssignedUuid = Uuid.randomUuid();
+        state.setAssignedTopicIds(Set.of(firstAssignedUuid));
+
+        // Second assignment received from coordinator (while the 1st still be reconciling)
+        Uuid secondAssignedUuid = Uuid.randomUuid();
+        state.setAssignedTopicIds(Set.of(firstAssignedUuid, secondAssignedUuid));
+
+        // First reconciliation completes and updates the subscription state
+        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+
+        // First assignment should have been applied
+        assertAssignmentAppliedAwaitingCallback(tp0);
+
+        // Second assignment should still on the assigned topic IDs
+        assertEquals(
+                Set.of(firstAssignedUuid, secondAssignedUuid),
+                state.assignedTopicIds(),
+                "Updating the subscription state when a reconciliation completes " +
+                        "should not overwrite assigned topics that have not been reconciled yet"
+        );
     }
 
     @Test

@@ -96,7 +96,7 @@ public class SubscriptionState {
      * Topic IDs received in an assignment.
      * We keep them to be included in metadata requests to retrieve topic names needed for the reconciliation process.
      * Note that when the user subscribes to a RE2J regex computed on the broker,
-     * it will only receive topic IDs assigned, that it won't be able to reconcile until it resolved topic names for them.
+     * it will only know about topic IDs assigned, that it won't be able to reconcile until it resolves topic names for them.
      */
     private Set<Uuid> assignedTopicIds;
 
@@ -921,23 +921,6 @@ public class SubscriptionState {
     }
 
     /**
-     * Change the assignment to the specified topic IDs and partitions, returned from the coordinator
-     * after subscribing to a set of topics or broker-side regular expression.
-     * This is used when the consumer subscribes using the Consumer rebalance protocol (KIP-848),
-     * where assignments contain topic IDs.
-     *
-     * @param fullAssignment  Full collection of partitions assigned. Includes previously owned
-     *                        and newly added partitions.
-     * @param addedPartitions Subset of the fullAssignment containing the added partitions. These
-     *                        are not fetchable until the onPartitionsAssigned callback completes.
-     */
-    public synchronized void assignFromSubscribedWithTopicIds(TopicIdPartitionSet fullAssignment,
-                                                              Collection<TopicPartition> addedPartitions) {
-        assignFromSubscribedAwaitingCallback(fullAssignment.topicPartitions(), addedPartitions);
-        setAssignedTopicIds(fullAssignment.topicIds());
-    }
-
-    /**
      * @return Topic IDs received in an assignment that have not been reconciled yet, so we need metadata for them.
      */
     public synchronized Set<Uuid> assignedTopicIds() {
@@ -945,8 +928,8 @@ public class SubscriptionState {
     }
 
     /**
-     * Set the set of topic IDs that have been assigned to the consumer.
-     * This is used for topic IDs received in an assignment when using the new consumer rebalance protocol.
+     * Set the set of topic IDs that have been assigned to the consumer by the coordinator.
+     * This is used for topic IDs received in an assignment when using the new consumer rebalance protocol (KIP-848).
      */
     public synchronized  void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
         this.assignedTopicIds = assignedTopicIds;

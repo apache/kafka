@@ -82,11 +82,13 @@ public class MetadataRequest extends AbstractRequest {
 
         public Builder(List<String> topicNames, Set<Uuid> topicIds, boolean allowAutoTopicCreation) {
             super(ApiKeys.METADATA, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
-            // Use topic IDs if present. If not, fallback to the topic name path that will request the known topic names or all topics
-            if (topicIds != null && !topicIds.isEmpty()) {
-                this.data = requestTopicIds(topicIds);
-            } else {
+            boolean requestingTopicNames = topicNames != null && !topicNames.isEmpty();
+            boolean requestingAllTopics = topicNames == null && (topicIds == null || topicIds.isEmpty());
+            if (requestingTopicNames || requestingAllTopics) {
                 this.data = requestTopicNamesOrAllTopics(topicNames, allowAutoTopicCreation);
+            } else {
+                this.data = requestTopicIds(topicIds);
+
             }
         }
 
