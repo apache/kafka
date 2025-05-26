@@ -19,7 +19,6 @@ package kafka.coordinator.transaction
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
-import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
 import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
@@ -759,7 +758,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -804,7 +802,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -848,7 +845,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any())
@@ -902,7 +898,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -1119,7 +1114,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -1272,7 +1266,6 @@ class TransactionStateManagerTest {
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicIdPartition, MemoryRecords]],
       capturedArgument.capture(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()

@@ -62,7 +62,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -897,22 +896,5 @@ public class GroupCoordinatorRecordHelpersTest {
             10,
             10
         ));
-    }
-
-    /**
-     * Creates a map of partitions to racks for testing.
-     *
-     * @param numPartitions The number of partitions for the topic.
-     *
-     * For testing purposes, the following criteria are used:
-     *      - Number of replicas for each partition: 2
-     *      - Number of racks available to the cluster: 4
-     */
-    public static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % 4, "rack" + (i + 1) % 4)));
-        }
-        return partitionRacks;
     }
 }
