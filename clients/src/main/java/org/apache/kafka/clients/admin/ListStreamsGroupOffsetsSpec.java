@@ -33,7 +33,7 @@ public class ListStreamsGroupOffsetsSpec {
     private Collection<TopicPartition> topicPartitions;
 
     /**
-     * Set the topic partitions whose offsets are to be listed for a Streams group.
+     * Set the topic partitions whose offsets are to be listed for a streams group.
      */
     ListStreamsGroupOffsetsSpec topicPartitions(Collection<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions;
@@ -41,7 +41,7 @@ public class ListStreamsGroupOffsetsSpec {
     }
 
     /**
-     * Returns the topic partitions whose offsets are to be listed for a Streams group.
+     * Returns the topic partitions whose offsets are to be listed for a streams group.
      */
     Collection<TopicPartition> topicPartitions() {
         return topicPartitions;
