@@ -71,7 +71,6 @@ public class ProspectiveStateTest {
             votedKey,
             voters,
             Optional.empty(),
-            1,
             electionTimeoutMs,
             logContext
         );
@@ -87,7 +86,6 @@ public class ProspectiveStateTest {
             Optional.empty(),
             voters,
             Optional.empty(),
-            1,
             electionTimeoutMs,
             logContext
         );
