@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.modern.share;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -31,6 +32,7 @@ import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -64,6 +66,35 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         public String toLowerCaseString() {
             return lowerCaseName;
         }
+    }
+
+    /**
+     * A record class to hold the value representing ShareGroupStatePartitionMetadata for the TimelineHashmap
+     * keyed on share group id.
+     *
+     * @param initializedTopics Map of set of partition ids keyed on the topic id.
+     * @param deletingTopics    Set of topic ids.
+     */
+    public record ShareGroupStatePartitionMetadataInfo(
+        Map<Uuid, InitMapValue> initializingTopics,
+        Map<Uuid, InitMapValue> initializedTopics,
+        Set<Uuid> deletingTopics
+    ) {
+    }
+
+    /**
+     * Represents the value part for the initializing and initialized topic partitions in
+     * ShareGroupStatePartitionMetadataValue
+     *
+     * @param name          Topic name
+     * @param partitions    Set of partitions in the topic
+     * @param timestamp     Timestamp at which the record was replayed
+     */
+    public record InitMapValue(
+        String name,
+        Set<Integer> partitions,
+        long timestamp
+    ) {
     }
 
     /**
@@ -210,6 +241,14 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      */
     @Override
     public void validateDeleteGroup() throws ApiException {
+        validateEmptyGroup();
+    }
+
+    public void validateOffsetsAlterable() throws ApiException {
+        validateEmptyGroup();
+    }
+
+    public void validateEmptyGroup() {
         if (state() != ShareGroupState.EMPTY) {
             throw Errors.NON_EMPTY_GROUP.exception();
         }

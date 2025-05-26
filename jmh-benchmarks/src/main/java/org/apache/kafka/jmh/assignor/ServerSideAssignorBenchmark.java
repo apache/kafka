@@ -184,18 +184,6 @@ public class ServerSideAssignorBenchmark {
         return isRackAware ? Optional.of("rack" + memberIndex % NUMBER_OF_RACKS) : Optional.empty();
     }
 
-    private static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(List.of(
-                "rack" + i % NUMBER_OF_RACKS,
-                "rack" + (i + 1) % NUMBER_OF_RACKS,
-                "rack" + (i + 2) % NUMBER_OF_RACKS
-            )));
-        }
-        return partitionRacks;
-    }
-
     private void simulateIncrementalRebalance() {
         GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
