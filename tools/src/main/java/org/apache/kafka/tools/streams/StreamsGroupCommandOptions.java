@@ -52,7 +52,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the '--describe' option only.";
     public static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset information." +
         "This is the default sub-action and may be used with the '--describe' option only.";
-    private static final String RESET_OFFSETS_DOC = "Reset offsets of Streams group. The instances should be inactive" + NL +
+    private static final String RESET_OFFSETS_DOC = "Reset offsets of streams group. The instances should be inactive" + NL +
         "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
         "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + NL +

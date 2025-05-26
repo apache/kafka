@@ -73,6 +73,8 @@ import static org.apache.kafka.tools.streams.StreamsGroupCommandOptions.LOGGER;
 
 public class StreamsGroupCommand {
 
+    private static final String TOPIC_PARTITION_SEPARATOR = ":";
+
     public static void main(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
         try {
@@ -118,8 +120,9 @@ public class StreamsGroupCommand {
 
     static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
         String format = "%n%-30s %-30s %-10s %-15s";
-        if (!groupAssignmentsToReset.isEmpty())
+        if (!groupAssignmentsToReset.isEmpty()) {
             System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
+        }
 
         groupAssignmentsToReset.forEach((groupId, assignment) ->
             assignment.forEach((streamsAssignment, offsetAndMetadata) ->
@@ -487,7 +490,7 @@ public class StreamsGroupCommand {
             List<String> topics = new ArrayList<>();
 
             topicArgs.forEach(topicArg -> {
-                if (topicArg.contains(":"))
+                if (topicArg.contains(TOPIC_PARTITION_SEPARATOR))
                     topicsWithPartitions.add(topicArg);
                 else
                     topics.add(topicArg);
@@ -837,9 +840,9 @@ public class StreamsGroupCommand {
          */
         private static void maybePrintEmptyGroupState(String group, GroupState state) {
             if (state == GroupState.DEAD) {
-                printError("Streams group '" + group + "' does not exist.", Optional.empty());
+                printError("streams group '" + group + "' does not exist.", Optional.empty());
             } else if (state == GroupState.EMPTY) {
-                printError("Streams group '" + group + "' has no active members.", Optional.empty());
+                printError("streams group '" + group + "' has no active members.", Optional.empty());
             }
         }
 
