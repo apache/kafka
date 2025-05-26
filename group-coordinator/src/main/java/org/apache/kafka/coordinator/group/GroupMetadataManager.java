@@ -199,7 +199,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -553,7 +552,7 @@ public class GroupMetadataManager {
         this.shareGroupAssignor = shareGroupAssignor;
         this.authorizerPlugin = authorizerPlugin;
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
-        this.topicHashCache = new ConcurrentHashMap<>();
+        this.topicHashCache = new HashMap<>();
     }
 
     /**
@@ -1906,7 +1905,6 @@ public class GroupMetadataManager {
                     groupId, memberId, metadataHash);
                 bumpGroupEpoch = true;
                 reconfigureTopology = true;
-                group.setMetadataHash(metadataHash);
             }
 
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {

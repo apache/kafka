@@ -25,7 +25,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataVa
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.Endpoint;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue.TaskIds;
@@ -248,16 +247,6 @@ class StreamsCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(GROUP_ID, MEMBER_ID));
-    }
-
-    @Test
-    public void testNewStreamsGroupPartitionMetadataTombstoneRecord() {
-        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
-            new StreamsGroupPartitionMetadataKey()
-                .setGroupId(GROUP_ID)
-        );
-
-        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(GROUP_ID));
     }
 
     @Test
@@ -682,13 +671,6 @@ class StreamsCoordinatorRecordHelpersTest {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("groupId", null));
         assertEquals("memberId should not be null here", exception.getMessage());
-    }
-
-    @Test
-    public void testNewStreamsGroupPartitionMetadataTombstoneRecordNullGroupId() {
-        NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(null));
-        assertEquals("groupId should not be null here", exception.getMessage());
     }
 
     @Test
