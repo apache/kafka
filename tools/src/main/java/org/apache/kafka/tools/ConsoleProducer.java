@@ -388,6 +388,7 @@ public class ConsoleProducer {
 
             // default properties
             props.put(BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOpt));
+            props.put(CLIENT_ID_CONFIG, "console-producer");
             props.put(COMPRESSION_TYPE_CONFIG, compressionCodec());
             props.put(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             props.put(VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
@@ -410,11 +411,6 @@ public class ConsoleProducer {
                 props.putAll(loadProps(options.valueOf(commandConfigOpt)));
             }
             props.putAll(parseKeyValueArgs(options.valuesOf(commandPropertyOpt)));
-
-            // required properties
-            if (props.getProperty(CLIENT_ID_CONFIG) == null) {
-                props.put(CLIENT_ID_CONFIG, "console-producer");
-            }
 
             return props;
         }
