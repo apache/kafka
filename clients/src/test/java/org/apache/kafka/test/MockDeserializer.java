@@ -57,10 +57,8 @@ public class MockDeserializer implements ClusterResourceListener, Deserializer<S
         // This will ensure that we get the cluster metadata when deserialize is called for the first time
         // as subsequent compareAndSet operations will fail.
         clusterIdBeforeDeserialize.compareAndSet(noClusterId, clusterMeta.get());
-        if (data == null)
-            return null;
-        else
-            return new String(data, StandardCharsets.UTF_8);
+        if (data == null) return null;
+        return new String(data, StandardCharsets.UTF_8);
     }
 
     @Override

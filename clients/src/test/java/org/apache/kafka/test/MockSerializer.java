@@ -40,10 +40,8 @@ public class MockSerializer implements ClusterResourceListener, Serializer<Strin
         // This will ensure that we get the cluster metadata when serialize is called for the first time
         // as subsequent compareAndSet operations will fail.
         CLUSTER_ID_BEFORE_SERIALIZE.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
-        if (data == null)
-            return null;
-        else
-            return data.getBytes(StandardCharsets.UTF_8);
+        if (data == null) return null;
+        return data.getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
