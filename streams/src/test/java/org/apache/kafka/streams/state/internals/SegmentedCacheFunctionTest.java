@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.nio.ByteBuffer;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 
@@ -36,7 +37,7 @@ class SegmentedCacheFunctionTest {
     private static final int END_TIMESTAMP = 800000000;
 
     private static final Bytes THE_WINDOW_KEY = WindowKeySchema.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, START_TIMESTAMP, 42);
-    private static final Bytes THE_SESSION_KEY = SessionKeySchema.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, END_TIMESTAMP, START_TIMESTAMP);
+    private static final Bytes THE_SESSION_KEY = toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, END_TIMESTAMP, START_TIMESTAMP);
 
     private static final Bytes THE_WINDOW_CACHE_KEY = Bytes.wrap(
         ByteBuffer.allocate(8 + THE_WINDOW_KEY.get().length)
@@ -70,15 +71,26 @@ class SegmentedCacheFunctionTest {
 
     private static Stream<Arguments> provideKeysForBoundaryChecks() {
         final Bytes sameKeyInPriorSegmentWindow = WindowKeySchema.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, 1234, 42);
-        final Bytes sameKeyInPriorSegmentSession = SessionKeySchema.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, 1234, 12345);
+        final Bytes sameKeyInPriorSegmentSession = toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, 1234, 12345);
 
         final Bytes lowerKeyInSameSegmentWindow = WindowKeySchema.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xB}, START_TIMESTAMP - 1, 0);
-        final Bytes lowerKeyInSameSegmentSession = SessionKeySchema.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xB}, END_TIMESTAMP - 1, START_TIMESTAMP + 1);
+        final Bytes lowerKeyInSameSegmentSession = toStoreKeyBinary(new byte[]{0xA, 0xB, 0xB}, END_TIMESTAMP - 1, START_TIMESTAMP + 1);
         
         return Stream.of(
                 Arguments.of(THE_WINDOW_KEY, new WindowKeySchema(), sameKeyInPriorSegmentWindow, lowerKeyInSameSegmentWindow),
                 Arguments.of(THE_SESSION_KEY, new SessionKeySchema(), sameKeyInPriorSegmentSession, lowerKeyInSameSegmentSession)
         );
+    }
+
+    static Bytes toStoreKeyBinary(final byte[] serializedKey,
+                                  final long endTime,
+                                  final long startTime) {
+        final ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE + TIMESTAMP_SIZE);
+        buf.put(serializedKey);
+        buf.putLong(endTime);
+        buf.putLong(startTime);
+
+        return Bytes.wrap(buf.array());
     }
 
     @ParameterizedTest
