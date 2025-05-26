@@ -15357,7 +15357,7 @@ public class GroupMetadataManagerTest {
                     .setActiveTasks(List.of())
                     .setStandbyTasks(List.of())
                     .setWarmupTasks(List.of())));
-        assertEquals("streams group fooup not found.", e.getMessage());
+        assertEquals("Streams group fooup not found.", e.getMessage());
     }
 
     @Test
@@ -16021,7 +16021,7 @@ public class GroupMetadataManagerTest {
                 .setShutdownApplication(true)
         );
 
-        String statusDetail = String.format("streams group member %s encountered a fatal error and requested a shutdown for the entire application.", memberId1);
+        String statusDetail = String.format("Streams group member %s encountered a fatal error and requested a shutdown for the entire application.", memberId1);
 
         assertResponseEquals(
             new StreamsGroupHeartbeatResponseData()
@@ -16105,7 +16105,7 @@ public class GroupMetadataManagerTest {
                 .setShutdownApplication(true)
         );
 
-        String statusDetail = String.format("streams group member %s encountered a fatal error and requested a shutdown for the entire application.", memberId1);
+        String statusDetail = String.format("Streams group member %s encountered a fatal error and requested a shutdown for the entire application.", memberId1);
 
         assertResponseEquals(
             new StreamsGroupHeartbeatResponseData()

@@ -357,7 +357,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             LOG.debug("Optimizing the Kafka streams graph for self-joins");
             rewriteSingleStoreSelfJoin(root, new IdentityHashMap<>());
         }
-        LOG.debug("Optimizing the Kafka streams graph for null-key records");
+        LOG.debug("Optimizing the Kafka Streams graph for null-key records");
         rewriteRepartitionNodes();
     }
 
