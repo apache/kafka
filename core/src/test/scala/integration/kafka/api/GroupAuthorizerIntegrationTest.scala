@@ -112,9 +112,9 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     new AccessControlEntry(principal.toString, WILDCARD_HOST, aclOperation, aclPermissionType)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUnauthorizedProduceAndConsume(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUnauthorizedProduceAndConsume(groupProtocol: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition("topic", 0)
 
@@ -127,15 +127,15 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Set(topic), produceException.asInstanceOf[TopicAuthorizationException].unauthorizedTopics.asScala)
 
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
-    consumer.assign(List(topicPartition).asJava)
+    consumer.assign(java.util.List.of(topicPartition))
     val consumeException = assertThrows(classOf[TopicAuthorizationException],
       () => TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1))
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumeUnsubscribeWithoutGroupPermission(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumeUnsubscribeWithoutGroupPermission(groupProtocol: String): Unit = {
     val topic = "topic"
 
     createTopic(topic, listenerName = interBrokerListenerName)
@@ -160,7 +160,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     props.put(ConsumerConfig.GROUP_ID_CONFIG, group)
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = createConsumer(configOverrides = props)
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
 
     removeAndVerifyAcls(
@@ -173,9 +173,9 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumeCloseWithoutGroupPermission(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumeCloseWithoutGroupPermission(groupProtocol: String): Unit = {
     val topic = "topic"
     createTopic(topic, listenerName = interBrokerListenerName)
 
@@ -198,7 +198,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     props.put(ConsumerConfig.GROUP_ID_CONFIG, group)
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = createConsumer(configOverrides = props)
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
 
     removeAndVerifyAcls(
@@ -211,9 +211,9 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAuthorizedProduceAndConsume(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAuthorizedProduceAndConsume(groupProtocol: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition("topic", 0)
 
@@ -231,7 +231,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
     )
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
-    consumer.assign(List(topicPartition).asJava)
+    consumer.assign(java.util.List.of(topicPartition))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
   }
 

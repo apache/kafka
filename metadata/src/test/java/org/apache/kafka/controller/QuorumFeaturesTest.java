@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -43,7 +43,7 @@ public class QuorumFeaturesTest {
     );
 
     private static final QuorumFeatures QUORUM_FEATURES = new QuorumFeatures(0, LOCAL,
-        Arrays.asList(0, 1, 2));
+        List.of(0, 1, 2));
 
     @Test
     public void testDefaultFeatureMap() {

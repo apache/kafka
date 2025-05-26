@@ -16,10 +16,7 @@
  */
 package kafka.log
 
-import java.io.File
-import java.nio.file.Files
-import java.util.Properties
-import kafka.utils.{Pool, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -28,10 +25,14 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordVersion
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.{AfterEach, Tag}
 
+import java.io.File
+import java.nio.file.Files
+import java.util
+import java.util.{Optional, Properties}
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
@@ -70,7 +71,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                           maxCompactionLagMs: Long = defaultMaxCompactionLagMs): Properties = {
     val props = new Properties()
     props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageSize: java.lang.Integer)
-    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentSize: java.lang.Integer)
+    props.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentSize: java.lang.Integer)
     props.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 100*1024: java.lang.Integer)
     props.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, deleteDelay: java.lang.Integer)
     props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
@@ -93,7 +94,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                   cleanerIoBufferSize: Option[Int] = None,
                   propertyOverrides: Properties = new Properties()): LogCleaner = {
 
-    val logMap = new Pool[TopicPartition, UnifiedLog]()
+    val logMap = new util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()
     for (partition <- partitions) {
       val dir = new File(logDir, s"${partition.topic}-${partition.partition}")
       Files.createDirectories(dir.toPath)
@@ -105,19 +106,20 @@ abstract class AbstractLogCleanerIntegrationTest {
         deleteDelay = deleteDelay,
         segmentSize = segmentSize,
         maxCompactionLagMs = maxCompactionLagMs))
-      val log = UnifiedLog(
-        dir = dir,
-        config = logConfig,
-        logStartOffset = 0L,
-        recoveryPoint = 0L,
-        scheduler = time.scheduler,
-        time = time,
-        brokerTopicStats = new BrokerTopicStats,
-        maxTransactionTimeoutMs = 5 * 60 * 1000,
-        producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-        producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-        logDirFailureChannel = new LogDirFailureChannel(10),
-        topicId = None)
+      val log = UnifiedLog.create(
+        dir,
+        logConfig,
+        0L,
+        0L,
+        time.scheduler,
+        new BrokerTopicStats,
+        time,
+        5 * 60 * 1000,
+        new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+        TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+        new LogDirFailureChannel(10),
+        true,
+        Optional.empty)
       logMap.put(partition, log)
       this.logs += log
     }
@@ -132,10 +134,10 @@ abstract class AbstractLogCleanerIntegrationTest {
       backoffMs,
       true)
     new LogCleaner(cleanerConfig,
-      logDirs = Array(logDir),
-      logs = logMap,
-      logDirFailureChannel = new LogDirFailureChannel(1),
-      time = time)
+      util.List.of(logDir),
+      logMap,
+      new LogDirFailureChannel(1),
+      time)
   }
 
   private var ctr = 0
@@ -147,7 +149,7 @@ abstract class AbstractLogCleanerIntegrationTest {
     for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
       val appendInfo = log.appendAsLeaderWithRecordVersion(TestUtils.singletonRecords(value = value.getBytes, codec = codec,
-        key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0, recordVersion = RecordVersion.lookup(magicValue))
+        key = key.toString.getBytes, magicValue = magicValue), 0, RecordVersion.lookup(magicValue))
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
       incCounter()

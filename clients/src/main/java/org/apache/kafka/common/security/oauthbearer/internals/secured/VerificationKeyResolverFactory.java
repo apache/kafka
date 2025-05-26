@@ -37,7 +37,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
 public class VerificationKeyResolverFactory {
 
     /**
-     * Create an {@link AccessTokenRetriever} from the given
+     * Create a {@link JwtRetriever} from the given
      * {@link org.apache.kafka.common.config.SaslConfigs}.
      *
      * <b>Note</b>: the returned <code>CloseableVerificationKeyResolver</code> is not

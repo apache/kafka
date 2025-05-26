@@ -36,12 +36,15 @@ import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
+import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.image.MetadataImage;
@@ -56,12 +59,11 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -77,11 +79,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("ClassDataAbstractionCoupling")
 class ShareCoordinatorShardTest {
 
     private static final String GROUP_ID = "group1";
     private static final Uuid TOPIC_ID = Uuid.randomUuid();
+    private static final Uuid TOPIC_ID_2 = Uuid.randomUuid();
     private static final int PARTITION = 0;
+    private static final Time TIME = new MockTime();
 
     public static class ShareCoordinatorShardBuilder {
         private final LogContext logContext = new LogContext();
@@ -92,6 +97,7 @@ class ShareCoordinatorShardTest {
         private MetadataImage metadataImage = null;
         private Map<String, String> configOverrides = new HashMap<>();
         ShareCoordinatorOffsetsManager offsetsManager = mock(ShareCoordinatorOffsetsManager.class);
+        private Time time;
 
         ShareCoordinatorShard build() {
             if (metadataImage == null) metadataImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
@@ -105,7 +111,8 @@ class ShareCoordinatorShardTest {
                 coordinatorMetrics,
                 metricsShard,
                 snapshotRegistry,
-                offsetsManager
+                offsetsManager,
+                time == null ? TIME : time
             );
             when(metadataImage.topics().getTopic((Uuid) any())).thenReturn(mock(TopicImage.class));
             when(metadataImage.topics().getPartition(any(), anyInt())).thenReturn(mock(PartitionRegistration.class));
@@ -120,6 +127,11 @@ class ShareCoordinatorShardTest {
 
         public ShareCoordinatorShardBuilder setOffsetsManager(ShareCoordinatorOffsetsManager offsetsManager) {
             this.offsetsManager = offsetsManager;
+            return this;
+        }
+
+        public ShareCoordinatorShardBuilder setTime(Time time) {
+            this.time = time;
             return this;
         }
     }
@@ -244,14 +256,14 @@ class ShareCoordinatorShardTest {
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), TIME.milliseconds())
         ));
 
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
 
         assertEquals(groupOffset(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), TIME.milliseconds())
         ).value().message()), shard.getShareStateMapValue(shareCoordinatorKey));
         assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
         verify(shard.getMetricsShard()).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
@@ -299,7 +311,7 @@ class ShareCoordinatorShardTest {
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
         ));
 
         assertEquals(expectedData, result.response());
@@ -317,7 +329,7 @@ class ShareCoordinatorShardTest {
         // The snapshot epoch here will be 1 since this is a snapshot update record,
         // and it refers to parent share snapshot.
         expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), 0)
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), TIME.milliseconds())
         ));
 
         assertEquals(expectedData, result.response());
@@ -447,7 +459,7 @@ class ShareCoordinatorShardTest {
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
         ));
 
         assertEquals(expectedData, result.response());
@@ -513,7 +525,7 @@ class ShareCoordinatorShardTest {
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
         ));
 
         assertEquals(expectedData, result.response());
@@ -592,6 +604,7 @@ class ShareCoordinatorShardTest {
         assertEquals(ReadShareGroupStateSummaryResponse.toResponseData(
             TOPIC_ID,
             PARTITION,
+            0,
             0,
             0
         ), result.response());
@@ -745,7 +758,7 @@ class ShareCoordinatorShardTest {
         //        -Share coordinator writes the snapshot with startOffset 110 and batch 3.
         //        -batch2 should NOT be lost
         ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder()
-            .setConfigOverrides(Collections.singletonMap(ShareCoordinatorConfig.SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, "0"))
+            .setConfigOverrides(Map.of(ShareCoordinatorConfig.SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, "0"))
             .build();
 
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
@@ -760,7 +773,7 @@ class ShareCoordinatorShardTest {
                     .setStartOffset(100)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
-                    .setStateBatches(Arrays.asList(
+                    .setStateBatches(List.of(
                         new WriteShareGroupStateRequestData.StateBatch()    //b1
                             .setFirstOffset(100)
                             .setLastOffset(109)
@@ -785,14 +798,14 @@ class ShareCoordinatorShardTest {
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), TIME.milliseconds())
         ));
 
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
 
         assertEquals(groupOffset(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), TIME.milliseconds())
         ).value().message()), shard.getShareStateMapValue(shareCoordinatorKey));
         assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
         verify(shard.getMetricsShard()).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
@@ -847,10 +860,12 @@ class ShareCoordinatorShardTest {
             .setLeaderEpoch(0)
             .setStateEpoch(0)
             .setSnapshotEpoch(2)    // since 2nd share snapshot
-            .setStateBatches(Arrays.asList(
+            .setStateBatches(List.of(
                 new PersisterStateBatch(110, 119, (byte) 1, (short) 2),  // b2 not lost
                 new PersisterStateBatch(120, 129, (byte) 2, (short) 1)
             ))
+            .setCreateTimestamp(TIME.milliseconds())
+            .setWriteTimestamp(TIME.milliseconds())
             .build();
         List<CoordinatorRecord> expectedRecordsFinal = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
             GROUP_ID, TOPIC_ID, PARTITION, offsetFinal
@@ -908,6 +923,8 @@ class ShareCoordinatorShardTest {
                 .setStateBatches(List.of())
                 .setSnapshotEpoch(0)
                 .setStateEpoch(PartitionFactory.DEFAULT_STATE_EPOCH)
+                .setCreateTimestamp(TIME.milliseconds())
+                .setWriteTimestamp(TIME.milliseconds())
                 .build()
         ));
 
@@ -979,9 +996,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new DeleteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)))));
 
-        CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> result = shard.deleteState(request);
-
-        // apply a record in to verify delete
+        // Apply a record to the state machine so that delete can be verified.
         CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
             GROUP_ID,
             TOPIC_ID,
@@ -1006,7 +1021,9 @@ class ShareCoordinatorShardTest {
         assertNotNull(shard.getLeaderMapValue(shareCoordinatorKey));
         assertNotNull(shard.getStateEpochMapValue(shareCoordinatorKey));
 
-        // apply tombstone
+        CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> result = shard.deleteState(request);
+
+        // Apply tombstone.
         shard.replay(0L, 0L, (short) 0, result.records().get(0));
 
         DeleteShareGroupStateResponseData expectedData = DeleteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
@@ -1024,7 +1041,7 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
-    public void testDeleteStateFirstRecordDeleteSuccess() {
+    public void testDeleteStateUnintializedRecord() {
         ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
 
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
@@ -1042,21 +1059,10 @@ class ShareCoordinatorShardTest {
         assertNull(shard.getLeaderMapValue(shareCoordinatorKey));
         assertNull(shard.getStateEpochMapValue(shareCoordinatorKey));
 
-        // apply tombstone
-        shard.replay(0L, 0L, (short) 0, result.records().get(0));
-
         DeleteShareGroupStateResponseData expectedData = DeleteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
-        List<CoordinatorRecord> expectedRecords = List.of(
-            ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(
-                GROUP_ID, TOPIC_ID, PARTITION)
-        );
 
         assertEquals(expectedData, result.response());
-        assertEquals(expectedRecords, result.records());
-
-        assertNull(shard.getShareStateMapValue(shareCoordinatorKey));
-        assertNull(shard.getLeaderMapValue(shareCoordinatorKey));
-        assertNull(shard.getStateEpochMapValue(shareCoordinatorKey));
+        assertEquals(List.of(), result.records());
     }
 
     @Test
@@ -1201,7 +1207,7 @@ class ShareCoordinatorShardTest {
         InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = List.of(
             ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), TIME.milliseconds())
             ));
 
         assertEquals(expectedData, result.response());
@@ -1237,7 +1243,6 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedRecords, result.records());
 
         // invalid state epoch
-        int stateEpoch = 1;
         partition = 0;
         shard.replay(0L, 0L, (short) 0, ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
             GROUP_ID, TOPIC_ID, partition, new ShareGroupOffset.Builder()
@@ -1352,6 +1357,432 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedRecords, result.records());
         verify(topicsImage, times(1)).getTopic(eq(TOPIC_ID));
         verify(topicsImage, times(1)).getPartition(eq(TOPIC_ID), eq(0));
+    }
+
+    @Test
+    public void testSnapshotColdPartitionsNoEligiblePartitions() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onNewMetadataImage(image, null);
+        int offset = 0;
+        int producerId = 0;
+        short producerEpoch = 0;
+        int leaderEpoch = 0;
+
+        long timestamp = TIME.milliseconds();
+
+        CoordinatorRecord record1 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(0),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
+                    .setStateBatches(List.of(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        );
+
+        CoordinatorRecord record2 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(1),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
+                    .setStateBatches(List.of(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        );
+
+        shard.replay(offset, producerId, producerEpoch, record1);
+        shard.replay(offset + 1, producerId, producerEpoch, record2);
+
+        assertNotNull(shard.getShareStateMapValue(SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 0)));
+        assertNotNull(shard.getShareStateMapValue(SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 1)));
+
+        TIME.sleep(5000);   // Less than config.
+
+        assertEquals(0, shard.snapshotColdPartitions().records().size());
+    }
+
+    @Test
+    public void testSnapshotColdPartitionsSnapshotUpdateNotConsidered() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onNewMetadataImage(image, null);
+        int offset = 0;
+        int producerId = 0;
+        short producerEpoch = 0;
+        int leaderEpoch = 0;
+
+        long timestamp = TIME.milliseconds();
+
+        CoordinatorRecord record1 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(0),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
+                    .setStateBatches(List.of(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        );
+
+        SharePartitionKey key = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 0);
+
+        shard.replay(offset, producerId, producerEpoch, record1);
+        assertNotNull(shard.getShareStateMapValue(key));
+
+        long sleep = 12000;
+        TIME.sleep(sleep);
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            CoordinatorRecord.record(
+                new ShareSnapshotKey()
+                    .setGroupId(GROUP_ID)
+                    .setTopicId(TOPIC_ID)
+                    .setPartition(0),
+                new ApiMessageAndVersion(
+                    new ShareSnapshotValue()
+                        .setSnapshotEpoch(1)
+                        .setStateEpoch(0)
+                        .setLeaderEpoch(leaderEpoch)
+                        .setCreateTimestamp(timestamp)
+                        .setWriteTimestamp(timestamp + sleep)
+                        .setStateBatches(List.of(
+                            new ShareSnapshotValue.StateBatch()
+                                .setFirstOffset(0)
+                                .setLastOffset(10)
+                                .setDeliveryCount((short) 1)
+                                .setDeliveryState((byte) 0))),
+                    (short) 0
+                )
+            )
+        );
+
+        assertEquals(expectedRecords, shard.snapshotColdPartitions().records());
+
+        shard.replay(offset + 1, producerId, producerEpoch, expectedRecords.get(0));
+        assertNotNull(shard.getShareStateMapValue(key));
+
+        CoordinatorRecord record2 = CoordinatorRecord.record(
+            new ShareUpdateKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(0),
+            new ApiMessageAndVersion(
+                new ShareUpdateValue()
+                    .setSnapshotEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setStateBatches(List.of(
+                        new ShareUpdateValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        );
+
+        shard.replay(offset + 2, producerId, producerEpoch, record2);
+
+        TIME.sleep(sleep);
+
+        assertNotNull(shard.getShareStateMapValue(key));
+        assertEquals(timestamp + sleep, shard.getShareStateMapValue(key).writeTimestamp()); // No snapshot since update has no time info.
+    }
+
+    @Test
+    public void testSnapshotColdPartitionsDoesNotPerpetuallySnapshot() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onNewMetadataImage(image, null);
+        int offset = 0;
+        int producerId = 0;
+        short producerEpoch = 0;
+        int leaderEpoch = 0;
+
+        long timestamp = TIME.milliseconds();
+
+        CoordinatorRecord record1 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(0),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
+                    .setStateBatches(List.of(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        );
+
+        shard.replay(offset, producerId, producerEpoch, record1);
+        assertNotNull(shard.getShareStateMapValue(SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 0)));
+
+        long sleep = 12000;
+        TIME.sleep(sleep);
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            CoordinatorRecord.record(
+                new ShareSnapshotKey()
+                    .setGroupId(GROUP_ID)
+                    .setTopicId(TOPIC_ID)
+                    .setPartition(0),
+                new ApiMessageAndVersion(
+                    new ShareSnapshotValue()
+                        .setSnapshotEpoch(1)
+                        .setStateEpoch(0)
+                        .setLeaderEpoch(leaderEpoch)
+                        .setCreateTimestamp(timestamp)
+                        .setWriteTimestamp(timestamp + sleep)
+                        .setStateBatches(List.of(
+                            new ShareSnapshotValue.StateBatch()
+                                .setFirstOffset(0)
+                                .setLastOffset(10)
+                                .setDeliveryCount((short) 1)
+                                .setDeliveryState((byte) 0))),
+                    (short) 0
+                )
+            )
+        );
+
+        assertEquals(expectedRecords, shard.snapshotColdPartitions().records());
+
+        shard.replay(offset + 1, producerId, producerEpoch, expectedRecords.get(0));
+        assertNotNull(shard.getShareStateMapValue(SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 0)));
+
+        // Since all existing snapshots are already snapshotted, no new records will be created.
+        TIME.sleep(12000);
+
+        assertEquals(0, shard.snapshotColdPartitions().records().size());
+    }
+
+    @Test
+    public void testSnapshotColdPartitionsPartialEligiblePartitions() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onNewMetadataImage(image, null);
+        int offset = 0;
+        int producerId = 0;
+        short producerEpoch = 0;
+        int leaderEpoch = 0;
+        SharePartitionKey key0 = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 0);
+        SharePartitionKey key1 = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 1);
+
+        long timestamp = TIME.milliseconds();
+        int record1SnapshotEpoch = 0;
+
+        CoordinatorRecord record1 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(0),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(record1SnapshotEpoch)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
+                    .setStateBatches(List.of(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        );
+
+        long delta = 15000; // 15 seconds
+
+        CoordinatorRecord record2 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(1),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setCreateTimestamp(timestamp + delta)
+                    .setWriteTimestamp(timestamp + delta)
+                    .setStateBatches(List.of(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        );
+
+        shard.replay(offset, producerId, producerEpoch, record1);
+        shard.replay(offset + 1, producerId, producerEpoch, record2);
+
+        assertNotNull(shard.getShareStateMapValue(key0));
+        assertNotNull(shard.getShareStateMapValue(key1));
+        assertEquals(timestamp, shard.getShareStateMapValue(key0).writeTimestamp());
+        assertEquals(timestamp + delta, shard.getShareStateMapValue(key1).writeTimestamp());
+
+        long sleep = 12000;
+        TIME.sleep(sleep);  // Record 1 is eligible now.
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            CoordinatorRecord.record(
+                new ShareSnapshotKey()
+                    .setGroupId(GROUP_ID)
+                    .setTopicId(TOPIC_ID)
+                    .setPartition(0),
+                new ApiMessageAndVersion(
+                    new ShareSnapshotValue()
+                        .setSnapshotEpoch(record1SnapshotEpoch + 1)
+                        .setStateEpoch(0)
+                        .setLeaderEpoch(leaderEpoch)
+                        .setCreateTimestamp(timestamp)
+                        .setWriteTimestamp(timestamp + sleep)
+                        .setStateBatches(List.of(
+                            new ShareSnapshotValue.StateBatch()
+                                .setFirstOffset(0)
+                                .setLastOffset(10)
+                                .setDeliveryCount((short) 1)
+                                .setDeliveryState((byte) 0))),
+                    (short) 0
+                )
+            )
+        );
+
+        List<CoordinatorRecord> records = shard.snapshotColdPartitions().records();
+        assertEquals(expectedRecords, records);
+
+        shard.replay(offset + 2, producerId, producerEpoch, records.get(0));
+
+        assertEquals(timestamp + delta, shard.getShareStateMapValue(key1).writeTimestamp());
+        assertEquals(timestamp + sleep, shard.getShareStateMapValue(key0).writeTimestamp());
+    }
+
+    @Test
+    public void testOnTopicsDeletedEmptyTopicIds() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+
+        CoordinatorResult<Void, CoordinatorRecord> expectedResult = new CoordinatorResult<>(List.of());
+        assertEquals(expectedResult, shard.maybeCleanupShareState(Set.of()));
+
+        // No internal state map.
+        shard = new ShareCoordinatorShardBuilder().build();
+        assertEquals(expectedResult, shard.maybeCleanupShareState(Set.of(Uuid.randomUuid())));
+    }
+
+    @Test
+    public void testOnTopicsDeletedTopicIds() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onNewMetadataImage(image, null);
+
+        int offset = 0;
+        int producerId = 0;
+        short producerEpoch = 0;
+        int leaderEpoch = 0;
+        SharePartitionKey key1 = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 0);
+
+        long timestamp = TIME.milliseconds();
+        int record1SnapshotEpoch = 0;
+
+        CoordinatorRecord record1 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(0),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(record1SnapshotEpoch)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
+                    .setStateBatches(List.of(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        );
+
+        CoordinatorRecord record2 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID_2)
+                .setPartition(0),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(record1SnapshotEpoch)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
+                    .setStateBatches(List.of(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        );
+
+        shard.replay(offset, producerId, producerEpoch, record1);
+        shard.replay(offset + 1, producerId, producerEpoch, record2);
+
+        CoordinatorResult<Void, CoordinatorRecord> expectedResult = new CoordinatorResult<>(List.of(
+            ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(key1.groupId(), key1.topicId(), key1.partition())
+        ));
+
+        assertEquals(expectedResult, shard.maybeCleanupShareState(Set.of(TOPIC_ID)));
     }
 
     private static ShareGroupOffset groupOffset(ApiMessage record) {

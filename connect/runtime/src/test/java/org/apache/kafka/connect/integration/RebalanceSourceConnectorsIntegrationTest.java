@@ -35,7 +35,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
@@ -333,10 +332,10 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
             assertNotEquals(0, maxConnectors, "Found no connectors running!");
             assertNotEquals(0, maxTasks, "Found no tasks running!");
-            assertEquals(connectors.values().size(),
+            assertEquals(connectors.size(),
                     connectors.values().stream().distinct().count(),
                     "Connector assignments are not unique: " + connectors);
-            assertEquals(tasks.values().size(),
+            assertEquals(tasks.size(),
                     tasks.values().stream().distinct().count(),
                     "Task assignments are not unique: " + tasks);
             assertTrue(maxConnectors - minConnectors < 2, "Connectors are imbalanced: " + formatAssignment(connectors));
@@ -350,7 +349,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
     private static String formatAssignment(Map<String, Collection<String>> assignment) {
         StringBuilder result = new StringBuilder();
-        for (String worker : assignment.keySet().stream().sorted().collect(Collectors.toList())) {
+        for (String worker : assignment.keySet().stream().sorted().toList()) {
             result.append(String.format("\n%s=%s", worker, assignment.getOrDefault(worker,
                     Collections.emptyList())));
         }

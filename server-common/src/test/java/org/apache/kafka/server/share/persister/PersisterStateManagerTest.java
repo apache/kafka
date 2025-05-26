@@ -60,8 +60,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -157,8 +155,8 @@ class PersisterStateManagerTest {
         @Override
         protected void handleRequestResponse(ClientResponse response) {
             this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
-                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
-                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                .setResults(List.of(new WriteShareGroupStateResponseData.WriteStateResult()
+                    .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partitionKey().partition())
                         .setErrorMessage(Errors.NONE.message())
                         .setErrorCode(Errors.NONE.code()))
@@ -175,9 +173,9 @@ class PersisterStateManagerTest {
         @Override
         protected void findCoordinatorErrorResponse(Errors error, Exception exception) {
             this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
-                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                .setResults(List.of(new WriteShareGroupStateResponseData.WriteStateResult()
                     .setTopicId(partitionKey().topicId())
-                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                    .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partitionKey().partition())
                         .setErrorMessage(exception == null ? error.message() : exception.getMessage())
                         .setErrorCode(error.code()))
@@ -189,9 +187,9 @@ class PersisterStateManagerTest {
         @Override
         protected void requestErrorResponse(Errors error, Exception exception) {
             this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
-                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                .setResults(List.of(new WriteShareGroupStateResponseData.WriteStateResult()
                     .setTopicId(partitionKey().topicId())
-                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                    .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partitionKey().partition())
                         .setErrorMessage(exception == null ? error.message() : exception.getMessage())
                         .setErrorCode(error.code()))
@@ -235,7 +233,7 @@ class PersisterStateManagerTest {
 
             @Override
             public List<Node> getClusterNodes() {
-                return Collections.singletonList(suppliedNode);
+                return List.of(suppliedNode);
             }
         };
     }
@@ -254,7 +252,7 @@ class PersisterStateManagerTest {
 
             @Override
             public List<Node> getClusterNodes() {
-                return Collections.emptyList();
+                return List.of();
             }
         };
     }
@@ -289,7 +287,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setKey(coordinatorKey)
                             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
@@ -493,7 +491,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setKey(coordinatorKey)
                             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
@@ -510,7 +508,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setKey(coordinatorKey)
                             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
@@ -590,7 +588,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -610,17 +608,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -653,9 +651,8 @@ class PersisterStateManagerTest {
 
         CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
 
-        ReadShareGroupStateResponse result = null;
         try {
-            result = resultFuture.get();
+            resultFuture.get();
         } catch (Exception e) {
             fail("Failed to get result from future", e);
         }
@@ -678,7 +675,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -693,7 +690,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -713,10 +710,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -789,7 +786,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -804,7 +801,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())
                     ))
@@ -817,7 +814,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -837,10 +834,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -909,7 +906,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -924,7 +921,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     ))
@@ -937,7 +934,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -957,10 +954,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -1033,7 +1030,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -1049,10 +1046,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -1126,7 +1123,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -1142,10 +1139,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
@@ -1163,10 +1160,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -1240,7 +1237,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -1256,10 +1253,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
@@ -1277,10 +1274,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
@@ -1298,10 +1295,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -1375,7 +1372,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -1391,10 +1388,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -1467,7 +1464,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -1487,17 +1484,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1577,7 +1574,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -1597,17 +1594,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(500)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1684,7 +1681,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())
                     ))
@@ -1697,7 +1694,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -1717,17 +1714,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1801,7 +1798,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())
                     ))
@@ -1814,7 +1811,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -1834,17 +1831,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1925,17 +1922,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -2017,17 +2014,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -2041,17 +2038,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -2133,17 +2130,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -2157,17 +2154,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -3016,7 +3013,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -3119,7 +3116,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())
                     ))
@@ -3132,7 +3129,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -3231,7 +3228,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     ))
@@ -3244,7 +3241,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -3740,7 +3737,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -3847,7 +3844,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())
                     ))
@@ -3860,7 +3857,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -3963,7 +3960,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     ))
@@ -3976,7 +3973,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)

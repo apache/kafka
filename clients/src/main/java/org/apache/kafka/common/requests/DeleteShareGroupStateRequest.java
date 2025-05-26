@@ -20,10 +20,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,11 +33,7 @@ public class DeleteShareGroupStateRequest extends AbstractRequest {
         private final DeleteShareGroupStateRequestData data;
 
         public Builder(DeleteShareGroupStateRequestData data) {
-            this(data, true);
-        }
-
-        public Builder(DeleteShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.DELETE_SHARE_GROUP_STATE, enableUnstableLastVersion);
+            super(ApiKeys.DELETE_SHARE_GROUP_STATE);
             this.data = data;
         }
 
@@ -80,9 +75,9 @@ public class DeleteShareGroupStateRequest extends AbstractRequest {
         return data;
     }
 
-    public static DeleteShareGroupStateRequest parse(ByteBuffer buffer, short version) {
+    public static DeleteShareGroupStateRequest parse(Readable readable, short version) {
         return new DeleteShareGroupStateRequest(
-                new DeleteShareGroupStateRequestData(new ByteBufferAccessor(buffer), version),
+                new DeleteShareGroupStateRequestData(readable, version),
                 version
         );
     }

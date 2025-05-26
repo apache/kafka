@@ -32,7 +32,6 @@ import org.apache.kafka.test.{TestUtils => _, _}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
-import scala.jdk.CollectionConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -116,9 +115,9 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     createTopic(topic, 2, serverCount)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testEndToEnd(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testEndToEnd(groupProtocol: String): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
     MockProducerInterceptor.resetCounters()
@@ -153,7 +152,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     this.consumerConfig.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockConsumerMetricsReporter].getName)
     this.consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val testConsumer = new KafkaConsumer(this.consumerConfig, new MockDeserializer, new MockDeserializer)
-    testConsumer.assign(List(tp).asJava)
+    testConsumer.assign(java.util.List.of(tp))
     testConsumer.seek(tp, 0)
 
     // consume and verify that values are modified by interceptors

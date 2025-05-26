@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.ShareAcknowledgementMode;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -195,7 +196,10 @@ public class ConsumerConfig extends AbstractConfig {
             "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
             "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
             "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel.";
+            "<code>max.message.bytes</code> (topic config). A fetch request consists of many partitions, and there is another setting that controls how much " +
+            "data is returned for each partition in a fetch request - see <code>max.partition.fetch.bytes</code>. Note that there is a current limitation when " +
+            "performing remote reads from tiered storage (KIP-405) - only one partition out of the fetch request is fetched from the remote store (KAFKA-14915). " +
+            "Note also that the consumer performs multiple fetches in parallel.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
     /**
@@ -220,7 +224,9 @@ public class ConsumerConfig extends AbstractConfig {
             "partition of the fetch is larger than this limit, the " +
             "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
             "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
+            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size. " +
+            "Consider increasing <code>max.partition.fetch.bytes</code> especially in the cases of remote storage reads (KIP-405), because currently only " +
+            "one partition per fetch request is served from the remote store (KAFKA-14915).";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
     /** <code>send.buffer.bytes</code> */
@@ -370,8 +376,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
     private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "Allow automatic topic creation on the broker when" +
             " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
-            " broker allows for it using `auto.create.topics.enable` broker configuration. This configuration must" +
-            " be set to `true` when using brokers older than 0.11.0";
+            " broker allows for it using `auto.create.topics.enable` broker configuration.";
     public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
 
     /**
@@ -380,13 +385,25 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    /**
+     * <code>share.acknowledgement.mode</code>
+     */
+    public static final String SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = "share.acknowledgement.mode";
+    private static final String SHARE_ACKNOWLEDGEMENT_MODE_DOC = "Controls the acknowledgement mode for a share consumer." +
+            " If set to <code>implicit</code>, the acknowledgement mode of the consumer is implicit and it must not" +
+            " use <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records. Instead," +
+            " delivery is acknowledged implicitly on the next call to poll or commit." +
+            " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
+            " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
+
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
      * A list of configuration keys not supported for CLASSIC protocol.
      */
-    private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = Collections.singletonList(
-            GROUP_REMOTE_ASSIGNOR_CONFIG
+    private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
+            GROUP_REMOTE_ASSIGNOR_CONFIG,
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
 
     /**
@@ -395,7 +412,8 @@ public class ConsumerConfig extends AbstractConfig {
     private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
             PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
             HEARTBEAT_INTERVAL_MS_CONFIG, 
-            SESSION_TIMEOUT_MS_CONFIG
+            SESSION_TIMEOUT_MS_CONFIG,
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
     
     static {
@@ -678,8 +696,13 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
-
+                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+                                        Type.STRING,
+                                        ShareAcknowledgementMode.IMPLICIT.name(),
+                                        new ShareAcknowledgementMode.Validator(),
+                                        Importance.MEDIUM,
+                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC);
     }
 
     @Override
@@ -689,7 +712,7 @@ public class ConsumerConfig extends AbstractConfig {
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
-        checkUnsupportedConfigs();
+        checkUnsupportedConfigsPostProcess();
         return refinedConfigs;
     }
 
@@ -736,16 +759,16 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    private void checkUnsupportedConfigs() {
+    protected void checkUnsupportedConfigsPostProcess() {
         String groupProtocol = getString(GROUP_PROTOCOL_CONFIG);
         if (GroupProtocol.CLASSIC.name().equalsIgnoreCase(groupProtocol)) {
-            checkUnsupportedConfigs(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);
+            checkUnsupportedConfigsPostProcess(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);
         } else if (GroupProtocol.CONSUMER.name().equalsIgnoreCase(groupProtocol)) {
-            checkUnsupportedConfigs(GroupProtocol.CONSUMER, CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS);
+            checkUnsupportedConfigsPostProcess(GroupProtocol.CONSUMER, CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS);
         }
     }
 
-    private void checkUnsupportedConfigs(GroupProtocol groupProtocol, List<String> unsupportedConfigs) {
+    private void checkUnsupportedConfigsPostProcess(GroupProtocol groupProtocol, List<String> unsupportedConfigs) {
         if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(groupProtocol.name())) {
             List<String> invalidConfigs = new ArrayList<>();
             unsupportedConfigs.forEach(configName -> {

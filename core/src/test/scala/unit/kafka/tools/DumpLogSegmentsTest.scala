@@ -24,8 +24,8 @@ import java.util.Collections
 import java.util.Optional
 import java.util.Properties
 import java.util.stream.IntStream
-import kafka.log.{LogTestUtils, UnifiedLog}
-import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
+import kafka.log.LogTestUtils
+import kafka.raft.KafkaMetadataLog
 import kafka.server.KafkaRaftServer
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, ShareGroupStateMessageParser, TimeIndexDumpErrors, TransactionLogMessageParser}
 import kafka.utils.TestUtils
@@ -33,25 +33,25 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
+import org.apache.kafka.common.message.{KRaftVersionRecord, LeaderChangeMessage, SnapshotFooterRecord, SnapshotHeaderRecord, VotersRecord}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor, MessageUtil, ObjectSerializationCache}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
+import org.apache.kafka.common.record.{ControlRecordType, ControlRecordUtils, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch, VoterSetTest}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion}
-import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.raft.{MetadataLogConfig, VoterSetTest}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, OffsetAndEpoch}
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState}
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -87,19 +87,20 @@ class DumpLogSegmentsTest {
     props.setProperty(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128")
     // This test uses future timestamps beyond the default of 1 hour.
     props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.MaxValue.toString)
-    log = UnifiedLog(
-      dir = logDir,
-      config = new LogConfig(props),
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerTopicStats = new BrokerTopicStats,
-      maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-      producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-      logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None
+    log = UnifiedLog.create(
+      logDir,
+      new LogConfig(props),
+      0L,
+      0L,
+      time.scheduler,
+      new BrokerTopicStats,
+      time,
+      5 * 60 * 1000,
+      new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+      TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+      new LogDirFailureChannel(10),
+      true,
+      Optional.empty
     )
     log
   }
@@ -116,8 +117,7 @@ class DumpLogSegmentsTest {
     batches += BatchInfo(fourthBatchRecords, hasKeys = false, hasValues = false)
 
     batches.foreach { batchInfo =>
-      log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0, batchInfo.records: _*),
-        leaderEpoch = 0)
+      log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0, batchInfo.records: _*), 0)
     }
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
     log.flush(false)
@@ -130,31 +130,31 @@ class DumpLogSegmentsTest {
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
       new SimpleRecord("a".getBytes),
       new SimpleRecord("b".getBytes)
-    ), leaderEpoch = 0)
+    ), 0)
 
     log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(), 0,
       new SimpleRecord(time.milliseconds(), "c".getBytes, "1".getBytes),
       new SimpleRecord("d".getBytes)
-    ), leaderEpoch = 3)
+    ), 3)
 
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
       new SimpleRecord("e".getBytes, null),
       new SimpleRecord(null, "f".getBytes),
       new SimpleRecord("g".getBytes)
-    ), leaderEpoch = 3)
+    ), 3)
 
     log.appendAsLeader(MemoryRecords.withIdempotentRecords(Compression.NONE, 29342342L, 15.toShort, 234123,
       new SimpleRecord("h".getBytes)
-    ), leaderEpoch = 3)
+    ), 3)
 
     log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.gzip().build(), 98323L, 99.toShort, 266,
       new SimpleRecord("i".getBytes),
       new SimpleRecord("j".getBytes)
-    ), leaderEpoch = 5)
+    ), 5)
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(98323L, 99.toShort,
       new EndTransactionMarker(ControlRecordType.COMMIT, 100)
-    ), origin = AppendOrigin.COORDINATOR, leaderEpoch = 7)
+    ), 7, AppendOrigin.COORDINATOR)
 
     assertDumpLogRecordMetadata(log)
   }
@@ -295,7 +295,7 @@ class DumpLogSegmentsTest {
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), 0)
     log.flush(false)
 
     val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
@@ -327,7 +327,7 @@ class DumpLogSegmentsTest {
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), 0)
     log.flush(false)
 
     val expectedUpdatePayload = String.format("RemoteLogSegmentMetadataUpdate{remoteLogSegmentId=" +
@@ -365,8 +365,8 @@ class DumpLogSegmentsTest {
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), 0)
     log.flush(false)
 
     val expectedUpdatePayload = String.format("RemoteLogSegmentMetadataUpdate{remoteLogSegmentId=" +
@@ -397,7 +397,7 @@ class DumpLogSegmentsTest {
     
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), 0)
     val secondSegment = log.roll()
     secondSegment.append(1L, MemoryRecords.withRecords(Compression.NONE, metadataRecords: _*))
     secondSegment.flush()
@@ -419,7 +419,7 @@ class DumpLogSegmentsTest {
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), 0)
     log.flush(false)
 
     val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
@@ -443,7 +443,7 @@ class DumpLogSegmentsTest {
     
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), 0)
     log.flush(false)
     
     Files.setPosixFilePermissions(Paths.get(logFilePath), PosixFilePermissions.fromString("-w-------"))
@@ -498,7 +498,7 @@ class DumpLogSegmentsTest {
       buf.flip()
       new SimpleRecord(null, buf.array)
     }).toArray
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 1)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), 1)
     log.flush(false)
 
     var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
@@ -515,13 +515,52 @@ class DumpLogSegmentsTest {
     val writer = new ByteBufferAccessor(buf)
     writer.writeUnsignedVarint(10000)
     writer.writeUnsignedVarint(10000)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 2)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(null, buf.array)), 2)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), 2)
 
     output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
     assertTrue(output.contains("TOPIC_RECORD"))
     assertTrue(output.contains("BROKER_RECORD"))
     assertTrue(output.contains("skipping"))
+  }
+
+  @Test
+  def testDumpControlRecord(): Unit = {
+    log = createTestLog
+
+    log.appendAsLeader(MemoryRecords.withEndTransactionMarker(0L, 0.toShort,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 100)
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(0L, 0L, 0, ByteBuffer.allocate(4),
+      new LeaderChangeMessage()
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withSnapshotHeaderRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new SnapshotHeaderRecord()
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withSnapshotFooterRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new SnapshotFooterRecord()
+        .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION)
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withKRaftVersionRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new KRaftVersionRecord()
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withVotersRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new VotersRecord()
+    ), 0, AppendOrigin.COORDINATOR)
+    log.flush(false)
+
+    val output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
+    assertTrue(output.contains("endTxnMarker"), output)
+    assertTrue(output.contains("LeaderChange"), output)
+    assertTrue(output.contains("SnapshotHeader"), output)
+    assertTrue(output.contains("SnapshotFooter"), output)
+    assertTrue(output.contains("KRaftVersion"), output)
+    assertTrue(output.contains("KRaftVoters"), output)
   }
 
   @Test
@@ -544,17 +583,13 @@ class DumpLogSegmentsTest {
       logDir,
       time,
       time.scheduler,
-      MetadataLogConfig(
-        logSegmentBytes = 100 * 1024,
-        logSegmentMinBytes = 100 * 1024,
-        logSegmentMillis = 10 * 1000,
-        retentionMaxBytes = 100 * 1024,
-        retentionMillis = 60 * 1000,
-        maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-        maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        fileDeleteDelayMs = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-        nodeId = 1
-      )
+      createMetadataLogConfig(
+        100 * 1024,
+        10 * 1000,
+        100 * 1024,
+        60 * 1000
+      ),
+      1
     )
 
     val lastContainedLogTimestamp = 10000
@@ -985,11 +1020,7 @@ class DumpLogSegmentsTest {
   }
 
   private def assertDumpLogRecordMetadata(log: UnifiedLog): Unit = {
-    val logReadInfo = log.read(
-      startOffset = 0,
-      maxLength = Int.MaxValue,
-      isolation = FetchIsolation.LOG_END,
-      minOneMessage = true
+    val logReadInfo = log.read(0, Int.MaxValue, FetchIsolation.LOG_END, true
     )
 
     val output = runDumpLogSegments(Array("--deep-iteration", "--files", logFilePath))
@@ -1041,6 +1072,7 @@ class DumpLogSegmentsTest {
   @Test
   def testShareGroupStateMessageParser(): Unit = {
     val parser = new ShareGroupStateMessageParser()
+    val timestamp = System.currentTimeMillis
 
     // The key is mandatory.
     assertEquals(
@@ -1055,7 +1087,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
-        Some("{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
+        Some(s"{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"createTimestamp\":$timestamp,\"writeTimestamp\":$timestamp,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
       ),
       parser.parse(serializedRecord(
         new ShareSnapshotKey()
@@ -1067,6 +1099,8 @@ class DumpLogSegmentsTest {
           .setStateEpoch(0)
           .setLeaderEpoch(0)
           .setStartOffset(0)
+          .setCreateTimestamp(timestamp)
+          .setWriteTimestamp(timestamp)
           .setStateBatches(List[ShareSnapshotValue.StateBatch](
             new ShareSnapshotValue.StateBatch()
               .setFirstOffset(0)
@@ -1155,5 +1189,20 @@ class DumpLogSegmentsTest {
         )
       ))
     )
+  }
+
+  private def createMetadataLogConfig(
+    internalLogSegmentBytes: Int,
+    logSegmentMillis: Long,
+    retentionMaxBytes: Long,
+    retentionMillis: Long
+  ): MetadataLogConfig = {
+    val config: util.Map[String, Any] = util.Map.of(
+      MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
+      MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
+      MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
+      MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
+    )
+    new MetadataLogConfig(new AbstractConfig(MetadataLogConfig.CONFIG_DEF, config, false))
   }
 }

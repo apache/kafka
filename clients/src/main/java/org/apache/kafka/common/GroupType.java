@@ -26,7 +26,8 @@ public enum GroupType {
     UNKNOWN("Unknown"),
     CONSUMER("Consumer"),
     CLASSIC("Classic"),
-    SHARE("Share");
+    SHARE("Share"),
+    STREAMS("Streams");
 
     private static final Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(type -> type.name.toLowerCase(Locale.ROOT), Function.identity()));

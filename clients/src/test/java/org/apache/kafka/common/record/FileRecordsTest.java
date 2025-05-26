@@ -26,6 +26,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.File;
@@ -51,10 +53,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -84,7 +89,7 @@ public class FileRecordsTest {
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn((long) Integer.MAX_VALUE);
 
-        FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, Integer.MAX_VALUE);
         assertThrows(IllegalArgumentException.class, () -> append(records, values));
     }
 
@@ -94,7 +99,7 @@ public class FileRecordsTest {
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn(Integer.MAX_VALUE + 5L);
 
-        assertThrows(KafkaException.class, () -> new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false));
+        assertThrows(KafkaException.class, () -> new FileRecords(fileMock, fileChannelMock, Integer.MAX_VALUE));
     }
 
     @Test
@@ -137,7 +142,7 @@ public class FileRecordsTest {
             Future<Object> readerCompletion = executor.submit(() -> {
                 while (log.sizeInBytes() < maxSizeInBytes) {
                     int currentSize = log.sizeInBytes();
-                    FileRecords slice = log.slice(0, currentSize);
+                    Records slice = log.slice(0, currentSize);
                     assertEquals(currentSize, slice.sizeInBytes());
                 }
                 return null;
@@ -248,25 +253,25 @@ public class FileRecordsTest {
 
         int message1Size = batches.get(0).sizeInBytes();
         assertEquals(new FileRecords.LogOffsetPosition(0L, position, message1Size),
-            fileRecords.searchForOffsetWithSize(0, 0),
+            fileRecords.searchForOffsetFromPosition(0, 0),
             "Should be able to find the first message by its offset");
         position += message1Size;
 
         int message2Size = batches.get(1).sizeInBytes();
         assertEquals(new FileRecords.LogOffsetPosition(1L, position, message2Size),
-            fileRecords.searchForOffsetWithSize(1, 0),
+            fileRecords.searchForOffsetFromPosition(1, 0),
             "Should be able to find second message when starting from 0");
         assertEquals(new FileRecords.LogOffsetPosition(1L, position, message2Size),
-            fileRecords.searchForOffsetWithSize(1, position),
+            fileRecords.searchForOffsetFromPosition(1, position),
             "Should be able to find second message starting from its offset");
         position += message2Size + batches.get(2).sizeInBytes();
 
         int message4Size = batches.get(3).sizeInBytes();
         assertEquals(new FileRecords.LogOffsetPosition(50L, position, message4Size),
-            fileRecords.searchForOffsetWithSize(3, position),
+            fileRecords.searchForOffsetFromPosition(3, position),
             "Should be able to find fourth message from a non-existent offset");
         assertEquals(new FileRecords.LogOffsetPosition(50L, position, message4Size),
-            fileRecords.searchForOffsetWithSize(50,  position),
+            fileRecords.searchForOffsetFromPosition(50,  position),
             "Should be able to find fourth message by correct offset");
     }
 
@@ -276,11 +281,11 @@ public class FileRecordsTest {
     @Test
     public void testIteratorWithLimits() throws IOException {
         RecordBatch batch = batches(fileRecords).get(1);
-        int start = fileRecords.searchForOffsetWithSize(1, 0).position;
+        int start = fileRecords.searchForOffsetFromPosition(1, 0).position;
         int size = batch.sizeInBytes();
-        FileRecords slice = fileRecords.slice(start, size);
+        Records slice = fileRecords.slice(start, size);
         assertEquals(Collections.singletonList(batch), batches(slice));
-        FileRecords slice2 = fileRecords.slice(start, size - 1);
+        Records slice2 = fileRecords.slice(start, size - 1);
         assertEquals(Collections.emptyList(), batches(slice2));
     }
 
@@ -290,7 +295,7 @@ public class FileRecordsTest {
     @Test
     public void testTruncate() throws IOException {
         RecordBatch batch = batches(fileRecords).get(0);
-        int end = fileRecords.searchForOffsetWithSize(1, 0).position;
+        int end = fileRecords.searchForOffsetFromPosition(1, 0).position;
         fileRecords.truncateTo(end);
         assertEquals(Collections.singletonList(batch), batches(fileRecords));
         assertEquals(batch.sizeInBytes(), fileRecords.sizeInBytes());
@@ -308,7 +313,7 @@ public class FileRecordsTest {
         when(channelMock.size()).thenReturn(42L);
         when(channelMock.position(42L)).thenReturn(null);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, Integer.MAX_VALUE);
         fileRecords.truncateTo(42);
 
         verify(channelMock, atLeastOnce()).size();
@@ -325,7 +330,7 @@ public class FileRecordsTest {
 
         when(channelMock.size()).thenReturn(42L);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, Integer.MAX_VALUE);
 
         try {
             fileRecords.truncateTo(43);
@@ -347,7 +352,7 @@ public class FileRecordsTest {
         when(channelMock.size()).thenReturn(42L);
         when(channelMock.truncate(anyLong())).thenReturn(channelMock);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, Integer.MAX_VALUE);
         fileRecords.truncateTo(23);
 
         verify(channelMock, atLeastOnce()).size();
@@ -424,24 +429,22 @@ public class FileRecordsTest {
             "abcd".getBytes(),
             "efgh".getBytes(),
             "ijkl".getBytes(),
-            "mnop".getBytes(),
-            "qrst".getBytes()
+            "mnopqr".getBytes(),
+            "stuv".getBytes()
         };
         try (FileRecords fileRecords = createFileRecords(values)) {
             List<RecordBatch> items = batches(fileRecords.slice(0, fileRecords.sizeInBytes()));
 
             // Slice from fourth message until the end.
             int position = IntStream.range(0, 3).map(i -> items.get(i).sizeInBytes()).sum();
-            FileRecords sliced  = fileRecords.slice(position, fileRecords.sizeInBytes() - position);
+            Records sliced  = fileRecords.slice(position, fileRecords.sizeInBytes() - position);
             assertEquals(fileRecords.sizeInBytes() - position, sliced.sizeInBytes());
             assertEquals(items.subList(3, items.size()), batches(sliced), "Read starting from the fourth message");
 
             // Further slice the already sliced file records, from fifth message until the end. Now the
-            // bytes available in the sliced file records are less than the start position. However, the
-            // position to slice is relative hence reset position to second message in the sliced file
-            // records i.e. reset with the size of the fourth message from the original file records.
-            position = items.get(4).sizeInBytes();
-            FileRecords finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
+            // bytes available in the sliced records are less than the moved position from original records.
+            position = items.get(3).sizeInBytes();
+            Records finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
             assertEquals(sliced.sizeInBytes() - position, finalSliced.sizeInBytes());
             assertEquals(items.subList(4, items.size()), batches(finalSliced), "Read starting from the fifth message");
         }
@@ -516,6 +519,194 @@ public class FileRecordsTest {
         fileRecords.writeTo(channel, firstWritten, secondWrittenLength);
         // But we still only write (size - firstWritten), which is not fulfilled in the old version
         verify(channel).transferFrom(any(), anyLong(), eq((long) size - firstWritten));
+    }
+
+    /**
+     * Test two conditions:
+     * 1. If the target offset equals the base offset of the first batch
+     * 2. If the target offset is less than the base offset of the first batch
+     * <p>
+     * If the base offset of the first batch is equal to or greater than the target offset, it should return the
+     * position of the first batch and the lastOffset method should not be called.
+     */
+    @ParameterizedTest
+    @ValueSource(longs = {5, 10})
+    public void testSearchForOffsetFromPosition1(long baseOffset) throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch.baseOffset()).thenReturn(baseOffset);
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
+        mockFileRecordBatches(fileRecords, batch);
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(5L, 0);
+
+        assertEquals(FileRecords.LogOffsetPosition.fromBatch(batch), result);
+        verify(batch, never()).lastOffset();
+    }
+
+    /**
+     * Test the case when the target offset equals the last offset of the first batch.
+     */
+    @Test
+    public void testSearchForOffsetFromPosition2() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch.baseOffset()).thenReturn(3L);
+        when(batch.lastOffset()).thenReturn(5L);
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
+        mockFileRecordBatches(fileRecords, batch);
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(5L, 0);
+
+        assertEquals(FileRecords.LogOffsetPosition.fromBatch(batch), result);
+        // target is equal to the last offset of the batch, we should call lastOffset
+        verify(batch, times(1)).lastOffset();
+    }
+
+    /**
+     * Test the case when the target offset equals the last offset of the last batch.
+     */
+    @Test
+    public void testSearchForOffsetFromPosition3() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch prevBatch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(prevBatch.baseOffset()).thenReturn(5L);
+        when(prevBatch.lastOffset()).thenReturn(12L);
+        FileLogInputStream.FileChannelRecordBatch currentBatch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(currentBatch.baseOffset()).thenReturn(15L);
+        when(currentBatch.lastOffset()).thenReturn(20L);
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
+        mockFileRecordBatches(fileRecords, prevBatch, currentBatch);
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(20L, 0);
+
+        assertEquals(FileRecords.LogOffsetPosition.fromBatch(currentBatch), result);
+        // Because the target offset is in the current batch, we should not call lastOffset in the previous batch
+        verify(prevBatch, never()).lastOffset();
+        verify(currentBatch, times(1)).lastOffset();
+    }
+
+    /**
+     * Test the case when the target offset is within the range of the previous batch.
+     */
+    @Test
+    public void testSearchForOffsetFromPosition4() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch prevBatch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(prevBatch.baseOffset()).thenReturn(5L);
+        when(prevBatch.lastOffset()).thenReturn(12L); // > targetOffset
+        FileLogInputStream.FileChannelRecordBatch currentBatch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(currentBatch.baseOffset()).thenReturn(15L); // >= targetOffset
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
+        mockFileRecordBatches(fileRecords, prevBatch, currentBatch);
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(10L, 0);
+
+        assertEquals(FileRecords.LogOffsetPosition.fromBatch(prevBatch), result);
+        // Because the target offset is in the current batch, we should call lastOffset
+        // on the previous batch
+        verify(prevBatch, times(1)).lastOffset();
+    }
+
+    /**
+     * Test the case when no batch matches the target offset.
+     */
+    @Test
+    public void testSearchForOffsetFromPosition5() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch1 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch1.baseOffset()).thenReturn(5L);  // < targetOffset
+        FileLogInputStream.FileChannelRecordBatch batch2 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch2.baseOffset()).thenReturn(8L);  // < targetOffset
+        when(batch2.lastOffset()).thenReturn(9L);  // < targetOffset
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
+        mockFileRecordBatches(fileRecords, batch1, batch2);
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(10L, 0);
+
+        assertNull(result);
+        // Because the target offset is exceeded by the last offset of the batch2,
+        // we should call lastOffset on the batch2
+        verify(batch1, never()).lastOffset();
+        verify(batch2, times(1)).lastOffset();
+    }
+
+    /**
+     * Test two conditions:
+     * 1. If the target offset is less than the base offset of the last batch
+     * 2. If the target offset equals the base offset of the last batch
+     */
+    @ParameterizedTest
+    @ValueSource(longs = {8, 10})
+    public void testSearchForOffsetFromPosition6(long baseOffset) throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch1 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch1.baseOffset()).thenReturn(5L);  // < targetOffset
+        FileLogInputStream.FileChannelRecordBatch batch2 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch2.baseOffset()).thenReturn(baseOffset);  // < targetOffset or == targetOffset
+        when(batch2.lastOffset()).thenReturn(12L); // >= targetOffset
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
+        mockFileRecordBatches(fileRecords, batch1, batch2);
+
+        long targetOffset = 10L;
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(targetOffset, 0);
+
+        assertEquals(FileRecords.LogOffsetPosition.fromBatch(batch2), result);
+        if (targetOffset == baseOffset) {
+            // Because the target offset is equal to the base offset of the batch2, we should not call
+            // lastOffset on batch2 and batch1
+            verify(batch1, never()).lastOffset();
+            verify(batch2, never()).lastOffset();
+        } else {
+            // Because the target offset is in the batch2, we should not call
+            // lastOffset on batch1
+            verify(batch1, never()).lastOffset();
+            verify(batch2, times(1)).lastOffset();
+        }
+    }
+
+    /**
+     * Test the case when the target offset is between two batches.
+     */
+    @Test
+    public void testSearchForOffsetFromPosition7() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch1 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch1.baseOffset()).thenReturn(5L);
+        when(batch1.lastOffset()).thenReturn(10L);
+        FileLogInputStream.FileChannelRecordBatch batch2 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch2.baseOffset()).thenReturn(15L);
+        when(batch2.lastOffset()).thenReturn(20L);
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 100));
+        mockFileRecordBatches(fileRecords, batch1, batch2);
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetFromPosition(13L, 0);
+
+        assertEquals(FileRecords.LogOffsetPosition.fromBatch(batch2), result);
+        // Because the target offset is between the two batches, we should call lastOffset on the batch1
+        verify(batch1, times(1)).lastOffset();
+        verify(batch2, never()).lastOffset();
+    }
+
+    private void mockFileRecordBatches(FileRecords fileRecords, FileLogInputStream.FileChannelRecordBatch... batch) {
+        List<FileLogInputStream.FileChannelRecordBatch> batches = asList(batch);
+        doReturn((Iterable<FileLogInputStream.FileChannelRecordBatch>) batches::iterator)
+                .when(fileRecords)
+                .batchesFrom(anyInt());
     }
 
     private void doTestConversion(Compression compression, byte toMagic) throws IOException {

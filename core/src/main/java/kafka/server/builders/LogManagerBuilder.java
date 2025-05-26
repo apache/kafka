@@ -30,7 +30,6 @@ import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.List;
 
 import scala.jdk.javaapi.CollectionConverters;
@@ -39,7 +38,7 @@ import scala.jdk.javaapi.CollectionConverters;
 public class LogManagerBuilder {
     private static final int PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS = 600000;
     private List<File> logDirs = null;
-    private List<File> initialOfflineDirs = Collections.emptyList();
+    private List<File> initialOfflineDirs = List.of();
     private ConfigRepository configRepository = null;
     private LogConfig initialDefaultConfig = null;
     private CleanerConfig cleanerConfig = null;

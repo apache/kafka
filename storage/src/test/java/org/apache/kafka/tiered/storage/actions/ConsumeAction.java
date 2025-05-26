@@ -29,11 +29,9 @@ import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchSpec;
 
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_OFFSET_INDEX;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
@@ -128,7 +126,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
         assertThat(storedRecords, correspondTo(readRecords, topicPartition, serde, serde));
 
         // (B) Assessment of the interactions between the source broker and the second-tier storage.
-        for (LocalTieredStorageEvent.EventType eventType : Arrays.asList(FETCH_SEGMENT, FETCH_OFFSET_INDEX, FETCH_TIME_INDEX, FETCH_TRANSACTION_INDEX)) {
+        for (LocalTieredStorageEvent.EventType eventType : List.of(FETCH_SEGMENT, FETCH_OFFSET_INDEX, FETCH_TIME_INDEX, FETCH_TRANSACTION_INDEX)) {
             Optional<LocalTieredStorageEvent> latestEvent;
             switch (eventType) {
                 case FETCH_SEGMENT:
@@ -149,7 +147,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
 
             List<LocalTieredStorageEvent> events = history.getEvents(eventType, topicPartition);
             List<LocalTieredStorageEvent> eventsInScope = latestEvent
-                    .map(e -> events.stream().filter(event -> event.isAfter(e)).collect(Collectors.toList()))
+                    .map(e -> events.stream().filter(event -> event.isAfter(e)).toList())
                     .orElse(events);
 
             RemoteFetchCount remoteFetchCount = remoteFetchSpec.getRemoteFetchCount();
@@ -171,18 +169,46 @@ public final class ConsumeAction implements TieredStorageTestAction {
                     expectedCountAndOp = new RemoteFetchCount.FetchCountAndOp(-1, RemoteFetchCount.OperationType.EQUALS_TO);
             }
 
-            String message = String.format("Number of %s requests from broker %d to the tier storage does not match the expected value for topic-partition %s",
-                    eventType, remoteFetchSpec.getSourceBrokerId(), remoteFetchSpec.getTopicPartition());
-            if (expectedCountAndOp.getCount() != -1) {
-                if (expectedCountAndOp.getOperationType() == RemoteFetchCount.OperationType.EQUALS_TO) {
-                    assertEquals(expectedCountAndOp.getCount(), eventsInScope.size(), message);
-                } else if (expectedCountAndOp.getOperationType() == RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO) {
-                    assertTrue(eventsInScope.size() <= expectedCountAndOp.getCount(), message);
+            RemoteFetchCount.OperationType exceptedOperationType = expectedCountAndOp.getOperationType();
+            int exceptedCount = expectedCountAndOp.getCount();
+            int actualCount = eventsInScope.size();
+            String message = errorMessage(eventType, actualCount, exceptedOperationType, exceptedCount);
+            if (exceptedCount != -1) {
+                if (exceptedOperationType == RemoteFetchCount.OperationType.EQUALS_TO) {
+                    assertEquals(exceptedCount, actualCount, message);
+                } else if (exceptedOperationType == RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO) {
+                    assertTrue(actualCount <= exceptedCount, message);
                 } else {
-                    assertTrue(eventsInScope.size() >= expectedCountAndOp.getCount(), message);
+                    assertTrue(actualCount >= exceptedCount, message);
                 }
             }
         }
+    }
+
+    private String errorMessage(
+        LocalTieredStorageEvent.EventType eventType,
+        int actualCount,
+        RemoteFetchCount.OperationType exceptedOperationType,
+        int exceptedCount
+    ) {
+        return String.format(
+            "Expected %s requests count from broker %d to tiered storage for topic-partition %s to be %s %d, " +
+                    "but actual count was %d.",
+            eventType,
+            remoteFetchSpec.getSourceBrokerId(),
+            remoteFetchSpec.getTopicPartition(),
+            operationTypeToString(exceptedOperationType),
+            exceptedCount,
+            actualCount
+        );
+    }
+
+    private String operationTypeToString(RemoteFetchCount.OperationType operationType) {
+        return switch (operationType) {
+            case EQUALS_TO -> "equal to";
+            case LESS_THAN_OR_EQUALS_TO -> "less than or equal to";
+            case GREATER_THAN_OR_EQUALS_TO -> "greater than or equal to";
+        };
     }
 
     @Override
