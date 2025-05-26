@@ -201,7 +201,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -556,7 +555,7 @@ public class GroupMetadataManager {
         this.shareGroupAssignor = shareGroupAssignor;
         this.authorizerPlugin = authorizerPlugin;
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
-        this.topicHashCache = new ConcurrentHashMap<>();
+        this.topicHashCache = new HashMap<>();
     }
 
     /**
@@ -2227,11 +2226,6 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         SubscriptionType subscriptionType = group.subscriptionType();
 
-        if (group.addSubscriptionMetadataTombstoneRecord()) {
-            records.add(newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId));
-            group.setAddSubscriptionMetadataTombstoneRecord(false);
-        }
-
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
@@ -3313,7 +3307,7 @@ public class GroupMetadataManager {
                 ));
             }
 
-            long groupMetadataHash = group.computeMetadataHash(
+            long groupMetadataHash = ModernGroup.computeMetadataHash(
                 subscribedTopicNames,
                 topicHashCache,
                 metadataImage
@@ -3618,7 +3612,7 @@ public class GroupMetadataManager {
             updatedMember
         );
 
-        long groupMetadataHash = group.computeMetadataHash(
+        long groupMetadataHash = ModernGroup.computeMetadataHash(
             subscribedTopicNamesMap,
             topicHashCache,
             metadataImage
@@ -3651,6 +3645,11 @@ public class GroupMetadataManager {
         }
 
         group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
+
+        if (group.addSubscriptionMetadataTombstoneRecord()) {
+            records.add(newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId));
+            group.setAddSubscriptionMetadataTombstoneRecord(false);
+        }
 
         return new UpdateSubscriptionMetadataResult(
             groupEpoch,
@@ -4028,7 +4027,7 @@ public class GroupMetadataManager {
                 members,
                 deletedRegexes
             );
-            long groupMetadataHash = group.computeMetadataHash(
+            long groupMetadataHash = ModernGroup.computeMetadataHash(
                 subscribedTopicNamesMap,
                 topicHashCache,
                 metadataImage

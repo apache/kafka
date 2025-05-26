@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
@@ -152,7 +151,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     private final TimelineHashMap<String, ResolvedRegularExpression> resolvedRegularExpressions;
 
-    private final AtomicBoolean addSubscriptionMetadataTombstoneRecord = new AtomicBoolean(false);
+    private final TimelineObject<Boolean> addSubscriptionMetadataTombstoneRecord;
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
@@ -169,6 +168,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.resolvedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.addSubscriptionMetadataTombstoneRecord = new TimelineObject<>(snapshotRegistry, false);
     }
 
     /**
