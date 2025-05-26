@@ -170,7 +170,6 @@ public class AdminClientTestUtils {
                 .map(name -> new ConfigResource(entry.getKey(), name)))
             .collect(Collectors.toList());
         return new ListConfigResourcesResult(KafkaFuture.completedFuture(resources));
-
     }
 
     public static ListConfigResourcesResult listConfigResourcesResult(String... names) {
