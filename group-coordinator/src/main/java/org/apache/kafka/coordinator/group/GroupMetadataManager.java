@@ -880,7 +880,7 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null) {
-            throw new GroupIdNotFoundException(String.format("streams group %s not found.", groupId));
+            throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
         } else {
             return castToStreamsGroup(group);
         }
@@ -1022,7 +1022,7 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
-            throw new GroupIdNotFoundException(String.format("streams group %s not found.", groupId));
+            throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
         }
 
         if (group == null) {
@@ -2010,7 +2010,7 @@ public class GroupMetadataManager {
             new Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
                 .setStatusDetail(
-                    String.format("streams group member %s encountered a fatal error and requested a shutdown for the entire application.",
+                    String.format("Streams group member %s encountered a fatal error and requested a shutdown for the entire application.",
                         requestingMemberId)
                 )
         ));
