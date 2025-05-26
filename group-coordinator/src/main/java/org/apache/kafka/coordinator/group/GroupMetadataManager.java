@@ -880,7 +880,7 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null) {
-            throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
+            throw new GroupIdNotFoundException(String.format("streams group %s not found.", groupId));
         } else {
             return castToStreamsGroup(group);
         }
@@ -1022,7 +1022,7 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
-            throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
+            throw new GroupIdNotFoundException(String.format("streams group %s not found.", groupId));
         }
 
         if (group == null) {
@@ -1643,7 +1643,7 @@ public class GroupMetadataManager {
     /**
      * Validates the member epoch provided in the heartbeat request.
      *
-     * @param member                The Streams group member.
+     * @param member                The streams group member.
      * @param receivedMemberEpoch   The member epoch.
      * @param ownedActiveTasks      The owned active tasks.
      * @param ownedStandbyTasks     The owned standby tasks.
@@ -1798,7 +1798,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handles a regular heartbeat from a Streams group member.
+     * Handles a regular heartbeat from a streams group member.
      * It mainly consists of five parts:
      * 1) Create or update the member.
      *    The group epoch is bumped if the member has been created or updated.
@@ -2010,7 +2010,7 @@ public class GroupMetadataManager {
             new Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
                 .setStatusDetail(
-                    String.format("Streams group member %s encountered a fatal error and requested a shutdown for the entire application.",
+                    String.format("streams group member %s encountered a fatal error and requested a shutdown for the entire application.",
                         requestingMemberId)
                 )
         ));
@@ -5248,8 +5248,8 @@ public class GroupMetadataManager {
 
     /**
      * Replays StreamsGroupMetadataKey/Value to update the hard state of
-     * the Streams group. It updates the group epoch of the Streams
-     * group or deletes the Streams group.
+     * the streams group. It updates the group epoch of the Streams
+     * group or deletes the streams group.
      *
      * @param key   A StreamsGroupMetadataKey key.
      * @param value A StreamsGroupMetadataValue record.

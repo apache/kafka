@@ -345,9 +345,9 @@ public class StreamsGroupCommand {
          */
         private static void maybePrintEmptyGroupState(String group, GroupState state) {
             if (state == GroupState.DEAD) {
-                printError("Streams group '" + group + "' does not exist.", Optional.empty());
+                printError("streams group '" + group + "' does not exist.", Optional.empty());
             } else if (state == GroupState.EMPTY) {
-                printError("Streams group '" + group + "' has no active members.", Optional.empty());
+                printError("streams group '" + group + "' has no active members.", Optional.empty());
             }
         }
 

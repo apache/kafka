@@ -346,18 +346,18 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 (String) props.get(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));
         }
         if (optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
-            LOG.debug("Optimizing the Kafka Streams graph for ktable source nodes");
+            LOG.debug("Optimizing the Kafka streams graph for ktable source nodes");
             reuseKTableSourceTopics();
         }
         if (optimizationConfigs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS)) {
-            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
+            LOG.debug("Optimizing the Kafka streams graph for repartition nodes");
             mergeRepartitionTopics();
         }
         if (optimizationConfigs.contains(StreamsConfig.SINGLE_STORE_SELF_JOIN)) {
-            LOG.debug("Optimizing the Kafka Streams graph for self-joins");
+            LOG.debug("Optimizing the Kafka streams graph for self-joins");
             rewriteSingleStoreSelfJoin(root, new IdentityHashMap<>());
         }
-        LOG.debug("Optimizing the Kafka Streams graph for null-key records");
+        LOG.debug("Optimizing the Kafka streams graph for null-key records");
         rewriteRepartitionNodes();
     }
 

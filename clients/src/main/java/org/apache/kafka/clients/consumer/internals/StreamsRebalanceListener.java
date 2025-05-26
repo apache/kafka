@@ -20,7 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Listener for handling Streams group rebalance events in Kafka Streams.
+ * Listener for handling streams group rebalance events in Kafka Streams.
  */
 public interface StreamsRebalanceListener {
 

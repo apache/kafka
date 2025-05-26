@@ -78,7 +78,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     private volatile Map<ShareGroupState, Long> shareGroupGauges;
 
     /**
-     * Streams group size gauge counters keyed by the metric name.
+     * streams group size gauge counters keyed by the metric name.
      */
     private volatile Map<StreamsGroupState, Long> streamsGroupGauges;
 
