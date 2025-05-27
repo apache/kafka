@@ -22,6 +22,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Time;
 
+import java.util.Objects;
+
 /**
  * The StrictControllerMutationQuota defines a strict quota for a given user/clientId pair. The
  * quota is strict meaning that 1) it does not accept any mutations once the quota is exhausted
@@ -34,8 +36,8 @@ public class StrictControllerMutationQuota extends AbstractControllerMutationQuo
     private final Sensor quotaSensor;
 
     public StrictControllerMutationQuota(Time time, Sensor quotaSensor) {
-        super(time);
-        this.quotaSensor = quotaSensor;
+        super(Objects.requireNonNull(time, "time cannot be null"));
+        this.quotaSensor = Objects.requireNonNull(quotaSensor, "quotaSensor cannot be null");
     }
 
     @Override
