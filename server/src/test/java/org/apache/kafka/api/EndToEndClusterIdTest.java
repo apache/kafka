@@ -65,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 @ClusterTestDefaults(serverProperties = {
     @ClusterConfigProperty(key = MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.api.EndToEndClusterIdTest$MockCommonMetricsReporter"),
+    @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
 })
 public class EndToEndClusterIdTest {
 
