@@ -20,6 +20,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreatePartitionsResult;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
@@ -56,6 +57,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.metadata.LeaderAndIsr;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
@@ -82,6 +84,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1397,6 +1400,27 @@ public class TopicCommandTest {
             assertThrows(TopicExistsException.class,
                     () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", topic)));
 
+        }
+    }
+
+    @ClusterTest
+    public void testCreateWithInternalConfig(ClusterInstance cluster) throws InterruptedException, ExecutionException {
+        String internalConfigTopicName = TestUtils.randomString(10);
+        String testTopicName = TestUtils.randomString(10);
+
+        try (Admin adminClient = cluster.admin()) {
+            CreateTopicsResult internalResult = adminClient.createTopics(List.of(new NewTopic(internalConfigTopicName, defaultNumPartitions, defaultReplicationFactor).configs(
+                Map.of(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1000")
+            )));
+
+            ConfigEntry internalConfigEntry = internalResult.config(internalConfigTopicName).get().get(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
+            assertNotNull(internalConfigEntry, "Internal config entry should not be null");
+            assertEquals("1000", internalConfigEntry.value());
+
+            CreateTopicsResult nonInternalResult = adminClient.createTopics(List.of(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
+            
+            ConfigEntry nonInternalConfigEntry = nonInternalResult.config(testTopicName).get().get(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
+            assertNull(nonInternalConfigEntry, "Non-internal config entry should be null");
         }
     }
 
