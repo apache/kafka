@@ -102,7 +102,7 @@ import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.server.ClientQuotaManager
 import org.apache.kafka.server.ControllerMutationQuotaManager
-import org.apache.kafka.server.UnboundedControllerMutationQuota
+import org.apache.kafka.server.ControllerMutationQuota
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -966,11 +966,11 @@ class KafkaApisTest extends Logging {
       when(clientControllerQuotaManager.newPermissiveQuotaFor(
         ArgumentMatchers.eq(request.session),
         ArgumentMatchers.eq(request.header.clientId())
-      )).thenReturn(UnboundedControllerMutationQuota.INSTANCE)
+      )).thenReturn(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA)
 
       when(autoTopicCreationManager.createTopics(
         ArgumentMatchers.eq(Set(topicName)),
-        ArgumentMatchers.eq(UnboundedControllerMutationQuota.INSTANCE),
+        ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA),
         capturedRequest.capture())).thenReturn(
         Seq(new MetadataResponseTopic()
         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())

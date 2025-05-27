@@ -25,4 +25,20 @@ public interface ControllerMutationQuota {
     boolean isExceeded();
     void record(double permits);
     int throttleTime();
+
+    ControllerMutationQuota UNBOUNDED_CONTROLLER_MUTATION_QUOTA = new ControllerMutationQuota() {
+        @Override
+        public boolean isExceeded() {
+            return false;
+        }
+
+        @Override
+        public void record(double permits) {
+        }
+
+        @Override
+        public int throttleTime() {
+            return 0;
+        }
+    };
 }

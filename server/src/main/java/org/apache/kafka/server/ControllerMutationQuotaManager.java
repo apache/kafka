@@ -131,7 +131,7 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
             ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
             return new StrictControllerMutationQuota(time, clientSensors.quotaSensor());
         } else {
-            return UnboundedControllerMutationQuota.INSTANCE;
+            return ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA;
         }
     }
 
@@ -152,7 +152,7 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
             ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
             return new PermissiveControllerMutationQuota(time, clientSensors.quotaSensor());
         } else {
-            return UnboundedControllerMutationQuota.INSTANCE;
+            return ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA;
         }
     }
 

@@ -39,7 +39,7 @@ import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorCon
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ServerConfigs
-import org.apache.kafka.server.UnboundedControllerMutationQuota
+import org.apache.kafka.server.ControllerMutationQuota
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
@@ -151,7 +151,7 @@ class AutoTopicCreationManagerTest {
     val requestContext = initializeRequestContext(userPrincipal, Optional.of(principalSerde))
 
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota.INSTANCE, Some(requestContext))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
 
     assertTrue(serializeIsCalled.get())
 
@@ -171,7 +171,7 @@ class AutoTopicCreationManagerTest {
 
     // Throw upon undefined principal serde when building the forward request
     assertThrows(classOf[IllegalArgumentException], () => autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota.INSTANCE, Some(requestContext)))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext)))
   }
 
   @Test
@@ -187,9 +187,9 @@ class AutoTopicCreationManagerTest {
 
     val requestContext = initializeRequestContext(KafkaPrincipal.ANONYMOUS, Optional.of(principalSerde))
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota.INSTANCE, Some(requestContext))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota.INSTANCE, Some(requestContext))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
 
     // Should only trigger once
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
@@ -209,7 +209,7 @@ class AutoTopicCreationManagerTest {
 
     // Could do the send again as inflight topics are cleared.
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota.INSTANCE, Some(requestContext))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
     Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
       argumentCaptor.capture())
@@ -377,7 +377,7 @@ class AutoTopicCreationManagerTest {
                                          isInternal: Boolean,
                                          metadataContext: Option[RequestContext] = None): Unit = {
     val topicResponses = autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota.INSTANCE, metadataContext)
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, metadataContext)
 
     val expectedResponses = Seq(new MetadataResponseTopic()
       .setErrorCode(error.code())

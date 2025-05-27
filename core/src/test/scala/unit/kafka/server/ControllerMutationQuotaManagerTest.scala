@@ -28,7 +28,7 @@ import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.server.quota.QuotaType
 import org.apache.kafka.server.PermissiveControllerMutationQuota
 import org.apache.kafka.server.StrictControllerMutationQuota
-import org.apache.kafka.server.UnboundedControllerMutationQuota
+import org.apache.kafka.server.ControllerMutationQuota
 import org.apache.kafka.server.ControllerMutationQuotaManager
 import org.apache.kafka.server.ClientQuotaManager
 import org.junit.jupiter.api.Assertions._
@@ -206,7 +206,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testNewStrictQuotaForReturnsUnboundedQuotaWhenQuotaIsDisabled(): Unit = {
     withQuotaManager { quotaManager =>
-      assertEquals(UnboundedControllerMutationQuota.INSTANCE,
+      assertEquals(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA,
         quotaManager.newStrictQuotaFor(buildSession(User), ClientId))
     }
   }
@@ -228,7 +228,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testNewPermissiveQuotaForReturnsUnboundedQuotaWhenQuotaIsDisabled(): Unit = {
     withQuotaManager { quotaManager =>
-      assertEquals(UnboundedControllerMutationQuota.INSTANCE,
+      assertEquals(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA,
         quotaManager.newPermissiveQuotaFor(buildSession(User), ClientId))
     }
   }
