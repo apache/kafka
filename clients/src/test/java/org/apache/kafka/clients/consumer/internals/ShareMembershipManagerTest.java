@@ -590,8 +590,12 @@ public class ShareMembershipManagerTest {
             new ShareGroupHeartbeatResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setMemberId(membershipManager.memberId())
-                .setMemberEpoch(membershipManager.memberEpoch())
+                .setMemberEpoch(MEMBER_EPOCH)
         ));
+        assertFalse(leaveResult.isDone());
+
+        // Receive a leave heartbeat response, which should unblock the consumer
+        membershipManager.onHeartbeatSuccess(createShareGroupLeaveResponse(membershipManager.memberId()));
         assertTrue(leaveResult.isDone());
 
         // Share unblocks and updates subscription

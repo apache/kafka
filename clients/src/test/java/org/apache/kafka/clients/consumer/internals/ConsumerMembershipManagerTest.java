@@ -1027,9 +1027,12 @@ public class ConsumerMembershipManagerTest {
             new ConsumerGroupHeartbeatResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setMemberId(membershipManager.memberId())
-                .setMemberEpoch(membershipManager.memberEpoch())
+                .setMemberEpoch(MEMBER_EPOCH)
         ));
-        assertTrue(leaveResult.isDone());
+        assertFalse(leaveResult.isDone());
+
+        // Receive a leave heartbeat response, which should unblock the consumer
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
 
         // Consumer unblocks and updates subscription
         membershipManager.onSubscriptionUpdated();

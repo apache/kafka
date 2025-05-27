@@ -1170,7 +1170,16 @@ public class StreamsMembershipManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setMemberId(membershipManager.memberId())
-                .setMemberEpoch(membershipManager.memberEpoch())
+                .setMemberEpoch(MEMBER_EPOCH)
+        ));
+        assertFalse(leaveResult.isDone());
+
+        // Receive a leave heartbeat response, which should unblock the consumer
+        membershipManager.onHeartbeatSuccess(new StreamsGroupHeartbeatResponse(
+            new StreamsGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
         ));
         assertTrue(leaveResult.isDone());
 

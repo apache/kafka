@@ -139,7 +139,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         }
         if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
-                "to leave the group and completed the leave operation. ", memberId, memberEpoch);
+                    "to leave the group and completed the leave operation. ", memberId, memberEpoch);
             return;
         }
         if (isNotInGroup()) {
@@ -150,7 +150,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         if (responseData.memberEpoch() < 0) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
                     "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
-                responseData.memberEpoch());
+                    responseData.memberEpoch());
             maybeCompleteLeaveInProgress();
             return;
         }
