@@ -148,18 +148,20 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         long pollTimeoutMs = timeoutMs;
 
-        if (!hasAnyPendingRequests())
+        if (!hasAnyPendingRequests()) {
+            // If there aren't any outgoing or inflight requests, execute a cursory poll so that the
+            // internal NetworkClient can do all of its work, but don't block unnecessarily.
             pollTimeoutMs = 0;
-        else if (!unsentRequests.isEmpty()) {
+        } else if (!unsentRequests.isEmpty()) {
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
 
         List<ClientResponse> clientResponses = this.client.poll(pollTimeoutMs, currentTimeMs);
-
         maybePropagateMetadataError();
         checkDisconnects(currentTimeMs);
         asyncConsumerMetrics.recordUnsentRequestsQueueSize(unsentRequests.size(), currentTimeMs);
 
+        // To mimic the classic Consumer, if there were responses, wake up the Selector.
         if (clientResponses != null && !clientResponses.isEmpty())
             client.wakeup();
     }
@@ -190,7 +192,7 @@ public class NetworkClientDelegate implements AutoCloseable {
      */
     private void trySend(final long currentTimeMs) {
         Iterator<UnsentRequest> iterator = unsentRequests.iterator();
-        boolean shouldWakeup = false;
+        boolean requestSent = false;
 
         while (iterator.hasNext()) {
             UnsentRequest unsent = iterator.next();
@@ -209,10 +211,11 @@ public class NetworkClientDelegate implements AutoCloseable {
             }
             iterator.remove();
             asyncConsumerMetrics.recordUnsentRequestsQueueTime(time.milliseconds() - unsent.enqueueTimeMs());
-            shouldWakeup = true;
+            requestSent = true;
         }
 
-        if (shouldWakeup)
+        // Mimic the classic Consumer in that if any of the enqueued requests were sent, wake up the Selector.
+        if (requestSent)
             client.wakeup();
     }
 

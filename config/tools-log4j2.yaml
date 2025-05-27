@@ -29,17 +29,3 @@ Configuration:
       level: WARN
       AppenderRef:
         - ref: STDERR
-    Logger:
-      # Kafka logger
-      - name: org.apache.kafka.clients.consumer.ConsumerConfig
-        level: WARN
-
-      - name: org.apache.kafka.clients.consumer
-        level: WARN
-
-      - name: org.apache.kafka.clients.NetworkClient
-        level: WARN
-
-      - name: org.apache.kafka.common.network.Selector
-        level: WARN
-
