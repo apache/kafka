@@ -624,12 +624,12 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords, result.records());
         assertTrue(context.groupMetadataManager.topicHashCache().containsKey(fooTopicName));
 
-        // leave group
+        // Use LEAVE_GROUP_STATIC_MEMBER_EPOCH to leave group, so there is no group subscribes to foo.
         result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-                .setMemberEpoch(-2));
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH));
 
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
@@ -646,7 +646,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, 0)
         );
         assertRecordsEquals(expectedRecords, result.records());
-        assertTrue(context.groupMetadataManager.topicHashCache().isEmpty());
+        assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
     }
 
     @Test
@@ -799,12 +799,14 @@ public class GroupMetadataManagerTest {
         MetadataImage newMetadataImage = new MetadataImageBuilder(metadataImage)
             .addTopic(fooTopicId, fooTopicName, 6)
             .addRacks()
-            .build(2L);
+            .build();
 
         context.groupMetadataManager.onNewMetadataImage(
             newMetadataImage,
             new MetadataDelta(newMetadataImage)
         );
+        // If a topic is updated, related topic hash is cleanup.
+        assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
 
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
@@ -836,6 +838,97 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
                 fooTopicName, computeTopicHash(fooTopicName, newMetadataImage)
             ))),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testRemoveTopicCleanupTopicHash() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .build();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                    .build())
+                .withAssignment(memberId, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName,
+                    computeTopicHash(fooTopicName, metadataImage))
+                )))
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of(memberId, new MemberAssignmentImpl(Map.of()))
+        ));
+
+        // Remove foo topic from metadata image.
+        MetadataDelta delta = new MetadataDelta(metadataImage);
+        delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
+        MetadataImage newMetadataImage = delta.apply(MetadataProvenance.EMPTY);
+
+        context.groupMetadataManager.onNewMetadataImage(
+            newMetadataImage,
+            new MetadataDelta(newMetadataImage)
+        );
+        // If a topic is removed, related topic hash is cleanup.
+        assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
+
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
+            .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of("foo"))
+            .setServerAssignorName("range")
+            .setPartitionsPendingRevocation(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+            .build();
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, Map.of()),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
@@ -18804,7 +18897,7 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupPartitionMetadataKey().setGroupId(groupId),
             new ApiMessageAndVersion(consumerGroupPartitionMetadataValue, (short) 0)
         ));
-        assertTrue(context.groupMetadataManager.consumerGroup(groupId).addSubscriptionMetadataTombstoneRecord());
+        assertTrue(context.groupMetadataManager.consumerGroup(groupId).hasSubscriptionMetadataRecord());
     }
 
     @Test
@@ -18827,7 +18920,7 @@ public class GroupMetadataManagerTest {
         // The group exists. Replaying the ConsumerGroupPartitionMetadata tombstone
         // doesn't set addSubscriptionMetadataTombstoneRecord flag.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord("foo"));
-        assertFalse(context.groupMetadataManager.consumerGroup("foo").addSubscriptionMetadataTombstoneRecord());
+        assertFalse(context.groupMetadataManager.consumerGroup("foo").hasSubscriptionMetadataRecord());
     }
 
     @Test

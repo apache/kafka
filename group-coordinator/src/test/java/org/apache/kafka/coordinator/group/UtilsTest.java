@@ -210,11 +210,6 @@ public class UtilsTest {
     }
 
     @Test
-    void testComputeGroupHashWithZeroTopicHash() {
-        assertEquals(0, Utils.computeGroupHash(Map.of(BAR_TOPIC_NAME, 0L)));
-    }
-
-    @Test
     void testComputeGroupHashWithDifferentOrder() {
         Map<String, Long> ascendTopicHashes = new LinkedHashMap<>();
         ascendTopicHashes.put(BAR_TOPIC_NAME, 123L);

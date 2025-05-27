@@ -349,19 +349,12 @@ public class Utils {
      * @return The hash of the group.
      */
     public static long computeGroupHash(Map<String, Long> topicHashes) {
-        List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>();
-        for (Map.Entry<String, Long> entry : topicHashes.entrySet()) {
-            // Filter out entries with a hash value of 0, which indicates no topic
-            if (entry.getValue() != 0) {
-                sortedEntries.add(entry);
-            }
-        }
-
-        if (sortedEntries.isEmpty()) {
+        if (topicHashes.isEmpty()) {
             return 0;
         }
 
         // Sort entries by topic name
+        List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>(topicHashes.entrySet());
         sortedEntries.sort(Map.Entry.comparingByKey());
 
         HashStream64 hasher = Hashing.xxh3_64().hashStream();

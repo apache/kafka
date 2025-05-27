@@ -491,7 +491,9 @@ public class GroupMetadataManager {
     private MetadataImage metadataImage;
 
     /**
-     * The topic hash value by topic name.
+     * The cache for topic hash value by topic name.
+     * A topic hash is calculated when there is a group subscribes to it.
+     * A topic hash is removed when it's updated in MetadataImage or there is no group subscribes to it.
      */
     private final Map<String, Long> topicHashCache;
 
@@ -3646,9 +3648,11 @@ public class GroupMetadataManager {
 
         group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
 
-        if (group.addSubscriptionMetadataTombstoneRecord()) {
+        // Before 4.0, the coordinator used subscription metadata to keep topic metadata.
+        // After 4.1, the subscription metadata is replaced by the metadata hash. If there is subscription metadata in log,
+        // add a tombstone record to remove it.
+        if (group.hasSubscriptionMetadataRecord()) {
             records.add(newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId));
-            group.setAddSubscriptionMetadataTombstoneRecord(false);
         }
 
         return new UpdateSubscriptionMetadataResult(
@@ -5102,7 +5106,7 @@ public class GroupMetadataManager {
 
         // If value is not null, add subscription metadata tombstone record in the next consumer group heartbeat,
         // because the subscription metadata is replaced by metadata hash in ConsumerGroupMetadataValue.
-        group.setAddSubscriptionMetadataTombstoneRecord(value != null);
+        group.setHasSubscriptionMetadataRecord(value != null);
     }
 
     /**

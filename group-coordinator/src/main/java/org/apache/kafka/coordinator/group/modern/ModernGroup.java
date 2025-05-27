@@ -429,12 +429,15 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         MetadataImage metadataImage
     ) {
         Map<String, Long> topicHash = new HashMap<>(subscribedTopicNames.size());
-        subscribedTopicNames.keySet().forEach(topicName ->
-            topicHash.put(
-                topicName,
-                topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
-            )
-        );
+        subscribedTopicNames.keySet().forEach(topicName -> {
+            TopicImage topicImage = metadataImage.topics().getTopic(topicName);
+            if (topicImage != null) {
+                topicHash.put(
+                    topicName,
+                    topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
+                );
+            }
+        });
         return Utils.computeGroupHash(topicHash);
     }
 

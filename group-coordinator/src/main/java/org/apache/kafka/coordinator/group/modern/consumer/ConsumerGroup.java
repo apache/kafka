@@ -151,7 +151,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     private final TimelineHashMap<String, ResolvedRegularExpression> resolvedRegularExpressions;
 
-    private final TimelineObject<Boolean> addSubscriptionMetadataTombstoneRecord;
+    private final TimelineObject<Boolean> hasSubscriptionMetadataRecord;
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
@@ -168,7 +168,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.resolvedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.addSubscriptionMetadataTombstoneRecord = new TimelineObject<>(snapshotRegistry, false);
+        this.hasSubscriptionMetadataRecord = new TimelineObject<>(snapshotRegistry, false);
     }
 
     /**
@@ -1302,11 +1302,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         return false;
     }
 
-    public void setAddSubscriptionMetadataTombstoneRecord(boolean addSubscriptionMetadataTombstoneRecord) {
-        this.addSubscriptionMetadataTombstoneRecord.set(addSubscriptionMetadataTombstoneRecord);
+    public void setHasSubscriptionMetadataRecord(boolean hasSubscriptionMetadataRecord) {
+        this.hasSubscriptionMetadataRecord.set(hasSubscriptionMetadataRecord);
     }
 
-    public boolean addSubscriptionMetadataTombstoneRecord() {
-        return addSubscriptionMetadataTombstoneRecord.get();
+    public boolean hasSubscriptionMetadataRecord() {
+        return hasSubscriptionMetadataRecord.get();
     }
 }
