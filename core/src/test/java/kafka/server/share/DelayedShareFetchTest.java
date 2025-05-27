@@ -25,12 +25,14 @@ import kafka.server.ReplicaQuota;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
@@ -111,8 +113,9 @@ public class DelayedShareFetchTest {
     private static final FetchParams FETCH_PARAMS = new FetchParams(
         FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK,
         Optional.empty(), true);
+    private static final MemoryRecords MEMORY_RECORDS = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes()));
     private static final FetchDataInfo REMOTE_FETCH_INFO = new FetchDataInfo(new LogOffsetMetadata(0, 0, 0),
-        MemoryRecords.EMPTY, false, Optional.empty(), Optional.of(mock(RemoteStorageFetchInfo.class)));
+        MEMORY_RECORDS, false, Optional.empty(), Optional.of(mock(RemoteStorageFetchInfo.class)));
     private static final BrokerTopicStats BROKER_TOPIC_STATS = new BrokerTopicStats();
 
     private Timer mockTimer;
@@ -1977,7 +1980,7 @@ public class DelayedShareFetchTest {
         Set<TopicIdPartition> remoteReadTopicIdPartitions) {
         List<Tuple2<TopicIdPartition, LogReadResult>> logReadResults = new ArrayList<>();
         localLogReadTopicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
-            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), MemoryRecords.EMPTY),
+            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), MEMORY_RECORDS),
             Option.empty(),
             -1L,
             -1L,
