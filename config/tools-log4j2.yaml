@@ -29,3 +29,4 @@ Configuration:
       level: WARN
       AppenderRef:
         - ref: STDERR
+
