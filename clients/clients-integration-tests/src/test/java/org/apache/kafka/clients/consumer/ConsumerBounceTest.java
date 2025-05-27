@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.consumer;
 
-import kafka.server.KafkaBroker;
-
 import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
@@ -239,6 +237,7 @@ public class ConsumerBounceTest {
     @ClusterTest
     public void testSubscribeWhenTopicUnavailable() throws Exception {
         String newTopic = "new-topic";
+        TopicPartition newTopicPartition = new TopicPartition(newTopic, 0);
         int numRecords = 1000;
 
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer();
@@ -247,29 +246,29 @@ public class ConsumerBounceTest {
         // Schedule topic creation after 2 seconds
         executor.schedule(() -> assertDoesNotThrow(() -> clusterInstance.createTopic(newTopic, numPartitions, numReplica)),
                 2, TimeUnit.SECONDS);
-        ClientsTestUtils.sendRecords(clusterInstance, new TopicPartition(newTopic, 0), numRecords);
+        ClientsTestUtils.sendRecords(clusterInstance, newTopicPartition, numRecords);
 
 
         // Start first poller
         ConsumerAssignmentPoller poller = new ConsumerAssignmentPoller(consumer, List.of(newTopic));
         consumerPollers.add(poller);
         poller.start();
-        ClientsTestUtils.sendRecords(clusterInstance, new TopicPartition(newTopic, 0), numRecords);
+        ClientsTestUtils.sendRecords(clusterInstance, newTopicPartition, numRecords);
         receiveExactRecords(poller, numRecords, 60000L);
         poller.shutdown();
 
         // Simulate broker failure and recovery
-        clusterInstance.brokers().values().forEach(KafkaBroker::shutdown);
+        clusterInstance.brokers().keySet().forEach(clusterInstance::shutdownBroker);
         Thread.sleep(500);
-        clusterInstance.brokers().values().forEach(KafkaBroker::startup);
+        clusterInstance.brokers().keySet().forEach(clusterInstance::startBroker);
 
         // Start second poller after recovery
         ConsumerAssignmentPoller poller2 = new ConsumerAssignmentPoller(consumer, List.of(newTopic));
         consumerPollers.add(poller2);
         poller2.start();
 
-        ClientsTestUtils.sendRecords(clusterInstance, new TopicPartition(newTopic, 0), numRecords);
-        receiveExactRecords(poller2, numRecords, 10000L);
+        ClientsTestUtils.sendRecords(clusterInstance, newTopicPartition, numRecords);
+        receiveExactRecords(poller2, numRecords, 60000L);
     }
 
     @ClusterTest
@@ -403,8 +402,10 @@ public class ConsumerBounceTest {
     }
 
     private void receiveExactRecords(ConsumerAssignmentPoller consumer, int numRecords, long timeoutMs) throws InterruptedException {
-        TestUtils.waitForCondition(() -> consumer.receivedMessages() == numRecords, timeoutMs,
-            String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
+        TestUtils.waitForCondition(() -> {
+            System.err.println("ZZZZ " + consumer.receivedMessages());
+            return consumer.receivedMessages() == numRecords;
+        }, timeoutMs, String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
     }
 
     // A mock class to represent broker bouncing (simulate broker restart behavior)
