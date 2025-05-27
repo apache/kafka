@@ -20,11 +20,12 @@ import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 
+import java.util.Objects;
+
 /**
  * The PermissiveControllerMutationQuota defines a permissive quota for a given user/clientId pair.
  * The quota is permissive meaning that 1) it does accept any mutations even if the quota is
  * exhausted; and 2) it does throttle as soon as the quota is exhausted.
- *
  * time @Time object to use
  * quotaSensor @Sensor object with a defined quota for a given user/clientId pair
  */
@@ -32,8 +33,8 @@ public class PermissiveControllerMutationQuota extends AbstractControllerMutatio
     private final Sensor quotaSensor;
 
     public PermissiveControllerMutationQuota(Time time, Sensor quotaSensor) {
-        super(time);
-        this.quotaSensor = quotaSensor;
+        super(Objects.requireNonNull(time, "time cannot be null"));
+        this.quotaSensor = Objects.requireNonNull(quotaSensor, "quotaSensor cannot be null");
     }
 
     @Override
