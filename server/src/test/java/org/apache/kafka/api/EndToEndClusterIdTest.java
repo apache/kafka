@@ -141,7 +141,7 @@ public class EndToEndClusterIdTest {
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName(),
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName(),
             ProducerConfig.CLIENT_ID_CONFIG, PRODUCER_CLIENT_ID);
-        try (var producer = clusterInstance.<byte[], byte[]>producer(producerConfig)) {
+        try (var producer = clusterInstance.<String, String>producer(producerConfig)) {
             // Send one record and make sure clusterId is set after sending and before onAcknowledgement
             sendRecord(producer);
         }
@@ -168,7 +168,7 @@ public class EndToEndClusterIdTest {
             ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, MockDeserializer.class.getName(),
             ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name(),
             ConsumerConfig.CLIENT_ID_CONFIG, CONSUMER_CLIENT_ID);
-        try (var consumer = clusterInstance.<byte[], byte[]>consumer(consumerConfig)) {
+        try (var consumer = clusterInstance.<String, String>consumer(consumerConfig)) {
             consumer.assign(List.of(TP));
             consumer.seek(TP, 0);
             // consume and verify that values are modified by interceptors
@@ -210,19 +210,19 @@ public class EndToEndClusterIdTest {
         MockProducerInterceptor.resetCounters();
     }
 
-    private static void sendRecord(Producer<byte[], byte[]> producer) throws Exception {
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(TP.topic(), TP.partition(), "0".getBytes(), "0".getBytes());
+    private static void sendRecord(Producer<String, String> producer) throws Exception {
+        ProducerRecord<String, String> record = new ProducerRecord<>(TP.topic(), TP.partition(), "0", "0");
         producer.send(record).get();
     }
 
-    private void consumeRecord(Consumer<byte[], byte[]> consumer) throws InterruptedException {
-        List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+    private void consumeRecord(Consumer<String, String> consumer) throws InterruptedException {
+        List<ConsumerRecord<String, String>> records = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
             consumer.poll(Duration.ofMillis(100)).forEach(records::add);
             return !records.isEmpty();
         }, 60000, "Timed out before consuming expected record.");
 
-        ConsumerRecord<byte[], byte[]> record = records.get(0);
+        ConsumerRecord<String, String> record = records.get(0);
         assertEquals(TOPIC, record.topic());
         assertEquals(PARTITION, record.partition());
         assertEquals(0, record.offset());
