@@ -109,6 +109,7 @@ public class ProduceResponse extends AbstractResponse {
                 tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic()).setTopicId(tp.topicId());
                 data.responses().add(tpr);
             }
+            System.err.println("AAA error code:" + response.error.code());
             tpr.partitionResponses()
                 .add(new ProduceResponseData.PartitionProduceResponse()
                     .setIndex(tp.partition())
