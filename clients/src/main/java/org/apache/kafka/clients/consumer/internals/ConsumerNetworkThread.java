@@ -39,14 +39,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.TreeMap;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -76,11 +71,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
     private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
     private long lastPollTimeMs = 0L;
-
-    private final AtomicBoolean canWakeup = new AtomicBoolean(true);
-    private int ignoredWakeups = 0;
-    private final Map<String, AtomicInteger> wakeupCauseCounts = new TreeMap<>();
-    private final FeatureFlags featureFlags = new FeatureFlags();
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
@@ -156,7 +146,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     void runOnce() {
         ApplicationEvent event = null;
 
-        if (featureFlags.useQueueForWakeup && !networkClientDelegate.hasAnyPendingRequests()) {
+        if (!networkClientDelegate.hasAnyPendingRequests()) {
             // If we don't have any outstanding network requests, we can park here until the next event comes.
             event = applicationEventQueue.poll();
         }
@@ -178,7 +168,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
 
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
-        canWakeup.set(true);
 
         long maxTimeToWaitMs = Long.MAX_VALUE;
 
@@ -273,52 +262,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         return running;
     }
 
-    public void wakeupForEvent(ApplicationEvent cause) {
-        String name = cause.type().name();
-
-        if (featureFlags.ignoreEventWakeups) {
-            log.debug("wakeupForEvent - ignoring {}", name);
-        } else {
-            if (wakeup(name))
-                log.debug("wakeupForEvent - waking up for {}", name);
-            else
-                log.debug("wakeupForEvent - tried to wake up for {}, but was duplicate", name);
-        }
-    }
-
-    public void wakeupForPrefetch() {
-        if (featureFlags.ignorePrefetchWakeups) {
-            log.debug("wakeupForPrefetch - ignoring");
-        } else {
-            if (wakeup("Prefetch"))
-                log.debug("wakeupForPrefetch - waking up");
-            else
-                log.debug("wakeupForPrefetch - tried to wake up, but was duplicate");
-        }
-    }
-
-    private boolean wakeup(String cause) {
-        // The network client can be null if the initializeResources method has not yet been called.
-        if (networkClientDelegate != null) {
-            if (featureFlags.dedupeEventWakeups) {
-                if (canWakeup.compareAndSet(true, false)) {
-                    networkClientDelegate.wakeup();
-                } else {
-                    log.debug("wakeup - ignoring duplicate for {}", cause);
-                    ignoredWakeups++;
-                    return false;
-                }
-            } else {
-                networkClientDelegate.wakeup();
-            }
-
-            wakeupCauseCounts.computeIfAbsent(cause, __ -> new AtomicInteger()).incrementAndGet();
-            return true;
-        }
-
-        return false;
-    }
-
     /**
      * Returns the delay for which the application thread can safely wait before it should be responsive
      * to results from the request managers. For example, the subscription state can change when heartbeats
@@ -372,12 +315,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Signaling the consumer network thread to close in {}ms", timeoutMs);
         running = false;
         closeTimeout = timeout;
-
-        log.debug("Ignored wakeups: {}", ignoredWakeups);
-
-        wakeupCauseCounts.forEach((k, v) -> {
-            log.debug("Wakeup cause {}: {}", k, v);
-        });
 
         if (networkClientDelegate != null)
             networkClientDelegate.wakeup();

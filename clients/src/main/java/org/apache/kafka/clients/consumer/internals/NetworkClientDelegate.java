@@ -74,8 +74,6 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final boolean notifyMetadataErrorsViaErrorQueue;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
-    private final FeatureFlags featureFlags = new FeatureFlags();
-
     public NetworkClientDelegate(
             final Time time,
             final ConsumerConfig config,
@@ -149,22 +147,20 @@ public class NetworkClientDelegate implements AutoCloseable {
         trySend(currentTimeMs);
 
         long pollTimeoutMs = timeoutMs;
-        if (!unsentRequests.isEmpty()) {
+
+        if (!hasAnyPendingRequests())
+            pollTimeoutMs = 0;
+        else if (!unsentRequests.isEmpty()) {
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
-        List<ClientResponse> clientResponses;
 
-        if (featureFlags.ignoreNoopPoll && inflightRequestCount() == 0 && unsentRequests.isEmpty()) {
-            clientResponses = Collections.emptyList();
-        } else {
-            clientResponses = this.client.poll(pollTimeoutMs, currentTimeMs);
-        }
+        List<ClientResponse> clientResponses = this.client.poll(pollTimeoutMs, currentTimeMs);
 
         maybePropagateMetadataError();
         checkDisconnects(currentTimeMs);
         asyncConsumerMetrics.recordUnsentRequestsQueueSize(unsentRequests.size(), currentTimeMs);
 
-        if (featureFlags.wakeupAfterPoll && clientResponses != null && !clientResponses.isEmpty())
+        if (clientResponses != null && !clientResponses.isEmpty())
             client.wakeup();
     }
 
@@ -216,7 +212,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             shouldWakeup = true;
         }
 
-        if (shouldWakeup && featureFlags.wakeupAfterTrySend)
+        if (shouldWakeup)
             client.wakeup();
     }
 

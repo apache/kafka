@@ -1822,19 +1822,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * of the {@link #fetchBuffer}, converting it to a well-formed {@link CompletedFetch}, validating that it and
      * the internal {@link SubscriptionState state} are correct, and then converting it all into a {@link Fetch}
      * for returning.
-     *
-     * <p/>
-     *
-     * This method will {@link ConsumerNetworkThread#wakeup() wake up the network thread} before returning. This is
-     * done as an optimization so that the <em>next round of data can be pre-fetched</em>.
      */
     private Fetch<K, V> collectFetch() {
-        final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
-
-        // Notify the network thread to wake up and start the next round of fetching.
-        applicationEventHandler.wakeupNetworkThread();
-
-        return fetch;
+        return fetchCollector.collectFetch(fetchBuffer);
     }
 
     /**
