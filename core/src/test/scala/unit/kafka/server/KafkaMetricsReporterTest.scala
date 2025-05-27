@@ -23,10 +23,8 @@ import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsRepo
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 
 object KafkaMetricsReporterTest {
@@ -78,9 +76,8 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
     broker.startup()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testMetricsContextNamespacePresent(quorum: String): Unit = {
+  @Test
+  def testMetricsContextNamespacePresent(): Unit = {
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.CLUSTERID.get())
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.NODEID.get())
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.JMXPREFIX.get())

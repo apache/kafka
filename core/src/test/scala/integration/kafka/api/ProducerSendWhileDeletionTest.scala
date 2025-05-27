@@ -22,14 +22,11 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, Record
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Optional
-import scala.jdk.CollectionConverters._
-
 
 class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val producerCount: Int = 1
@@ -50,23 +47,22 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the partition is included in the metadata.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSendWithTopicDeletionMidWay(quorum: String): Unit = {
+  @Test
+  def testSendWithTopicDeletionMidWay(): Unit = {
     val numRecords = 10
     val topic = "topic"
 
     // Create topic with leader as 0 for the 2 partitions.
     createTopicWithAssignment(topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1)))
 
-    val reassignment = Map(
-      new TopicPartition(topic, 0) -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 0))),
-      new TopicPartition(topic, 1) -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 0)))
+    val reassignment = util.Map.of(
+      new TopicPartition(topic, 0), Optional.of(new NewPartitionReassignment(util.List.of(1, 0))),
+      new TopicPartition(topic, 1), Optional.of(new NewPartitionReassignment(util.List.of(1, 0)))
     )
 
     // Change leader to 1 for both the partitions to increase leader epoch from 0 -> 1
     val admin = createAdminClient()
-    admin.alterPartitionReassignments(reassignment.asJava).all().get()
+    admin.alterPartitionReassignments(reassignment).all().get()
 
     val producer = createProducer()
 
@@ -91,9 +87,8 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the metadata has been updated with new topic id.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSendWithRecreatedTopic(quorum: String): Unit = {
+  @Test
+  def testSendWithRecreatedTopic(): Unit = {
     val numRecords = 10
     val topic = "topic"
     createTopic(topic)
@@ -125,9 +120,8 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the metadata cache on the leader includes the partition topic id.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSendWithTopicReassignmentIsMidWay(quorum: String): Unit = {
+  @Test
+  def testSendWithTopicReassignmentIsMidWay(): Unit = {
     val numRecords = 10
     val topic = "topic"
     val partition0: TopicPartition = new TopicPartition(topic, 0)
@@ -145,12 +139,12 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
       assertEquals(topic, resp.topic())
     }
 
-    val reassignment = Map(
-      partition0 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1))),
+    val reassignment = util.Map.of(
+      partition0, Optional.of(new NewPartitionReassignment(util.List.of(1))),
     )
 
     // Change replica assignment from 0 to 1. Leadership moves to 1.
-    admin.alterPartitionReassignments(reassignment.asJava).all().get()
+    admin.alterPartitionReassignments(reassignment).all().get()
     TestUtils.assertLeader(admin, partition0, 1)
     assertEquals(topicDetails.topicId(), topicMetadata(admin, topic).topicId())
 
@@ -159,6 +153,6 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   }
 
   private def topicMetadata(admin: Admin, topic: String): TopicDescription = {
-    admin.describeTopics(util.Collections.singletonList(topic)).allTopicNames().get().get(topic)
+    admin.describeTopics(util.List.of(topic)).allTopicNames().get().get(topic)
   }
 }

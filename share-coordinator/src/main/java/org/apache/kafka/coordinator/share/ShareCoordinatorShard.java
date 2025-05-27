@@ -67,8 +67,10 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
     private final Logger log;
@@ -453,6 +455,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 topicId,
                 partitionId,
                 PartitionFactory.UNINITIALIZED_START_OFFSET,
+                PartitionFactory.DEFAULT_LEADER_EPOCH,
                 PartitionFactory.DEFAULT_STATE_EPOCH
             );
         } else {
@@ -470,6 +473,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     topicId,
                     partitionId,
                     offsetValue.startOffset(),
+                    offsetValue.leaderEpoch(),
                     offsetValue.stateEpoch()
                 );
             }
@@ -616,6 +620,28 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Remove share partitions corresponding to the input topic ids, if present.
+     * @param deletedTopicIds   The topic ids which have been deleted
+     * @return A result containing relevant coordinator records and void response
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareState(Set<Uuid> deletedTopicIds) {
+        if (deletedTopicIds.isEmpty()) {
+            return new CoordinatorResult<>(List.of());
+        }
+        Set<SharePartitionKey> eligibleKeys = new HashSet<>();
+        shareStateMap.forEach((key, __) -> {
+            if (deletedTopicIds.contains(key.topicId())) {
+                eligibleKeys.add(key);
+            }
+        });
+
+        return new CoordinatorResult<>(eligibleKeys.stream()
+            .map(key -> ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(key.groupId(), key.topicId(), key.partition()))
+            .toList()
+        );
+    }
+
+    /**
      * Util method to generate a ShareSnapshot or ShareUpdate type record for a key, based on various conditions.
      * <p>
      * If no snapshot has been created for the key => create a new ShareSnapshot record
@@ -746,11 +772,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
         if (partitionData.leaderEpoch() != -1 && leaderEpochMap.containsKey(mapKey) && leaderEpochMap.get(mapKey) > partitionData.leaderEpoch()) {
-            log.error("Request leader epoch smaller than last recorded.");
+            log.error("Write request leader epoch is smaller than last recorded current: {}, requested: {}.", leaderEpochMap.get(mapKey), partitionData.leaderEpoch());
             return Optional.of(getWriteErrorCoordinatorResult(Errors.FENCED_LEADER_EPOCH, null, topicId, partitionId));
         }
         if (partitionData.stateEpoch() != -1 && stateEpochMap.containsKey(mapKey) && stateEpochMap.get(mapKey) > partitionData.stateEpoch()) {
-            log.error("Request state epoch smaller than last recorded.");
+            log.info("Write request state epoch is smaller than last recorded current: {}, requested: {}.", stateEpochMap.get(mapKey), partitionData.stateEpoch());
             return Optional.of(getWriteErrorCoordinatorResult(Errors.FENCED_STATE_EPOCH, null, topicId, partitionId));
         }
         if (metadataImage == null) {
@@ -788,7 +814,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
         if (leaderEpochMap.containsKey(mapKey) && leaderEpochMap.get(mapKey) > partitionData.leaderEpoch()) {
-            log.error("Request leader epoch id is smaller than last recorded.");
+            log.error("Read request leader epoch is smaller than last recorded current: {}, requested: {}.", leaderEpochMap.get(mapKey), partitionData.leaderEpoch());
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.FENCED_LEADER_EPOCH, Errors.FENCED_LEADER_EPOCH.message()));
         }
 
@@ -889,7 +915,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicId, partitionId);
         if (partitionData.stateEpoch() != -1 && stateEpochMap.containsKey(key) && stateEpochMap.get(key) > partitionData.stateEpoch()) {
-            log.error("Initialize request state epoch smaller than last recorded.");
+            log.info("Initialize request state epoch is smaller than last recorded current: {}, requested: {}.", stateEpochMap.get(key), partitionData.stateEpoch());
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.FENCED_STATE_EPOCH, Errors.FENCED_STATE_EPOCH.exception(), topicId, partitionId));
         }
 

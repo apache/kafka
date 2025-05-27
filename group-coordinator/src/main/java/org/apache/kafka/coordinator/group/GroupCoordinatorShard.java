@@ -23,6 +23,8 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -526,15 +528,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Reconcile initializing and initialized tps in share group state metadata records.
-     *
-     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
-     */
-    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
-        return groupMetadataManager.reconcileShareGroupStateInitializingState(offset);
-    }
-
-    /**
      * Returns the set of share-partitions whose share-group state has been initialized in the persister.
      *
      * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
@@ -786,6 +779,36 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Make the following checks to make sure the AlterShareGroupOffsetsRequest request is valid:
+     * 1. Checks whether the provided group is empty
+     * 2. Checks the requested topics are presented in the metadataImage
+     * 3. Checks the corresponding share partitions in AlterShareGroupOffsetsRequest are existing
+     *
+     * @param groupId - The group ID
+     * @param alterShareGroupOffsetsRequestData - The request data for AlterShareGroupOffsetsRequestData
+     * @return A Result containing a pair of AlterShareGroupOffsets InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
+     */
+    public CoordinatorResult<Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters>, CoordinatorRecord> alterShareGroupOffsets(
+        String groupId,
+        AlterShareGroupOffsetsRequestData alterShareGroupOffsetsRequestData
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        ShareGroup group = groupMetadataManager.shareGroup(groupId);
+        group.validateOffsetsAlterable();
+
+        Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters> response = groupMetadataManager.completeAlterShareGroupOffsets(
+            groupId,
+            alterShareGroupOffsetsRequestData,
+            records
+        );
+        return new CoordinatorResult<>(
+            records,
+            response
+        );
+    }
+
+    /**
      * Fetch offsets for a given set of partitions and a given group.
      *
      * @param request   The OffsetFetchRequestGroup request.
@@ -1026,6 +1049,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             records.size(), time.milliseconds() - startTimeMs, topicPartitions);
 
         return new CoordinatorResult<>(records, false);
+    }
+
+    public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
+        Set<Uuid> deletedTopicIds
+    ) {
+        return groupMetadataManager.maybeCleanupShareGroupState(deletedTopicIds);
     }
 
     /**

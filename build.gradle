@@ -890,6 +890,9 @@ project(':server') {
   }
 
   dependencies {
+    compileOnly libs.bndlib
+    compileOnly libs.spotbugs
+
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':server-common')
@@ -902,6 +905,7 @@ project(':server') {
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.slf4jApi
+    implementation log4j2Libs
 
     testImplementation project(':clients').sourceSets.test.output
 
@@ -911,6 +915,7 @@ project(':server') {
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':storage:storage-api').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1417,6 +1422,7 @@ project(':group-coordinator') {
     implementation libs.hdrHistogram
     implementation libs.re2j
     implementation libs.slf4jApi
+    implementation libs.hash4j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1970,6 +1976,7 @@ project(':clients:clients-integration-tests') {
   }
 
   dependencies {
+    testImplementation libs.metrics
     testImplementation libs.slf4jApi
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
@@ -2233,6 +2240,7 @@ project(':storage') {
     implementation project(':clients')
     implementation(libs.caffeine) {
       exclude group: 'org.checkerframework', module: 'checker-qual'
+      exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
