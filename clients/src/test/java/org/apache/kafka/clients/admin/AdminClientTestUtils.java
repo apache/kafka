@@ -163,17 +163,17 @@ public class AdminClientTestUtils {
         return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
     }
 
-    public static ListClientMetricsResourcesResult listClientMetricsResourcesResult(String... names) {
-        return new ListClientMetricsResourcesResult(
-                KafkaFuture.completedFuture(Arrays.stream(names)
-                        .map(ClientMetricsResourceListing::new)
-                        .collect(Collectors.toList())));
+    public static ListConfigResourcesResult listConfigResourcesResult(String... names) {
+        return new ListConfigResourcesResult(
+            KafkaFuture.completedFuture(Arrays.stream(names)
+                .map(name -> new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name))
+                .collect(Collectors.toList())));
     }
 
-    public static ListClientMetricsResourcesResult listClientMetricsResourcesResult(KafkaException exception) {
-        final KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
+    public static ListConfigResourcesResult listConfigResourcesResult(KafkaException exception) {
+        final KafkaFutureImpl<Collection<ConfigResource>> future = new KafkaFutureImpl<>();
         future.completeExceptionally(exception);
-        return new ListClientMetricsResourcesResult(future);
+        return new ListConfigResourcesResult(future);
     }
 
     public static ListShareGroupOffsetsResult createListShareGroupOffsetsResult(Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> groupOffsets) {

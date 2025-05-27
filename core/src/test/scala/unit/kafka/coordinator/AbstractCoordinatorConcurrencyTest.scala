@@ -20,7 +20,6 @@ package kafka.coordinator
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors}
 import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.cluster.Partition
 import kafka.log.LogManager
@@ -46,7 +45,6 @@ import org.mockito.Mockito.{mock, when, withSettings}
 import scala.collection._
 import scala.jdk.CollectionConverters._
 import scala.jdk.FunctionConverters.enrichAsJavaConsumer
-import scala.jdk.OptionConverters.RichOption
 
 abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extends Logging {
   val nThreads = 5
@@ -220,7 +218,6 @@ object AbstractCoordinatorConcurrencyTest {
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
                                responseCallback: java.util.Map[TopicIdPartition, PartitionResponse] => Unit,
-                               delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.noCaching,
                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
@@ -234,7 +231,7 @@ object AbstractCoordinatorConcurrencyTest {
 
       // It is safe to set the third parameter to null because it is only used in tryComplete().
       // In this test, we override the original implementation and do not use that parameter at all.
-      val delayedProduce = new DelayedProduce(5, produceMetadata, null, responseCallback.asJava, delayedProduceLock.toJava) {
+      val delayedProduce = new DelayedProduce(5, produceMetadata, null, responseCallback.asJava) {
         // Complete produce requests after a few attempts to trigger delayed produce from different threads
         val completeAttempts = new AtomicInteger
         override def tryComplete(): Boolean = {

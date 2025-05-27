@@ -110,6 +110,8 @@ import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.admin.ListClientMetricsResourcesOptions;
 import org.apache.kafka.clients.admin.ListClientMetricsResourcesResult;
+import org.apache.kafka.clients.admin.ListConfigResourcesOptions;
+import org.apache.kafka.clients.admin.ListConfigResourcesResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
@@ -436,6 +438,12 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
         return adminDelegate.fenceProducers(transactionalIds, options);
     }
 
+    @Override
+    public ListConfigResourcesResult listConfigResources(final Set<ConfigResource.Type> configResourceTypes, final ListConfigResourcesOptions options) {
+        return adminDelegate.listConfigResources(configResourceTypes, options);
+    }
+
+    @SuppressWarnings({"deprecation", "removal"})
     @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(final ListClientMetricsResourcesOptions options) {
         return adminDelegate.listClientMetricsResources(options);

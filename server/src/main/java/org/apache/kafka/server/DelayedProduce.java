@@ -30,10 +30,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -156,9 +154,8 @@ public class DelayedProduce extends DelayedOperation {
     public DelayedProduce(long delayMs,
                           ProduceMetadata produceMetadata,
                           BiConsumer<TopicPartition, ProducePartitionStatus> updateProducePartitionStatusCallback,
-                          Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback,
-                          Optional<Lock> lockOpt) {
-        super(delayMs, lockOpt);
+                          Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback) {
+        super(delayMs);
 
         this.produceMetadata = produceMetadata;
         this.updateProducePartitionStatusCallback = updateProducePartitionStatusCallback;

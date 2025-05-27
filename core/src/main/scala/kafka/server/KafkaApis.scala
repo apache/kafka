@@ -3738,11 +3738,50 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterShareGroupOffsetsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val alterShareGroupOffsetsRequest = request.body[AlterShareGroupOffsetsRequest]
+    val groupId = alterShareGroupOffsetsRequest.data.groupId
+
     if (!isShareGroupProtocolEnabled) {
       requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
       return CompletableFuture.completedFuture[Unit](())
+    } else if (!authHelper.authorize(request.context, READ, GROUP, groupId)) {
+      requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+    } else {
+      val responseBuilder = new AlterShareGroupOffsetsResponse.Builder()
+      val authorizedTopicPartitions = new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection()
+
+      alterShareGroupOffsetsRequest.data.topics.forEach(topic => {
+        val topicError = {
+          if (!authHelper.authorize(request.context, READ, TOPIC, topic.topicName())) {
+            Some(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED))
+          } else if (!metadataCache.contains(topic.topicName())) {
+            Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+          } else {
+            None
+          }
+        }
+        topicError match {
+          case Some(error) =>
+            topic.partitions().forEach(partition => responseBuilder.addPartition(topic.topicName(), partition.partitionIndex(), metadataCache.topicNamesToIds(), error.error))
+          case None =>
+            authorizedTopicPartitions.add(topic)
+        }
+      })
+
+      val data = new AlterShareGroupOffsetsRequestData()
+        .setGroupId(groupId)
+        .setTopics(authorizedTopicPartitions)
+      groupCoordinator.alterShareGroupOffsets(
+        request.context,
+        groupId,
+        data
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, responseBuilder.merge(response, metadataCache.topicNamesToIds()).build())
+        }
+      }
     }
-    requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     CompletableFuture.completedFuture[Unit](())
   }
 
