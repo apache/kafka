@@ -25,8 +25,8 @@ import org.apache.kafka.common.utils.Time;
  * The quota is permissive meaning that 1) it does accept any mutations even if the quota is
  * exhausted; and 2) it does throttle as soon as the quota is exhausted.
  *
- * @param time @Time object to use
- * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
+ * time @Time object to use
+ * quotaSensor @Sensor object with a defined quota for a given user/clientId pair
  */
 public class PermissiveControllerMutationQuota extends AbstractControllerMutationQuota {
     private final Sensor quotaSensor;

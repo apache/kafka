@@ -40,12 +40,11 @@ import java.util.Optional;
 /**
  * The ControllerMutationQuotaManager is a specialized ClientQuotaManager used in the context
  * of throttling controller's operations/mutations.
- *
- * @param config @ClientQuotaManagerConfig quota configs
- * @param metrics @Metrics Metrics instance
- * @param time @Time object to use
- * @param threadNamePrefix The thread prefix to use
- * @param quotaCallback @ClientQuotaCallback ClientQuotaCallback to use
+ * config @ClientQuotaManagerConfig quota configs
+ * metrics @Metrics Metrics instance
+ * time @Time object to use
+ * threadNamePrefix The thread prefix to use
+ * quotaCallback @ClientQuotaCallback ClientQuotaCallback to use
  */
 public class ControllerMutationQuotaManager extends ClientQuotaManager {
 
@@ -160,7 +159,6 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
      * Returns a ControllerMutationQuota based on `strictSinceVersion`. It returns a strict
      * quota if the version is equal to or above of the `strictSinceVersion`, a permissive
      * quota if the version is below, and an unbounded quota if the quota is disabled.
-     *
      * When the quota is strictly enforced. Any operation above the quota is not allowed
      * and rejected with a THROTTLING_QUOTA_EXCEEDED error.
      *
@@ -180,7 +178,6 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
     /**
      * This calculates the amount of time needed to bring the TokenBucket within quota
      * assuming that no new metrics are recorded.
-     *
      * Basically, if a value < 0 is observed, the time required to bring it to zero is
      * -value / refill rate (quota bound) * 1000.
      */

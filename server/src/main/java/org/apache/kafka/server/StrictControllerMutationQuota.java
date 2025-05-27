@@ -27,9 +27,8 @@ import org.apache.kafka.common.utils.Time;
  * quota is strict meaning that 1) it does not accept any mutations once the quota is exhausted
  * until it gets back to the defined rate; and 2) it does not throttle for any number of mutations
  * if quota is not already exhausted.
- *
- * @param time @Time object to use
- * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
+ * time @Time object to use
+ * quotaSensor @Sensor object with a defined quota for a given user/clientId pair
  */
 public class StrictControllerMutationQuota extends AbstractControllerMutationQuota {
     private final Sensor quotaSensor;

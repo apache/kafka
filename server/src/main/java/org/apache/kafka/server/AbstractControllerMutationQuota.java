@@ -22,8 +22,7 @@ import org.apache.kafka.common.utils.Time;
 /**
  * The AbstractControllerMutationQuota is the base class of StrictControllerMutationQuota and
  * PermissiveControllerMutationQuota.
- *
- * @param time @Time object to use
+ * time @Time object to use
  */
 public abstract class AbstractControllerMutationQuota implements ControllerMutationQuota {
     protected final Time time;
