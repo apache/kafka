@@ -1536,7 +1536,8 @@ public class ConsumerGroupTest {
             new SnapshotRegistry(logContext),
             mock(GroupCoordinatorMetricsShard.class),
             classicGroup,
-            metadataImage.topics()
+            new HashMap<>(),
+            metadataImage
         );
 
         ConsumerGroup expectedConsumerGroup = new ConsumerGroup(
@@ -1548,6 +1549,10 @@ public class ConsumerGroupTest {
         expectedConsumerGroup.setTargetAssignmentEpoch(10);
         expectedConsumerGroup.updateTargetAssignment(memberId, new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 0)
+        )));
+        expectedConsumerGroup.setMetadataHash(computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage),
+            barTopicName, computeTopicHash(barTopicName, metadataImage)
         )));
         expectedConsumerGroup.updateMember(new ConsumerGroupMember.Builder(memberId)
             .setMemberEpoch(classicGroup.generationId())
@@ -1580,6 +1585,7 @@ public class ConsumerGroupTest {
         assertEquals(expectedConsumerGroup.groupEpoch(), consumerGroup.groupEpoch());
         assertEquals(expectedConsumerGroup.state(), consumerGroup.state());
         assertEquals(expectedConsumerGroup.preferredServerAssignor(), consumerGroup.preferredServerAssignor());
+        assertEquals(Map.copyOf(expectedConsumerGroup.subscriptionMetadata()), Map.copyOf(consumerGroup.subscriptionMetadata()));
         assertEquals(expectedConsumerGroup.members(), consumerGroup.members());
     }
 
