@@ -17,6 +17,7 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.metrics.Sensor;
+
 import java.util.Map;
 import java.util.Objects;
 
