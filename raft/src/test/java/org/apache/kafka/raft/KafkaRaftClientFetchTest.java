@@ -34,6 +34,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -72,7 +73,7 @@ public final class KafkaRaftClientFetchTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLog.empty());
 
         long oldLogEndOffset = context.log.endOffset().offset();
 
@@ -107,7 +108,7 @@ public final class KafkaRaftClientFetchTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLong.empty());
 
         long oldLogEndOffset = context.log.endOffset().offset();
         int numberOfRecords = 10;
@@ -148,5 +149,41 @@ public final class KafkaRaftClientFetchTest {
 
         // Check that only the first batch was appended because the second batch has a greater epoch
         assertEquals(oldLogEndOffset + numberOfRecords, context.log.endOffset().offset());
+    }
+
+    @Test
+    void testHighWatermarkSentInFetchRequest() throws Exception {
+        int epoch = 2;
+        int localId = KafkaRaftClientTest.randomReplicaId();
+        ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
+        ReplicaKey electedLeader = KafkaRaftClientTest.replicaKey(localId + 1, true);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            local.id(),
+            local.directoryId().get()
+        )
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
+            )
+            .withElectedLeader(epoch, electedLeader.id())
+            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)
+            .build();
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLong.empty());
+
+        long logEndOffset = 100;
+
+        // Make the LEO and HWM equal logEndOffset
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.divergingFetchResponse(epoch, electedLeader.id(), logEndOffset, epoch, logEndOffset)
+        );
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLong.of(logEndOffset));
     }
 }

@@ -49,7 +49,7 @@
   //
   // Version 17 no changes to the response (KIP-853).
   //
-  // Version 18 no changes to the response (KIP-583)
+  // Version 18 no changes to the response (KIP-1166)
   "validVersions": "4-18",
   "flexibleVersions": "12+",
   "fields": [

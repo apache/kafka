@@ -1672,7 +1672,8 @@ public final class RaftClientTestContext {
         RaftRequest.Outbound message,
         int epoch,
         long fetchOffset,
-        int lastFetchedEpoch
+        int lastFetchedEpoch,
+        OptionalLong highWatermark
     ) {
         assertInstanceOf(
             FetchRequestData.class,
@@ -1691,6 +1692,7 @@ public final class RaftClientTestContext {
         assertEquals(fetchOffset, fetchPartition.fetchOffset());
         assertEquals(lastFetchedEpoch, fetchPartition.lastFetchedEpoch());
         assertEquals(localId.orElse(-1), request.replicaState().replicaId());
+        assertEquals(highWatermark.orElse(-1), request.highWatermark());
 
         // Assert that voters have flushed up to the fetch offset
         if ((localId.isPresent() && startingVoters.voterIds().contains(localId.getAsInt())) ||
