@@ -155,9 +155,9 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     val quotaValue = newValue.map(new Quota(_, true))
     try {
       manager.updateQuota(
-        userEntity.toJava,     // Convert Scala Option to Java Optional
-        clientEntity.toJava,   // Convert Scala Option to Java Optional
-        quotaValue.toJava      // Convert Scala Option to Java Optional
+        userEntity.toJava,
+        clientEntity.toJava,
+        quotaValue.toJava
       )
     } catch {
       case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
