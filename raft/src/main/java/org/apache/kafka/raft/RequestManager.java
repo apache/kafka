@@ -78,16 +78,16 @@ public class RequestManager {
      * the same offset twice.
      *
      * @param currentTimeMs the current time
-     * @param requestKey the request type to check for pending requests
+     * @param wantRequestKey the request type to check for in-flight requests
      * @return true if the request manager is tracking at least one request of the given type
      */
-    public boolean hasAnyInflightRequest(long currentTimeMs, ApiKeys requestKey) {
+    public boolean hasAnyInflightRequest(long currentTimeMs, ApiKeys wantRequestKey) {
         boolean result = false;
 
         final var iterator = inflightRequests.entrySet().iterator();
         while (iterator.hasNext()) {
             final var entry = iterator.next();
-            final var nodeAndRequestKey = entry.getKey();
+            final var requestKey = entry.getKey().requestType().apiKey();
             final var requestState = entry.getValue();
             if (requestState.hasRequestTimedOut(currentTimeMs)) {
                 // Mark the node as ready after request timeout
@@ -95,7 +95,7 @@ public class RequestManager {
             } else if (requestState.isBackoffComplete(currentTimeMs)) {
                 // Mark the node as ready after completed backoff
                 iterator.remove();
-            } else if (nodeAndRequestKey.requestType().apiKey() == requestKey &&
+            } else if (requestKey == wantRequestKey &&
                 requestState.hasInflightRequest(currentTimeMs)) {
                 // If there is at least one inflight request, it is enough
                 // to stop checking the rest of the inflightRequests
@@ -161,7 +161,7 @@ public class RequestManager {
         final var iterator = inflightRequests.entrySet().iterator();
         while (iterator.hasNext()) {
             final var entry = iterator.next();
-            final var requestType = entry.getKey().requestType().apiKey();
+            final var requestKey = entry.getKey().requestType().apiKey();
             final var requestState = entry.getValue();
             if (requestState.hasRequestTimedOut(currentTimeMs)) {
                 // Mark the node as ready after request timeout
@@ -169,11 +169,11 @@ public class RequestManager {
             } else if (requestState.isBackoffComplete(currentTimeMs)) {
                 // Mark the node as ready after completed backoff
                 iterator.remove();
-            } else if (requestType == ApiKeys.FETCH &&
+            } else if (requestKey == ApiKeys.FETCH &&
                 requestState.hasInflightRequest(currentTimeMs)) {
                 // There can be at most one inflight fetch or fetch snapshot request
                 return requestState.remainingRequestTimeMs(currentTimeMs);
-            } else if (requestType == ApiKeys.FETCH &&
+            } else if (requestKey == ApiKeys.FETCH &&
                 requestState.isBackingOff(currentTimeMs)) {
                 minBackoffMs = Math.min(minBackoffMs, requestState.remainingBackoffMs(currentTimeMs));
             }
