@@ -469,7 +469,7 @@ public class SubscriptionStateTest {
         // First assignment should have been applied
         assertAssignmentAppliedAwaitingCallback(tp0);
 
-        // Second assignment should still on the assigned topic IDs
+        // Assigned topic IDs should still have both topics (one reconciled, one not reconciled yet)
         assertEquals(
                 Set.of(firstAssignedUuid, secondAssignedUuid),
                 state.assignedTopicIds(),

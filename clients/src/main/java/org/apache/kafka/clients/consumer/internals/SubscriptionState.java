@@ -93,10 +93,9 @@ public class SubscriptionState {
     private Set<String> subscription;
 
     /**
-     * Topic IDs received in an assignment.
-     * We keep them to be included in metadata requests to retrieve topic names needed for the reconciliation process.
-     * Note that when the user subscribes to a RE2J regex computed on the broker,
-     * it will only know about topic IDs assigned, that it won't be able to reconcile until it resolves topic names for them.
+     * Topic IDs received in an assignment from the coordinator when using the Consumer rebalance protocol.
+     * This will be used to include assigned topic IDs in metadata requests when the consumer
+     * does not know the topic names (ex. when the user subscribes to a RE2J regex computed on the broker)
      */
     private Set<Uuid> assignedTopicIds;
 
