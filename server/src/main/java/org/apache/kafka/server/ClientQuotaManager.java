@@ -550,17 +550,10 @@ public class ClientQuotaManager {
      * This function either returns the sensors for a given client id or creates them if they don't exist
      */
     public ClientSensors getOrCreateQuotaSensors(Session session, String clientId) {
-        Map<String, String> metricTags;
-
-        // Use cached sanitized principal if using default callback
-        if (quotaCallback instanceof DefaultQuotaCallback defaultCallback) {
-            metricTags = defaultCallback.quotaMetricTags(session.sanitizedUser, clientId);
-        } else {
-            // For custom callbacks, preserve whatever order they return
-            metricTags = quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId);
-        }
-
-        // Create the sensors
+        Map<String, String> metricTags = Map.copyOf(
+                quotaCallback instanceof DefaultQuotaCallback defaultCallback
+                        ? defaultCallback.quotaMetricTags(session.sanitizedUser, clientId)
+                        : quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId));
         ClientSensors sensors = new ClientSensors(
                 metricTags,
                 sensorAccessor.getOrCreate(
