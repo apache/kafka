@@ -266,35 +266,6 @@ public class ClientQuotaManager {
         public static final String CLIENT_ID = "client-id";
     }
 
-    /**
-     * Helper class that records per-client metrics. It is also responsible for maintaining Quota usage statistics
-     * for all clients.
-     * <p/>
-     * Quotas can be set at <user, client-id>, user or client-id levels. For a given client connection,
-     * the most specific quota matching the connection will be applied. For example, if both a <user, client-id>
-     * and a user quota match a connection, the <user, client-id> quota will be used. Otherwise, user quota takes
-     * precedence over client-id quota. The order of precedence is:
-     * <ul>
-     *   <li>/config/users/<user>/clients/<client-id>
-     *   <li>/config/users/<user>/clients/<default>
-     *   <li>/config/users/<user>
-     *   <li>/config/users/<default>/clients/<client-id>
-     *   <li>/config/users/<default>/clients/<default>
-     *   <li>/config/users/<default>
-     *   <li>/config/clients/<client-id>
-     *   <li>/config/clients/<default>
-     * </ul>
-     * Quota limits including defaults may be updated dynamically. The implementation is optimized for the case
-     * where a single level of quotas is configured.
-     * config @ClientQuotaManagerConfig quota configs
-     * metrics @Metrics Metrics instance
-     * quotaType Quota type of this quota manager
-     * time @Time object to use
-     * threadNamePrefix The thread prefix to use
-     * clientQuotaCallbackPlugin An optional @ClientQuotaCallback and
-     *                                  wrap it in a {@link org.apache.kafka.common.internals.Plugin}
-     */
-
     private final ClientQuotaManagerConfig config;
     protected final Metrics metrics;
     private final QuotaType quotaType;
@@ -316,6 +287,33 @@ public class ClientQuotaManager {
         throttledChannelReaper.doWork();
     }
 
+    /**
+     * Helper class that records per-client metrics. It is also responsible for maintaining Quota usage statistics
+     * for all clients.
+     * <p/>
+     * Quotas can be set at <user, client-id>, user or client-id levels. For a given client connection,
+     * the most specific quota matching the connection will be applied. For example, if both a <user, client-id>
+     * and a user quota match a connection, the <user, client-id> quota will be used. Otherwise, user quota takes
+     * precedence over client-id quota. The order of precedence is:
+     * <ul>
+     *   <li>/config/users/<user>/clients/<client-id>
+     *   <li>/config/users/<user>/clients/<default>
+     *   <li>/config/users/<user>
+     *   <li>/config/users/<default>/clients/<client-id>
+     *   <li>/config/users/<default>/clients/<default>
+     *   <li>/config/users/<default>
+     *   <li>/config/clients/<client-id>
+     *   <li>/config/clients/<default>
+     * </ul>
+     * Quota limits including defaults may be updated dynamically. The implementation is optimized for the case
+     * where a single level of quotas is configured.
+     * @param config the ClientQuotaManagerConfig containing quota configurations
+     * @param metrics the Metrics instance for recording quota-related metrics
+     * @param quotaType the quota type managed by this quota manager
+     * @param time the Time object used for time-based operations
+     * @param threadNamePrefix the thread name prefix used for internal threads
+     * @param clientQuotaCallbackPlugin optional Plugin containing a ClientQuotaCallback for custom quota logic
+     */
     public ClientQuotaManager(ClientQuotaManagerConfig config,
                               Metrics metrics,
                               QuotaType quotaType,

@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.util.Optional
-import scala.jdk.OptionConverters.RichOption
 
 class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = new ClientQuotaManagerConfig()
@@ -37,9 +36,9 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientEntity: ClientQuotaEntity.ConfigEntity = new ClientQuotaManager.ClientIdEntity("test-client")
 
     clientRequestQuotaManager.updateQuota(
-      Some(userEntity).toJava,
-      Some(clientEntity).toJava,
-      Some(Quota.upperBound(1)).toJava
+      Optional.of(userEntity),
+      Optional.of(clientEntity),
+      Optional.of(Quota.upperBound(1))
     )
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", QuotaType.REQUEST.toString, ""))
     def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientRequestQuotaManager.NANOS_TO_PERCENTAGE_PER_SECOND

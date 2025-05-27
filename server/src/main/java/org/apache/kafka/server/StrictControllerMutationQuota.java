@@ -29,12 +29,17 @@ import java.util.Objects;
  * quota is strict meaning that 1) it does not accept any mutations once the quota is exhausted
  * until it gets back to the defined rate; and 2) it does not throttle for any number of mutations
  * if quota is not already exhausted.
- * time @Time object to use
- * quotaSensor @Sensor object with a defined quota for a given user/clientId pair
  */
 public class StrictControllerMutationQuota extends AbstractControllerMutationQuota {
     private final Sensor quotaSensor;
 
+    /**
+     * Creates a new StrictControllerMutationQuota with the specified time source and quota sensor.
+     *
+     * @param time the Time object used for time-based calculations and quota tracking
+     * @param quotaSensor the Sensor object that tracks quota usage for a specific user/clientId pair
+     * @throws IllegalArgumentException if time or quotaSensor is null
+     */
     public StrictControllerMutationQuota(Time time, Sensor quotaSensor) {
         super(Objects.requireNonNull(time, "time cannot be null"));
         this.quotaSensor = Objects.requireNonNull(quotaSensor, "quotaSensor cannot be null");

@@ -75,7 +75,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
 import scala.collection.Seq
 
 object DynamicBrokerReconfigurationTest {
@@ -967,9 +966,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val clientId = "test-client-1"
     servers.foreach { server =>
       server.quotaManagers.produce.updateQuota(
-        None.toJava,
-        Some(new ClientQuotaManager.ClientIdEntity(clientId): ClientQuotaEntity.ConfigEntity).toJava,
-        Some(Quota.upperBound(10000000)).toJava
+        Optional.empty,
+        Optional.of(new ClientQuotaManager.ClientIdEntity(clientId): ClientQuotaEntity.ConfigEntity),
+        Optional.of(Quota.upperBound(10000000))
       )
     }
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol, clientId)
