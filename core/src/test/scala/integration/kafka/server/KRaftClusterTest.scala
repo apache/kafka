@@ -18,8 +18,8 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.utils.TestUtils
+import org.apache.kafka.server.IntegrationTestUtils.connectAndReceive
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
@@ -492,12 +492,16 @@ class KRaftClusterTest {
   }
 
   private def sendDescribeClusterRequestToBoundPort(destination: SocketServer,
-                                                    listenerName: ListenerName): DescribeClusterResponse =
-    connectAndReceive[DescribeClusterResponse](
-      request = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
-      destination = destination,
-      listenerName = listenerName
-    )
+                                                    listenerName: ListenerName): DescribeClusterResponse = {
+
+      val port = destination.boundPort(listenerName)
+
+      connectAndReceive[DescribeClusterResponse](
+            request = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
+            port
+          )
+  }
+
 
   @Test
   def testCreateClusterAndPerformReassignment(): Unit = {

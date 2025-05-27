@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.server.IntegrationTestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.net.Socket
@@ -900,19 +901,24 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def connectAny(): Socket = {
-    val socket: Socket = IntegrationTestUtils.connect(
-      cluster.anyBrokerSocketServer(),
-      cluster.clientListener()
-    )
+
+    val socketServer = cluster.anyBrokerSocketServer()
+    val listenerName = cluster.clientListener()
+    val port = socketServer.boundPort(listenerName)
+
+    val socket: Socket = IntegrationTestUtils.connect(port)
     openSockets += socket
     socket
   }
 
   protected def connect(destination: Int): Socket = {
-    val socket: Socket = IntegrationTestUtils.connect(
-      brokerSocketServer(destination),
-      cluster.clientListener()
-    )
+
+    val socketServer = brokerSocketServer(destination)
+    val listenerName = cluster.clientListener()
+    val port = socketServer.boundPort(listenerName)
+
+
+    val socket: Socket = IntegrationTestUtils.connect(port)
     openSockets += socket
     socket
   }
@@ -920,10 +926,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
   ): T = {
+    val destination = cluster.anyBrokerSocketServer()
+    val listenerName = cluster.clientListener()
+    val port = destination.boundPort(listenerName)
+
     IntegrationTestUtils.connectAndReceive[T](
       request,
-      cluster.anyBrokerSocketServer(),
-      cluster.clientListener()
+      port
     )
   }
 
@@ -931,10 +940,14 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     request: AbstractRequest,
     destination: Int
   ): T = {
+
+    val socketServer = brokerSocketServer(destination)
+    val listenerName = cluster.clientListener()
+    val port = socketServer.boundPort(listenerName)
+
     IntegrationTestUtils.connectAndReceive[T](
       request,
-      brokerSocketServer(destination),
-      cluster.clientListener()
+      port
     )
   }
 

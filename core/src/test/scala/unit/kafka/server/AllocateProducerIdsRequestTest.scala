@@ -17,12 +17,13 @@
 package unit.kafka.server
 
 import kafka.network.SocketServer
-import kafka.server.{BrokerServer, ControllerServer, IntegrationTestUtils}
+import kafka.server.{BrokerServer, ControllerServer}
 import org.apache.kafka.common.test.api.{ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.server.IntegrationTestUtils
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
@@ -79,10 +80,13 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
     controllerSocketServer: SocketServer,
     request: AllocateProducerIdsRequest
   ): AllocateProducerIdsResponse = {
+
+    val listenerName = cluster.controllerListenerName
+    val port = controllerSocketServer.boundPort(listenerName)
+
     IntegrationTestUtils.connectAndReceive[AllocateProducerIdsResponse](
       request,
-      controllerSocketServer,
-      cluster.controllerListenerName
+      port
     )
   }
 

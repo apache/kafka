@@ -18,7 +18,7 @@
 package kafka.coordinator.transaction
 
 import kafka.network.SocketServer
-import kafka.server.IntegrationTestUtils
+import org.apache.kafka.server.IntegrationTestUtils
 import org.apache.kafka.clients.admin.{Admin, NewTopic, TransactionState}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
@@ -205,11 +205,12 @@ class ProducerIntegrationTest {
         .setProducerId(RecordBatch.NO_PRODUCER_ID)
         .setTransactionalId(null)
         .setTransactionTimeoutMs(10)
-      val request = new InitProducerIdRequest.Builder(data).build()
+    val request = new InitProducerIdRequest.Builder(data).build()
+    val port = broker.boundPort(listener)
 
       response = IntegrationTestUtils.connectAndReceive[InitProducerIdResponse](request,
-        destination = broker,
-        listenerName = listener)
+        port
+        )
 
       shouldRetry = response.data.errorCode == Errors.COORDINATOR_LOAD_IN_PROGRESS.code
     }

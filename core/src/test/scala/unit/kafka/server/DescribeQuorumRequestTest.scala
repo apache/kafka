@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, DescribeQuorumRequest, DescribeQuorumResponse}
 import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.server.IntegrationTestUtils
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
@@ -91,10 +92,14 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
   )(
     implicit classTag: ClassTag[T]
   ): T = {
+
+    val socketServer = cluster.brokerSocketServers().asScala.head
+    val listenerName = cluster.clientListener()
+    val port = socketServer.boundPort(listenerName)
+
     IntegrationTestUtils.connectAndReceive(
       request,
-      cluster.brokerSocketServers().asScala.head,
-      cluster.clientListener()
+      port
     )
   }
 

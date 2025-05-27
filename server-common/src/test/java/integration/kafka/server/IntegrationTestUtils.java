@@ -14,11 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
+package org.apache.kafka.server;
 
-import kafka.network.SocketServer;
-
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -108,10 +105,9 @@ public class IntegrationTestUtils {
 
     public static <T extends AbstractResponse> T connectAndReceive(
             AbstractRequest request,
-            SocketServer destination,
-            ListenerName listenerName
+            int port
     ) throws IOException {
-        Socket socket = connect(destination, listenerName);
+        Socket socket = connect(port);
         try {
             return sendAndReceive(request, socket);
         } finally {
@@ -119,7 +115,7 @@ public class IntegrationTestUtils {
         }
     }
 
-    public static Socket connect(SocketServer socketServer, ListenerName listenerName) throws IOException {
-        return new Socket("localhost", socketServer.boundPort(listenerName));
+    public static Socket connect(int port) throws IOException {
+        return new Socket("localhost", port);
     }
 }
