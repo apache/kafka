@@ -134,16 +134,16 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
     }
 
     @ClusterTest
-    public void testOffsetsForTimesWithClassicConsumer() throws InterruptedException {
+    public void testOffsetsForTimesWithClassicConsumer() {
         testOffsetsForTimes(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
-    public void testOffsetsForTimesWithAsyncConsumer() throws InterruptedException {
+    public void testOffsetsForTimesWithAsyncConsumer() {
         testOffsetsForTimes(GroupProtocol.CONSUMER);
     }
 
-    public void testOffsetsForTimes(GroupProtocol groupProtocol) throws InterruptedException {
+    public void testOffsetsForTimes(GroupProtocol groupProtocol) {
         try (Consumer<Object, Object> consumer = cluster.consumer(Map.of(
                 GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
         ) {
@@ -191,16 +191,16 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
     }
 
     @ClusterTest
-    public void testEarliestOrLatestOffsetsWithClassicConsumer() throws InterruptedException {
+    public void testEarliestOrLatestOffsetsWithClassicConsumer() {
         testEarliestOrLatestOffsets(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
-    public void testEarliestOrLatestOffsetsWithAsyncConsumer() throws InterruptedException {
+    public void testEarliestOrLatestOffsetsWithAsyncConsumer() {
         testEarliestOrLatestOffsets(GroupProtocol.CONSUMER);
     }
 
-    public void testEarliestOrLatestOffsets(GroupProtocol groupProtocol) throws InterruptedException {
+    public void testEarliestOrLatestOffsets(GroupProtocol groupProtocol) {
         Set<TopicPartition> partitions = Set.of(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1);
 
         try (Consumer<Object, Object> consumer = cluster.consumer(Map.of(
