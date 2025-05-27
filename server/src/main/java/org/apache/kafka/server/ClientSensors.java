@@ -17,16 +17,63 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.metrics.Sensor;
-
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Represents the sensors aggregated per client
- * @param metricTags Quota metric tags for the client
- * @param quotaSensor @Sensor that tracks the quota
- * @param throttleTimeSensor @Sensor that tracks the throttle time
+ * metricTags Quota metric tags for the client
+ * quotaSensor @Sensor that tracks the quota
+ * throttleTimeSensor @Sensor that tracks the throttle time
  */
-public record ClientSensors(Map<String, String> metricTags,
-                            Sensor quotaSensor,
-                            Sensor throttleTimeSensor) {
+public final class ClientSensors {
+    private final Map<String, String> metricTags;
+    private final Sensor quotaSensor;
+    private final Sensor throttleTimeSensor;
+
+    public ClientSensors(Map<String, String> metricTags,
+                         Sensor quotaSensor,
+                         Sensor throttleTimeSensor) {
+        this.metricTags = Map.copyOf(metricTags); // Defensive immutable copy
+        this.quotaSensor = Objects.requireNonNull(quotaSensor);
+        this.throttleTimeSensor = Objects.requireNonNull(throttleTimeSensor);
+    }
+
+    // Getters (equivalent to case class field access)
+    public Map<String, String> metricTags() {
+        return metricTags;
+    }
+
+    public Sensor quotaSensor() {
+        return quotaSensor;
+    }
+
+    public Sensor throttleTimeSensor() {
+        return throttleTimeSensor;
+    }
+
+    // equals, hashCode, toString (equivalent to case class generated methods)
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        ClientSensors that = (ClientSensors) obj;
+        return Objects.equals(metricTags, that.metricTags) &&
+                Objects.equals(quotaSensor, that.quotaSensor) &&
+                Objects.equals(throttleTimeSensor, that.throttleTimeSensor);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(metricTags, quotaSensor, throttleTimeSensor);
+    }
+
+    @Override
+    public String toString() {
+        return "ClientSensors{" +
+                "metricTags=" + metricTags +
+                ", quotaSensor=" + quotaSensor +
+                ", throttleTimeSensor=" + throttleTimeSensor +
+                '}';
+    }
 }
