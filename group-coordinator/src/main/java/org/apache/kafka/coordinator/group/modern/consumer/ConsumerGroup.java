@@ -43,6 +43,7 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
+import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -1129,7 +1130,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param snapshotRegistry  The SnapshotRegistry.
      * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
-     * @param topicsImage       The TopicsImage for topic id and topic name conversion.
+     * @param topicsImage       The current metadata for all available topics.
+     * @param clusterImage      The current metadata for the Kafka cluster.
      * @return  The created ConsumerGroup.
      *
      * @throws SchemaException if any member's subscription or assignment cannot be deserialized.
@@ -1139,7 +1141,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         SnapshotRegistry snapshotRegistry,
         GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
-        TopicsImage topicsImage
+        TopicsImage topicsImage,
+        ClusterImage clusterImage
     ) {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
@@ -1195,6 +1198,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             consumerGroup.updateMember(newMember);
         });
 
+        consumerGroup.setSubscriptionMetadata(consumerGroup.computeSubscriptionMetadata(
+            consumerGroup.subscribedTopicNames(),
+            topicsImage,
+            clusterImage
+        ));
+
         return consumerGroup;
     }
 
@@ -1209,6 +1218,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         members().forEach((__, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
+
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId(), subscriptionMetadata()));
 
         records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch()));
 
