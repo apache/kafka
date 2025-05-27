@@ -47,7 +47,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     assertEquals(1, consumer.assignment.size)
 
     consumer.seek(tp, 0)
@@ -73,7 +73,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerDeserializer])
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerDeserializer])
     val consumer: Consumer[Array[Byte], Array[Byte]] = createConsumer(keyDeserializer = null, valueDeserializer = null, consumerProps)
-    consumer.subscribe(List(tp.topic()).asJava)
+    consumer.subscribe(java.util.List.of(tp.topic()))
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
     assertNotEquals(0, BaseConsumerTest.updateProducerCount.get())
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
@@ -91,7 +91,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "15000")
     val consumer = createConsumer()
 
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // the initial subscription should cause a callback execution
     awaitRebalance(consumer, listener)
