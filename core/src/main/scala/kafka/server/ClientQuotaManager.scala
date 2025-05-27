@@ -155,7 +155,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     case None => new DefaultQuotaCallback
   }
   private val clientQuotaType = QuotaType.toClientQuotaType(quotaType)
-  private val activeQuotaEntities = new ConcurrentHashMap[KafkaQuotaEntity, Boolean]()
+  private val activeQuotaEntities = new util.HashSet[KafkaQuotaEntity]()
 
   @volatile
   private var quotaTypesEnabled = clientQuotaCallbackPlugin match {
@@ -348,7 +348,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       case callback: DefaultQuotaCallback => callback.quotaMetricTags(session.sanitizedUser, clientId)
       case _ => quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId).asScala.toMap
     }
-
     // Names of the sensors to access
     val sensors = ClientSensors(
       metricTags,
@@ -430,7 +429,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       quota match {
         case Some(newQuota) =>
           quotaCallback.updateQuota(clientQuotaType, quotaEntity, newQuota.bound)
-          if(!activeQuotaEntities.put(quotaEntity, true)){
+          if(activeQuotaEntities.add(quotaEntity)){
             updateQuotaTypes()
           }
         case None =>
@@ -466,8 +465,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         QuotaTypes.NoQuotas
       }
 
-    activeQuotaEntities.forEach { (entity, _) =>
-      entity match {
+    activeQuotaEntities.forEach {
         case KafkaQuotaEntity(Some(_), Some(_)) =>
           quotaTypesEnabled |= QuotaTypes.UserClientIdQuotaEnabled
         case KafkaQuotaEntity(Some(_), None) =>
@@ -475,11 +473,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         case KafkaQuotaEntity(None, Some(_)) =>
           quotaTypesEnabled |= QuotaTypes.ClientIdQuotaEnabled
         case _ => // Unexpected entity type
-      }
     }
 
-    val activeEntities = if (activeQuotaEntities.isEmpty) "No active quota entities" else activeQuotaEntities.keys.asScala.map(_.toString).mkString(", ")
-    info(s"Quota types enabled changed to $quotaTypesEnabled with active quota entities: [$activeEntities]")
+    val activeEntities = if (activeQuotaEntities.isEmpty) "No active quota entities" else activeQuotaEntities.asScala.map(_.toString).mkString(", ")
+    info(s"Quota types enabled has been changed with active quota entities: [$activeEntities]")
   }
 
   /**

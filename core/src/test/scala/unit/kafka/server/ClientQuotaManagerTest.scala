@@ -19,7 +19,6 @@ package kafka.server
 import kafka.server.ClientQuotaManager.BaseUserEntity
 import org.apache.kafka.common.Cluster
 
-import java.{lang, util}
 import java.net.InetAddress
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.Quota
@@ -30,7 +29,7 @@ import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, Cl
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import java.util.Collections
+import java.util.{Collections, Map}
 
 class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = new ClientQuotaManagerConfig()
@@ -581,11 +580,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testQuotaTypesEnabledUpdatesWithCustomCallback(): Unit = {
     val customQuotaCallback = new ClientQuotaCallback {
-      override def configure(configs: util.Map[String, _]): Unit = {}
+      override def configure(configs: Map[String, _]): Unit = {}
 
-      override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = Collections.emptyMap()
+      override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): Map[String, String] = Collections.emptyMap()
 
-      override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = 1
+      override def quotaLimit(quotaType: ClientQuotaType, metricTags: Map[String, String]): java.lang.Double = 1
       override def updateClusterMetadata(cluster: Cluster): Boolean = false
 
       override def updateQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity, newValue: Double): Unit = {}
