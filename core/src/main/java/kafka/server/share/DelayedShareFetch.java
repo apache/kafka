@@ -172,7 +172,7 @@ public class DelayedShareFetch extends DelayedOperation {
         Uuid fetchId,
         long remoteFetchMaxWaitMs
     ) {
-        super(shareFetch.fetchParams().maxWaitMs, Optional.empty());
+        super(shareFetch.fetchParams().maxWaitMs);
         this.shareFetch = shareFetch;
         this.replicaManager = replicaManager;
         this.partitionsAcquired = new LinkedHashMap<>();
