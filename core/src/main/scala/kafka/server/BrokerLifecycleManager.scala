@@ -458,6 +458,9 @@ class BrokerLifecycleManager(
         } else {
           info(s"Unable to register broker $nodeId because the controller returned " +
             s"error $errorCode")
+          if (response.responseBody().isInstanceOf[BrokerRegistrationResponse]) {
+            info("this is testing")
+          }
           scheduleNextCommunicationAfterFailure()
         }
       }

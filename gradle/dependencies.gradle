@@ -60,7 +60,7 @@ versions += [
   caffeine: "3.1.1",
   bndlib: "7.0.0",
   checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "10.20.2",
-  commonsValidator: "1.9.0",
+  commonsValidator: "1.7",
   classgraph: "4.8.173",
   gradle: "8.10.2",
   grgit: "4.1.1",

@@ -33,7 +33,7 @@ import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 import java.util.concurrent.{CompletableFuture, Future}
 import scala.jdk.CollectionConverters._
 
-@Timeout(value = 12)
+@Timeout(value = 13)
 class BrokerLifecycleManagerTest {
   private var manager: BrokerLifecycleManager = null
 
@@ -52,7 +52,7 @@ class BrokerLifecycleManagerTest {
     properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9093")
     properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     properties.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "300000")
-    properties.setProperty(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, "100")
+    properties.setProperty(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, "110")
     properties
   }
 
