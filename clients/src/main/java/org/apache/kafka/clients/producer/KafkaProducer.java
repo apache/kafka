@@ -910,21 +910,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         // Get the current prepared transaction state
         PreparedTxnState currentPreparedState = transactionManager.preparedTransactionState();
         
-        long completeStart = time.nanoseconds();
-        
         // Compare the prepared transaction state token and commit or abort accordingly
         if (currentPreparedState.equals(preparedTxnState)) {
-            log.info("Committing prepared transaction as the prepared state token matches");
-            TransactionalRequestResult result = transactionManager.beginCommit();
-            sender.wakeup();
-            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
-            producerMetrics.recordCommitTxn(time.nanoseconds() - completeStart);
+            commitTransaction();
         } else {
-            log.info("Aborting prepared transaction as the prepared state token does not match");
-            TransactionalRequestResult result = transactionManager.beginAbort();
-            sender.wakeup();
-            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
-            producerMetrics.recordAbortTxn(time.nanoseconds() - completeStart);
+            abortTransaction();
         }
     }
 
