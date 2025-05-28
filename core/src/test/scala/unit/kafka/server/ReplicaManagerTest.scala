@@ -63,8 +63,8 @@ import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.server.{DelayedProduce, PartitionFetchState}
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets}
+import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteListOffsets}
 import org.apache.kafka.server.share.SharePartitionKey
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchGroupKey, DelayedShareFetchKey, ShareFetch}
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics
@@ -2991,9 +2991,9 @@ class ReplicaManagerTest {
     val result = new CallbackResult[PartitionResponse]()
     val topicIdPartition = new TopicIdPartition(topicId, partition)
     def appendCallback(responses: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
-      val response = java.util.Optional.ofNullable(responses.get(topicIdPartition))
-      assertTrue(response.isPresent)
-      result.fire(response.get)
+      val response = responses.get(topicIdPartition)
+      assertNotNull(response)
+      result.fire(response)
     }
 
     replicaManager.appendRecords(

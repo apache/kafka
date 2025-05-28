@@ -14,14 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server;
+package org.apache.kafka.server.purgatory;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
-import org.apache.kafka.server.purgatory.DelayedOperation;
 
 import com.yammer.metrics.core.Meter;
 
@@ -141,9 +140,11 @@ public class DelayedProduce extends DelayedOperation {
         private static void recordExpiration(TopicPartition partition) {
             AGGREGATE_EXPIRATION_METER.mark();
             PARTITION_EXPIRATION_METERS.computeIfAbsent(partition,
-                    key -> METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS,
-                                        Map.of("topic", key.topic(), "partition", String.valueOf(key.partition()))))
-                    .mark();
+                            key -> METRICS_GROUP.newMeter("ExpiresPerSec",
+                                        "requests",
+                                        TimeUnit.SECONDS,
+                                        Map.of("topic", key.topic(), "partition", String.valueOf(key.partition())))
+                                    ).mark();
         }
     }
 
@@ -185,6 +186,10 @@ public class DelayedProduce extends DelayedOperation {
      *   C.1 - If there was a local error thrown while checking if at least requiredAcks
      *         replicas have caught up to this operation: set an error in response
      *   C.2 - Otherwise, set the response with no error.
+     *
+     * These cases were originally handled by some methods in the ReplicaManager.
+     * However, since DelayedProduce has been moved to the server module, it cannot directly access the ReplicaManager.
+     * Therefore, these cases are now handled in the delegate method within `ReplicaManager#maybeAddDelayedProduce()`.
      */
     @Override
     public boolean tryComplete() {
@@ -193,6 +198,7 @@ public class DelayedProduce extends DelayedOperation {
             LOGGER.trace("Checking produce satisfaction for {}, current status {}", topicIdPartition, status);
             // skip those partitions that have already been satisfied
             if (status.acksPending) {
+                // Delegate to `ReplicaManager#maybeAddDelayedProduc`
                 updateProducePartitionStatusCallback.accept(topicIdPartition.topicPartition(), status);
             }
         });

@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito.mock
 
 import java.io.File
-import java.util.{Optional, Map => JMap}
+import java.util.{Map => JMap}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
@@ -271,11 +271,11 @@ class LocalLeaderEndPointTest extends Logging {
                             origin: AppendOrigin = AppendOrigin.CLIENT,
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
-    def appendCallback(responses: java.util.Map[TopicIdPartition, PartitionResponse]): Unit = {
-      val response = Optional.ofNullable(responses.get(partition))
+    def appendCallback(responses: JMap[TopicIdPartition, PartitionResponse]): Unit = {
+      val response = responses.get(partition)
 
-      assertTrue(response.isPresent)
-      result.fire(response.get)
+      assertNotNull(response)
+      result.fire(response)
     }
 
     replicaManager.appendRecords(

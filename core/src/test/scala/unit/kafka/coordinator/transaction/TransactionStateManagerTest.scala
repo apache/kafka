@@ -49,7 +49,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{atLeastOnce, mock, reset, times, verify, when}
 
-import java.util.Collections
+import java.util.{Collections, Map => JMap}
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -1104,7 +1104,7 @@ class TransactionStateManagerTest {
     capturedAppends: mutable.Map[TopicIdPartition, mutable.Buffer[MemoryRecords]]
   ): Unit = {
     val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] = ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[java.util.Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[java.util.Map[TopicIdPartition, PartitionResponse] => Unit])
+    val callbackCapture: ArgumentCaptor[JMap[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[JMap[TopicIdPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
       anyLong(),
