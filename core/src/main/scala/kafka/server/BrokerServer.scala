@@ -426,6 +426,7 @@ class BrokerServer(
           sessionIdRange,
           shardNum
         ))
+      
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
       val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
