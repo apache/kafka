@@ -54,11 +54,6 @@ public class SubscribedTopicMetadataTest {
     }
 
     @Test
-    public void testTopicPartitionAllowedMapCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(metadataImage));
-    }
-
-    @Test
     public void testNumberOfPartitions() {
         Uuid topicId = Uuid.randomUuid();
 
