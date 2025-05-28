@@ -56,7 +56,7 @@ class ShareConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, messages, group="perf-share-consumer", version=DEV_BRANCH, timeout=10000, fetch_size=1024*1024, settings={}):
+    def __init__(self, context, num_nodes, kafka, topic, messages, group="perf-share-consumer", version=DEV_BRANCH, timeout=10000, settings={}):
         super(ShareConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -65,9 +65,9 @@ class ShareConsumerPerformanceService(PerformanceService):
         self.settings = settings
         self.group = group
         self.timeout = timeout
-        self.fetch_size = fetch_size
 
         # These less-frequently used settings can be updated manually after instantiation
+        self.fetch_size = None
         self.socket_buffer_size = None
 
         for node in self.nodes:
@@ -80,9 +80,11 @@ class ShareConsumerPerformanceService(PerformanceService):
             'messages': self.messages,
             'bootstrap-server': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'group': self.group,
-            'timeout': self.timeout,
-            'fetch-size': self.fetch_size,
+            'timeout': self.timeout
         }
+
+        if self.fetch_size is not None:
+            args['fetch-size'] = self.fetch_size
 
         if self.socket_buffer_size is not None:
             args['socket-buffer-size'] = self.socket_buffer_size

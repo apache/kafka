@@ -1750,7 +1750,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             cmd += " --type %s" % type
         return self.run_cli_tool(node, cmd)
     
-    def set_group_offset_reset_strategy(self, group, strategy=None, node=None):
+    def set_group_offset_reset_strategy(self, group, strategy=None, node=None, command_config=None):
         """ Set the offset reset strategy config for the given group.
         """
         if strategy is None:
@@ -1759,12 +1759,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node = self.nodes[0]
         consumer_group_script = self.path.script("kafka-configs.sh", node)
 
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
         cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"share.auto.offset.reset=%s\"" % \
+        cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"share.auto.offset.reset=%s\" %s" % \
               (consumer_group_script,
                self.bootstrap_servers(self.security_protocol),
                group,
-               strategy)
+               strategy,
+               command_config)
         return "Completed" in self.run_cli_tool(node, cmd)
 
     def describe_consumer_group(self, group, node=None, command_config=None):
