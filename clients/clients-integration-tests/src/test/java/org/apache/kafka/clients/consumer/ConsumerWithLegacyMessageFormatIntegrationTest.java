@@ -172,20 +172,18 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
             assertEquals(20, timestampTopic1P1.timestamp());
             assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch());
 
-            // v0 message format doesn't have timestamp
             OffsetAndTimestamp timestampTopic2P0 = timestampOffsets.get(t2p0);
-            assertNull(timestampTopic2P0);
+            assertNull(timestampTopic2P0, "v0 message format shouldn't have timestamp");
 
             OffsetAndTimestamp timestampTopic2P1 = timestampOffsets.get(t2p1);
             assertNull(timestampTopic2P1);
 
-            // v1 message format doesn't have leader epoch
             OffsetAndTimestamp timestampTopic3P0 = timestampOffsets.get(t3p0);
             assertEquals(80, timestampTopic3P0.offset());
             assertEquals(80, timestampTopic3P0.timestamp());
             assertEquals(Optional.empty(), timestampTopic3P0.leaderEpoch());
 
-            assertNull(timestampOffsets.get(t3p1));
+            assertNull(timestampOffsets.get(t3p1), "v1 message format doesn't have leader epoch");
         }
 
     }
