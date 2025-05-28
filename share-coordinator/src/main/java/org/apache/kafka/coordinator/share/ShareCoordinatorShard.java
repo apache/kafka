@@ -671,7 +671,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
                     .build());
-        } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
+        } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot() ||
+            partitionData.stateEpoch() > shareStateMap.get(key).stateEpoch()) {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
             int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? currentState.leaderEpoch() : partitionData.leaderEpoch();
             int newStateEpoch = partitionData.stateEpoch() == -1 ? currentState.stateEpoch() : partitionData.stateEpoch();
