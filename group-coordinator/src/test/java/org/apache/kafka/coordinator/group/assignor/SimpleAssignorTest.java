@@ -22,7 +22,6 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
@@ -390,13 +389,13 @@ public class SimpleAssignorTest {
         Map<TopicIdPartition, List<String>> assignment = new HashMap<>();
         assignment.put(partition1, List.of(member1));
 
-        SubscribedTopicDescriber describer = mock(SubscribedTopicDescriber.class);
-        when(describer.assignablePartitions(eq(TOPIC_1_UUID))).thenReturn(Set.of(0));
-        when(describer.assignablePartitions(eq(TOPIC_2_UUID))).thenReturn(Set.of(0));
-        when(describer.assignablePartitions(eq(TOPIC_3_UUID))).thenReturn(Set.of(0));
-        when(describer.assignablePartitions(eq(TOPIC_4_UUID))).thenReturn(Set.of(0));
+        GroupSpec spec = mock(GroupSpec.class);
+        when(spec.isPartitionAssignable(eq(TOPIC_1_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_2_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_3_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_4_UUID), eq(0))).thenReturn(true);
 
-        assignor.roundRobinAssignment(members, unassignedPartitions, assignment, describer);
+        assignor.roundRobinAssignment(spec, members, unassignedPartitions, assignment);
         Map<TopicIdPartition, List<String>> expectedAssignment = Map.of(
             partition1, List.of(member1),
             partition2, List.of(member1),
@@ -422,13 +421,13 @@ public class SimpleAssignorTest {
         assignment.put(member1, new HashSet<>(Set.of(partition1)));
         assignment.put(member2, new HashSet<>(Set.of(partition1)));
 
-        SubscribedTopicDescriber describer = mock(SubscribedTopicDescriber.class);
-        when(describer.assignablePartitions(eq(TOPIC_1_UUID))).thenReturn(Set.of(0));
-        when(describer.assignablePartitions(eq(TOPIC_2_UUID))).thenReturn(Set.of(0));
-        when(describer.assignablePartitions(eq(TOPIC_3_UUID))).thenReturn(Set.of(0));
-        when(describer.assignablePartitions(eq(TOPIC_4_UUID))).thenReturn(Set.of(0));
+        GroupSpec spec = mock(GroupSpec.class);
+        when(spec.isPartitionAssignable(eq(TOPIC_1_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_2_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_3_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_4_UUID), eq(0))).thenReturn(true);
 
-        assignor.roundRobinAssignmentWithCount(members, unassignedPartitions, assignment, 2, describer);
+        assignor.roundRobinAssignmentWithCount(spec, members, unassignedPartitions, assignment, 2);
         Map<String, Set<TopicIdPartition>> expectedAssignment = Map.of(
             member1, Set.of(partition1, partition2, partition4),
             member2, Set.of(partition1, partition3)
@@ -453,15 +452,17 @@ public class SimpleAssignorTest {
         Map<String, Set<TopicIdPartition>> assignment = new HashMap<>();
         assignment.put(member1, new HashSet<>(Set.of(partition1)));
         assignment.put(member2, new HashSet<>(Set.of(partition1)));
-
-        SubscribedTopicDescriber describer = mock(SubscribedTopicDescriber.class);
-        when(describer.assignablePartitions(eq(TOPIC_1_UUID))).thenReturn(Set.of(0));
-        when(describer.assignablePartitions(eq(TOPIC_2_UUID))).thenReturn(Set.of(0));
-        when(describer.assignablePartitions(eq(TOPIC_3_UUID))).thenReturn(Set.of(0));
-        when(describer.assignablePartitions(eq(TOPIC_4_UUID))).thenReturn(Set.of(0, 1, 2));
+        
+        GroupSpec spec = mock(GroupSpec.class);
+        when(spec.isPartitionAssignable(eq(TOPIC_1_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_2_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_3_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_4_UUID), eq(0))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_4_UUID), eq(1))).thenReturn(true);
+        when(spec.isPartitionAssignable(eq(TOPIC_4_UUID), eq(2))).thenReturn(true);
 
         assertThrows(PartitionAssignorException.class,
-            () -> assignor.roundRobinAssignmentWithCount(members, unassignedPartitions, assignment, 2, describer));
+            () -> assignor.roundRobinAssignmentWithCount(spec, members, unassignedPartitions, assignment, 2));
     }
 
     @Test

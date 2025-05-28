@@ -41,6 +41,18 @@ public interface GroupSpec {
     boolean isPartitionAssigned(Uuid topicId, int partitionId);
 
     /**
+     * For share groups, a partition cannot be directly assigned to a
+     * share consumer. It must first be initialized in the share coordinator
+     * and on successful persistance, it can be assigned. For non-share groups,
+     * this will always return true.
+     *
+     * @param topicId The topic uuid.
+     * @param partitionId The partition id of the topic.
+     * @return True, if the partition is assignable.
+     */
+    boolean isPartitionAssignable(Uuid topicId, int partitionId);
+
+    /**
      * Gets the member subscription specification for a member.
      *
      * @param memberId The member Id.

@@ -25,6 +25,8 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * The assignment specification for a modern group.
@@ -46,14 +48,31 @@ public class GroupSpecImpl implements GroupSpec {
      */
     private final Map<Uuid, Map<Integer, String>> invertedMemberAssignment;
 
+    /**
+     * In case of share groups, this map will be queried to decide
+     * which partition is assignable. For non-share groups,
+     * this optional should be empty.
+     */
+    private final Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap;
+
     public GroupSpecImpl(
         Map<String, MemberSubscriptionAndAssignmentImpl> members,
         SubscriptionType subscriptionType,
         Map<Uuid, Map<Integer, String>> invertedMemberAssignment
     ) {
+        this(members, subscriptionType, invertedMemberAssignment, Optional.empty());
+    }
+
+    public GroupSpecImpl(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members,
+        SubscriptionType subscriptionType,
+        Map<Uuid, Map<Integer, String>> invertedMemberAssignment,
+        Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
+    ) {
         this.members = Objects.requireNonNull(members);
         this.subscriptionType = Objects.requireNonNull(subscriptionType);
         this.invertedMemberAssignment = Objects.requireNonNull(invertedMemberAssignment);
+        this.topicPartitionAllowedMap = topicPartitionAllowedMap;
     }
 
     /**
@@ -82,6 +101,14 @@ public class GroupSpecImpl implements GroupSpec {
             return false;
         }
         return partitionMap.containsKey(partitionId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isPartitionAssignable(Uuid topicId, int partitionId) {
+        return topicPartitionAllowedMap.map(allowedMap -> allowedMap.containsKey(topicId) && allowedMap.get(topicId).contains(partitionId)).orElse(true);
     }
 
     /**
