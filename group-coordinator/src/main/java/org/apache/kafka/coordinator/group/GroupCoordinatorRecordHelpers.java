@@ -28,7 +28,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
@@ -51,7 +50,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
@@ -122,36 +120,6 @@ public class GroupCoordinatorRecordHelpers {
             new ConsumerGroupMemberMetadataKey()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-        );
-    }
-
-    /**
-     * Creates a ConsumerGroupPartitionMetadata record.
-     *
-     * @param groupId                   The consumer group id.
-     * @param newSubscriptionMetadata   The subscription metadata.
-     * @return The record.
-     */
-    public static CoordinatorRecord newConsumerGroupSubscriptionMetadataRecord(
-        String groupId,
-        Map<String, TopicMetadata> newSubscriptionMetadata
-    ) {
-        ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) ->
-            value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                .setTopicId(topicMetadata.id())
-                .setTopicName(topicMetadata.name())
-                .setNumPartitions(topicMetadata.numPartitions())
-            )
-        );
-
-        return CoordinatorRecord.record(
-            new ConsumerGroupPartitionMetadataKey()
-                .setGroupId(groupId),
-            new ApiMessageAndVersion(
-                value,
-                (short) 0
-            )
         );
     }
 

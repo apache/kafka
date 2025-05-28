@@ -173,7 +173,7 @@ public class StreamsMembershipManager implements RequestManager {
     private MemberState state;
 
     /**
-     * Group ID of the Streams group the member will be part of, provided when creating the current
+     * Group ID of the streams group the member will be part of, provided when creating the current
      * membership manager.
      */
     private final String groupId;

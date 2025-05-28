@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
@@ -35,7 +34,6 @@ public class ShareGroupBuilder {
     private int assignmentEpoch;
     private final Map<String, ShareGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
-    private Map<String, TopicMetadata> subscriptionMetadata;
     private long metadataHash = 0L;
 
     public ShareGroupBuilder(String groupId, int groupEpoch) {

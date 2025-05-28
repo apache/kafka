@@ -141,7 +141,6 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
@@ -199,7 +198,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -228,7 +226,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord;
@@ -489,7 +487,9 @@ public class GroupMetadataManager {
     private MetadataImage metadataImage;
 
     /**
-     * The topic hash value by topic name.
+     * The cache for topic hash value by topic name.
+     * A topic hash is calculated when there is a group subscribes to it.
+     * A topic hash is removed when it's updated in MetadataImage or there is no group subscribes to it.
      */
     private final Map<String, Long> topicHashCache;
 
@@ -553,7 +553,7 @@ public class GroupMetadataManager {
         this.shareGroupAssignor = shareGroupAssignor;
         this.authorizerPlugin = authorizerPlugin;
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
-        this.topicHashCache = new ConcurrentHashMap<>();
+        this.topicHashCache = new HashMap<>();
     }
 
     /**
@@ -1359,7 +1359,8 @@ public class GroupMetadataManager {
                 snapshotRegistry,
                 metrics,
                 classicGroup,
-                metadataImage.topics()
+                topicHashCache,
+                metadataImage
             );
         } catch (SchemaException e) {
             log.warn("Cannot upgrade classic group " + classicGroup.groupId() +
@@ -1633,7 +1634,7 @@ public class GroupMetadataManager {
     /**
      * Validates the member epoch provided in the heartbeat request.
      *
-     * @param member                The Streams group member.
+     * @param member                The streams group member.
      * @param receivedMemberEpoch   The member epoch.
      * @param ownedActiveTasks      The owned active tasks.
      * @param ownedStandbyTasks     The owned standby tasks.
@@ -1788,7 +1789,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handles a regular heartbeat from a Streams group member.
+     * Handles a regular heartbeat from a streams group member.
      * It mainly consists of five parts:
      * 1) Create or update the member.
      *    The group epoch is bumped if the member has been created or updated.
@@ -2548,7 +2549,7 @@ public class GroupMetadataManager {
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
             subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-            long groupMetadataHash = group.computeMetadataHash(
+            long groupMetadataHash = ModernGroup.computeMetadataHash(
                 subscribedTopicNamesMap,
                 topicHashCache,
                 metadataImage
@@ -3306,26 +3307,24 @@ public class GroupMetadataManager {
                 ));
             }
 
-            // Compute the subscription metadata.
-            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+            long groupMetadataHash = ModernGroup.computeMetadataHash(
                 subscribedTopicNames,
-                metadataImage.topics(),
-                metadataImage.cluster()
+                topicHashCache,
+                metadataImage
             );
 
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+            if (groupMetadataHash != group.metadataHash()) {
                 if (log.isDebugEnabled()) {
-                    log.debug("[GroupId {}] Computed new subscription metadata: {}.",
-                        groupId, subscriptionMetadata);
+                    log.debug("[GroupId {}] Computed new metadata hash: {}.",
+                        groupId, groupMetadataHash);
                 }
                 bumpGroupEpoch = true;
-                records.add(newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
 
             if (bumpGroupEpoch) {
                 int groupEpoch = group.groupEpoch() + 1;
-                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
-                log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
+                log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
                 group.setMetadataRefreshDeadline(
                     time.milliseconds() + METADATA_REFRESH_INTERVAL_MS,
@@ -3612,10 +3611,11 @@ public class GroupMetadataManager {
             member,
             updatedMember
         );
-        Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+
+        long groupMetadataHash = ModernGroup.computeMetadataHash(
             subscribedTopicNamesMap,
-            metadataImage.topics(),
-            metadataImage.cluster()
+            topicHashCache,
+            metadataImage
         );
 
         int numMembers = group.numMembers();
@@ -3629,23 +3629,29 @@ public class GroupMetadataManager {
             numMembers
         );
 
-        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+        if (groupMetadataHash != group.metadataHash()) {
             if (log.isDebugEnabled()) {
-                log.debug("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
+                log.debug("[GroupId {}] Computed new metadata hash: {}.",
+                    groupId, groupMetadataHash);
             }
             bumpGroupEpoch = true;
-            records.add(newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
         }
 
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
-            log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
+            log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         }
 
         group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
+
+        // Before 4.0, the coordinator used subscription metadata to keep topic metadata.
+        // After 4.1, the subscription metadata is replaced by the metadata hash. If there is subscription metadata in log,
+        // add a tombstone record to remove it.
+        if (group.hasSubscriptionMetadataRecord()) {
+            records.add(newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId));
+        }
 
         return new UpdateSubscriptionMetadataResult(
             groupEpoch,
@@ -4019,25 +4025,27 @@ public class GroupMetadataManager {
                 members
             );
 
-            // We update the subscription metadata without the leaving members.
-            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
-                group.computeSubscribedTopicNamesWithoutDeletedMembers(members, deletedRegexes),
-                metadataImage.topics(),
-                metadataImage.cluster()
+            Map<String, SubscriptionCount> subscribedTopicNamesMap = group.computeSubscribedTopicNamesWithoutDeletedMembers(
+                members,
+                deletedRegexes
+            );
+            long groupMetadataHash = ModernGroup.computeMetadataHash(
+                subscribedTopicNamesMap,
+                topicHashCache,
+                metadataImage
             );
 
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+            if (groupMetadataHash != group.metadataHash()) {
                 if (log.isDebugEnabled()) {
-                    log.debug("[GroupId {}] Computed new subscription metadata: {}.",
-                        group.groupId(), subscriptionMetadata);
+                    log.debug("[GroupId {}] Computed new metadata hash: {}.",
+                        group.groupId(), groupMetadataHash);
                 }
-                records.add(newConsumerGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
             }
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, 0));
-            log.info("[GroupId {}] Bumped group epoch to {}.", group.groupId(), groupEpoch);
+            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
+            log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", group.groupId(), groupEpoch, groupMetadataHash);
 
             for (ConsumerGroupMember member : members) {
                 cancelTimers(group.groupId(), member.memberId());
@@ -4066,7 +4074,7 @@ public class GroupMetadataManager {
         records.add(newShareGroupMemberSubscriptionTombstoneRecord(group.groupId(), member.memberId()));
 
         // We update the subscription metadata without the leaving member.
-        long groupMetadataHash = group.computeMetadataHash(
+        long groupMetadataHash = ModernGroup.computeMetadataHash(
             group.computeSubscribedTopicNames(member, null),
             topicHashCache,
             metadataImage
@@ -4984,7 +4992,11 @@ public class GroupMetadataManager {
     ) {
         groupsByTopics.computeIfPresent(topicName, (__, groupIds) -> {
             groupIds.remove(groupId);
-            return groupIds.isEmpty() ? null : groupIds;
+            if (groupIds.isEmpty()) {
+                topicHashCache.remove(topicName);
+                return null;
+            }
+            return groupIds;
         });
     }
 
@@ -5039,6 +5051,7 @@ public class GroupMetadataManager {
         if (value != null) {
             ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             consumerGroup.setGroupEpoch(value.epoch());
+            consumerGroup.setMetadataHash(value.metadataHash());
         } else {
             ConsumerGroup consumerGroup;
             try {
@@ -5088,15 +5101,9 @@ public class GroupMetadataManager {
             return;
         }
 
-        if (value != null) {
-            Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-            value.topics().forEach(topicMetadata -> {
-                subscriptionMetadata.put(topicMetadata.topicName(), TopicMetadata.fromRecord(topicMetadata));
-            });
-            group.setSubscriptionMetadata(subscriptionMetadata);
-        } else {
-            group.setSubscriptionMetadata(Map.of());
-        }
+        // If value is not null, add subscription metadata tombstone record in the next consumer group heartbeat,
+        // because the subscription metadata is replaced by metadata hash in ConsumerGroupMetadataValue.
+        group.setHasSubscriptionMetadataRecord(value != null);
     }
 
     /**
@@ -5251,8 +5258,8 @@ public class GroupMetadataManager {
 
     /**
      * Replays StreamsGroupMetadataKey/Value to update the hard state of
-     * the Streams group. It updates the group epoch of the Streams
-     * group or deletes the Streams group.
+     * the streams group. It updates the group epoch of the Streams
+     * group or deletes the streams group.
      *
      * @param key   A StreamsGroupMetadataKey key.
      * @param value A StreamsGroupMetadataValue record.
@@ -5712,11 +5719,15 @@ public class GroupMetadataManager {
         Set<String> allGroupIds = new HashSet<>();
         topicsDelta.changedTopics().forEach((topicId, topicDelta) -> {
             String topicName = topicDelta.name();
+            // Remove topic hash from the cache to recalculate it.
+            topicHashCache.remove(topicName);
             allGroupIds.addAll(groupsSubscribedToTopic(topicName));
         });
         topicsDelta.deletedTopicIds().forEach(topicId -> {
             TopicImage topicImage = delta.image().topics().getTopic(topicId);
-            allGroupIds.addAll(groupsSubscribedToTopic(topicImage.name()));
+            String topicName = topicImage.name();
+            topicHashCache.remove(topicName);
+            allGroupIds.addAll(groupsSubscribedToTopic(topicName));
         });
         allGroupIds.forEach(groupId -> {
             Group group = groups.get(groupId);
@@ -8353,6 +8364,10 @@ public class GroupMetadataManager {
         return Collections.unmodifiableSet(this.groups.keySet());
     }
 
+    // Visible for testing
+    Map<String, Long> topicHashCache() {
+        return Collections.unmodifiableMap(this.topicHashCache);
+    }
 
     /**
      * Get the session timeout of the provided consumer group.
