@@ -2623,8 +2623,9 @@ public class ShareConsumerTest {
         try {
             transactionalProducer.beginTransaction();
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, message.getBytes(), message.getBytes());
-            transactionalProducer.send(record);
+            Future<RecordMetadata> future = transactionalProducer.send(record);
             transactionalProducer.flush();
+            future.get(); // Ensure producer send is complete before aborting
             transactionalProducer.abortTransaction();
         } catch (Exception e) {
             transactionalProducer.abortTransaction();
