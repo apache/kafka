@@ -68,6 +68,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public final OptionSpec<Void> offsetsOpt;
     public final OptionSpec<Void> verboseOpt;
 
+    final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
     final Set<OptionSpec<?>> allStreamsGroupLevelOpts;
 
 
@@ -113,8 +114,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         verboseOpt = parser.accepts("verbose", VERBOSE_DOC)
             .availableIf(describeOpt);
 
-        // todo resetOffsetsOpt must be added later
         allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
+        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
         options = parser.parse(args);
     }
 
@@ -140,11 +141,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOpt + " takes one of these options: " + allStreamsGroupLevelOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+                    "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
         }
 
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
-        // todo resetOffsetsOpt must be added later
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allStreamsGroupLevelOpts, describeOpt, deleteOpt));
     }
 }

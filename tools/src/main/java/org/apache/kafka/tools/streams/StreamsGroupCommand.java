@@ -17,7 +17,9 @@
 package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
@@ -35,6 +37,7 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -45,6 +48,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -406,64 +410,107 @@ public class StreamsGroupCommand {
 
         Map<String, Throwable> deleteGroups() {
             List<String> groupIds = opts.options.has(opts.allGroupsOpt)
-                ? listStreamsGroups()
-                : opts.options.valuesOf(opts.groupOpt);
+                ? new ArrayList<>(listStreamsGroups())
+                : new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
 
+            // pre admin call checks
+            Map<String, Throwable> failed = preAdminCallChecks(groupIds);
+
+            groupIds.removeAll(failed.keySet());
             Map<String, Throwable> success = new HashMap<>();
-            Map<String, Throwable> failed = new HashMap<>();
-
-            // retrieve internal topics before deleting groups
-            Map<String, List<String>> internalTopics = retrieveInternalTopics(groupIds);
-
-            Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteStreamsGroups(
-                groupIds
-            ).deletedGroups();
-
-            groupsToDelete.forEach((g, f) -> {
-                try {
-                    f.get();
-                    success.put(g, null);
-                } catch (InterruptedException ie) {
-                    failed.put(g, ie);
-                } catch (ExecutionException e) {
-                    failed.put(g, e.getCause());
-                }
-            });
-
-            // delete internal topics
+            Map<String, List<String>> internalTopics = new HashMap<>();
             Map<String, Throwable> internalTopicsDeletionFailures = new HashMap<>();
-            if (!success.isEmpty()) {
-                for (String groupId : success.keySet()) {
-                    List<String> internalTopicsToDelete = internalTopics.get(groupId);
-                    if (internalTopicsToDelete != null && !internalTopicsToDelete.isEmpty()) {
-                        try {
-                            DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(internalTopicsToDelete);
-                            deleteTopicsResult.all().get();
-                        } catch (InterruptedException | ExecutionException e) {
-                            internalTopicsDeletionFailures.put(groupId, e.getCause());
+            if (!groupIds.isEmpty()) {
+                // retrieve internal topics before deleting groups
+                internalTopics = retrieveInternalTopics(groupIds);
+
+                // delete streams groups
+                Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteStreamsGroups(
+                    groupIds,
+                    withTimeoutMs(new DeleteStreamsGroupsOptions())
+                ).deletedGroups();
+
+                groupsToDelete.forEach((g, f) -> {
+                    try {
+                        f.get();
+                        success.put(g, null);
+                    } catch (InterruptedException ie) {
+                        failed.put(g, ie);
+                    } catch (ExecutionException e) {
+                        failed.put(g, e.getCause());
+                    }
+                });
+
+                // delete internal topics
+                if (!success.isEmpty()) {
+                    for (String groupId : success.keySet()) {
+                        List<String> internalTopicsToDelete = internalTopics.get(groupId);
+                        if (internalTopicsToDelete != null && !internalTopicsToDelete.isEmpty()) {
+                            try {
+                                DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(internalTopicsToDelete);
+                                deleteTopicsResult.all().get();
+                            } catch (InterruptedException | ExecutionException e) {
+                                internalTopicsDeletionFailures.put(groupId, e.getCause());
+                            }
                         }
                     }
                 }
             }
 
+            // display outcome messages based on the results
             if (failed.isEmpty()) {
-                System.out.println("Deletion of requested streams groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
+                System.out.println("Deletion of requested streams groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("', '")) + "') was successful.");
             } else {
                 printError("Deletion of some streams groups failed:", Optional.empty());
                 failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty()) {
-                    System.out.println("\nThese streams groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
+                    System.out.println("\nThese streams groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("', '")) + "'.");
                 }
             }
-
             if (!internalTopics.keySet().isEmpty()) {
                 printInternalTopicErrors(internalTopicsDeletionFailures, success.keySet(), internalTopics.keySet());
             }
-
+            // for testing purpose: return all failures, including internal topics deletion failures
             failed.putAll(success);
             failed.putAll(internalTopicsDeletionFailures);
             return failed;
+        }
+
+        private Map<String, Throwable> preAdminCallChecks(List<String> groupIds) {
+            List<GroupListing> streamsGroupIds = listDetailedStreamsGroups();
+            LinkedHashSet<String> groupIdSet = new LinkedHashSet<>(groupIds);
+
+            Map<String, Throwable> failed = new HashMap<>();
+
+            for (String groupId : groupIdSet) {
+                Optional<GroupListing> listing = streamsGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
+                if (listing.isEmpty()) {
+                    failed.put(groupId, new IllegalArgumentException("Group '" + groupId + "' does not exist or is not a Kafka Streams group."));
+                } else {
+                    Optional<GroupState> groupState = listing.get().groupState();
+                    groupState.ifPresent(state -> {
+                        if (state == GroupState.DEAD) {
+                            failed.put(groupId, new IllegalStateException("Streams group '" + groupId + "' group state is DEAD."));
+                        } else if (state != GroupState.EMPTY) {
+                            failed.put(groupId, new GroupNotEmptyException("Streams group '" + groupId + "' is not EMPTY."));
+                        }
+                    });
+                }
+            }
+            return failed;
+        }
+
+        List<GroupListing> listDetailedStreamsGroups() {
+            try {
+                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                    .withTypes(Set.of(GroupType.STREAMS)));
+                Collection<GroupListing> listings = result.all().get();
+                return listings.stream().toList();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         private void printInternalTopicErrors(Map<String, Throwable> internalTopicsDeletionFailures,
@@ -491,16 +538,28 @@ public class StreamsGroupCommand {
                 Map<String, StreamsGroupDescription> descriptionMap = adminClient.describeStreamsGroups(groupIds).all().get();
                 for (StreamsGroupDescription description : descriptionMap.values()) {
 
-                    List<String> sourceTopics = description.subtopologies().stream()
-                        .flatMap(subtopology -> subtopology.sourceTopics().stream())
+                    List<String> nonInternalTopics = description.subtopologies().stream()
+                        .flatMap(subtopology -> Stream.concat(
+                            subtopology.sourceTopics().stream(),
+                            subtopology.repartitionSinkTopics().stream()))
+                        .distinct()
                         .toList();
+
 
                     List<String> internalTopics = description.subtopologies().stream()
                         .flatMap(subtopology -> Stream.concat(
                             subtopology.repartitionSourceTopics().keySet().stream(),
                             subtopology.stateChangelogTopics().keySet().stream()))
-                        .filter(topic -> !sourceTopics.contains(topic))
+                        .filter(topic -> !nonInternalTopics.contains(topic))
                         .collect(Collectors.toList());
+                    internalTopics.removeIf(topic -> {
+                        if (!isInferredInternalTopic(topic, description.groupId())) {
+                            printError("The internal topic '" + topic + "' is not inferred as internal " +
+                                "and thus will not be deleted with the group '" + description.groupId() + "'.", Optional.empty());
+                            return true;
+                        }
+                        return false;
+                    });
                     if (!internalTopics.isEmpty()) {
                         groupToInternalTopics.put(description.groupId(), internalTopics);
                     }
@@ -508,12 +567,24 @@ public class StreamsGroupCommand {
             } catch (InterruptedException | ExecutionException e) {
                 if (e.getCause() instanceof UnsupportedVersionException) {
                     printError("Retrieving internal topics is not supported by the broker version. " +
-                        "Please execute --delete --internal-topics <topic names> to delete the group's associated internal topics.", Optional.of(e.getCause()));
+                        "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
                 } else {
                     printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
                 }
             }
             return groupToInternalTopics;
+        }
+
+        private boolean isInferredInternalTopic(final String topicName, final String applicationId) {
+            return topicName.startsWith(applicationId + "-") && matchesInternalTopicFormat(topicName);
+        }
+
+        public static boolean matchesInternalTopicFormat(final String topicName) {
+            return topicName.endsWith("-changelog") || topicName.endsWith("-repartition")
+                || topicName.endsWith("-subscription-registration-topic")
+                || topicName.endsWith("-subscription-response-topic")
+                || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-\\d+-topic")
+                || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-\\d+-topic");
         }
 
         Collection<StreamsGroupMemberDescription> collectGroupMembers(String groupId) throws Exception {
@@ -524,7 +595,12 @@ public class StreamsGroupCommand {
             return getDescribeGroup(groupId).groupState();
         }
 
+        private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
+            int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
+            return options.timeoutMs(t);
+        }
     }
+
 
     public record OffsetsInfo(Optional<Long> currentOffset, Optional<Integer> leaderEpoch, Long logEndOffset, Long lag) {
     }

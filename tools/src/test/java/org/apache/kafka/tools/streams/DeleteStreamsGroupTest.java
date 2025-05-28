@@ -22,11 +22,11 @@ import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
-import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
@@ -61,6 +61,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import joptsimple.OptionException;
@@ -68,6 +69,7 @@ import joptsimple.OptionException;
 import static org.apache.kafka.common.GroupState.EMPTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -99,9 +101,25 @@ public class DeleteStreamsGroupTest {
     }
 
     @Test
-    public void testResetWithUnrecognizedOption() {
-        final String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", bootstrapServers, "--delete-group", "--all-groups"};
+    public void testDeleteWithUnrecognizedOption() {
+        final String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", bootstrapServers, "--delete", "--all-groups"};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
+    }
+
+    @Test
+    public void testDeleteWithoutGroupOption() {
+        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete"};
+        AtomicBoolean exited = new AtomicBoolean(false);
+        Exit.setExitProcedure(((statusCode, message) -> {
+            assertNotEquals(0, statusCode);
+            assertTrue(message.contains("Option [delete] takes one of these options: [all-groups], [group]"));
+            exited.set(true);
+        }));
+        try {
+            getStreamsGroupService(args);
+        } finally {
+            assertTrue(exited.get());
+        }
     }
 
     @Test
@@ -115,7 +133,8 @@ public class DeleteStreamsGroupTest {
             String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
             Map<String, Throwable> result = service.deleteGroups();
 
-            assertTrue(output.contains("Group '" + appId + "' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message()),
+            assertTrue(output.contains("Group '" + appId + "' could not be deleted due to:")
+                    && output.contains("Streams group '" + appId + "' is not EMPTY."),
                 "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Output was: (" + output + ")");
 
             assertNotNull(result.get(appId),
@@ -143,9 +162,9 @@ public class DeleteStreamsGroupTest {
             result = service.deleteGroups();
             assertEquals(1, result.size());
             assertNotNull(result.get(appId));
-            assertInstanceOf(GroupIdNotFoundException.class,
+            assertInstanceOf(IllegalArgumentException.class,
                 result.get(appId),
-                "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
+                "The expected error was not detected while deleting streams group");
         }
     }
 
@@ -167,11 +186,14 @@ public class DeleteStreamsGroupTest {
         final Map<String, Throwable> result = new HashMap<>();
         String output = ToolsTestUtils.grabConsoleOutput(() -> result.putAll(service.deleteGroups()));
 
-        assertTrue(output.contains("Group '" + appId1 + "' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message()),
+        assertTrue(output.contains("Group '" + appId1 + "' could not be deleted due to:")
+                && output.contains("Streams group '" + appId1 + "' is not EMPTY."),
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Output was: (" + output + ")");
-        assertTrue(output.contains("Group '" + appId3 + "' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message()),
+        assertTrue(output.contains("Group '" + appId3 + "' could not be deleted due to:")
+                && output.contains("Streams group '" + appId3 + "' is not EMPTY."),
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Output was: (" + output + ")");
-        assertTrue(output.contains("Group '" + appId2 + "' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message()),
+        assertTrue(output.contains("Group '" + appId2 + "' could not be deleted due to:")
+                && output.contains("Streams group '" + appId2 + "' is not EMPTY."),
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Output was: (" + output + ")");
 
 
@@ -199,9 +221,9 @@ public class DeleteStreamsGroupTest {
         output = ToolsTestUtils.grabConsoleOutput(() -> mixGrpsRes.putAll(service.deleteGroups()));
 
         assertTrue(output.contains("Group '" + appId2 + "' could not be deleted due to:")
-                && output.contains(Errors.NON_EMPTY_GROUP.message()), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + result + ")");
+            && output.contains("Streams group '" + appId2 + "' is not EMPTY."), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + result + ")");
         assertTrue(output.contains("Group '" + appId3 + "' could not be deleted due to:")
-            && output.contains(Errors.NON_EMPTY_GROUP.message()), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + result + ")");
+            && output.contains("Streams group '" + appId3 + "' is not EMPTY."), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + result + ")");
         assertTrue(output.contains("These streams groups were deleted successfully: '" + appId1 + "'"),
             "The streams groups deletion did not work as expected");
         assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId1 + "') was successful."),
@@ -219,8 +241,8 @@ public class DeleteStreamsGroupTest {
         final Map<String, Throwable> allGrpsRes = new HashMap<>();
         output = ToolsTestUtils.grabConsoleOutput(() -> allGrpsRes.putAll(service.deleteGroups()));
 
-        assertTrue(output.contains("Deletion of requested streams groups ('" + appId2 + ", " + appId3 + "') was successful.") |
-                output.contains("Deletion of requested streams groups ('" + appId3 + ", " + appId2 + "') was successful."),
+        assertTrue(output.contains("Deletion of requested streams groups ('" + appId2 + "', '" + appId3 + "') was successful.") |
+                output.contains("Deletion of requested streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
             "The streams groups deletion did not work as expected");
         assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId2 + ", " + appId3 + "') was successful.") |
                 output.contains("Deletion of associated internal topics of the streams groups ('" + appId3 + ", " + appId2 + "') was successful."),
@@ -241,16 +263,16 @@ public class DeleteStreamsGroupTest {
             stopKSApp(appId, streams, service);
             // downgrade the streams.version to 0
             updateStreamsGroupProtocol((short) 0);
-            final Map<String, Throwable> emptyGrpRes = new HashMap<>();
-            String output = ToolsTestUtils.grabConsoleOutput(() -> emptyGrpRes.putAll(service.deleteGroups()));
+            final Map<String, Throwable> result = new HashMap<>();
+            String output = ToolsTestUtils.grabConsoleOutput(() -> result.putAll(service.deleteGroups()));
 
             assertTrue(output.contains("Deletion of requested streams groups ('" + appId + "') was successful."),
                 "The streams group could not be deleted as expected");
             assertTrue(output.contains("Retrieving internal topics is not supported by the broker version. " +
-                "Please execute --delete --internal-topics <topic names> to delete the group's associated internal topics."));
-            assertEquals(1, emptyGrpRes.size());
-            assertTrue(emptyGrpRes.containsKey(appId));
-            assertNull(emptyGrpRes.get(appId), "The streams group could not be deleted as expected");
+                "Use 'kafka-topics.sh' to list and delete the group's internal topics."));
+            assertEquals(1, result.size());
+            assertTrue(result.containsKey(appId));
+            assertNull(result.get(appId), "The streams group could not be deleted as expected");
         } finally {
             // upgrade back the streams.version to 1
             updateStreamsGroupProtocol((short) 1);
