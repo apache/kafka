@@ -875,11 +875,10 @@ public class ClientQuotaManager {
                     BaseUserEntity userEntity = new UserEntity(sanitizedUser);
                     ClientQuotaEntity.ConfigEntity clientIdEntity = new ClientIdEntity(clientId);
 
-                    // Start with full tags
+                    // Start with full tags (sanitizedUser, clientId)
                     userTag = sanitizedUser;
                     clientIdTag = clientId;
 
-                    // Check each hierarchy level in order of precedence - exactly like Scala
                     // 1) /config/users/<user>/clients/<client-id>
                     if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, clientIdEntity))) {
                         // 2) /config/users/<user>/clients/<default>
@@ -891,7 +890,7 @@ public class ClientQuotaManager {
                             clientIdTag = "";
                             if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, null))) {
                                 // 4) /config/users/<default>/clients/<client-id>
-                                userTag = sanitizedUser;  // Back to full tags like Scala
+                                userTag = sanitizedUser;
                                 clientIdTag = clientId;
                                 if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity))) {
                                     // 5) /config/users/<default>/clients/<default>
@@ -902,7 +901,8 @@ public class ClientQuotaManager {
                                         userTag = sanitizedUser;
                                         clientIdTag = "";
                                         if (!overriddenQuotas.containsKey(DEFAULT_USER_QUOTA_ENTITY)) {
-                                            // 7) /config/clients/<client-id> or 8) /config/clients/<default>
+                                            // 7) /config/clients/<client-id>
+                                            // 8) /config/clients/<default>
                                             userTag = "";
                                             clientIdTag = clientId;
                                         }
