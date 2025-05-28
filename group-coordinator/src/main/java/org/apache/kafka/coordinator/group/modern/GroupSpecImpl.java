@@ -152,11 +152,11 @@ public class GroupSpecImpl implements GroupSpec {
 
     @Override
     public String toString() {
-        return "GroupSpecImpl{" +
+        return "GroupSpecImpl(" +
             "members=" + members +
             ", subscriptionType=" + subscriptionType +
             ", invertedMemberAssignment=" + invertedMemberAssignment +
             ", topicPartitionAllowedMap=" + topicPartitionAllowedMap +
-            '}';
+            ')';
     }
 }
