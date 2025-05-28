@@ -614,7 +614,7 @@ class BrokerServer(
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)
-        fatal("Fatal error during broker startup. Prepare to shutdown", e)
+        fatal("~~~Fatal error during broker startup. Prepare to shutdown", e)
         shutdown()
         throw if (e.isInstanceOf[ExecutionException]) e.getCause else e
     }
