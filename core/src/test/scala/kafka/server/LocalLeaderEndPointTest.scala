@@ -273,7 +273,6 @@ class LocalLeaderEndPointTest extends Logging {
     val result = new CallbackResult[PartitionResponse]()
     def appendCallback(responses: JMap[TopicIdPartition, PartitionResponse]): Unit = {
       val response = responses.get(partition)
-
       assertNotNull(response)
       result.fire(response)
     }
