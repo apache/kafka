@@ -34,7 +34,7 @@ import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -127,7 +127,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Set(topic), produceException.asInstanceOf[TopicAuthorizationException].unauthorizedTopics.asScala)
 
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
-    consumer.assign(List(topicPartition).asJava)
+    consumer.assign(java.util.List.of(topicPartition))
     val consumeException = assertThrows(classOf[TopicAuthorizationException],
       () => TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1))
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
@@ -135,6 +135,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  @Timeout(60)
   def testConsumeUnsubscribeWithoutGroupPermission(groupProtocol: String): Unit = {
     val topic = "topic"
 
@@ -160,7 +161,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     props.put(ConsumerConfig.GROUP_ID_CONFIG, group)
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = createConsumer(configOverrides = props)
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
 
     removeAndVerifyAcls(
@@ -198,7 +199,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     props.put(ConsumerConfig.GROUP_ID_CONFIG, group)
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = createConsumer(configOverrides = props)
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
 
     removeAndVerifyAcls(
@@ -231,7 +232,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
     )
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
-    consumer.assign(List(topicPartition).asJava)
+    consumer.assign(java.util.List.of(topicPartition))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
   }
 

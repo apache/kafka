@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.ClientMetricsResourceListing;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -77,13 +76,5 @@ public class ListConfigResourcesResponse extends AbstractResponse {
                     entry.resourceName()
                 )
             ).collect(Collectors.toList());
-    }
-
-    public Collection<ClientMetricsResourceListing> clientMetricsResources() {
-        return data.configResources()
-            .stream()
-            .filter(entry -> entry.resourceType() == ConfigResource.Type.CLIENT_METRICS.id())
-            .map(entry -> new ClientMetricsResourceListing(entry.resourceName()))
-            .collect(Collectors.toList());
     }
 }

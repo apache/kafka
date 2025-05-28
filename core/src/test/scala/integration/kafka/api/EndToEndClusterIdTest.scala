@@ -32,7 +32,6 @@ import org.apache.kafka.test.{TestUtils => _, _}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
-import scala.jdk.CollectionConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -153,7 +152,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     this.consumerConfig.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockConsumerMetricsReporter].getName)
     this.consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val testConsumer = new KafkaConsumer(this.consumerConfig, new MockDeserializer, new MockDeserializer)
-    testConsumer.assign(List(tp).asJava)
+    testConsumer.assign(java.util.List.of(tp))
     testConsumer.seek(tp, 0)
 
     // consume and verify that values are modified by interceptors
@@ -187,9 +186,9 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     MockProducerInterceptor.resetCounters()
   }
 
-  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition): Unit = {
+  private def sendRecords(producer: KafkaProducer[String, String], numRecords: Int, tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
-      val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
+      val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i", s"$i")
       debug(s"Sending this record: $record")
       producer.send(record)
     }
@@ -200,7 +199,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     }
   }
 
-  private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
+  private def consumeRecords(consumer: Consumer[String, String],
                              numRecords: Int,
                              startingOffset: Int = 0,
                              topic: String = topic,
