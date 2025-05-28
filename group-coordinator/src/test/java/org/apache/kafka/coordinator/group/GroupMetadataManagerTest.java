@@ -624,7 +624,6 @@ public class GroupMetadataManagerTest {
 
         assertRecordsEquals(expectedRecords, result.records());
         assertEquals(Map.of(fooTopicName, fooTopicHash), context.groupMetadataManager.topicHashCache());
-        assertTrue(context.groupMetadataManager.topicHashCache().containsKey(fooTopicName));
 
         // Use LEAVE_GROUP_MEMBER_EPOCH to leave group, so there is no group subscribes to foo.
         result = context.consumerGroupHeartbeat(
