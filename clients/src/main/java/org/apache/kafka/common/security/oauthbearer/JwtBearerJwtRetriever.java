@@ -151,12 +151,12 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
             sslSocketFactory = jou.createSSLSocketFactory();
 
         if (cu.validateString(SASL_OAUTHBEARER_ASSERTION_FILE, false) != null) {
-            File assertionFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_FILE).toFile();
+            File assertionFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_FILE);
             assertionCreator = new FileAssertionCreator(assertionFile);
             assertionJwtTemplate = new StaticAssertionJwtTemplate();
         } else {
             String algorithm = cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
-            File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE).toFile();
+            File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
             assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile, Optional.empty());
             assertionJwtTemplate = layeredAssertionJwtTemplate(cu, time);
         }

@@ -41,7 +41,7 @@ public class FileJwtRetriever implements JwtRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        File file = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).toFile();
+        File file = cu.validateFileUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
         jwtFile = new CachedFile<>(file, STRING_JSON_VALIDATING_TRANSFORMER, lastModifiedPolicy());
     }
 

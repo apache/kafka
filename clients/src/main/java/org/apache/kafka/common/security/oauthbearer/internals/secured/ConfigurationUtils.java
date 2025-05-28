@@ -26,13 +26,14 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_DEFAULT;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT;
 
@@ -77,7 +78,7 @@ public class ConfigurationUtils {
      * ignored. Any whitespace is trimmed off of the beginning and end.
      */
 
-    public Path validateFile(String name) {
+    public File validateFileUrl(String name) {
         URL url = validateUrl(name);
         File file;
 
@@ -87,6 +88,35 @@ public class ConfigurationUtils {
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, url, e.getMessage()));
         }
 
+        return validateFile(name, file);
+    }
+
+    /**
+     * Validates that the file:
+     *
+     * <li>
+     *     <ul>exists</ul>
+     *     <ul>has read permission</ul>
+     *     <ul>points to a file</ul>
+     * </li>
+     */
+    public File validateFile(String name) {
+        String s = validateString(name);
+        File file = validateFile(name, new File(s).getAbsoluteFile());
+        throwIfFileIsNotAllowed(name, file.getAbsolutePath());
+        return file;
+    }
+
+    /**
+     * Validates that the file:
+     *
+     * <li>
+     *     <ul>exists</ul>
+     *     <ul>has read permission</ul>
+     *     <ul>points to a file</ul>
+     * </li>
+     */
+    private File validateFile(String name, File file) {
         if (!file.exists())
             throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", name, file));
 
@@ -96,7 +126,7 @@ public class ConfigurationUtils {
         if (file.isDirectory())
             throw new ConfigException(String.format("The OAuth configuration option %s references a directory (%s), not a file", name, file));
 
-        return file.toPath();
+        return file;
     }
 
     /**
@@ -193,7 +223,7 @@ public class ConfigurationUtils {
         if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
 
-        throwIfURLIsNotAllowed(value);
+        throwIfURLIsNotAllowed(name, value);
 
         return url;
     }
@@ -245,15 +275,46 @@ public class ConfigurationUtils {
 
     // visible for testing
     // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
-    void throwIfURLIsNotAllowed(String value) {
-        String[] allowedUrlsArray = System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(",");
-        Set<String> allowedUrls = Arrays.stream(allowedUrlsArray)
+    void throwIfURLIsNotAllowed(String configName, String configValue) {
+        throwIfResourceIsNotAllowed(
+            "file",
+            configName,
+            configValue,
+            ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG,
+            ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT
+        );
+    }
+
+    // visible for testing
+    // make sure the file is in the "org.apache.kafka.sasl.oauthbearer.allowed.files" system property
+    void throwIfFileIsNotAllowed(String configName, String configValue) {
+        throwIfResourceIsNotAllowed(
+            "file",
+            configName,
+            configValue,
+            ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG,
+            ALLOWED_SASL_OAUTHBEARER_FILES_DEFAULT
+        );
+    }
+
+    private void throwIfResourceIsNotAllowed(String resourceType,
+                                             String configName,
+                                             String configValue,
+                                             String propertyName,
+                                             String propertyDefault) {
+        String[] allowedArray = System.getProperty(propertyName, propertyDefault).split(",");
+        Set<String> allowed = Arrays.stream(allowedArray)
             .map(String::trim)
             .collect(Collectors.toSet());
 
-        if (!allowedUrls.contains(value)) {
-            throw new ConfigException(value + " is not allowed. Update system property '"
-                + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
+        if (!allowed.contains(configValue)) {
+            String message = String.format(
+                "The %s cannot be accessed due to restrictions. Update the system property '%s' to allow the %s to be accessed.",
+                resourceType,
+                propertyName,
+                resourceType
+            );
+            throw new ConfigException(configName, configValue, message);
         }
     }
 }

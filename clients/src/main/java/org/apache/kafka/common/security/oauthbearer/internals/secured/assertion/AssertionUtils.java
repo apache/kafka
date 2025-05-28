@@ -125,7 +125,7 @@ public class AssertionUtils {
 
     public static Optional<FileAssertionJwtTemplate> fileAssertionJwtTemplate(ConfigurationUtils cu) {
         if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE)) {
-            File assertionTemplateFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE).toFile();
+            File assertionTemplateFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
             return Optional.of(new FileAssertionJwtTemplate(assertionTemplateFile));
         } else {
             return Optional.empty();

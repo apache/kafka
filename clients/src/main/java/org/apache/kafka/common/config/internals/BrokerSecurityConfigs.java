@@ -136,6 +136,10 @@ public class BrokerSecurityConfigs {
     // The allowlist of the SASL OAUTHBEARER endpoints
     public static final String ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG = "org.apache.kafka.sasl.oauthbearer.allowed.urls";
     public static final String ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT = "";
+
+    public static final String ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG = "org.apache.kafka.sasl.oauthbearer.allowed.files";
+    public static final String ALLOWED_SASL_OAUTHBEARER_FILES_DEFAULT = "";
+
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             // General Security Configuration
             .define(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, LONG, BrokerSecurityConfigs.DEFAULT_CONNECTIONS_MAX_REAUTH_MS, MEDIUM, BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_DOC)
