@@ -40,16 +40,18 @@ import java.util.Optional;
 /**
  * The ControllerMutationQuotaManager is a specialized ClientQuotaManager used in the context
  * of throttling controller's operations/mutations.
- * config @ClientQuotaManagerConfig quota configs
- * metrics @Metrics Metrics instance
- * time @Time object to use
- * threadNamePrefix The thread prefix to use
- * quotaCallback @ClientQuotaCallback ClientQuotaCallback to use
  */
 public class ControllerMutationQuotaManager extends ClientQuotaManager {
 
     private static final Logger log = LoggerFactory.getLogger(ControllerMutationQuotaManager.class);
 
+    /**
+     * @param config ClientQuotaManagerConfig quota configs
+     * @param metrics Metrics instance
+     * @param time Time object to use
+     * @param threadNamePrefix The thread prefix to use
+     * @param quotaCallback ClientQuotaCallback to use
+     */
     public ControllerMutationQuotaManager(ClientQuotaManagerConfig config,
                                           Metrics metrics,
                                           Time time,
