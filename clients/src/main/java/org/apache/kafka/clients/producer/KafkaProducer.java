@@ -890,7 +890,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * If they match, the transaction is committed; otherwise, it is aborted.
      * 
      * @param preparedTxnState              The prepared transaction state to compare against the current state
-     * @throws IllegalStateException if the producer is not in prepared transaction state
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
      * @throws InvalidTxnStateException if the producer is not in prepared state
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
