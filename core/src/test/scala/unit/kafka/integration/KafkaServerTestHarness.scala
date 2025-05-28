@@ -366,7 +366,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
       admin => {
         admin.alterClientQuotas(util.Set.of(
           new ClientQuotaAlteration(
-            new ClientQuotaEntity(util.Map.of(ClientQuotaEntity.CLIENT_ID, if (sanitizedClientId == "<default>") null else sanitizedClientId)),
+            new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> (if (sanitizedClientId == "<default>") null else sanitizedClientId)).asJava),
             configs.asScala.map { case (key, value) => new ClientQuotaAlteration.Op(key, value.toDouble) }.toList.asJava))).all().get()
       }
     }

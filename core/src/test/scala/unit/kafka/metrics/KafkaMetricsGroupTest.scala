@@ -39,7 +39,13 @@ class KafkaMetricsGroupTest {
 
   @Test
   def testTaggedMetricName(): Unit = {
-    val tags = java.util.Map.of("foo", "bar", "bar", "baz", "baz", "raz.taz")
+    val tags = {
+      val map = new java.util.LinkedHashMap[String, String]()
+      map.put("foo", "bar")
+      map.put("bar", "baz")
+      map.put("baz", "raz.taz")
+      map
+    }
     val metricsGroup = new KafkaMetricsGroup("kafka.metrics", "TestMetrics")
     val metricName = metricsGroup.metricName("TaggedMetric", tags)
 
@@ -53,7 +59,13 @@ class KafkaMetricsGroupTest {
 
   @Test
   def testTaggedMetricNameWithEmptyValue(): Unit = {
-    val tags = java.util.Map.of("foo", "bar", "bar", "", "baz", "raz.taz")
+    val tags = {
+      val map = new java.util.LinkedHashMap[String, String]()
+      map.put("foo", "bar")
+      map.put("bar", "")
+      map.put("baz", "raz.taz")
+      map
+    }
     val metricsGroup = new KafkaMetricsGroup("kafka.metrics", "TestMetrics")
     val metricName = metricsGroup.metricName("TaggedMetric", tags)
 
