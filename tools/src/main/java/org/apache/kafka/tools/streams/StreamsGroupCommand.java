@@ -522,11 +522,11 @@ public class StreamsGroupCommand {
                         .filter(groupIdsWithInternalTopics::contains)
                         .collect(Collectors.toList());
                     System.out.println("Deletion of associated internal topics of the streams groups ('" +
-                        String.join(", ", successfulGroups) + "') was successful.");
+                        String.join("', '", successfulGroups) + "') was successful.");
                 } else {
                     System.out.println("Deletion of some associated internal topics failed:");
                     internalTopicsDeletionFailures.forEach((group, error) ->
-                        System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
+                        System.out.println("* Internal topics of the streams group '" + group + "' could not be deleted due to: " + error));
                 }
             }
         }

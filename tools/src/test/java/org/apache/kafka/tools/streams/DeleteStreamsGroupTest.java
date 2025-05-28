@@ -220,6 +220,7 @@ public class DeleteStreamsGroupTest {
         final Map<String, Throwable> mixGrpsRes = new HashMap<>();
         output = ToolsTestUtils.grabConsoleOutput(() -> mixGrpsRes.putAll(service.deleteGroups()));
 
+        assertTrue(output.contains("Deletion of some streams groups failed:"), "The streams groups deletion did not work as expected");
         assertTrue(output.contains("Group '" + appId2 + "' could not be deleted due to:")
             && output.contains("Streams group '" + appId2 + "' is not EMPTY."), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + result + ")");
         assertTrue(output.contains("Group '" + appId3 + "' could not be deleted due to:")
@@ -244,8 +245,8 @@ public class DeleteStreamsGroupTest {
         assertTrue(output.contains("Deletion of requested streams groups ('" + appId2 + "', '" + appId3 + "') was successful.") |
                 output.contains("Deletion of requested streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
             "The streams groups deletion did not work as expected");
-        assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId2 + ", " + appId3 + "') was successful.") |
-                output.contains("Deletion of associated internal topics of the streams groups ('" + appId3 + ", " + appId2 + "') was successful."),
+        assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId2 + "', '" + appId3 + "') was successful.") |
+                output.contains("Deletion of associated internal topics of the streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
             "The internal topics could not be deleted as expected");
 
         assertEquals(2, allGrpsRes.size());
