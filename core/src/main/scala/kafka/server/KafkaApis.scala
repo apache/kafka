@@ -317,7 +317,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       responseData.topicPartitionLogInfoList().add(topicPartitionLogInfo)
     }
-    responseData.setTruncated(partitionCount == GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST)
+    responseData.setHasMoreData(partitionCount == GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST)
     requestHelper.sendMaybeThrottle(request, new GetReplicaLogInfoResponse(responseData))
   }
 

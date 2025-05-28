@@ -13547,7 +13547,7 @@ class KafkaApisTest extends Logging {
     }
 
     val expectedResponseData =
-      new GetReplicaLogInfoResponseData().setTruncated(true).setBrokerEpoch(brokerEpoch)
+      new GetReplicaLogInfoResponseData().setHasMoreData(true).setBrokerEpoch(brokerEpoch)
     uuids.take(50).zipWithIndex.foreach { case (uuid, idx) =>
       val tpli = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
         .setTopicId(uuid)
