@@ -976,7 +976,8 @@ class ReplicaManager(val config: KafkaConfig,
       val produceMetadata = new ProduceMetadata(requiredAcks, initialProduceStatus.asJava)
 
       // Updates the status of a produce partition based on the current state.
-      // Please refer to the documentation in `DelayedProduce#tryComplete` for a comprehensive description of these cases.
+      // Please refer to the documentation in `DelayedProduce#tryComplete` for
+      // a comprehensive description of Case A, Case B and Case C.
       def delegate(tp: TopicPartition, status: ProducePartitionStatus) : Unit = {
         val (hasEnough, error) = getPartitionOrError(tp) match {
           case Left(err) =>
