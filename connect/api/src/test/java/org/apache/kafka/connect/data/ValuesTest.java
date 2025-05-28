@@ -1331,4 +1331,41 @@ public class ValuesTest {
             assertEquals(schema, result.schema());
         }
     }
+
+    @Test
+    public void shouldConvertToTimestampMicros() {
+        long currentTimeMillis = System.currentTimeMillis();
+        long microseconds = currentTimeMillis * 1000 + 456;
+        Instant expected = Instant.ofEpochSecond(currentTimeMillis / 1000, (currentTimeMillis % 1000) * 1_000_000 + 456_000);
+
+        // Test conversion from millisecond timestamp to microsecond timestamp
+        java.util.Date date = new java.util.Date(currentTimeMillis);
+        Instant fromDate = Values.convertToTimestampMicros(Timestamp.SCHEMA, date);
+        assertEquals(currentTimeMillis * 1000, TimestampMicros.fromLogical(TimestampMicros.SCHEMA, fromDate));
+
+        // Test conversion from long microseconds to TimestampMicros
+        Instant fromLong = Values.convertToTimestampMicros(null, microseconds);
+        assertEquals(expected, fromLong);
+
+        // Test conversion from Instant to TimestampMicros
+        Instant fromInstant = Values.convertToTimestampMicros(null, expected);
+        assertEquals(expected, fromInstant);
+    }
+
+    @Test
+    public void shouldConvertBetweenTimestampAndTimestampMicros() {
+        long currentTimeMillis = System.currentTimeMillis();
+        java.util.Date date = new java.util.Date(currentTimeMillis);
+
+        // Convert from Date/Timestamp to TimestampMicros
+        Instant micros = Values.convertToTimestampMicros(Timestamp.SCHEMA, date);
+        assertEquals(currentTimeMillis * 1000, TimestampMicros.fromLogical(TimestampMicros.SCHEMA, micros));
+
+        // Convert from TimestampMicros to Date/Timestamp
+        long microsValue = currentTimeMillis * 1000 + 456;
+        Instant instant = TimestampMicros.toLogical(TimestampMicros.SCHEMA, microsValue);
+        java.util.Date convertedDate = Values.convertToTimestamp(TimestampMicros.SCHEMA, instant);
+
+        assertEquals(currentTimeMillis, convertedDate.getTime());
+    }
 }

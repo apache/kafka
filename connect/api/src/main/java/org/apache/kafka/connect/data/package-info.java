@@ -16,5 +16,15 @@
  */
 /**
  * Provides classes for representing data and schemas handled by Connect.
+ *
+ * <p>In addition to basic data types like integers, strings, and maps, Connect also supports logical types
+ * that add additional semantic meaning to the basic types:</p>
+ * <ul>
+ *   <li>{@link org.apache.kafka.connect.data.Decimal} - Arbitrary precision decimal numbers</li>
+ *   <li>{@link org.apache.kafka.connect.data.Date} - Calendar date (year, month, day) without time or timezone</li>
+ *   <li>{@link org.apache.kafka.connect.data.Time} - Time of day (hours, minutes, seconds, milliseconds) without date or timezone</li>
+ *   <li>{@link org.apache.kafka.connect.data.Timestamp} - Absolute point in time with millisecond precision</li>
+ *   <li>{@link org.apache.kafka.connect.data.TimestampMicros} - Absolute point in time with microsecond precision</li>
+ * </ul>
  */
 package org.apache.kafka.connect.data;

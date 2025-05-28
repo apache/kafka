@@ -320,6 +320,21 @@ public class Values {
     }
 
     /**
+     * Convert the specified value to a {@link TimestampMicros#SCHEMA timestamp-micros} value.
+     *
+     * @param schema the schema for the value; may be null
+     * @param value the value to be converted; may be null
+     * @return the representation as a timestamp with microsecond precision, or null if the supplied value was null
+     * @throws DataException if the value cannot be converted to a timestamp-micros value
+     */
+    public static java.time.Instant convertToTimestampMicros(Schema schema, Object value) {
+        if (value == null) {
+            return null;
+        }
+        return convertToTimestampMicros(TimestampMicros.SCHEMA, schema, value);
+    }
+
+    /**
      * Convert the specified value to a {@link Decimal decimal} value.
      * Not supplying a schema may limit the ability to convert to the desired type.
      *
@@ -573,7 +588,48 @@ public class Values {
         if (Timestamp.LOGICAL_NAME.equals(toSchema.name())) {
             return convertToTimestamp(toSchema, fromSchema, value);
         }
+        if (TimestampMicros.LOGICAL_NAME.equals(toSchema.name())) {
+            return convertToTimestampMicros(toSchema, fromSchema, value);
+        }
         return convertToLong(fromSchema, value);
+    }
+
+    private static java.time.Instant convertToTimestampMicros(Schema toSchema, Schema fromSchema, Object value) {
+        if (value == null) {
+            return null;
+        } else if (value instanceof String) {
+            SchemaAndValue parsed = parseString(value.toString());
+            value = parsed.value();
+        }
+        if (value instanceof java.time.Instant instant) {
+            return instant;
+        }
+        if (value instanceof java.util.Date date) {
+            if (fromSchema != null) {
+                String fromSchemaName = fromSchema.name();
+                if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
+                    int days = Date.fromLogical(fromSchema, date);
+                    long micros = days * MILLIS_PER_DAY * 1000L;
+                    return TimestampMicros.toLogical(toSchema, micros);
+                }
+                if (Time.LOGICAL_NAME.equals(fromSchemaName)) {
+                    long millis = Time.fromLogical(fromSchema, date);
+                    return TimestampMicros.toLogical(toSchema, millis * 1000L);
+                }
+                if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
+                    long millis = date.getTime();
+                    return TimestampMicros.toLogical(toSchema, millis * 1000L);
+                }
+                if (TimestampMicros.LOGICAL_NAME.equals(fromSchemaName)) {
+                    java.time.Instant instant = java.time.Instant.ofEpochMilli(date.getTime());
+                    return instant;
+                }
+            } else {
+                return java.time.Instant.ofEpochMilli(date.getTime());
+            }
+        }
+        long numeric = asLong(value, fromSchema, null);
+        return TimestampMicros.toLogical(toSchema, numeric);
     }
 
     private static java.util.Date convertToTimestamp(Schema toSchema, Schema fromSchema, Object value) {
@@ -582,6 +638,13 @@ public class Values {
         } else if (value instanceof String) {
             SchemaAndValue parsed = parseString(value.toString());
             value = parsed.value();
+        }
+        if (value instanceof java.time.Instant instant) {
+            if (fromSchema != null && TimestampMicros.LOGICAL_NAME.equals(fromSchema.name())) {
+                // Convert from TimestampMicros (microsecond precision) to Timestamp (millisecond precision)
+                return new java.util.Date(instant.toEpochMilli());
+            }
+            return new java.util.Date(instant.toEpochMilli());
         }
         if (value instanceof java.util.Date date) {
             if (fromSchema != null) {
