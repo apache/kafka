@@ -37,7 +37,6 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.IntStream;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 
@@ -364,8 +363,11 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
                 );
             }
 
-            IntStream.range(0, numPartitions).filter(partition -> groupSpec.isPartitionAssignable(topicId, partition))
-                .forEach(partition -> targetPartitions.add(new TopicIdPartition(topicId, partition)));
+            for (int partition = 0; partition < numPartitions; partition++) {
+                if (groupSpec.isPartitionAssignable(topicId, partition)) {
+                    targetPartitions.add(new TopicIdPartition(topicId, partition));
+                }
+            }
         });
         return targetPartitions;
     }
