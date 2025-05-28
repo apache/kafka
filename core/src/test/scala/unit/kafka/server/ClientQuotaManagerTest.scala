@@ -90,7 +90,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         defaultConfigClient.configUser,
         defaultConfigClient.configClientEntity,
-        Optional.of(new  Quota(4000, true))
+        Optional.of(new Quota(4000, true))
       )
       assertEquals(4000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
 
@@ -144,7 +144,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE),
         Optional.empty,
-        Optional.of(new  Quota(10, true))
+        Optional.of(new Quota(10, true))
       )
       assertEquals(10 * numFullQuotaWindows, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
     } finally {
@@ -193,7 +193,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Optional.of(new ClientQuotaManager.UserEntity("userA")),
         Optional.empty,
-        Optional.of(new  Quota(10, true))
+        Optional.of(new Quota(10, true))
       )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
 
@@ -220,7 +220,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Optional.of(new ClientQuotaManager.UserEntity("userA")),
         Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
-        Optional.of(new  Quota(10, true))
+        Optional.of(new Quota(10, true))
       )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
 
@@ -250,7 +250,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Optional.empty,
         Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
-        Optional.of(new  Quota(2000, true))
+        Optional.of(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
         Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE),
@@ -260,7 +260,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Optional.of(new ClientQuotaManager.UserEntity("userA")),
         Optional.empty,
-        Optional.of(new  Quota(4000, true))
+        Optional.of(new Quota(4000, true))
       )
       clientQuotaManager.updateQuota(
         Optional.of(new ClientQuotaManager.UserEntity("userA")),
@@ -290,7 +290,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Optional.empty,
         Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
-        Optional.of(new  Quota(9000, true))
+        Optional.of(new Quota(9000, true))
       )
 
       checkQuota(clientQuotaManager, "userA", "client1", 5000, 4500, expectThrottle = false) // <user, client> quota takes precedence over <user>
@@ -337,7 +337,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Optional.of(new ClientQuotaManager.UserEntity("userA")),
         Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
-        Optional.of(new  Quota(10000, true))
+        Optional.of(new Quota(10000, true))
       )
       checkQuota(clientQuotaManager, "userA", "client2", 8000, 0, expectThrottle = false)
       checkQuota(clientQuotaManager, "userA", "client2", 8000, 4500, expectThrottle = true) // Throttled due to sum of new and earlier values
@@ -352,7 +352,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Optional.of(new ClientQuotaManager.UserEntity("userA")),
         Optional.of(new ClientQuotaManager.ClientIdEntity("client6")),
-        Optional.of(new  Quota(11000, true))
+        Optional.of(new Quota(11000, true))
       )
       checkQuota(clientQuotaManager, "userA", "client6", 11000, 8500, expectThrottle = false)
       clientQuotaManager.updateQuota(
@@ -456,7 +456,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Optional.empty,
         Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
-        Optional.of(new  Quota(500, true))
+        Optional.of(new Quota(500, true))
       )
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
