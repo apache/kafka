@@ -23,24 +23,25 @@ import java.util.Objects;
 
 /**
  * Represents the sensors aggregated per client
- * metricTags Quota metric tags for the client
- * quotaSensor @Sensor that tracks the quota
- * throttleTimeSensor @Sensor that tracks the throttle time
  */
 public final class ClientSensors {
     private final Map<String, String> metricTags;
     private final Sensor quotaSensor;
     private final Sensor throttleTimeSensor;
 
+    /**
+     * @param metricTags quota metric tags for the client
+     * @param quotaSensor sensor that tracks the quota
+     * @param throttleTimeSensor sensor that tracks the throttle time
+     */
     public ClientSensors(Map<String, String> metricTags,
                          Sensor quotaSensor,
                          Sensor throttleTimeSensor) {
-        this.metricTags = Map.copyOf(metricTags); // Defensive immutable copy
+        this.metricTags = Map.copyOf(metricTags);
         this.quotaSensor = Objects.requireNonNull(quotaSensor);
         this.throttleTimeSensor = Objects.requireNonNull(throttleTimeSensor);
     }
 
-    // Getters (equivalent to case class field access)
     public Map<String, String> metricTags() {
         return metricTags;
     }
@@ -53,7 +54,6 @@ public final class ClientSensors {
         return throttleTimeSensor;
     }
 
-    // equals, hashCode, toString (equivalent to case class generated methods)
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
