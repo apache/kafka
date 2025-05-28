@@ -442,6 +442,28 @@ public class OffsetMetadataManagerTest {
             int leaderEpoch,
             long commitTimestamp
         ) {
+            commitOffset(
+                producerId,
+                groupId,
+                Uuid.ZERO_UUID,
+                topic,
+                partition,
+                offset,
+                leaderEpoch,
+                commitTimestamp
+            );
+        }
+
+        public void commitOffset(
+            long producerId,
+            String groupId,
+            Uuid topicId,
+            String topic,
+            int partition,
+            long offset,
+            int leaderEpoch,
+            long commitTimestamp
+        ) {
             replay(producerId, GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
                 groupId,
                 topic,
@@ -452,7 +474,7 @@ public class OffsetMetadataManagerTest {
                     "metadata",
                     commitTimestamp,
                     OptionalLong.empty(),
-                    Uuid.ZERO_UUID
+                    topicId
                 )
             ));
         }
@@ -1823,6 +1845,73 @@ public class OffsetMetadataManagerTest {
                 .setTopicId(barId)
                 .setPartitions(List.of(
                     mkOffsetPartitionResponse(0, 200L, 1, "metadata")
+                ))
+        ), context.fetchOffsets("group", request, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testFetchOffsetsWithRecreatedTopic() {
+        Uuid fooId1 = Uuid.randomUuid();
+        Uuid fooId2 = Uuid.randomUuid();
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
+
+        context.commitOffset(
+            RecordBatch.NO_PRODUCER_ID,
+            "group",
+            fooId1,
+            "foo",
+            0,
+            100L,
+            1,
+            context.time.milliseconds()
+        );
+
+        context.commitOffset(
+            RecordBatch.NO_PRODUCER_ID,
+            "group",
+            fooId1,
+            "foo",
+            1,
+            100L,
+            1,
+            context.time.milliseconds()
+        );
+
+        // Request with the correct topic id.
+        var request = List.of(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setTopicId(fooId1)
+                .setPartitionIndexes(List.of(0, 1))
+        );
+
+        assertEquals(List.of(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setTopicId(fooId1)
+                .setPartitions(List.of(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 100L, 1, "metadata")
+                ))
+        ), context.fetchOffsets("group", request, Long.MAX_VALUE));
+
+        // Request with the incorrect topic id.
+        request = List.of(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setTopicId(fooId2)
+                .setPartitionIndexes(List.of(0, 1))
+        );
+
+        assertEquals(List.of(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setTopicId(fooId2)
+                .setPartitions(List.of(
+                    mkInvalidOffsetPartitionResponse(0),
+                    mkInvalidOffsetPartitionResponse(1)
                 ))
         ), context.fetchOffsets("group", request, Long.MAX_VALUE));
     }

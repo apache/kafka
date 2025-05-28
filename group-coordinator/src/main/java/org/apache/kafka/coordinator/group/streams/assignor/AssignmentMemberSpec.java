@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The assignment specification for a Streams group member.
+ * The assignment specification for a streams group member.
  *
  * @param instanceId   The instance ID if provided.
  * @param rackId       The rack ID if provided.

@@ -1638,7 +1638,7 @@ public class GroupMetadataManager {
     /**
      * Validates the member epoch provided in the heartbeat request.
      *
-     * @param member                The Streams group member.
+     * @param member                The streams group member.
      * @param receivedMemberEpoch   The member epoch.
      * @param ownedActiveTasks      The owned active tasks.
      * @param ownedStandbyTasks     The owned standby tasks.
@@ -1793,7 +1793,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handles a regular heartbeat from a Streams group member.
+     * Handles a regular heartbeat from a streams group member.
      * It mainly consists of five parts:
      * 1) Create or update the member.
      *    The group epoch is bumped if the member has been created or updated.
@@ -5262,8 +5262,8 @@ public class GroupMetadataManager {
 
     /**
      * Replays StreamsGroupMetadataKey/Value to update the hard state of
-     * the Streams group. It updates the group epoch of the Streams
-     * group or deletes the Streams group.
+     * the streams group. It updates the group epoch of the Streams
+     * group or deletes the streams group.
      *
      * @param key   A StreamsGroupMetadataKey key.
      * @param value A StreamsGroupMetadataValue record.
