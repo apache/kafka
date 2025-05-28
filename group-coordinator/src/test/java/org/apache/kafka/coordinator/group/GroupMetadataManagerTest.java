@@ -559,6 +559,7 @@ public class GroupMetadataManagerTest {
             .addTopic(fooTopicId, fooTopicName, 6)
             .addRacks()
             .build();
+        long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -612,7 +613,7 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                fooTopicName, fooTopicHash
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
@@ -622,19 +623,20 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
+        assertEquals(Map.of(fooTopicName, fooTopicHash), context.groupMetadataManager.topicHashCache());
         assertTrue(context.groupMetadataManager.topicHashCache().containsKey(fooTopicName));
 
-        // Use LEAVE_GROUP_STATIC_MEMBER_EPOCH to leave group, so there is no group subscribes to foo.
+        // Use LEAVE_GROUP_MEMBER_EPOCH to leave group, so there is no group subscribes to foo.
         result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH));
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
 
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(-2)
+                .setMemberEpoch(-1)
                 .setHeartbeatIntervalMs(0),
             result.response()
         );
@@ -784,8 +786,7 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
                 .withAssignmentEpoch(10)
                 .withMetadataHash(computeGroupHash(Map.of(
-                    fooTopicName,
-                    computeTopicHash(fooTopicName, metadataImage))
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage))
                 )))
             .build();
 
@@ -3650,8 +3651,7 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
                 .withAssignmentEpoch(10)
                 .withMetadataHash(computeGroupHash(Map.of(
-                    fooTopicName,
-                    computeTopicHash(fooTopicName, metadataImage))
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage))
                 )))
             .build();
 
