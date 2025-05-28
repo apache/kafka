@@ -72,7 +72,7 @@ public class GroupSpecImpl implements GroupSpec {
         this.members = Objects.requireNonNull(members);
         this.subscriptionType = Objects.requireNonNull(subscriptionType);
         this.invertedMemberAssignment = Objects.requireNonNull(invertedMemberAssignment);
-        this.topicPartitionAllowedMap = topicPartitionAllowedMap;
+        this.topicPartitionAllowedMap = Objects.requireNonNull(topicPartitionAllowedMap);
     }
 
     /**
