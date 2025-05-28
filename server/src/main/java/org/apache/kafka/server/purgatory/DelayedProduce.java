@@ -198,7 +198,7 @@ public class DelayedProduce extends DelayedOperation {
             LOGGER.trace("Checking produce satisfaction for {}, current status {}", topicIdPartition, status);
             // skip those partitions that have already been satisfied
             if (status.acksPending) {
-                // Delegate to `ReplicaManager#maybeAddDelayedProduc`
+                // Delegate to `ReplicaManager#maybeAddDelayedProduce`
                 updateProducePartitionStatusCallback.accept(topicIdPartition.topicPartition(), status);
             }
         });
