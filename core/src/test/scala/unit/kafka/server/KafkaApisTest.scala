@@ -229,7 +229,7 @@ class KafkaApisTest extends Logging {
 
   def initializeMetadataCacheWithShareGroupsEnabled(enableShareGroups: Boolean = true): MetadataCache = {
     val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-    val delta = new MetadataDelta(MetadataImage.EMPTY);
+    val delta = new MetadataDelta(MetadataImage.EMPTY)
     delta.replay(new FeatureLevelRecord()
       .setName(MetadataVersion.FEATURE_NAME)
       .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
@@ -13361,8 +13361,8 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(builder.build())
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val clusterActions = Collections.singletonList(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
-    val allowList = Collections.singletonList(AuthorizationResult.ALLOWED)
+    val clusterActions = util.List.of(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
+    val allowList = util.List.of(AuthorizationResult.ALLOWED)
     when(authorizer.authorize(request.context, clusterActions)).thenReturn(allowList)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleGetReplicaLogInfo(request)
@@ -13374,8 +13374,8 @@ class KafkaApisTest extends Logging {
     val builder = new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData())
     val request = buildRequest(builder.build(0))
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val clusterActions = Collections.singletonList(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
-    val allowList = Collections.singletonList(AuthorizationResult.DENIED)
+    val clusterActions = util.List.of(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
+    val allowList = util.List.of(AuthorizationResult.DENIED)
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(request.context, clusterActions)).thenReturn(allowList)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
@@ -13388,7 +13388,7 @@ class KafkaApisTest extends Logging {
     val uuids = (1 to 4).map(_ => Uuid.randomUuid()).toList
     val tps = uuids.map(new GetReplicaLogInfoRequestData.TopicPartitions()
       .setTopicId(_)
-      .setPartitions(Collections.singletonList(1)))
+      .setPartitions(util.List.of(1)))
 
     def mockTopicName(uuid: Uuid, idx: Int): String = s"topic-idx-$idx-with-uuid-$uuid"
 
@@ -13411,7 +13411,7 @@ class KafkaApisTest extends Logging {
     val expected = new GetReplicaLogInfoResponseData().setBrokerEpoch(brokerEpoch)
     expected.topicPartitionLogInfoList().add(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
       .setTopicId(uuids.head)
-      .setPartitionLogInfo(Collections.singletonList(new GetReplicaLogInfoResponseData.PartitionLogInfo()
+      .setPartitionLogInfo(util.List.of(new GetReplicaLogInfoResponseData.PartitionLogInfo()
         .setPartition(1)
         .setLogEndOffset(100L)
         .setLastWrittenLeaderEpoch(10)
@@ -13425,7 +13425,7 @@ class KafkaApisTest extends Logging {
       when(replicaManager.getPartitionOrError(invalid)).thenReturn(Left(err))
       expected.topicPartitionLogInfoList().add(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
         .setTopicId(uuid)
-        .setPartitionLogInfo(Collections.singletonList(new GetReplicaLogInfoResponseData.PartitionLogInfo()
+        .setPartitionLogInfo(util.List.of(new GetReplicaLogInfoResponseData.PartitionLogInfo()
           .setErrorCode(err.code())
           .setPartition(1))))
       idx += 1
@@ -13444,10 +13444,10 @@ class KafkaApisTest extends Logging {
   def testGetReplicaLogInfoFailedToRetrieveLog(): Unit = {
     val topic1 = new GetReplicaLogInfoRequestData.TopicPartitions()
       .setTopicId(Uuid.randomUuid())
-      .setPartitions(Collections.singletonList(1))
+      .setPartitions(util.List.of(1))
     val topic2 = new GetReplicaLogInfoRequestData.TopicPartitions()
       .setTopicId(Uuid.randomUuid())
-      .setPartitions(Collections.singletonList(2))
+      .setPartitions(util.List.of(2))
     val builder = new GetReplicaLogInfoRequest.Builder(List(topic1, topic2) asJava)
 
     metadataCache = mock(classOf[MetadataCache])
@@ -13476,7 +13476,7 @@ class KafkaApisTest extends Logging {
       .setTopicPartitionLogInfoList(List(
         new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
           .setTopicId(topic1.topicId())
-          .setPartitionLogInfo(Collections.singletonList(
+          .setPartitionLogInfo(util.List.of(
             new GetReplicaLogInfoResponseData.PartitionLogInfo()
               .setPartition(1)
               .setLogEndOffset(100L)
@@ -13484,7 +13484,7 @@ class KafkaApisTest extends Logging {
               .setCurrentLeaderEpoch(1))),
         new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
           .setTopicId(topic2.topicId())
-          .setPartitionLogInfo(Collections.singletonList(
+          .setPartitionLogInfo(util.List.of(
             new GetReplicaLogInfoResponseData.PartitionLogInfo()
               .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
           ))) asJava)
@@ -13501,18 +13501,18 @@ class KafkaApisTest extends Logging {
     val expectedUuid = Uuid.randomUuid()
     val builder = new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData()
       .setTopicPartitions(
-        Collections.singletonList(new GetReplicaLogInfoRequestData.TopicPartitions()
+        util.List.of(new GetReplicaLogInfoRequestData.TopicPartitions()
           .setTopicId(expectedUuid)
-          .setPartitions(Collections.singletonList(expectedPartition)))))
+          .setPartitions(util.List.of(expectedPartition)))))
     metadataCache = mock(classOf[MetadataCache])
     when(metadataCache.getTopicName(expectedUuid)).thenReturn(Optional.empty())
 
     val expectedResponseData = new GetReplicaLogInfoResponseData()
       .setBrokerEpoch(brokerEpoch)
-      .setTopicPartitionLogInfoList(Collections.singletonList(
+      .setTopicPartitionLogInfoList(util.List.of(
         new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
           .setTopicId(expectedUuid)
-          .setPartitionLogInfo(Collections.singletonList(
+          .setPartitionLogInfo(util.List.of(
             new GetReplicaLogInfoResponseData.PartitionLogInfo()
               .setPartition(expectedPartition)
               .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code())
@@ -13579,10 +13579,10 @@ class KafkaApisTest extends Logging {
   def testGetReplicaInfoRequestHappyTrail(): Unit = {
     val topic1 = new GetReplicaLogInfoRequestData.TopicPartitions()
       .setTopicId(Uuid.randomUuid())
-      .setPartitions(Collections.singletonList(1))
+      .setPartitions(util.List.of(1))
     val topic2 = new GetReplicaLogInfoRequestData.TopicPartitions()
       .setTopicId(Uuid.randomUuid())
-      .setPartitions(Collections.singletonList(2))
+      .setPartitions(util.List.of(2))
     val builder = new GetReplicaLogInfoRequest.Builder(List(topic1, topic2) asJava)
 
     metadataCache = mock(classOf[MetadataCache])
@@ -13614,7 +13614,7 @@ class KafkaApisTest extends Logging {
       .setTopicPartitionLogInfoList(List(
         new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
           .setTopicId(topic1.topicId())
-          .setPartitionLogInfo(Collections.singletonList(
+          .setPartitionLogInfo(util.List.of(
             new GetReplicaLogInfoResponseData.PartitionLogInfo()
               .setPartition(1)
               .setLogEndOffset(100L)
@@ -13622,7 +13622,7 @@ class KafkaApisTest extends Logging {
               .setCurrentLeaderEpoch(1))),
         new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
           .setTopicId(topic2.topicId())
-          .setPartitionLogInfo(Collections.singletonList(
+          .setPartitionLogInfo(util.List.of(
             new GetReplicaLogInfoResponseData.PartitionLogInfo()
               .setPartition(2)
               .setLogEndOffset(200L)

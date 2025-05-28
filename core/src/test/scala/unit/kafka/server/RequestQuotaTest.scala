@@ -191,7 +191,7 @@ class RequestQuotaTest extends BaseRequestTest {
     ApiKeys.brokerApis.asScala.filter(_.clusterAction).toSet
   }
 
-  private def clusterActionsWithThrottleForBroker: Set[ApiKeys] = {RequestQuotaTest
+  private def clusterActionsWithThrottleForBroker: Set[ApiKeys] = {
     // Exclude `ALLOCATE_PRODUCER_IDS`, it is enabled for kraft controller instead of broker
     Set(ApiKeys.UPDATE_FEATURES)
   }
