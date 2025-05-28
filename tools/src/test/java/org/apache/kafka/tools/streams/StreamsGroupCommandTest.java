@@ -241,9 +241,11 @@ public class StreamsGroupCommandTest {
         List<String> repartitionSinkTopics = List.of("rep-sink-topic1", "rep-sink-topic2");
         Map<String, StreamsGroupSubtopologyDescription.TopicInfo> stateChangelogTopics = Map.of(
             groupId + "-1-changelog", mock(StreamsGroupSubtopologyDescription.TopicInfo.class),
+            "some-pre-fix" + "-changelog", mock(StreamsGroupSubtopologyDescription.TopicInfo.class),
             groupId + "-2-changelog", mock(StreamsGroupSubtopologyDescription.TopicInfo.class));
         Map<String, StreamsGroupSubtopologyDescription.TopicInfo> repartitionSourceTopics = Map.of(
             groupId + "-1-repartition", mock(StreamsGroupSubtopologyDescription.TopicInfo.class),
+            groupId + "-some-thing", mock(StreamsGroupSubtopologyDescription.TopicInfo.class),
             groupId + "-2-repartition", mock(StreamsGroupSubtopologyDescription.TopicInfo.class));
 
 
@@ -267,9 +269,11 @@ public class StreamsGroupCommandTest {
 
         assertNotNull(internalTopics.get(groupId));
         assertEquals(4, internalTopics.get(groupId).size());
-        assertEquals(new HashSet<>(List.of(
-                groupId + "-1-changelog", groupId + "-2-changelog", groupId + "-1-repartition", groupId + "-2-repartition")),
+        assertEquals(new HashSet<>(List.of(groupId + "-1-changelog", groupId + "-2-changelog", groupId + "-1-repartition", groupId + "-2-repartition")),
             new HashSet<>(internalTopics.get(groupId)));
+        assertFalse(internalTopics.get(groupId).stream().anyMatch(List.of("some-pre-fix-changelog", groupId + "-some-thing")::contains));
+        assertFalse(internalTopics.get(groupId).stream().anyMatch(sourceTopics::contains));
+        assertFalse(internalTopics.get(groupId).stream().anyMatch(repartitionSinkTopics::contains));
 
         service.close();
     }
