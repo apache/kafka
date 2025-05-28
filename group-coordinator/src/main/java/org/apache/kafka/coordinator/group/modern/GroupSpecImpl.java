@@ -138,26 +138,25 @@ public class GroupSpecImpl implements GroupSpec {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        GroupSpecImpl that = (GroupSpecImpl) o;
-        return subscriptionType == that.subscriptionType &&
-            members.equals(that.members) &&
-            invertedMemberAssignment.equals(that.invertedMemberAssignment);
+        if (!(o instanceof GroupSpecImpl groupSpec)) return false;
+        return Objects.equals(members, groupSpec.members) &&
+            subscriptionType == groupSpec.subscriptionType &&
+            Objects.equals(invertedMemberAssignment, groupSpec.invertedMemberAssignment) &&
+            Objects.equals(topicPartitionAllowedMap, groupSpec.topicPartitionAllowedMap);
     }
 
     @Override
     public int hashCode() {
-        int result = members.hashCode();
-        result = 31 * result + subscriptionType.hashCode();
-        result = 31 * result + invertedMemberAssignment.hashCode();
-        return result;
+        return Objects.hash(members, subscriptionType, invertedMemberAssignment, topicPartitionAllowedMap);
     }
 
     @Override
     public String toString() {
-        return "GroupSpecImpl(members=" + members +
+        return "GroupSpecImpl{" +
+            "members=" + members +
             ", subscriptionType=" + subscriptionType +
             ", invertedMemberAssignment=" + invertedMemberAssignment +
-            ')';
+            ", topicPartitionAllowedMap=" + topicPartitionAllowedMap +
+            '}';
     }
 }

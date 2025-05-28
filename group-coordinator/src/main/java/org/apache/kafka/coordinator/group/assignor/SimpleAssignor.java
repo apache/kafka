@@ -196,7 +196,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             .filter(targetPartition -> !finalAssignmentByPartition.containsKey(targetPartition))
             .toList();
 
-        roundRobinAssignmentWithCount(groupSpec, groupSpec.memberIds(), unassignedPartitions, finalAssignment, desiredAssignmentCount);
+        roundRobinAssignmentWithCount(groupSpec.memberIds(), unassignedPartitions, finalAssignment, desiredAssignmentCount);
 
         return groupAssignment(finalAssignment, groupSpec.memberIds());
     }
@@ -239,7 +239,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         });
 
         unassignedPartitions.keySet().forEach(unassignedTopic ->
-            roundRobinAssignment(groupSpec, topicToMemberSubscription.get(unassignedTopic), unassignedPartitions.get(unassignedTopic), newAssignment));
+            roundRobinAssignment(topicToMemberSubscription.get(unassignedTopic), unassignedPartitions.get(unassignedTopic), newAssignment));
 
         // Step 3: We combine current assignment and new assignment.
         Map<String, Set<TopicIdPartition>> finalAssignment = newHashMap(numGroupMembers);
@@ -283,7 +283,6 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
     /**
      * This functions assigns topic partitions to members by a round-robin approach and updates the existing assignment.
-     * @param groupSpec                 The group spec implementation.
      * @param memberIds                 The member ids to which the topic partitions need to be assigned, should be non-empty.
      * @param partitionsToAssign        The subscribed topic partitions which needs assignment.
      * @param assignment                The existing assignment by topic partition. We need to pass it as a parameter because this
@@ -291,7 +290,6 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
      */
     // Visible for testing
     void roundRobinAssignment(
-        GroupSpec groupSpec,
         Collection<String> memberIds,
         List<TopicIdPartition> partitionsToAssign,
         Map<TopicIdPartition, List<String>> assignment
@@ -304,15 +302,12 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
                 memberIdIterator = memberIds.iterator();
             }
             String memberId = memberIdIterator.next();
-            if (groupSpec.isPartitionAssignable(topicPartition.topicId(), topicPartition.partitionId())) {
-                assignment.computeIfAbsent(topicPartition, k -> new ArrayList<>()).add(memberId);
-            }
+            assignment.computeIfAbsent(topicPartition, k -> new ArrayList<>()).add(memberId);
         }
     }
 
     /**
      * This functions assigns topic partitions to members by a round-robin approach and updates the existing assignment.
-     * @param groupSpec                 The group spec implementation.
      * @param memberIds                 The member ids to which the topic partitions need to be assigned, should be non-empty.
      * @param partitionsToAssign        The subscribed topic partitions which need assignment.
      * @param assignment                The existing assignment by topic partition. We need to pass it as a parameter because this
@@ -322,7 +317,6 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
      *                                  in which we have hashing collisions.
      */
     void roundRobinAssignmentWithCount(
-        GroupSpec groupSpec,
         Collection<String> memberIds,
         List<TopicIdPartition> partitionsToAssign,
         Map<String, Set<TopicIdPartition>> assignment,
@@ -336,9 +330,6 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         ListIterator<TopicIdPartition> partitionListIterator = partitionsToAssign.listIterator();
         while (partitionListIterator.hasNext()) {
             TopicIdPartition partition = partitionListIterator.next();
-            if (!groupSpec.isPartitionAssignable(partition.topicId(), partition.partitionId())) {
-                continue;
-            }
             if (!memberIdIterator.hasNext()) {
                 memberIdIterator = memberIdsCopy.iterator();
                 if (memberIdsCopy.isEmpty()) {
