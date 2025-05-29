@@ -555,7 +555,7 @@ public class ClientQuotaManager {
                 sensorAccessor.getOrCreate(
                         getQuotaSensorName(metricTags),
                         INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS,
-                        sensor -> registerQuotaMetrics(metricTags, sensor)
+                        sensor -> registerQuotaMetrics(metricTags, sensor)  // quotaLimit() called here only for new sensors
                 ),
                 sensorAccessor.getOrCreate(
                         getThrottleTimeSensorName(metricTags),
@@ -580,6 +580,22 @@ public class ClientQuotaManager {
     }
 
     private String metricTagsToSensorSuffix(Map<String, String> metricTags) {
+        if (metricTags.isEmpty()) {
+            return "";
+        }
+
+        // Handle GroupedUserQuotaCallback case
+        if (metricTags.containsKey("group")) {
+            return metricTags.get("group");
+        }
+
+        // Handle DefaultQuotaCallback case
+        if (metricTags.containsKey(DefaultTags.USER) || metricTags.containsKey(DefaultTags.CLIENT_ID)) {
+            String userTag = metricTags.getOrDefault(DefaultTags.USER, "");
+            String clientIdTag = metricTags.getOrDefault(DefaultTags.CLIENT_ID, "");
+            return userTag + ":" + clientIdTag;
+        }
+
         return String.join(":", metricTags.values());
     }
 
