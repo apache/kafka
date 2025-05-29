@@ -55,6 +55,21 @@ public final class ClientSensors {
     }
 
     @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        ClientSensors that = (ClientSensors) obj;
+        return Objects.equals(metricTags, that.metricTags) &&
+                Objects.equals(quotaSensor, that.quotaSensor) &&
+                Objects.equals(throttleTimeSensor, that.throttleTimeSensor);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(metricTags, quotaSensor, throttleTimeSensor);
+    }
+
+    @Override
     public String toString() {
         return "ClientSensors{" +
                 "metricTags=" + metricTags +
