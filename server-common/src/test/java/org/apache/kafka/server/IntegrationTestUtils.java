@@ -107,10 +107,8 @@ public class IntegrationTestUtils {
             AbstractRequest request,
             int port
     ) throws IOException {
-        try (Socket socket = connect(port)){
+        try (Socket socket = connect(port)) {
             return sendAndReceive(request, socket);
-        } finally {
-            socket.close();
         }
     }
 
