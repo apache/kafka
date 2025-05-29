@@ -3989,7 +3989,7 @@ public class KafkaAdminClient extends AdminClient {
                             for (ReassignablePartitionResponse partition : topicResponse.partitions()) {
                                 errors.put(
                                     new TopicPartition(topicName, partition.partitionIndex()),
-                                    new topLevelError.exception(response.data().errorMessage())
+                                    topLevelError.exception(response.data().errorMessage())
                                 );
                                 receivedResponsesCount += 1;
                             }
