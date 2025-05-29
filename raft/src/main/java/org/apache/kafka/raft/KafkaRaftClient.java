@@ -2747,9 +2747,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             handleRequest(request, currentTimeMs);
         } else if (message instanceof RaftResponse.Inbound response) {
             if (requestManager.isResponseExpected(
-                response.source(),
-                response.correlationId(),
-                ApiKeys.forId(message.data().apiKey()))
+                    response.source(),
+                    response.correlationId(),
+                    ApiKeys.forId(message.data().apiKey())
+                )
             ) {
                 handleResponse(response, currentTimeMs);
             } else {

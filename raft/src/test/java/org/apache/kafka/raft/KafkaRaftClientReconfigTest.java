@@ -2251,6 +2251,7 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         // polling sends a fetch because no fetches are in flight, only the update voter
+        // it will also handle the incoming update voter response, which will reset the fetch timer
         context.client.poll();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
@@ -2830,12 +2831,27 @@ public class KafkaRaftClientReconfigTest {
             )
         );
 
-        // the first poll can still send a fetch request to the old leader, because there is not one in flight
-        // but will handle the update voter response afterwards to update state
+        // this poll will send a fetch request to the old leader, because there is not one in flight
+        // after sending the request, the local replica will handle the update voter response to update
+        // its state to a higher epoch
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
         assertEquals(voter1.id(), fetchRequest.destination().id());
+
+        // deliver the old fetch response with some records, which should be
+        // ignored on the next poll since the local replica is now in a higher epoch
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(
+                epoch,
+                voter1.id(),
+                context.buildBatch(0L, epoch, List.of("a", "b", "c")),
+                3L,
+                Errors.NONE
+            )
+        );
 
         // the next poll should send a fetch request to the new leader
         context.pollUntilRequest();

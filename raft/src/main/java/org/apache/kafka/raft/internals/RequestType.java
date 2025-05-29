@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
  * that at most one FETCH or FETCH_SNAPSHOT request is pending at any time.
  */
 public class RequestType {
+    public static final RequestType FETCH_AND_FETCH_SNAPSHOT = new RequestType(ApiKeys.FETCH);
     private final ApiKeys apiKey;
 
     private RequestType(ApiKeys apiKey) {
@@ -33,7 +34,7 @@ public class RequestType {
 
     public static RequestType of(ApiKeys apiKey) {
         if (apiKey == ApiKeys.FETCH_SNAPSHOT) {
-            return new RequestType(ApiKeys.FETCH);
+            return FETCH_AND_FETCH_SNAPSHOT;
         }
         return new RequestType(apiKey);
     }

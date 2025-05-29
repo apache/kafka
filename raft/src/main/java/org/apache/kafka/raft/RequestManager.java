@@ -38,7 +38,7 @@ import java.util.Random;
  *
  * Requests start in the ready state ({@code isReady(Node, long, ApiKeys)} returns true).
  *
- * When a request times out or completes successfully the collection will transition back to the
+ * When a request times out or completes successfully the request state will transition back to the
  * ready state.
  *
  * When a request completes with an error it still transitions to the backoff state until
@@ -85,9 +85,10 @@ public class RequestManager {
         boolean result = false;
 
         final var iterator = inflightRequests.entrySet().iterator();
+        final var wantRequestType = RequestType.of(wantRequestKey);
         while (iterator.hasNext()) {
             final var entry = iterator.next();
-            final var requestKey = entry.getKey().requestType().apiKey();
+            final var requestType = entry.getKey().requestType();
             final var requestState = entry.getValue();
             if (requestState.hasRequestTimedOut(currentTimeMs)) {
                 // Mark the node as ready after request timeout
@@ -95,7 +96,7 @@ public class RequestManager {
             } else if (requestState.isBackoffComplete(currentTimeMs)) {
                 // Mark the node as ready after completed backoff
                 iterator.remove();
-            } else if (requestKey == wantRequestKey &&
+            } else if (requestType.equals(wantRequestType) &&
                 requestState.hasInflightRequest(currentTimeMs)) {
                 // If there is at least one inflight request, it is enough
                 // to stop checking the rest of the inflightRequests
@@ -161,7 +162,7 @@ public class RequestManager {
         final var iterator = inflightRequests.entrySet().iterator();
         while (iterator.hasNext()) {
             final var entry = iterator.next();
-            final var requestKey = entry.getKey().requestType().apiKey();
+            final var requestType = entry.getKey().requestType();
             final var requestState = entry.getValue();
             if (requestState.hasRequestTimedOut(currentTimeMs)) {
                 // Mark the node as ready after request timeout
@@ -169,11 +170,11 @@ public class RequestManager {
             } else if (requestState.isBackoffComplete(currentTimeMs)) {
                 // Mark the node as ready after completed backoff
                 iterator.remove();
-            } else if (requestKey == ApiKeys.FETCH &&
+            } else if (requestType.equals(RequestType.FETCH_AND_FETCH_SNAPSHOT) &&
                 requestState.hasInflightRequest(currentTimeMs)) {
                 // There can be at most one inflight fetch or fetch snapshot request
                 return requestState.remainingRequestTimeMs(currentTimeMs);
-            } else if (requestKey == ApiKeys.FETCH &&
+            } else if (requestType.equals(RequestType.FETCH_AND_FETCH_SNAPSHOT) &&
                 requestState.isBackingOff(currentTimeMs)) {
                 minBackoffMs = Math.min(minBackoffMs, requestState.remainingBackoffMs(currentTimeMs));
             }

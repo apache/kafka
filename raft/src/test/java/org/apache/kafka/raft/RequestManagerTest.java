@@ -353,21 +353,25 @@ public class RequestManagerTest {
         );
 
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
 
         // Send a request and check state
         cache.onRequestSent(otherNode, 11, time.milliseconds(), fetch);
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
 
         // Send the other request and check state
         cache.onRequestSent(otherNode, 11, time.milliseconds(), updateVoter);
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
 
         // Wait until the request times out
         time.sleep(requestTimeoutMs);
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
 
         // Results should not affect the connection state of other request types
@@ -377,13 +381,18 @@ public class RequestManagerTest {
         cache.onRequestSent(otherNode, 12, time.milliseconds(), fetch);
         cache.onResponseResult(otherNode, 12, false, time.milliseconds(), fetch);
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
 
         // Send fetch snapshot request, it should be treated the same as fetch
         cache.onRequestSent(otherNode, 12, time.milliseconds(), fetchSnapshot);
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
+        assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
+
         cache.onResponseResult(otherNode, 12, true, time.milliseconds(), fetchSnapshot);
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
     }
 
