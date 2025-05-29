@@ -53,6 +53,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.common.test.TestUtils.SEEDED_RANDOM;
 import static org.apache.kafka.common.test.TestUtils.randomSelect;
@@ -67,8 +68,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     types = {Type.KRAFT},
     brokers = ConsumerBounceTest.BROKER_COUNT,
     serverProperties = {
-        @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"), // don't want to lose offset
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "10"), // set small enough session timeout
@@ -104,7 +103,7 @@ public class ConsumerBounceTest {
 
     private final ClusterInstance clusterInstance;
 
-    private Consumer<byte[], byte[]> consumer;
+    private List<Consumer<byte[], byte[]>> consumers;
     private List<ConsumerAssignmentPoller> consumerPollers;
 
     ConsumerBounceTest(ClusterInstance clusterInstance) {
@@ -114,6 +113,7 @@ public class ConsumerBounceTest {
     @BeforeEach
     void setUp() throws InterruptedException {
         consumerPollers = new ArrayList<>();
+        consumers = new ArrayList<>();
         clusterInstance.createTopic(topic, numPartitions, numReplica);
     }
 
@@ -129,10 +129,7 @@ public class ConsumerBounceTest {
         executor.shutdownNow();
         // Wait for any active tasks to terminate to ensure consumer is not closed while being used from another thread
         assertTrue(executor.awaitTermination(5000, TimeUnit.MILLISECONDS), "Executor did not terminate");
-        if (consumer != null) {
-            consumer.close();
-            consumer = null;
-        }
+        consumers.forEach(Consumer::close);
     }
 
     @ClusterTest
@@ -239,14 +236,23 @@ public class ConsumerBounceTest {
         }
     }
 
-    // FIXME: Two protocol and concurrent issue.
     @ClusterTest
-    public void testSubscribeWhenTopicUnavailable() throws Exception {
+    public void testClassicSubscribeWhenTopicUnavailable() throws InterruptedException {
+        testSubscribeWhenTopicUnavailable(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncSubscribeWhenTopicUnavailable() throws InterruptedException {
+        testSubscribeWhenTopicUnavailable(GroupProtocol.CONSUMER);
+    }
+
+    private void testSubscribeWhenTopicUnavailable(GroupProtocol groupProtocol) throws InterruptedException {
         String newTopic = "new-topic";
         TopicPartition newTopicPartition = new TopicPartition(newTopic, 0);
         int numRecords = 1000;
 
-        consumer = clusterInstance.consumer();
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name));
+        consumers.add(consumer);
         consumer.subscribe(List.of(newTopic));
         consumer.poll(Duration.ZERO);
         // Schedule topic creation after 2 seconds
@@ -279,8 +285,30 @@ public class ConsumerBounceTest {
     public void testClose() throws Exception {
         int numRecords = 10;
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
+
         checkCloseGoodPath(numRecords, "group1");
         checkCloseWithCoordinatorFailure(numRecords, "group2", "group3");
+    }
+
+    private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords) throws InterruptedException {
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_ID_CONFIG, groupId));
+        ConsumerAssignmentPoller poller;
+
+        if (manualAssign) {
+            consumer.assign(List.of(topicPartition));
+            poller = new ConsumerAssignmentPoller(consumer, Set.of(topicPartition));
+        } else {
+            consumer.subscribe(List.of(topic));
+            poller = new ConsumerAssignmentPoller(consumer, List.of(groupId));
+        }
+
+        poller.start();
+        consumers.add(consumer);
+        consumerPollers.add(poller);
+        receiveExactRecords(poller, numRecords, 60000L);
+        poller.shutdown();
+
+        return consumer;
     }
 
     /**
@@ -289,17 +317,9 @@ public class ConsumerBounceTest {
      * last committed offset.
      */
     private void checkCloseGoodPath(int numRecords, String groupId) throws InterruptedException {
-        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_ID_CONFIG, groupId));
-        assertEquals(0, consumer.assignment().size());
-        ConsumerAssignmentPoller consumerPoller = new ConsumerAssignmentPoller(consumer, List.of(topic));
-        consumerPoller.start();
-        consumerPollers.add(consumerPoller);
-        receiveExactRecords(consumerPoller, numRecords, 60000);
-        consumerPoller.shutdown();
-
+        Consumer<byte[], byte[]> consumer = createConsumerAndReceive(groupId, false, numRecords);
         assertDoesNotThrow(() -> submitCloseAndValidate(consumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get());
         checkClosedState(groupId, numRecords);
-
     }
 
     private void checkCloseWithCoordinatorFailure(int numRecords, String dynamicGroup, String manualGroup) throws Exception {
@@ -406,8 +426,12 @@ public class ConsumerBounceTest {
     }
 
     private void receiveExactRecords(ConsumerAssignmentPoller consumer, int numRecords, long timeoutMs) throws InterruptedException {
-        TestUtils.waitForCondition(() -> consumer.receivedMessages() == numRecords,
-        timeoutMs, String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
+        TestUtils.waitForCondition(() -> {
+            System.err.println("ZZZ " + numRecords + " consumer.receivedMessages() " + consumer.receivedMessages());
+            return consumer.receivedMessages() == numRecords;
+        }, timeoutMs, String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
+//        TestUtils.waitForCondition(() -> consumer.receivedMessages() == numRecords, timeoutMs,
+//             String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
     }
 
     // A mock class to represent broker bouncing (simulate broker restart behavior)
