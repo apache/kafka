@@ -58,15 +58,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
-final class QuotaTypes {
-    static final int NO_QUOTAS = 0;
-    static final int CLIENT_ID_QUOTA_ENABLED = 1;
-    static final int USER_QUOTA_ENABLED = 2;
-    static final int USER_CLIENT_ID_QUOTA_ENABLED = 4;
-    static final int CUSTOM_QUOTAS = 8; // No metric update optimizations are used with custom quotas
-}
-
 public class ClientQuotaManager {
+
+    static final class QuotaTypes {
+        static final int NO_QUOTAS = 0;
+        static final int CLIENT_ID_QUOTA_ENABLED = 1;
+        static final int USER_QUOTA_ENABLED = 2;
+        static final int USER_CLIENT_ID_QUOTA_ENABLED = 4;
+        static final int CUSTOM_QUOTAS = 8; // No metric update optimizations are used with custom quotas
+    }
 
     private static final Logger log = LoggerFactory.getLogger(ClientQuotaManager.class);
 
