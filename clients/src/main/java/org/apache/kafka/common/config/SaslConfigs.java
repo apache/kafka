@@ -290,7 +290,7 @@ public class SaslConfigs {
     public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE_DOC =  "<p>File that contains a private key in the standard PEM format which is used to"
         + " sign the JWT assertion sent to the identity provider.</p>"
         + "<p>The underlying implementation caches the file contents to avoid the performance hit of loading the file on each access. The caching mechanism will detect when"
-        + "the file changes to allow for the file to be reloaded on modifications. This allows for &quot;live&quot; private key rotation without restarting the Kafka client.</p>"
+        + " the file changes to allow for the file to be reloaded on modifications. This allows for &quot;live&quot; private key rotation without restarting the Kafka client.</p>"
         + ASSERTION_FILE_MUTUAL_EXCLUSION_NOTICE;
 
     public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE = "sasl.oauthbearer.assertion.private.key.passphrase";
