@@ -145,7 +145,6 @@ public class ClientsTestUtils {
     ) {
         try (Producer<byte[], byte[]> producer = cluster.producer()) {
             for (var i = 0; i < numRecords; i++) {
-                System.err.println("RRRR " + i);
                 sendRecord(producer, tp, startingTimestamp, i, timestampIncrement);
             }
             producer.flush();
