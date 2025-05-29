@@ -1545,7 +1545,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
                 doRestartConnectorAndTasks(restartRequest);
             } catch (Exception e) {
-                log.warn("Unexpected error while trying to process " + restartRequest + ", the restart request will be skipped.", e);
+                log.warn("Unexpected error while trying to process {}, the restart request will be skipped.", restartRequest, e);
             }
         });
     }
@@ -2079,7 +2079,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void startConnector(String connectorName, Callback<Void> callback) {
         log.info("Starting connector {}", connectorName);
         final Map<String, String> configProps = configState.connectorConfig(connectorName);
-        final CloseableConnectorContext ctx = new HerderConnectorContext(this, connectorName);
+        final CloseableConnectorContext ctx = new HerderConnectorContext(this, connectorName, worker.metrics().connectorPluginMetrics(connectorName));
         final TargetState initialState = configState.targetState(connectorName);
         final Callback<TargetState> onInitialStateChange = (error, newState) -> {
             if (error != null) {
@@ -2113,11 +2113,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             try {
                 startConnector(connectorName, (error, result) -> {
                     if (error != null) {
-                        log.error("Failed to start connector '" + connectorName + "'", error);
+                        log.error("Failed to start connector '{}'", connectorName, error);
                     }
                 });
             } catch (Throwable t) {
-                log.error("Unexpected error while trying to start connector " + connectorName, t);
+                log.error("Unexpected error while trying to start connector {}", connectorName, t);
                 onFailure(connectorName, t);
             }
             return null;
@@ -2129,7 +2129,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             try {
                 worker.stopAndAwaitConnector(connectorName);
             } catch (Throwable t) {
-                log.error("Failed to shut down connector " + connectorName, t);
+                log.error("Failed to shut down connector {}", connectorName, t);
             }
             return null;
         };
@@ -2576,11 +2576,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private static Callback<Void> forwardErrorAndTickThreadStages(final Callback<?> callback) {
-        Callback<Void> cb = callback.chainStaging((error, result) -> {
+        return callback.chainStaging((error, result) -> {
             if (error != null)
                 callback.onCompletion(error, null);
         });
-        return cb;
     }
 
     private void updateDeletedConnectorStatus() {

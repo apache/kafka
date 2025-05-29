@@ -18,7 +18,6 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
-import kafka.log.UnifiedLog
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
@@ -31,7 +30,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.slf4j.Logger
 
 import java.util
@@ -135,7 +134,7 @@ object KafkaRaftServer {
     // Load and verify the original ensemble.
     val loader = new MetaPropertiesEnsemble.Loader()
     loader.addMetadataLogDir(config.metadataLogDir)
-          .addLogDirs(config.logDirs.asJava)
+          .addLogDirs(config.logDirs)
     val initialMetaPropsEnsemble = loader.load()
     val verificationFlags = util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR)
     initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags)
@@ -182,8 +181,7 @@ object KafkaRaftServer {
     }
 
     // Load the BootstrapMetadata.
-    val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir,
-      Optional.ofNullable(config.interBrokerProtocolVersionString))
+    val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir)
     val bootstrapMetadata = bootstrapDirectory.read()
     (metaPropsEnsemble, bootstrapMetadata)
   }

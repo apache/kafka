@@ -16,19 +16,16 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, DescribeQuorumRequest, DescribeQuorumResponse}
+import org.apache.kafka.common.test.ClusterInstance
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT))
 class DescribeQuorumRequestTest(cluster: ClusterInstance) {
 
@@ -84,7 +81,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
         val nodes = response.data.nodes().asScala
         assertEquals(cluster.controllerIds().asScala, nodes.map(_.nodeId()).toSet)
         val node = nodes.find(_.nodeId() == cluster.controllers().keySet().asScala.head)
-        assertEquals(cluster.controllerListenerName().get().value(), node.get.listeners().asScala.head.name())
+        assertEquals(cluster.controllerListenerName().value(), node.get.listeners().asScala.head.name())
       }
     }
   }

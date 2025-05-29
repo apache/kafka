@@ -203,7 +203,7 @@ public class RecordAccumulatorTest {
     }
 
     private void verifyTopicPartitionInBatches(Map<Integer, List<ProducerBatch>> nodeBatches, TopicPartition... tp) {
-        int allTpBatchCount = (int) nodeBatches.values().stream().flatMap(Collection::stream).count();
+        int allTpBatchCount = (int) nodeBatches.values().stream().mapToLong(Collection::size).sum();
         assertEquals(tp.length, allTpBatchCount);
         List<TopicPartition> topicPartitionsInBatch = new ArrayList<>();
         for (Map.Entry<Integer, List<ProducerBatch>> entry : nodeBatches.entrySet()) {
@@ -397,7 +397,7 @@ public class RecordAccumulatorTest {
             List<ProducerBatch> batches = accum.drain(metadataCache, nodes, 5 * 1024, 0).get(node1.id());
             if (batches != null) {
                 for (ProducerBatch batch : batches) {
-                    for (Record record : batch.records().records())
+                    for (@SuppressWarnings("UnusedLocalVariable") Record ignored : batch.records().records())
                         read++;
                     accum.deallocate(batch);
                 }
@@ -460,7 +460,7 @@ public class RecordAccumulatorTest {
 
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
             Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
-            deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+            deliveryTimeoutMs, metrics, metricGrpName, time, null,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
@@ -525,7 +525,7 @@ public class RecordAccumulatorTest {
 
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
                 Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
-                deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+                deliveryTimeoutMs, metrics, metricGrpName, time, null,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
@@ -586,7 +586,7 @@ public class RecordAccumulatorTest {
 
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
                 Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
-                deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+                deliveryTimeoutMs, metrics, metricGrpName, time, null,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
@@ -1266,7 +1266,7 @@ public class RecordAccumulatorTest {
         long totalSize = 1024 * 1024;
         int batchSize = 128;
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-                3200, config, metrics, "producer-metrics", time, new ApiVersions(), null,
+                3200, config, metrics, "producer-metrics", time, null,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics")) {
             @Override
             BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
@@ -1399,7 +1399,7 @@ public class RecordAccumulatorTest {
         String metricGrpName = "producer-metrics";
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
             Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
-            deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+            deliveryTimeoutMs, metrics, metricGrpName, time, null,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         // Create 1 batch(batchA) to be produced to partition1.
@@ -1610,22 +1610,6 @@ public class RecordAccumulatorTest {
         }
     }
 
-     /**
-     * Return the offset delta when there is no key.
-     */
-    private int expectedNumAppendsNoKey(int batchSize) {
-        int size = 0;
-        int offsetDelta = 0;
-        while (true) {
-            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, 0, value.length,
-                Record.EMPTY_HEADERS);
-            if (size + recordSize > batchSize)
-                return offsetDelta;
-            offsetDelta += 1;
-            size += recordSize;
-        }
-    }
-
     private RecordAccumulator createTestRecordAccumulator(int batchSize, long totalSize, Compression compression, int lingerMs) {
         int deliveryTimeoutMs = 3200;
         return createTestRecordAccumulator(deliveryTimeoutMs, batchSize, totalSize, compression, lingerMs);
@@ -1661,7 +1645,6 @@ public class RecordAccumulatorTest {
             metrics,
             metricGrpName,
             time,
-            new ApiVersions(),
             txnManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName)) {
             @Override

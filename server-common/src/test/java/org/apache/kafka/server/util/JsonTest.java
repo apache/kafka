@@ -27,9 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -105,18 +103,6 @@ public class JsonTest {
         JsonObject parsed = parse(JSON).asJsonObject();
         assertEquals(parse("{\"a\":true,\"b\":false}"), parsed.apply("object"));
         assertThrows(JsonMappingException.class, () -> parsed.apply("aaaaaaaa"));
-    }
-
-    @Test
-    public void testJsonObjectIterator() throws JsonProcessingException {
-        List<Map.Entry<String, JsonValue>> results = new ArrayList<>();
-        parse(JSON).asJsonObject().apply("object").asJsonObject().iterator().forEachRemaining(results::add);
-
-        Map.Entry<String, JsonValue> entryA = new AbstractMap.SimpleEntry<>("a", parse("true"));
-        AbstractMap.SimpleEntry<String, JsonValue> entryB = new AbstractMap.SimpleEntry<>("b", parse("false"));
-        List<Map.Entry<String, JsonValue>> expectedResult = Arrays.asList(entryA, entryB);
-
-        assertEquals(expectedResult, results);
     }
 
     @Test
@@ -197,7 +183,7 @@ public class JsonTest {
     @Test
     public void testDecodeSeq() throws JsonMappingException {
         DecodeJson<List<Double>> decodeJson = DecodeJson.decodeList(new DecodeJson.DecodeDouble());
-        assertTo(Arrays.asList(4.0, 11.1, 44.5), decodeJson, jsonObject -> jsonObject.get("array").get());
+        assertTo(List.of(4.0, 11.1, 44.5), decodeJson, jsonObject -> jsonObject.get("array").get());
         assertToFails(decodeJson, jsonObject -> jsonObject.get("string").get());
         assertToFails(decodeJson, jsonObject -> jsonObject.get("object").get());
         assertToFails(DecodeJson.decodeList(new DecodeJson.DecodeString()), jsonObject -> jsonObject.get("array").get());

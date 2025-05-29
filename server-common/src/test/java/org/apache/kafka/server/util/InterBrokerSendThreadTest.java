@@ -36,7 +36,7 @@ import org.mockito.ArgumentMatchers;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -87,7 +87,7 @@ public class InterBrokerSendThreadTest {
 
         @Override
         public Collection<RequestAndCompletionHandler> generateRequests() {
-            return queue.isEmpty() ? Collections.emptyList() : Collections.singletonList(queue.poll());
+            return queue.isEmpty() ? List.of() : List.of(queue.poll());
         }
 
         @Override
@@ -147,7 +147,7 @@ public class InterBrokerSendThreadTest {
         final InterBrokerSendThread sendThread = new TestInterBrokerSendThread();
 
         // poll is always called but there should be no further invocations on NetworkClient
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(List.of());
 
         sendThread.doWork();
 
@@ -179,7 +179,7 @@ public class InterBrokerSendThreadTest {
 
         when(networkClient.ready(node, time.milliseconds())).thenReturn(true);
 
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(List.of());
 
         sendThread.enqueue(handler);
         sendThread.doWork();
@@ -224,7 +224,7 @@ public class InterBrokerSendThreadTest {
 
         when(networkClient.connectionDelay(any(), anyLong())).thenReturn(0L);
 
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(List.of());
 
         when(networkClient.connectionFailed(node)).thenReturn(true);
 
@@ -278,7 +278,7 @@ public class InterBrokerSendThreadTest {
 
         when(networkClient.connectionDelay(any(), anyLong())).thenReturn(0L);
 
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(List.of());
 
         // rule out disconnects so the request stays for the expiry check
         when(networkClient.connectionFailed(node)).thenReturn(false);

@@ -43,6 +43,7 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -151,6 +152,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     private final TimelineHashMap<String, ResolvedRegularExpression> resolvedRegularExpressions;
 
+    private final TimelineObject<Boolean> hasSubscriptionMetadataRecord;
+
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
         String groupId,
@@ -166,6 +169,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.resolvedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.hasSubscriptionMetadataRecord = new TimelineObject<>(snapshotRegistry, false);
     }
 
     /**
@@ -644,7 +648,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
     ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
@@ -885,7 +889,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     @Override
     protected void maybeUpdateGroupState() {
-        ConsumerGroupState previousState = state.get();
         ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
@@ -901,7 +904,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         }
 
         state.set(newState);
-        metrics.onConsumerGroupStateTransition(previousState, newState);
     }
 
     /**
@@ -1131,7 +1133,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param snapshotRegistry  The SnapshotRegistry.
      * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
-     * @param topicsImage       The TopicsImage for topic id and topic name conversion.
+     * @param topicHashCache    The cache for topic hashes.
+     * @param metadataImage     The current metadata image for the Kafka cluster.
      * @return  The created ConsumerGroup.
      *
      * @throws SchemaException if any member's subscription or assignment cannot be deserialized.
@@ -1141,7 +1144,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         SnapshotRegistry snapshotRegistry,
         GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
-        TopicsImage topicsImage
+        Map<String, Long> topicHashCache,
+        MetadataImage metadataImage
     ) {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
@@ -1153,7 +1157,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // We should accept the empty assignment.
             Map<Uuid, Set<Integer>> assignedPartitions;
             if (Arrays.equals(classicGroupMember.assignment(), EMPTY_ASSIGNMENT)) {
-                assignedPartitions = Collections.emptyMap();
+                assignedPartitions = Map.of();
             } else {
                 ConsumerProtocolAssignment assignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(
                     ByteBuffer.wrap(classicGroupMember.assignment())
@@ -1161,7 +1165,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 if (assignment.userData() != null && assignment.userData().hasRemaining()) {
                     throw new UnsupportedVersionException("userData from a custom assignor would be lost");
                 }
-                assignedPartitions = toTopicPartitionMap(assignment, topicsImage);
+                assignedPartitions = toTopicPartitionMap(assignment, metadataImage.topics());
             }
 
             // Every member is guaranteed to have metadata set when it joins,
@@ -1197,6 +1201,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             consumerGroup.updateMember(newMember);
         });
 
+        consumerGroup.setMetadataHash(ModernGroup.computeMetadataHash(
+            consumerGroup.subscribedTopicNames(),
+            topicHashCache,
+            metadataImage
+        ));
+
         return consumerGroup;
     }
 
@@ -1212,7 +1222,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), metadataHash()));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
@@ -1255,12 +1265,27 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Checks whether all the members use the classic protocol except the given member.
      *
-     * @param memberId The member to remove.
+     * @param member The member to remove.
      * @return A boolean indicating whether all the members use the classic protocol.
      */
-    public boolean allMembersUseClassicProtocolExcept(String memberId) {
-        return numClassicProtocolMembers() == members().size() - 1 &&
-            !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
+    public boolean allMembersUseClassicProtocolExcept(ConsumerGroupMember member) {
+        return numClassicProtocolMembers() == members().size() - 1 && !member.useClassicProtocol();
+    }
+
+    /**
+     * Checks whether all the members use the classic protocol except the given members.
+     *
+     * @param members The members to remove.
+     * @return A boolean indicating whether all the members use the classic protocol.
+     */
+    public boolean allMembersUseClassicProtocolExcept(Set<ConsumerGroupMember> members) {
+        int numExcludedClassicProtocolMembers = 0;
+        for (ConsumerGroupMember member : members) {
+            if (member.useClassicProtocol()) {
+                numExcludedClassicProtocolMembers++;
+            }
+        }
+        return numClassicProtocolMembers() - numExcludedClassicProtocolMembers == members().size() - members.size();
     }
 
     /**
@@ -1274,7 +1299,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
             for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
                 Uuid topicId = entry.getKey();
-                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Collections.emptySet());
+                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Set.of());
 
                 for (int partition : entry.getValue()) {
                     if (!assignedPartitions.contains(partition) && currentPartitionEpoch(topicId, partition) != -1) {
@@ -1284,5 +1309,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             }
         }
         return false;
+    }
+
+    public void setHasSubscriptionMetadataRecord(boolean hasSubscriptionMetadataRecord) {
+        this.hasSubscriptionMetadataRecord.set(hasSubscriptionMetadataRecord);
+    }
+
+    public boolean hasSubscriptionMetadataRecord() {
+        return hasSubscriptionMetadataRecord.get();
     }
 }

@@ -19,10 +19,10 @@ package kafka.network
 
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
-import kafka.cluster.EndPoint
 import kafka.server._
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
+import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.{ProduceRequestData, SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils._
 import org.apache.kafka.network.RequestConvertToJson
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.CredentialProvider
+import org.apache.kafka.server.{ApiVersionManager, SimpleApiVersionManager}
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -84,16 +85,16 @@ class SocketServerTest {
   TestUtils.clearYammerMetrics()
 
   private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-    () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+    () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
   var server: SocketServer = _
   val sockets = new ArrayBuffer[Socket]
 
   private val kafkaLogger = LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
-  def endpoint: EndPoint = {
+  def endpoint: Endpoint = {
     KafkaConfig.fromProps(props, doLog = false).dataPlaneListeners.head
   }
-  def listener: String = endpoint.listenerName.value
+  def listener: String = endpoint.listener
   val uncaughtExceptions = new AtomicInteger(0)
 
   @BeforeEach
@@ -839,7 +840,7 @@ class SocketServerTest {
 
       // same as SocketServer.createAcceptor,
       // except the Acceptor overriding a method to inject the exception
-      override protected def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
+      override protected def createDataPlaneAcceptor(endPoint: Endpoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
 
         new DataPlaneAcceptor(this, endPoint, this.config, nodeId, connectionQuotas, time, false, requestChannel, serverMetrics, this.credentialProvider, new LogContext(), MemoryPool.NONE, this.apiVersionManager) {
           override protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
@@ -1857,7 +1858,7 @@ class SocketServerTest {
       val failedFuture = new CompletableFuture[Void]()
       failedFuture.completeExceptionally(new RuntimeException("authorizer startup failed"))
       assertThrows(classOf[ExecutionException], () => {
-        newServer.enableRequestProcessing(Map(endpoint.toJava -> failedFuture)).get()
+        newServer.enableRequestProcessing(Map(endpoint -> failedFuture)).get()
       })
     } finally {
       shutdownServerAndMetrics(newServer)
@@ -1890,7 +1891,7 @@ class SocketServerTest {
       val authorizerFuture = new CompletableFuture[Void]()
       val enableFuture = newServer.enableRequestProcessing(
         newServer.dataPlaneAcceptors.keys().asScala.
-          map(_.toJava).map(k => k -> authorizerFuture).toMap)
+          map(k => k -> authorizerFuture).toMap)
       assertFalse(authorizerFuture.isDone)
       assertFalse(enableFuture.isDone)
       newServer.dataPlaneAcceptors.values().forEach(a => assertNull(a.serverChannel))
@@ -1991,7 +1992,7 @@ class SocketServerTest {
   }
 
   class TestableAcceptor(socketServer: SocketServer,
-                         endPoint: EndPoint,
+                         endPoint: Endpoint,
                          cfg: KafkaConfig,
                          nodeId: Int,
                          connectionQuotas: ConnectionQuotas,
@@ -2097,7 +2098,7 @@ class SocketServerTest {
     connectionDisconnectListeners = connectionDisconnectListeners
   ) {
 
-    override def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel) : DataPlaneAcceptor = {
+    override def createDataPlaneAcceptor(endPoint: Endpoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel) : DataPlaneAcceptor = {
       new TestableAcceptor(this, endPoint, this.config, 0, connectionQuotas, time, isPrivilegedListener, requestChannel, this.metrics, this.credentialProvider, new LogContext, MemoryPool.NONE, this.apiVersionManager, connectionQueueSize)
     }
 

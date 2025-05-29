@@ -312,6 +312,7 @@ public class DistributedHerderTest {
     public void setUp() throws Exception {
         time = new MockTime();
         metrics = new MockConnectMetrics(time);
+        when(worker.metrics()).thenReturn(metrics);
         AutoCloseable uponShutdown = shutdownCalled::countDown;
 
         // Default to the old protocol unless specified otherwise
@@ -1347,6 +1348,7 @@ public class DistributedHerderTest {
             return true;
         }).when(worker).startConnector(eq(CONN1), any(), any(), eq(herder), any(), stateCallback.capture());
         doNothing().when(member).wakeup();
+        when(worker.connectorVersion(any())).thenReturn(null);
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1377,6 +1379,7 @@ public class DistributedHerderTest {
         doNothing().when(statusBackingStore).put(eq(status));
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any())).thenReturn(true);
+        when(worker.taskVersion(any())).thenReturn(null);
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1418,6 +1421,8 @@ public class DistributedHerderTest {
         doNothing().when(statusBackingStore).put(eq(taskStatus));
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any())).thenReturn(true);
+        when(worker.taskVersion(any())).thenReturn(null);
+        when(worker.connectorVersion(any())).thenReturn(null);
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1669,6 +1674,7 @@ public class DistributedHerderTest {
         when(member.memberId()).thenReturn("member");
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
         when(worker.isSinkConnector(CONN1)).thenReturn(Boolean.TRUE);
+        when(worker.connectorVersion(CONN1)).thenReturn(null);
 
         WorkerConfigTransformer configTransformer = mock(WorkerConfigTransformer.class);
         // join

@@ -126,20 +126,24 @@ Configuration:
         additivity: false
         AppenderRef:
           ref: RequestAppender
-      # KRaft mode controller logger
+      # Controller logger
       - name: org.apache.kafka.controller
         level: INFO
         additivity: false
         AppenderRef:
           ref: ControllerAppender
-      # ZK mode controller logger
-      - name: kafka.controller
-        level: TRACE
+      # LogCleaner logger
+      - name: org.apache.kafka.storage.internals.log.LogCleaner
+        level: INFO
         additivity: false
         AppenderRef:
-          ref: ControllerAppender
-      # LogCleaner logger
-      - name: kafka.log.LogCleaner
+          ref: CleanerAppender
+      - name: org.apache.kafka.storage.internals.log.LogCleaner$CleanerThread
+        level: INFO
+        additivity: false
+        AppenderRef:
+          ref: CleanerAppender
+      - name: org.apache.kafka.storage.internals.log.Cleaner
         level: INFO
         additivity: false
         AppenderRef:

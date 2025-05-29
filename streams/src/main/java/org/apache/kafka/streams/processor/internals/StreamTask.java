@@ -417,7 +417,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         timeCurrentIdlingStarted = Optional.empty();
     }
 
-
     public void flush() {
         stateMgr.flushCache();
         recordCollector.flush();
@@ -429,7 +428,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @return offsets that should be committed for this task
      */
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
         switch (state()) {
             case CREATED:
             case RESTORING:
@@ -444,6 +443,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     //
                     // TODO: this should be removed after we decouple caching with emitting
                     flush();
+                    if (!clean) {
+                        log.debug("Skipped preparing {} task with id {} for commit since the task is getting closed dirty.", state(), id);
+                        return null;
+                    }
                     hasPendingTxCommit = eosEnabled;
 
                     log.debug("Prepared {} task for committing", state());
@@ -861,8 +864,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final Record<Object, Object> toProcess = new Record<>(
             record.key(),
             record.value(),
-            processorContext.timestamp(),
-            processorContext.headers()
+            processorContext.recordContext().timestamp(),
+            processorContext.recordContext().headers()
         );
         maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
 
@@ -1024,7 +1027,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.warn(
                 "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
                     "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                time.toString(),
+                timeoutException.toString(),
                 ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
             // re-throw to trigger `task.timeout.ms`

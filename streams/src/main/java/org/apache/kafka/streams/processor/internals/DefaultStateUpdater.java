@@ -673,7 +673,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 measureCheckpointLatency(() -> task.maybeCheckpoint(true));
                 changelogReader.unregister(changelogPartitions);
                 addToRestoredTasks(task);
-                updatingTasks.remove(task.id());
                 log.info("Stateful active task " + task.id() + " completed restoration");
                 transitToUpdateStandbysIfOnlyStandbysLeft();
             }
@@ -689,6 +688,7 @@ public class DefaultStateUpdater implements StateUpdater {
             restoredActiveTasksLock.lock();
             try {
                 restoredActiveTasks.add(task);
+                updatingTasks.remove(task.id());
                 log.debug("Active task " + task.id() + " was added to the restored tasks");
                 restoredActiveTasksCondition.signalAll();
             } finally {
@@ -885,7 +885,10 @@ public class DefaultStateUpdater implements StateUpdater {
                 restoredActiveTasksLock.lock();
                 try {
                     while (restoredActiveTasks.isEmpty() && now <= deadline) {
-                        final boolean elapsed = restoredActiveTasksCondition.await(deadline - now, TimeUnit.MILLISECONDS);
+                        // We can ignore whether the deadline expired during await, as the while loop condition will
+                        // check again for deadline expiration.
+                        @SuppressWarnings("UnusedLocalVariable")
+                        final boolean ignored = restoredActiveTasksCondition.await(deadline - now, TimeUnit.MILLISECONDS);
                         now = time.milliseconds();
                     }
                     result.addAll(restoredActiveTasks);

@@ -27,7 +27,6 @@ import org.apache.kafka.metadata.KafkaConfigSchema;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,7 +43,7 @@ public final class RecordRedactorTest {
                 define("quux", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "quuux2 doc"));
     }
 
-    private static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, Collections.emptyMap());
+    private static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, Map.of());
 
     private static final RecordRedactor REDACTOR = new RecordRedactor(SCHEMA);
 

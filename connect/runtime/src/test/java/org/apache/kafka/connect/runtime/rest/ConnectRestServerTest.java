@@ -16,11 +16,19 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
+import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.PluginsTest;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -56,18 +64,22 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import jakarta.ws.rs.core.MediaType;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.reset;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -85,6 +97,7 @@ public class ConnectRestServerTest {
     @BeforeEach
     public void setUp() {
         httpClient = HttpClients.createMinimal();
+        doReturn(new MockConnectMetrics()).when(herder).connectMetrics();
     }
 
     @AfterEach
@@ -118,6 +131,9 @@ public class ConnectRestServerTest {
 
     @Test
     public void testAdvertisedUri() {
+        // Clear stubs not needed by this test
+        reset(herder);
+
         // Advertised URI from listeners without protocol
         Map<String, String> configMap = new HashMap<>(baseServerProps());
         configMap.put(RestServerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
@@ -375,6 +391,44 @@ public class ConnectRestServerTest {
         checkCustomizedHttpResponseHeaders(headerConfig, expectedHeaders);
     }
 
+    static final class MonitorableConnectRestExtension extends PluginsTest.TestConnectRestExtension implements Monitorable {
+
+        private boolean called = false;
+        private static MetricName metricName;
+
+        @Override
+        public void register(ConnectRestExtensionContext restPluginContext) {
+            called = true;
+        }
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            metricName = metrics.metricName("name", "description", new LinkedHashMap<>());
+            metrics.addMetric(metricName, (Gauge<Boolean>) (config, now) -> called);
+        }
+    }
+
+    @Test
+    public void testMonitorableConnectRestExtension() {
+        Map<String, String> configMap = new HashMap<>(baseServerProps());
+        configMap.put(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG, MonitorableConnectRestExtension.class.getName());
+
+        doReturn(plugins).when(herder).plugins();
+        doReturn(List.of(new MonitorableConnectRestExtension())).when(plugins).newPlugins(any(), any(), eq(ConnectRestExtension.class));
+
+        server = new ConnectRestServer(null, restClient, configMap);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        Map<MetricName, KafkaMetric> metrics = herder.connectMetrics().metrics().metrics();
+        assertTrue(metrics.containsKey(MonitorableConnectRestExtension.metricName));
+        assertTrue((boolean) metrics.get(MonitorableConnectRestExtension.metricName).metricValue());
+
+        server.stop();
+        metrics = herder.connectMetrics().metrics().metrics();
+        assertFalse(metrics.containsKey(MonitorableConnectRestExtension.metricName));
+    }
+
     private void checkCustomizedHttpResponseHeaders(String headerConfig, Map<String, String> expectedHeaders)
             throws IOException  {
         Map<String, String> configMap = baseServerProps();
@@ -410,7 +464,7 @@ public class ConnectRestServerTest {
 
     private String executePut(URI serverUrl, String endpoint, String jsonBody) throws IOException {
         HttpPut request = new HttpPut(endpoint);
-        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8.name());
+        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8);
         entity.setContentType("application/json");
         request.setEntity(entity);
         HttpResponse response = executeRequest(serverUrl, request);

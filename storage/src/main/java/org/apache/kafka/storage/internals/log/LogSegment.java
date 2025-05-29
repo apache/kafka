@@ -43,6 +43,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.attribute.FileTime;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.Callable;
@@ -50,7 +51,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static java.util.Arrays.asList;
 
 /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileRecords containing
@@ -232,38 +232,38 @@ public class LogSegment implements Closeable {
      * It is assumed this method is being called from within a lock, it is not thread-safe otherwise.
      *
      * @param largestOffset The last offset in the message set
-     * @param largestTimestampMs The largest timestamp in the message set.
-     * @param shallowOffsetOfMaxTimestamp The last offset of earliest batch with max timestamp in the messages to append.
-     * @param records The log entries to append.
+     * @param records       The log entries to append.
      * @throws LogSegmentOffsetOverflowException if the largest offset causes index offset overflow
      */
     public void append(long largestOffset,
-                       long largestTimestampMs,
-                       long shallowOffsetOfMaxTimestamp,
                        MemoryRecords records) throws IOException {
         if (records.sizeInBytes() > 0) {
-            LOGGER.trace("Inserting {} bytes at end offset {} at position {} with largest timestamp {} at offset {}",
-                records.sizeInBytes(), largestOffset, log.sizeInBytes(), largestTimestampMs, shallowOffsetOfMaxTimestamp);
+            LOGGER.trace("Inserting {} bytes at end offset {} at position {}",
+                records.sizeInBytes(), largestOffset, log.sizeInBytes());
             int physicalPosition = log.sizeInBytes();
-            if (physicalPosition == 0)
-                rollingBasedTimestamp = OptionalLong.of(largestTimestampMs);
 
             ensureOffsetInRange(largestOffset);
 
             // append the messages
             long appendedBytes = log.append(records);
             LOGGER.trace("Appended {} to {} at end offset {}", appendedBytes, log.file(), largestOffset);
-            // Update the in memory max timestamp and corresponding offset.
-            if (largestTimestampMs > maxTimestampSoFar()) {
-                maxTimestampAndOffsetSoFar = new TimestampOffset(largestTimestampMs, shallowOffsetOfMaxTimestamp);
+
+            for (RecordBatch batch : records.batches()) {
+                long batchMaxTimestamp = batch.maxTimestamp();
+                long batchLastOffset = batch.lastOffset();
+                if (batchMaxTimestamp > maxTimestampSoFar()) {
+                    maxTimestampAndOffsetSoFar = new TimestampOffset(batchMaxTimestamp, batchLastOffset);
+                }
+
+                if (bytesSinceLastIndexEntry > indexIntervalBytes) {
+                    offsetIndex().append(batchLastOffset, physicalPosition);
+                    timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar());
+                    bytesSinceLastIndexEntry = 0;
+                }
+                var sizeInBytes = batch.sizeInBytes();
+                physicalPosition += sizeInBytes;
+                bytesSinceLastIndexEntry += sizeInBytes;
             }
-            // append an entry to the index (if needed)
-            if (bytesSinceLastIndexEntry > indexIntervalBytes) {
-                offsetIndex().append(largestOffset, physicalPosition);
-                timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar());
-                bytesSinceLastIndexEntry = 0;
-            }
-            bytesSinceLastIndexEntry += records.sizeInBytes();
         }
     }
 
@@ -274,8 +274,6 @@ public class LogSegment implements Closeable {
 
     private int appendChunkFromFile(FileRecords records, int position, BufferSupplier bufferSupplier) throws IOException {
         int bytesToAppend = 0;
-        long maxTimestamp = Long.MIN_VALUE;
-        long shallowOffsetOfMaxTimestamp = Long.MIN_VALUE;
         long maxOffset = Long.MIN_VALUE;
         ByteBuffer readBuffer = bufferSupplier.get(1024 * 1024);
 
@@ -284,10 +282,6 @@ public class LogSegment implements Closeable {
         Iterator<FileChannelRecordBatch> nextBatches = records.batchesFrom(position).iterator();
         FileChannelRecordBatch batch;
         while ((batch = nextAppendableBatch(nextBatches, readBuffer, bytesToAppend)) != null) {
-            if (batch.maxTimestamp() > maxTimestamp) {
-                maxTimestamp = batch.maxTimestamp();
-                shallowOffsetOfMaxTimestamp = batch.lastOffset();
-            }
             maxOffset = batch.lastOffset();
             bytesToAppend += batch.sizeInBytes();
         }
@@ -300,7 +294,7 @@ public class LogSegment implements Closeable {
             readBuffer.limit(bytesToAppend);
             records.readInto(readBuffer, position);
 
-            append(maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer));
+            append(maxOffset, MemoryRecords.readableRecords(readBuffer));
         }
 
         bufferSupplier.release(readBuffer);
@@ -387,7 +381,7 @@ public class LogSegment implements Closeable {
      */
     LogOffsetPosition translateOffset(long offset, int startingFilePosition) throws IOException {
         OffsetPosition mapping = offsetIndex().lookup(offset);
-        return log.searchForOffsetWithSize(offset, Math.max(mapping.position, startingFilePosition));
+        return log.searchForOffsetFromPosition(offset, Math.max(mapping.position, startingFilePosition));
     }
 
     /**
@@ -465,11 +459,11 @@ public class LogSegment implements Closeable {
      *
      * @param producerStateManager Producer state corresponding to the segment's base offset. This is needed to recover
      *                             the transaction index.
-     * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
+     * @param leaderEpochCache a cache for updating the leader epoch during recovery.
      * @return The number of bytes truncated from the log
      * @throws LogSegmentOffsetOverflowException if the log segment contains an offset that causes the index offset to overflow
      */
-    public int recover(ProducerStateManager producerStateManager, Optional<LeaderEpochFileCache> leaderEpochCache) throws IOException {
+    public int recover(ProducerStateManager producerStateManager, LeaderEpochFileCache leaderEpochCache) throws IOException {
         offsetIndex().reset();
         timeIndex().reset();
         txnIndex.reset();
@@ -495,11 +489,9 @@ public class LogSegment implements Closeable {
                 validBytes += batch.sizeInBytes();
 
                 if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
-                    leaderEpochCache.ifPresent(cache -> {
-                        if (batch.partitionLeaderEpoch() >= 0 &&
-                                (cache.latestEpoch().isEmpty() || batch.partitionLeaderEpoch() > cache.latestEpoch().getAsInt()))
-                            cache.assign(batch.partitionLeaderEpoch(), batch.baseOffset());
-                    });
+                    if (batch.partitionLeaderEpoch() >= 0 &&
+                            (leaderEpochCache.latestEpoch().isEmpty() || batch.partitionLeaderEpoch() > leaderEpochCache.latestEpoch().get()))
+                        leaderEpochCache.assign(batch.partitionLeaderEpoch(), batch.baseOffset());
                     updateProducerState(producerStateManager, batch);
                 }
             }
@@ -780,7 +772,7 @@ public class LogSegment implements Closeable {
      */
     public void deleteIfExists() throws IOException {
         try {
-            Utils.tryAll(asList(
+            Utils.tryAll(List.of(
                 () -> deleteTypeIfExists(() -> log.deleteIfExists(), "log", log.file(), true),
                 () -> deleteTypeIfExists(() -> lazyOffsetIndex.deleteIfExists(), "offset index", offsetIndexFile(), true),
                 () -> deleteTypeIfExists(() -> lazyTimeIndex.deleteIfExists(), "time index", timeIndexFile(), true),

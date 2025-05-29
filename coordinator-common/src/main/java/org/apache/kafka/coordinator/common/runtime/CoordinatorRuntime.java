@@ -52,7 +52,6 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -494,15 +493,15 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final MemoryRecordsBuilder builder;
 
         /**
-         * The timer used to enfore the append linger time if
+         * The timer used to enforce the append linger time if
          * it is non-zero.
          */
         final Optional<TimerTask> lingerTimeoutTask;
 
         /**
-         * The list of deferred events associated with the batch.
+         * The deferred events associated with the batch.
          */
-        final List<DeferredEvent> deferredEvents;
+        final DeferredEventCollection deferredEvents;
 
         /**
          * The next offset. This is updated when records
@@ -511,6 +510,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         long nextOffset;
 
         CoordinatorBatch(
+            Logger log,
             long baseOffset,
             long appendTimeMs,
             int maxBatchSize,
@@ -527,7 +527,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.buffer = buffer;
             this.builder = builder;
             this.lingerTimeoutTask = lingerTimeoutTask;
-            this.deferredEvents = new ArrayList<>();
+            this.deferredEvents = new DeferredEventCollection(log);
         }
     }
 
@@ -742,7 +742,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             deferredEventQueue.failAll(Errors.NOT_COORDINATOR.exception());
             failCurrentBatch(Errors.NOT_COORDINATOR.exception());
             if (coordinator != null) {
-                coordinator.onUnloaded();
+                try {
+                    coordinator.onUnloaded();
+                } catch (Throwable ex) {
+                    log.error("Failed to unload coordinator for {} due to {}.", tp, ex.getMessage(), ex);
+                }
             }
             coordinator = null;
         }
@@ -806,9 +810,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     }
 
                     // Add all the pending deferred events to the deferred event queue.
-                    for (DeferredEvent event : currentBatch.deferredEvents) {
-                        deferredEventQueue.add(offset, event);
-                    }
+                    deferredEventQueue.add(offset, currentBatch.deferredEvents);
 
                     // Free up the current batch.
                     freeCurrentBatch();
@@ -839,9 +841,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private void failCurrentBatch(Throwable t) {
             if (currentBatch != null) {
                 coordinator.revertLastWrittenOffset(currentBatch.baseOffset);
-                for (DeferredEvent event : currentBatch.deferredEvents) {
-                    event.complete(t);
-                }
+                currentBatch.deferredEvents.complete(t);
                 freeCurrentBatch();
             }
         }
@@ -894,6 +894,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 }
 
                 currentBatch = new CoordinatorBatch(
+                    log,
                     prevLastWrittenOffset,
                     currentTimeMs,
                     maxBatchSize,
@@ -940,7 +941,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     currentBatch.deferredEvents.add(event);
                 } else {
                     if (coordinator.lastCommittedOffset() < coordinator.lastWrittenOffset()) {
-                        deferredEventQueue.add(coordinator.lastWrittenOffset(), event);
+                        deferredEventQueue.add(coordinator.lastWrittenOffset(), DeferredEventCollection.of(log, event));
                     } else {
                         event.complete(null);
                     }
@@ -1127,7 +1128,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                 coordinator.updateLastWrittenOffset(offset);
 
-                deferredEventQueue.add(offset, event);
+                deferredEventQueue.add(offset, DeferredEventCollection.of(log, event));
             } catch (Throwable t) {
                 coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
                 event.complete(t);
@@ -1154,6 +1155,58 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             String name = event.toString();
             scheduleInternalOperation("OperationTimeout(name=" + name + ", tp=" + tp + ")", tp,
                 () -> event.complete(new TimeoutException(name + " timed out after " + delayMs + "ms")));
+        }
+    }
+
+    /**
+     * A collection of {@link DeferredEvent}. When completed, completes all the events in the collection
+     * and logs any exceptions thrown.
+     */
+    static class DeferredEventCollection implements DeferredEvent {
+        /**
+         * The logger.
+         */
+        private final Logger log;
+
+        /**
+         * The list of events.
+         */
+        private final List<DeferredEvent> events = new ArrayList<>();
+
+        public DeferredEventCollection(Logger log) {
+            this.log = log;
+        }
+
+        @Override
+        public void complete(Throwable t) {
+            for (DeferredEvent event : events) {
+                try {
+                    event.complete(t);
+                } catch (Throwable e) {
+                    log.error("Completion of event {} failed due to {}.", event, e.getMessage(), e);
+                }
+            }
+        }
+
+        public boolean add(DeferredEvent event) {
+            return events.add(event);
+        }
+
+        public int size() {
+            return events.size();
+        }
+
+        @Override
+        public String toString() {
+            return "DeferredEventCollection(events=" + events + ")";
+        }
+
+        public static DeferredEventCollection of(Logger log, DeferredEvent... deferredEvents) {
+            DeferredEventCollection collection = new DeferredEventCollection(log);
+            for (DeferredEvent deferredEvent : deferredEvents) {
+                collection.add(deferredEvent);
+            }
+            return collection;
         }
     }
 
@@ -2183,7 +2236,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         short producerEpoch,
         Duration timeout,
         CoordinatorWriteOperation<S, T, U> op,
-        Short apiVersion
+        int apiVersion
     ) {
         throwIfNotRunning();
         log.debug("Scheduled execution of transactional write operation {}.", name);
@@ -2387,9 +2440,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 try {
                     if (partitionEpoch.isEmpty() || context.epoch < partitionEpoch.getAsInt()) {
                         log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
-                        context.transitionTo(CoordinatorState.CLOSED);
-                        coordinators.remove(tp, context);
-                        log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                        try {
+                            context.transitionTo(CoordinatorState.CLOSED);
+                            log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                        } catch (Throwable ex) {
+                            // It's very unlikely that we will ever see an exception here, since we
+                            // already make an effort to catch exceptions in the unload method.
+                            log.error("Failed to unload metadata for {} with epoch {} due to {}.",
+                                tp, partitionEpoch, ex.toString());
+                        } finally {
+                            // Always remove the coordinator context, otherwise the coordinator
+                            // shard could be permanently stuck.
+                            coordinators.remove(tp, context);
+                        }
                     } else {
                         log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
                             tp, partitionEpoch, context.epoch);
@@ -2470,6 +2533,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             context.lock.lock();
             try {
                 context.transitionTo(CoordinatorState.CLOSED);
+            } catch (Throwable ex) {
+                log.warn("Failed to unload metadata for {} due to {}.", tp, ex.getMessage(), ex);
             } finally {
                 context.lock.unlock();
             }
@@ -2490,7 +2555,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      */
     public List<TopicPartition> activeTopicPartitions() {
         if (coordinators == null || coordinators.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         return coordinators.entrySet().stream()

@@ -35,7 +35,7 @@ import java.util.Map.Entry;
  * This class is thread-safe.
  */
 public final class DelegationTokenImage {
-    public static final DelegationTokenImage EMPTY = new DelegationTokenImage(Collections.emptyMap());
+    public static final DelegationTokenImage EMPTY = new DelegationTokenImage(Map.of());
 
     // Map TokenID to TokenInformation.
     // The TokenID is also contained in the TokenInformation inside the DelegationTokenData

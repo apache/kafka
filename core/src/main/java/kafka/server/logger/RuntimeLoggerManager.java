@@ -17,8 +17,6 @@
 
 package kafka.server.logger;
 
-import kafka.utils.Log4jController;
-
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.config.LogLevelConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -27,6 +25,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.server.logger.LoggingController;
 
 import org.slf4j.Logger;
 
@@ -76,14 +75,14 @@ public class RuntimeLoggerManager {
             String logLevel = op.value();
             switch (OpType.forId(op.configOperation())) {
                 case SET:
-                    if (Log4jController.logLevel(loggerName, logLevel)) {
+                    if (LoggingController.logLevel(loggerName, logLevel)) {
                         log.warn("Updated the log level of {} to {}", loggerName, logLevel);
                     } else {
                         log.error("Failed to update the log level of {} to {}", loggerName, logLevel);
                     }
                     break;
                 case DELETE:
-                    if (Log4jController.unsetLogLevel(loggerName)) {
+                    if (LoggingController.unsetLogLevel(loggerName)) {
                         log.warn("Unset the log level of {}", loggerName);
                     } else {
                         log.error("Failed to unset the log level of {}", loggerName);
@@ -106,12 +105,12 @@ public class RuntimeLoggerManager {
         }
         if (requestId != nodeId) {
             throw new InvalidRequestException("Unexpected node id. Expected " + nodeId +
-                ", but received " + nodeId);
+                ", but received " + requestId);
         }
     }
 
     void validateLoggerNameExists(String loggerName) {
-        if (!Log4jController.loggerExists(loggerName)) {
+        if (!LoggingController.loggerExists(loggerName)) {
             throw new InvalidConfigurationException("Logger " + loggerName + " does not exist!");
         }
     }
@@ -131,9 +130,9 @@ public class RuntimeLoggerManager {
                     break;
                 case DELETE:
                     validateLoggerNameExists(loggerName);
-                    if (loggerName.equals(Log4jController.ROOT_LOGGER())) {
+                    if (loggerName.equals(LoggingController.ROOT_LOGGER)) {
                         throw new InvalidRequestException("Removing the log level of the " +
-                            Log4jController.ROOT_LOGGER() + " logger is not allowed");
+                            LoggingController.ROOT_LOGGER + " logger is not allowed");
                     }
                     break;
                 case APPEND:

@@ -20,6 +20,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreatePartitionsResult;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
@@ -44,26 +45,23 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.apache.kafka.server.common.AdminOperationException;
+import org.apache.kafka.metadata.LeaderAndIsr;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -86,6 +84,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -99,7 +98,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(ClusterTestExtensions.class)
 public class TopicCommandTest {
     private final short defaultReplicationFactor = 1;
     private final int defaultNumPartitions = 1;
@@ -675,7 +673,7 @@ public class TopicCommandTest {
 
             TestUtils.waitForCondition(
                     () -> clusterInstance.brokers().values().stream().allMatch(
-                            b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
+                            b -> b.metadataCache().numPartitions(testTopicName).orElse(0) == 3),
                     TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
             TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
             assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
@@ -703,7 +701,7 @@ public class TopicCommandTest {
 
             TestUtils.waitForCondition(
                     () -> clusterInstance.brokers().values().stream().allMatch(
-                            b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
+                            b -> b.metadataCache().numPartitions(testTopicName).orElse(0) == 3),
                     TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
 
             TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
@@ -830,7 +828,7 @@ public class TopicCommandTest {
                     CLUSTER_WAIT_MS, testTopicName + String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
             TestUtils.waitForCondition(
-                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().getTopicPartitions(testTopicName).size() == alteredNumPartitions),
+                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().numPartitions(testTopicName).orElse(0) == alteredNumPartitions),
                     TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
 
             assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
@@ -866,7 +864,7 @@ public class TopicCommandTest {
             topicService.alterTopic(alterOpts);
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().getTopicPartitions(testTopicName).size() == numPartitionsModified),
+                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().numPartitions(testTopicName).orElse(0) == numPartitionsModified),
                     TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
 
             Config newProps = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
@@ -1112,8 +1110,8 @@ public class TopicCommandTest {
             TestUtils.waitForCondition(
                     () -> clusterInstance.aliveBrokers().values().stream().allMatch(
                             broker -> {
-                                Optional<UpdateMetadataRequestData.UpdateMetadataPartitionState> partitionState =
-                                        Optional.ofNullable(broker.metadataCache().getPartitionInfo(testTopicName, 0).getOrElse(null));
+                                Optional<LeaderAndIsr> partitionState = Optional.ofNullable(
+                                        broker.metadataCache().getLeaderAndIsr(testTopicName, 0).orElseGet(null));
                                 return partitionState.map(s -> FetchRequest.isValidBrokerId(s.leader())).orElse(false);
                             }
                     ), CLUSTER_WAIT_MS, String.format("Meta data propogation fail in %s ms", CLUSTER_WAIT_MS));
@@ -1141,7 +1139,7 @@ public class TopicCommandTest {
             assertEquals(2, clusterInstance.aliveBrokers().size());
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getPartitionInfo(testTopicName, 0).get().isr().size() == 2),
+                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getLeaderAndIsr(testTopicName, 0).get().isr().size() == 2),
                     CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
             );
 
@@ -1244,7 +1242,7 @@ public class TopicCommandTest {
             assertEquals(4, clusterInstance.aliveBrokers().size());
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getPartitionInfo(testTopicName, 0).get().isr().size() == 4),
+                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getLeaderAndIsr(testTopicName, 0).get().isr().size() == 4),
                     CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
             );
 
@@ -1302,8 +1300,8 @@ public class TopicCommandTest {
 
             TestUtils.waitForCondition(
                     () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker ->
-                            broker.metadataCache().getPartitionInfo(underMinIsrTopic, 0).get().isr().size() < 6 &&
-                            broker.metadataCache().getPartitionInfo(offlineTopic, 0).get().leader() == MetadataResponse.NO_LEADER_ID),
+                            broker.metadataCache().getLeaderAndIsr(underMinIsrTopic, 0).get().isr().size() < 6 &&
+                            broker.metadataCache().getLeaderAndIsr(offlineTopic, 0).get().leader() == MetadataResponse.NO_LEADER_ID),
                     CLUSTER_WAIT_MS, "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic"
             );
 
@@ -1402,6 +1400,27 @@ public class TopicCommandTest {
             assertThrows(TopicExistsException.class,
                     () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", topic)));
 
+        }
+    }
+
+    @ClusterTest
+    public void testCreateWithInternalConfig(ClusterInstance cluster) throws InterruptedException, ExecutionException {
+        String internalConfigTopicName = TestUtils.randomString(10);
+        String testTopicName = TestUtils.randomString(10);
+
+        try (Admin adminClient = cluster.admin()) {
+            CreateTopicsResult internalResult = adminClient.createTopics(List.of(new NewTopic(internalConfigTopicName, defaultNumPartitions, defaultReplicationFactor).configs(
+                Map.of(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1000")
+            )));
+
+            ConfigEntry internalConfigEntry = internalResult.config(internalConfigTopicName).get().get(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
+            assertNotNull(internalConfigEntry, "Internal config entry should not be null");
+            assertEquals("1000", internalConfigEntry.value());
+
+            CreateTopicsResult nonInternalResult = adminClient.createTopics(List.of(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
+            
+            ConfigEntry nonInternalConfigEntry = nonInternalResult.config(testTopicName).get().get(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
+            assertNull(nonInternalConfigEntry, "Non-internal config entry should be null");
         }
     }
 

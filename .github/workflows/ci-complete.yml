@@ -30,7 +30,7 @@ run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 #
 # This "workflow_run" triggered workflow is run in a privileged context and so does have access to
 # the repository secrets. Here we can download the build scan files produced by a PR and publish
-# them to ge.apache.org.
+# them to develocity.apache.org.
 #
 # If we need to do things like comment on, label, or otherwise modify PRs from public forks. This
 # workflow is the place to do it. PR number is ${{ github.event.workflow_run.pull_requests[0].number }}
@@ -43,8 +43,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Make sure these match build.yml
         java: [ 23, 17 ]
-        artifact-prefix: [ "build-scan-test-", "build-scan-quarantined-test-"]
+        run-flaky: [ true, false ]
+        run-new: [ true, false ]
+        exclude:
+          - run-flaky: true
+            run-new: true
+
+    env:
+      job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
+      status-context: Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' / Flaky' || '' }}${{ matrix.run-new == true && ' / New' || '' }}
+
     steps:
       - name: Env
         run: printenv
@@ -59,7 +69,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
       - name: Download build scan archive
         id: download-build-scan
         uses: actions/download-artifact@v4
@@ -67,7 +77,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
-          name: ${{ matrix.artifact-prefix }}${{ matrix.java }}
+          name: build-scan-${{ env.job-variation }}
           path: ~/.gradle/build-scan-data  # This is where Gradle buffers unpublished build scan data when --no-scan is given
       - name: Handle missing scan
         if: ${{ steps.download-build-scan.outcome == 'failure' }}
@@ -78,7 +88,7 @@ jobs:
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: '${{ github.event.workflow_run.html_url }}'
           description: 'Could not find build scan'
-          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          context: Gradle Build Scan / ${{ env.status-context }}
           state: 'error'
       - name: Publish Scan
         id: publish-build-scan
@@ -106,7 +116,7 @@ jobs:
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
           description: 'The build scan failed to be published'
-          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          context: Gradle Build Scan / ${{ env.status-context }}
           state: 'error'
       - name: Update Status Check
         if: ${{ steps.publish-build-scan.outcome == 'success' }}
@@ -117,5 +127,5 @@ jobs:
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: ${{ steps.publish-build-scan.outputs.build-scan-url }}
           description: 'The build scan was successfully published'
-          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          context: Gradle Build Scan / ${{ env.status-context }}
           state: 'success'

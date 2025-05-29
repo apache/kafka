@@ -33,7 +33,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
-import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -84,14 +84,14 @@ public class MetadataShellIntegrationTest {
     @ValueSource(booleans = {false, true})
     public void testLock(boolean canLock) throws Exception {
         try (IntegrationEnv env = new IntegrationEnv()) {
-            env.shell = new MetadataShell(null,
+            env.shell = new MetadataShell(
                 new File(new File(env.tempDir, "__cluster_metadata-0"), "00000000000122906351-0000000226.checkpoint").getAbsolutePath(),
                     env.faultHandler);
 
             if (canLock) {
                 assertEquals(NoSuchFileException.class,
                     assertThrows(ExecutionException.class,
-                        () -> env.shell.run(Collections.emptyList())).
+                        () -> env.shell.run(List.of())).
                             getCause().getClass());
             } else {
                 FileLock fileLock = new FileLock(new File(env.tempDir, ".lock"));
@@ -101,7 +101,7 @@ public class MetadataShellIntegrationTest {
                         ". Please ensure that no broker or controller process is using this " +
                         "directory before proceeding.",
                         assertThrows(RuntimeException.class,
-                            () -> env.shell.run(Collections.emptyList())).
+                            () -> env.shell.run(List.of())).
                                 getMessage());
                 } finally {
                     fileLock.destroy();

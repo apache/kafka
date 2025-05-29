@@ -22,10 +22,11 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -42,7 +43,7 @@ public class ConfiguredTopologyTest {
             () -> new ConfiguredTopology(
                 0,
                 null,
-                Collections.emptyMap(),
+                Map.of(),
                 Optional.empty()
             )
         );
@@ -53,7 +54,7 @@ public class ConfiguredTopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                Collections.emptyMap(),
+                Optional.of(new TreeMap<>()),
                 null,
                 Optional.empty()
             )
@@ -65,8 +66,8 @@ public class ConfiguredTopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
+                Optional.empty(),
+                Map.of(),
                 null
             )
         );
@@ -77,21 +78,34 @@ public class ConfiguredTopologyTest {
         assertThrows(IllegalArgumentException.class,
             () -> new ConfiguredTopology(
                 -1,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
+                Optional.of(new TreeMap<>()),
+                Map.of(),
                 Optional.empty()
             )
         );
     }
 
     @Test
+    public void testNoExceptionButNoSubtopologies() {
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> new ConfiguredTopology(
+                1,
+                Optional.empty(),
+                Map.of(),
+                Optional.empty()
+            )
+        );
+        assertEquals(ex.getMessage(), "Subtopologies must be present if topicConfigurationException is empty.");
+    }
+
+    @Test
     public void testIsReady() {
         ConfiguredTopology readyTopology = new ConfiguredTopology(
-            1, new HashMap<>(), new HashMap<>(), Optional.empty());
+            1, Optional.of(new TreeMap<>()), new HashMap<>(), Optional.empty());
         assertTrue(readyTopology.isReady());
 
         ConfiguredTopology notReadyTopology = new ConfiguredTopology(
-            1, new HashMap<>(), new HashMap<>(), Optional.of(TopicConfigurationException.missingSourceTopics("missing")));
+            1, Optional.empty(), new HashMap<>(), Optional.of(TopicConfigurationException.missingSourceTopics("missing")));
         assertFalse(notReadyTopology.isReady());
     }
 
@@ -101,12 +115,12 @@ public class ConfiguredTopologyTest {
         ConfiguredSubtopology subtopologyMock = mock(ConfiguredSubtopology.class);
         StreamsGroupDescribeResponseData.Subtopology subtopologyResponse = new StreamsGroupDescribeResponseData.Subtopology();
         when(subtopologyMock.asStreamsGroupDescribeSubtopology(Mockito.anyString())).thenReturn(subtopologyResponse);
-        Map<String, ConfiguredSubtopology> subtopologies = new HashMap<>();
+        SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>();
         subtopologies.put("subtopology1", subtopologyMock);
         Map<String, CreatableTopic> internalTopicsToBeCreated = new HashMap<>();
         Optional<TopicConfigurationException> topicConfigurationException = Optional.empty();
         ConfiguredTopology configuredTopology = new ConfiguredTopology(
-            topologyEpoch, subtopologies, internalTopicsToBeCreated, topicConfigurationException);
+            topologyEpoch, Optional.of(subtopologies), internalTopicsToBeCreated, topicConfigurationException);
 
         StreamsGroupDescribeResponseData.Topology topology = configuredTopology.asStreamsGroupDescribeTopology();
 

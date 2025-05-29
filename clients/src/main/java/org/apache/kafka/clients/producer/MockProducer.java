@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
@@ -141,7 +142,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void initTransactions() {
+    public void initTransactions(boolean keepPreparedTxn) {
         verifyNotClosed();
         verifyNotFenced();
         if (this.transactionInitialized) {
@@ -200,6 +201,18 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
+    public PreparedTxnState prepareTransaction() throws ProducerFencedException {
+        verifyNotClosed();
+        verifyNotFenced();
+        verifyTransactionsInitialized();
+        verifyTransactionInFlight();
+        
+        // Return a new PreparedTxnState with mock values for producerId and epoch
+        // Using 1000L and (short)1 as arbitrary values for a valid PreparedTxnState
+        return new PreparedTxnState(1000L, (short) 1);
+    }
+
+    @Override
     public void commitTransaction() throws ProducerFencedException {
         verifyNotClosed();
         verifyNotFenced();
@@ -242,6 +255,27 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionCommitted = false;
         this.transactionAborted = true;
         this.transactionInFlight = false;
+    }
+
+    @Override
+    public void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException {
+        verifyNotClosed();
+        verifyNotFenced();
+        verifyTransactionsInitialized();
+        
+        if (!this.transactionInFlight) {
+            throw new IllegalStateException("There is no prepared transaction to complete.");
+        }
+
+        // For testing purposes, we'll consider a prepared state with producerId=1000L and epoch=1 as valid
+        // This should match what's returned in prepareTransaction()
+        PreparedTxnState currentState = new PreparedTxnState(1000L, (short) 1);
+        
+        if (currentState.equals(preparedTxnState)) {
+            commitTransaction();
+        } else {
+            abortTransaction();
+        }
     }
 
     private synchronized void verifyNotClosed() {
@@ -301,8 +335,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
             partition = partition(record, this.cluster);
         else {
             //just to throw ClassCastException if serializers are not the proper ones to serialize key/value
-            keySerializer.serialize(record.topic(), record.key());
-            valueSerializer.serialize(record.topic(), record.value());
+            keySerializer.serialize(record.topic(), new RecordHeaders(), record.key());
+            valueSerializer.serialize(record.topic(), new RecordHeaders(), record.value());
         }
 
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);

@@ -495,7 +495,7 @@ abstract class EmbeddedConnect {
         Response response = requestPost(restartEndpoint, "", Collections.emptyMap());
         try {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
-                //only the 202 stauts returns a body
+                //only the 202 status returns a body
                 if (response.getStatus() == Response.Status.ACCEPTED.getStatusCode()) {
                     return mapper.readerFor(ConnectorStateInfo.class)
                             .readValue(responseToString(response));
@@ -1010,7 +1010,7 @@ abstract class EmbeddedConnect {
                     .entity(res.getContentAsString())
                     .build();
         } catch (Exception e) {
-            log.error("Could not execute " + httpMethod + " request to " + url, e);
+            log.error("Could not execute {} request to {}", httpMethod, url, e);
             throw new ConnectException(e);
         }
     }
