@@ -121,9 +121,9 @@ public record LogReadResult(
             this.leaderLogStartOffset,
             this.info.records,
             this.divergingEpoch,
-            this.lastStableOffset.isPresent() ? OptionalLong.of(this.lastStableOffset.getAsLong()) : OptionalLong.empty(),
+            this.lastStableOffset,
             this.info.abortedTransactions,
-            this.preferredReadReplica.isPresent() ? OptionalInt.of(this.preferredReadReplica.getAsInt()) : OptionalInt.empty(),
+            this.preferredReadReplica,
             isReassignmentFetch);
     }
 }
