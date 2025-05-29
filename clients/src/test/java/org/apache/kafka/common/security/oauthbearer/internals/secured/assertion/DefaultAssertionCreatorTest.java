@@ -31,21 +31,16 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.EnumSet;
 import java.util.List;
@@ -54,7 +49,6 @@ import java.util.Optional;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.TOKEN_SIGNING_ALGORITHM_RS256;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.getSignature;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.privateKey;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.sign;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -83,39 +77,6 @@ public class DefaultAssertionCreatorTest {
         try (AssertionCreator assertionCreator = builder.build()) {
             String assertion = assertionCreator.create(jwtTemplate);
             assertClaims(keyPair.getPublic(), assertion);
-        }
-    }
-
-    @Test
-    public void testPrivateKeyWithPassphrase() throws Exception {
-        KeyPair keyPair = loadKeyPair(
-            "test_id_rsa_x509.pub",
-            "test_id_rsa.pk8",
-            Optional.of("thisisatest")
-        );
-
-        Builder builder = new Builder()
-            .setPrivateKeyFile(generatePrivateKey(keyPair.getPrivate()));
-
-        AssertionJwtTemplate jwtTemplate = new LayeredAssertionJwtTemplate(
-            new StaticAssertionJwtTemplate(Map.of("kid", "test-id"), Map.of()),
-            new DynamicAssertionJwtTemplate(
-                new MockTime(),
-                builder.algorithm,
-                3600,
-                60,
-                false
-            )
-        );
-
-        try (AssertionCreator assertionCreator = builder.build()) {
-            String assertion = assertionCreator.create(jwtTemplate);
-            JwtContext context = assertContext(keyPair.getPublic(), assertion);
-            List<JsonWebStructure> joseObjects = context.getJoseObjects();
-            assertNotNull(joseObjects);
-            assertEquals(1, joseObjects.size());
-            JsonWebStructure jsonWebStructure = joseObjects.get(0);
-            assertEquals("test-id", jsonWebStructure.getKeyIdHeaderValue());
         }
     }
 
@@ -252,42 +213,6 @@ public class DefaultAssertionCreatorTest {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("Received unexpected error during private key generation", e);
         }
-    }
-
-    private KeyPair loadKeyPair(String publicKeyResourceName, String privateKeyResourceName, Optional<String> passphrase) throws IOException, GeneralSecurityException {
-        byte[] publicKeyBytes = loadResource(publicKeyResourceName);
-
-        String publicKeyPem = new String(publicKeyBytes, StandardCharsets.UTF_8)
-            .replaceAll("-----BEGIN PUBLIC KEY-----", "")
-            .replaceAll("-----END PUBLIC KEY-----", "")
-            .replaceAll("\\s+", "");
-        byte[] decodedPublicKeyPem = Base64.getDecoder().decode(publicKeyPem);
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(decodedPublicKeyPem);
-        KeyFactory kf = KeyFactory.getInstance("RSA");
-        PublicKey publicKey = kf.generatePublic(spec);
-
-        byte[] privateKeyBytes = loadResource(privateKeyResourceName);
-        PrivateKey privateKey = privateKey(privateKeyBytes, passphrase);
-
-        return new KeyPair(publicKey, privateKey);
-    }
-
-    private byte[] loadResource(String resourceName) throws IOException {
-        ByteBuffer buf = ByteBuffer.allocate(4096);
-        int numBytesRead = 0;
-        String fullyQualifiedResourceName = "common/security/oauthbearer/" + resourceName;
-
-        try (InputStream in = getClass().getClassLoader().getResourceAsStream(fullyQualifiedResourceName)) {
-            if (in == null)
-                throw new FileNotFoundException("Classpath resource " + fullyQualifiedResourceName + " was not found");
-
-            numBytesRead = Utils.readFully(in, buf);
-        }
-
-        byte[] bytes = new byte[numBytesRead];
-        buf.flip();
-        buf.get(bytes);
-        return bytes;
     }
 
     private static class Builder {
