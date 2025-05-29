@@ -962,7 +962,6 @@ class KafkaConfigTest {
         case SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS =>
         case SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE =>
         case SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER =>
-        case SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE =>
         case SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE =>
         case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS =>
         case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS =>

@@ -93,7 +93,6 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.ass
  *     <li><code>sasl.oauthbearer.assertion.private.key.file</code></li>
  *     <li><code>sasl.oauthbearer.assertion.private.key.passphrase</code></li>
  *     <li><code>sasl.oauthbearer.assertion.template.file</code></li>
- *     <li><code>sasl.oauthbearer.grant.type</code></li>
  *     <li><code>sasl.oauthbearer.jwt.retriever.class</code></li>
  *     <li><code>sasl.oauthbearer.scope</code></li>
  *     <li><code>sasl.oauthbearer.token.endpoint.url</code></li>
@@ -118,7 +117,6 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.ass
  * sasl.oauthbearer.assertion.private.key.file=/path/to/private.key
  * sasl.oauthbearer.assertion.private.key.passphrase=$3cr3+
  * sasl.oauthbearer.assertion.template.file=/path/to/assertion-template.json
- * sasl.oauthbearer.grant.type=urn:ietf:params:oauth:grant-type:jwt-bearer
  * sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever
  * sasl.oauthbearer.scope=my-application-scope
  * sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
