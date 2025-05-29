@@ -335,7 +335,7 @@ class ShareCoordinatorShardTest {
         shard.replay(0L, 0L, (short) 0, result.records().get(0));
 
         expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
-        expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
+        expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
             GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), TIME.milliseconds())
         ));
 
@@ -446,7 +446,7 @@ class ShareCoordinatorShardTest {
         expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         // The snapshot epoch here will be 1 since this is a snapshot update record,
         // and it refers to parent share snapshot.
-        expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
+        expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
             GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), TIME.milliseconds())
         ));
 
