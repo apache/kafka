@@ -83,12 +83,7 @@ public class ClientQuotaManager {
 
     public interface BaseUserEntity extends ClientQuotaEntity.ConfigEntity { }
 
-    public static class UserEntity implements BaseUserEntity {
-        private final String sanitizedUser;
-
-        public UserEntity(String sanitizedUser) {
-            this.sanitizedUser = sanitizedUser;
-        }
+    public record UserEntity(String sanitizedUser) implements BaseUserEntity {
 
         @Override
         public ClientQuotaEntity.ConfigEntityType entityType() {
@@ -100,35 +95,14 @@ public class ClientQuotaManager {
             return Sanitizer.desanitize(sanitizedUser);
         }
 
-        public String getSanitizedUser() {
-            return sanitizedUser;
-        }
-
         @Override
         public String toString() {
             return "user " + sanitizedUser;
         }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false;
-            UserEntity that = (UserEntity) obj;
-            return sanitizedUser.equals(that.sanitizedUser);
-        }
-
-        @Override
-        public int hashCode() {
-            return sanitizedUser.hashCode();
-        }
     }
 
-    public static class ClientIdEntity implements ClientQuotaEntity.ConfigEntity {
-        private final String clientId;
-
-        public ClientIdEntity(String clientId) {
-            this.clientId = clientId;
-        }
+    // Convert to record - this is a simple data holder
+    public record ClientIdEntity(String clientId) implements ClientQuotaEntity.ConfigEntity {
 
         @Override
         public ClientQuotaEntity.ConfigEntityType entityType() {
@@ -140,29 +114,13 @@ public class ClientQuotaManager {
             return clientId;
         }
 
-        public String getClientId() {
-            return clientId;
-        }
-
         @Override
         public String toString() {
             return "client-id " + clientId;
         }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false;
-            ClientIdEntity that = (ClientIdEntity) obj;
-            return clientId.equals(that.clientId);
-        }
-
-        @Override
-        public int hashCode() {
-            return clientId.hashCode();
-        }
     }
 
+    // Keep as class - uses singleton pattern which doesn't work well with records
     public static class DefaultUserEntity implements BaseUserEntity {
         public static final DefaultUserEntity INSTANCE = new DefaultUserEntity();
 
@@ -205,14 +163,8 @@ public class ClientQuotaManager {
         }
     }
 
-    public static class KafkaQuotaEntity implements ClientQuotaEntity {
-        private final BaseUserEntity userEntity;
-        private final ClientQuotaEntity.ConfigEntity clientIdEntity;
-
-        public KafkaQuotaEntity(BaseUserEntity userEntity, ClientQuotaEntity.ConfigEntity clientIdEntity) {
-            this.userEntity = userEntity;
-            this.clientIdEntity = clientIdEntity;
-        }
+    public record KafkaQuotaEntity(BaseUserEntity userEntity,
+                                          ClientQuotaEntity.ConfigEntity clientIdEntity) implements ClientQuotaEntity {
 
         @Override
         public List<ConfigEntity> configEntities() {
@@ -227,8 +179,8 @@ public class ClientQuotaManager {
         }
 
         public String sanitizedUser() {
-            if (userEntity instanceof UserEntity) {
-                return ((UserEntity) userEntity).getSanitizedUser();
+            if (userEntity instanceof UserEntity userRecord) {
+                return userRecord.sanitizedUser();
             } else if (userEntity == DefaultUserEntity.INSTANCE) {
                 return DEFAULT_NAME;
             }
@@ -244,20 +196,6 @@ public class ClientQuotaManager {
             String user = userEntity != null ? userEntity.toString() : "";
             String clientId = clientIdEntity != null ? clientIdEntity.toString() : "";
             return (user + " " + clientId).trim();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false;
-            KafkaQuotaEntity that = (KafkaQuotaEntity) obj;
-            return java.util.Objects.equals(userEntity, that.userEntity) &&
-                    java.util.Objects.equals(clientIdEntity, that.clientIdEntity);
-        }
-
-        @Override
-        public int hashCode() {
-            return java.util.Objects.hash(userEntity, clientIdEntity);
         }
     }
 
@@ -283,7 +221,7 @@ public class ClientQuotaManager {
     private final DelayQueue<ThrottledChannel> delayQueue = new DelayQueue<>();
     private final ThrottledChannelReaper throttledChannelReaper;
 
-    public void  processThrottledChannelReaperDoWork() {
+    public void processThrottledChannelReaperDoWork() {
         throttledChannelReaper.doWork();
     }
 
