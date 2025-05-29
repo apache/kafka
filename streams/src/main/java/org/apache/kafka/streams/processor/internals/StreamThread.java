@@ -236,7 +236,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             oldState = state;
 
             if (state == State.PENDING_SHUTDOWN && newState != State.DEAD) {
-                log.debug("Ignoring request to transit from PENDING_SHUTDOWN to {}: " +
+                log.debug("adding test. Ignoring request to transit from PENDING_SHUTDOWN to {}: " +
                               "only DEAD state is a valid next state", newState);
                 // when the state is already in PENDING_SHUTDOWN, all other transitions will be
                 // refused but we do not throw exception here

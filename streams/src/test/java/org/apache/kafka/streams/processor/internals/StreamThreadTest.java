@@ -273,7 +273,7 @@ public class StreamThreadTest {
     private Cluster createCluster() {
         final Node node = new Node(-1, "localhost", 8121);
         return new Cluster(
-            "mockClusterId",
+            "mockClusterId123",
             Collections.singletonList(node),
             Collections.emptySet(),
             Collections.emptySet(),
@@ -354,7 +354,7 @@ public class StreamThreadTest {
             ++numChanges;
             if (this.newState != null) {
                 if (!this.newState.equals(oldState)) {
-                    throw new RuntimeException("State mismatch " + oldState + " different from " + this.newState);
+                    throw new RuntimeException("State mismatch " + oldState + " is different from " + this.newState);
                 }
             }
             this.oldState = oldState;
