@@ -21,7 +21,7 @@ from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService, ShareConsumerPerformanceService
 from kafkatest.services.performance import latency, compute_aggregate_throughput
-from kafkatest.version import DEV_BRANCH, LATEST_2_1, V_4_0_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_2_1, V_4_1_0, KafkaVersion
 
 
 class PerformanceServiceTest(Test):
@@ -81,7 +81,7 @@ class PerformanceServiceTest(Test):
             "consumer_performance": consumer_perf_data,
         }
 
-        if version >= V_4_0_0:
+        if version >= V_4_1_0:
             # check basic run of share consumer performance service
             self.share_consumer_perf = ShareConsumerPerformanceService(
                 self.test_context, 1, self.kafka,

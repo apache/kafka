@@ -1734,7 +1734,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             return
         if node is None:
             node = self.nodes[0]
-        consumer_group_script = self.path.script("kafka-configs.sh", node)
+        config_script = self.path.script("kafka-configs.sh", node)
 
         if command_config is None:
             command_config = ""
@@ -1743,7 +1743,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"share.auto.offset.reset=%s\" %s" % \
-               (consumer_group_script,
+               (config_script,
                 self.bootstrap_servers(self.security_protocol),
                 group,
                 strategy,

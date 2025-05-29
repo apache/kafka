@@ -118,7 +118,7 @@ class ShareConsumerPerformanceService(PerformanceService):
         self.security_config.setup_node(node)
 
         cmd = self.start_cmd(node)
-        self.logger.debug("Share Consumer performance %d command: %s", idx, cmd)
+        self.logger.debug("Share consumer performance %d command: %s", idx, cmd)
         last = None
         for line in node.account.ssh_capture(cmd):
             last = line

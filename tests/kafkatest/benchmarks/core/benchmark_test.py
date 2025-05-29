@@ -286,7 +286,7 @@ class Benchmark(Test):
             kafka_node.account.create_file(COMMAND_CONFIG_FILE, prop_file)
 
         wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=share_group, strategy="earliest", command_config=COMMAND_CONFIG_FILE),
-                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
         self.share_consumer = ShareConsumerPerformanceService(
             self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, messages=num_records, group=share_group, timeout=20000)
