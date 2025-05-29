@@ -273,7 +273,7 @@ public class ClientMetricsCommandTest {
                 fail(t);
             }
         });
-        assertTrue(capturedOutput.contains("The client-metric " + clientMetricsName + " doesn't exist and doesn't have dynamic config."));
+        assertTrue(capturedOutput.contains("The client metric resource " + clientMetricsName + " doesn't exist and doesn't have dynamic config."));
     }
 
     @Test

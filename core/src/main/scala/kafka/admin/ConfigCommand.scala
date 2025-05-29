@@ -348,7 +348,7 @@ object ConfigCommand extends Logging {
           case TopicType =>
             Topic.validate(name)
             if (!adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names.get.contains(name)) {
-              System.out.println(s"The $entityType '$name' doesn't exist and doesn't have dynamic config.")
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
               return
             }
           case BrokerType | BrokerLoggerConfigType =>
@@ -357,20 +357,20 @@ object ConfigCommand extends Logging {
             } else if (name == BrokerDefaultEntityName) {
               // default broker configs
             } else {
-              System.out.println(s"The $entityType '$name' doesn't exist and doesn't have dynamic config.")
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
               return
             }
           case ClientMetricsType =>
             if (adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions).all.get
               .stream.noneMatch(_.name == name)) {
-              System.out.println(s"The $entityType '$name' doesn't exist and doesn't have dynamic config.")
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
               return
             }
           case GroupType =>
             if (adminClient.listGroups().all.get.stream.noneMatch(_.groupId() == name) &&
               adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all.get
                 .stream.noneMatch(_.name == name)) {
-              System.out.println(s"The $entityType '$name' doesn't exist and doesn't have dynamic config.")
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
               return
             }
           case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")

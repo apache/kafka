@@ -159,7 +159,7 @@ public class ClientMetricsCommand {
                 if (adminClient.listConfigResources(Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions())
                         .all().get(30, TimeUnit.SECONDS).stream()
                         .noneMatch(resource -> resource.name().equals(entityNameOpt.get()))) {
-                    System.out.println("The client-metric " + entityNameOpt.get() + " doesn't exist and doesn't have dynamic config.");
+                    System.out.println("The client metric resource " + entityNameOpt.get() + " doesn't exist and doesn't have dynamic config.");
                     return;
                 }
                 entities = Collections.singletonList(entityNameOpt.get());

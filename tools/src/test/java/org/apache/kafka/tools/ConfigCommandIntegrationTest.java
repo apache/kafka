@@ -557,7 +557,7 @@ public class ConfigCommandIntegrationTest {
                 "--describe"));
             String message = captureStandardOut(run(command));
             assertTrue(
-                message.contains("The " + type + " '" + name + "' doesn't exist and doesn't have dynamic config."),
+                message.contains("The " + type.substring(0, type.length() - 1) + " '" + name + "' doesn't exist and doesn't have dynamic config."),
                 "The config resource type " + type + " got unexpected result: " + message
             );
         });
