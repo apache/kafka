@@ -149,9 +149,9 @@ public class SaslConfigs {
     public static final String DEFAULT_CLIENT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.ClientJwtValidator";
     public static final String SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS_DOC = "<p>The fully-qualified class name of a <code>JwtValidator</code> implementation used to"
         + " validate the JWT from the identity provider.</p>"
-        + "<p>The default configuration value represents a class that maintains backward compatibility with previous versions of"
-        + " Apache Kafka. The default implementation uses the configuration to determine which concrete implementation to create."
-        + "<p>Other implementations that are provided include:</p>"
+        + "<p>The default validator (<code>org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator</code>) maintains backward compatibility with previous"
+        + " versions of Apache Kafka. The default validator uses configuration to determine which concrete implementation to create."
+        + "<p>The built-in <code>JwtValidator</code> implementations are:</p>"
         + "<ul>"
         + "<li><code>org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator</code></li>"
         + "<li><code>org.apache.kafka.common.security.oauthbearer.ClientJwtValidator</code></li>"
@@ -160,9 +160,10 @@ public class SaslConfigs {
 
     public static final String SASL_OAUTHBEARER_GRANT_TYPE = "sasl.oauthbearer.grant.type";
     public static final String DEFAULT_SASL_OAUTHBEARER_GRANT_TYPE = "client_credentials";
-    public static final String SASL_OAUTHBEARER_GRANT_TYPE_DOC = "The OAuth grant type to use when communicating with the identity provider. On the whole, the"
-        + " OAuth layer does not rely on this value and expects it to be used and/or verified for correctness by the <code>JwtRetriever</code> implementation."
-        + " The default value of <code>client_credentials</code> maintains backward compatibility. The built-in grant types are:"
+    public static final String SASL_OAUTHBEARER_GRANT_TYPE_DOC = "The OAuth grant type to use when communicating with the identity provider. The <code>JwtRetriever</code>"
+        + " implementation."
+        + " The default grant type, <code>client_credentials</code>, maintains backward compatibility with previous versions of Apache Kafka."
+        + "<p>The built-in grant types are:</p>"
         + "<ul>"
         + "<li><code>client_credentials</code></li>"
         + "<li><code>urn:ietf:params:oauth:grant-type:jwt-bearer</code></li>"
@@ -284,7 +285,7 @@ public class SaslConfigs {
         + "<p>See <a href=\"https://datatracker.ietf.org/doc/html/rfc7519\">RFC 7519</a> and <a href=\"https://datatracker.ietf.org/doc/html/rfc7515\">RFC 7515</a>"
         + " for more details on the JWT and JWS formats.</p>"
         + "<p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, all other"
-        + " <code>sasl.oauthbearer.assertion.</code>* configuration are ignored.</p>";
+        + " <code>sasl.oauthbearer.assertion.</code>* configurations are ignored.</p>";
 
     public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE = "sasl.oauthbearer.assertion.private.key.file";
     public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE_DOC =  "<p>File that contains a private key in the standard PEM format which is used to"
@@ -297,7 +298,7 @@ public class SaslConfigs {
     public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE_DOC = "<p>The optional passphrase to decrypt the private key file specified by"
         + " <code>sasl.oauthbearer.assertion.private.key.file</code>.</p>"
         + "<p><em>Note</em>: If the file referred to by <code>sasl.oauthbearer.assertion.private.key.file</code> is modified on the file system at runtime and it was"
-        + "created with a <em>different</em> passphrase than it was previously, the client will not be able to access the private key file because the passphrase is now"
+        + " created with a <em>different</em> passphrase than it was previously, the client will not be able to access the private key file because the passphrase is now"
         + " out of date. For that reason, when using private key passphrases, either use the same passphrase each time, or&mdash;for improved security&mdash;restart"
         + " the Kafka client using the new passphrase configuration.</p>"
         + ASSERTION_FILE_MUTUAL_EXCLUSION_NOTICE;

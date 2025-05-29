@@ -57,7 +57,7 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  * from the client, but ultimately from posting the client credentials to the OAuth/OIDC provider's
  * token endpoint.
  *
- * The validation steps performed (primary by the jose4j library) are:
+ * The validation steps performed (primarily by the jose4j library) are:
  *
  * <ol>
  *     <li>

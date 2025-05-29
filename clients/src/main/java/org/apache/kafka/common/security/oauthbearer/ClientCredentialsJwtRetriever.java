@@ -84,7 +84,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
  *     <li><code>sasl.oauthbearer.token.endpoint.url</code></li>
  * </ul>
  *
- * Please refer to the official Apache Kafka documentation for more information on these, and related, configuration.
+ * Please refer to the official Apache Kafka documentation for more information on these, and related configuration.
  *
  * <p/>
  *
