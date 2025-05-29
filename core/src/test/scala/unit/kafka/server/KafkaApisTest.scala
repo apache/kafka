@@ -13357,7 +13357,7 @@ class KafkaApisTest extends Logging {
     assertEquals(alterShareGroupOffsetsResponseData, response.data)
   }
 
-  def verifyGetReplicaLogInfoRequest(builder: GetReplicaLogInfoRequest.Builder, withResponse: (GetReplicaLogInfoResponse => Unit)): Unit = {
+  def verifyGetReplicaLogInfoRequest(builder: GetReplicaLogInfoRequest.Builder, expectedResponseData: GetReplicaLogInfoResponseData): Unit = {
     val request = buildRequest(builder.build())
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
@@ -13366,7 +13366,8 @@ class KafkaApisTest extends Logging {
     when(authorizer.authorize(request.context, clusterActions)).thenReturn(allowList)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleGetReplicaLogInfo(request)
-    withResponse(verifyNoThrottling[GetReplicaLogInfoResponse](request))
+    val response = verifyNoThrottling[GetReplicaLogInfoResponse](request)
+    assertEquals(expectedResponseData, response.data())
   }
 
   @Test
@@ -13384,7 +13385,8 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testGetReplicaLogInfoFailedToRetrievePartition(): Unit = {
+  def testGetReplicaLogInfoMixOfSuccessAndFailure(): Unit = {
+    // 1 succesful case and 3 failing topic partitions with different error codes, returned in same request.
     val uuids = (1 to 4).map(_ => Uuid.randomUuid()).toList
     val tps = uuids.map(new GetReplicaLogInfoRequestData.TopicPartitions()
       .setTopicId(_)
@@ -13435,98 +13437,93 @@ class KafkaApisTest extends Logging {
     val builder = new GetReplicaLogInfoRequest.Builder(
       new GetReplicaLogInfoRequestData().setTopicPartitions(tps asJava)
     )
-    verifyGetReplicaLogInfoRequest(builder, { response =>
-      assertEquals(expected, response.data())
-    })
+    verifyGetReplicaLogInfoRequest(builder, expected)
   }
 
   @Test
-  def testGetReplicaLogInfoFailedToRetrieveLog(): Unit = {
-    val topic1 = new GetReplicaLogInfoRequestData.TopicPartitions()
-      .setTopicId(Uuid.randomUuid())
-      .setPartitions(util.List.of(1))
-    val topic2 = new GetReplicaLogInfoRequestData.TopicPartitions()
+  def testGetReplicaLogInfoLogDirNotFoundError(): Unit = {
+    // Handles case where an online LogDir is not found.
+    val topic = new GetReplicaLogInfoRequestData.TopicPartitions()
       .setTopicId(Uuid.randomUuid())
       .setPartitions(util.List.of(2))
-    val builder = new GetReplicaLogInfoRequest.Builder(List(topic1, topic2) asJava)
+    val builder = new GetReplicaLogInfoRequest.Builder(List(topic) asJava)
 
     metadataCache = mock(classOf[MetadataCache])
-    when(metadataCache.getTopicName(topic1.topicId())).thenReturn(Optional.of("topic1"))
-    when(metadataCache.getTopicName(topic2.topicId())).thenReturn(Optional.of("topic2"))
+    when(metadataCache.getTopicName(topic.topicId())).thenReturn(Optional.of("topic2"))
 
-    val log1 = mock(classOf[UnifiedLog])
-    when(log1.logEndOffset).thenReturn(100L)
-    when(log1.latestEpoch).thenReturn(Optional.of(10))
-    val partition1 = mock(classOf[Partition])
-    when(partition1.log).thenReturn(Some(log1))
-    when(partition1.getLeaderEpoch).thenReturn(1)
-    when(partition1.partitionId).thenReturn(1)
+    val partition = mock(classOf[Partition])
+    when(partition.log).thenReturn(None)
+    when(partition.getLeaderEpoch).thenReturn(2)
+    when(partition.partitionId).thenReturn(2)
 
-    val partition2 = mock(classOf[Partition])
-    when(partition2.log).thenReturn(None)
-    when(partition2.getLeaderEpoch).thenReturn(2)
-    when(partition2.partitionId).thenReturn(2)
-
-    val tp1 = new TopicPartition("topic1", 1)
-    when(replicaManager.getPartitionOrError(tp1)).thenReturn(Right(partition1))
-    val tp2 = new TopicPartition("topic2", 2)
-    when(replicaManager.getPartitionOrError(tp2)).thenReturn(Right(partition2))
+    val tp = new TopicPartition("topic2", 2)
+    when(replicaManager.getPartitionOrError(tp)).thenReturn(Right(partition))
 
     val expected = new GetReplicaLogInfoResponseData()
       .setTopicPartitionLogInfoList(List(
         new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
-          .setTopicId(topic1.topicId())
-          .setPartitionLogInfo(util.List.of(
-            new GetReplicaLogInfoResponseData.PartitionLogInfo()
-              .setPartition(1)
-              .setLogEndOffset(100L)
-              .setLastWrittenLeaderEpoch(10)
-              .setCurrentLeaderEpoch(1))),
-        new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
-          .setTopicId(topic2.topicId())
+          .setTopicId(topic.topicId())
           .setPartitionLogInfo(util.List.of(
             new GetReplicaLogInfoResponseData.PartitionLogInfo()
               .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
           ))) asJava)
       .setBrokerEpoch(brokerEpoch)
 
-    verifyGetReplicaLogInfoRequest(builder, { response =>
-      assertEquals(expected, response.data())
-    })
+    verifyGetReplicaLogInfoRequest(builder, expected)
   }
 
   @Test
   def testGetReplicaLogInfoUnknownTopic(): Unit = {
-    val expectedPartition = 1
-    val expectedUuid = Uuid.randomUuid()
+    val unknownTopicUuid = Uuid.randomUuid()
+    val knownTopicUuid = Uuid.randomUuid()
     val builder = new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData()
       .setTopicPartitions(
-        util.List.of(new GetReplicaLogInfoRequestData.TopicPartitions()
-          .setTopicId(expectedUuid)
-          .setPartitions(util.List.of(expectedPartition)))))
+        util.List.of(
+          new GetReplicaLogInfoRequestData.TopicPartitions()
+            .setTopicId(unknownTopicUuid)
+            .setPartitions(util.List.of(1)),
+          new GetReplicaLogInfoRequestData.TopicPartitions()
+            .setTopicId(knownTopicUuid)
+            .setPartitions(util.List.of(1)))))
     metadataCache = mock(classOf[MetadataCache])
-    when(metadataCache.getTopicName(expectedUuid)).thenReturn(Optional.empty())
+    when(metadataCache.getTopicName(unknownTopicUuid)).thenReturn(Optional.empty())
+    when(metadataCache.getTopicName(knownTopicUuid)).thenReturn(Optional.of("topic1"))
 
-    val expectedResponseData = new GetReplicaLogInfoResponseData()
+    val log = mock(classOf[UnifiedLog])
+    when(log.logEndOffset).thenReturn(100L)
+    when(log.latestEpoch).thenReturn(Optional.of(10))
+    val partition = mock(classOf[Partition])
+    when(partition.log).thenReturn(Some(log))
+    when(partition.getLeaderEpoch).thenReturn(1)
+    when(partition.partitionId).thenReturn(1)
+    val valid = new TopicPartition("topic1", 1)
+    when(replicaManager.getPartitionOrError(valid)).thenReturn(Right(partition))
+
+    val expected = new GetReplicaLogInfoResponseData()
       .setBrokerEpoch(brokerEpoch)
       .setTopicPartitionLogInfoList(util.List.of(
         new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
-          .setTopicId(expectedUuid)
+          .setTopicId(unknownTopicUuid)
           .setPartitionLogInfo(util.List.of(
             new GetReplicaLogInfoResponseData.PartitionLogInfo()
-              .setPartition(expectedPartition)
+              .setPartition(1)
               .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code())
-          ))
-      ))
-    verifyGetReplicaLogInfoRequest(builder, { response =>
-      assertEquals(expectedResponseData, response.data())
-    })
+          )),
+          new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+            .setTopicId(knownTopicUuid)
+            .setPartitionLogInfo(util.List.of(
+              new GetReplicaLogInfoResponseData.PartitionLogInfo()
+                .setPartition(1)
+                .setLogEndOffset(100L)
+                .setCurrentLeaderEpoch(1)
+                .setLastWrittenLeaderEpoch(10)))))
+    verifyGetReplicaLogInfoRequest(builder, expected)
   }
 
   @Test
   def testGetReplicaLogInfoRequestTooManyTopics(): Unit = {
     // 100 topics, 20 partitions per topic = 2k topic-partitions
-    // only first 1000 should be sent back and truncated = true
+    // only first 1000 should be sent back and HasMoreData = true
     val numberUuids = 100
     val numberPartitions = 20
     val uuids: List[Uuid] = (1 to numberUuids).map(_ => Uuid.randomUuid()).toList
@@ -13541,13 +13538,15 @@ class KafkaApisTest extends Logging {
 
     def mockTopicName(uuid: Uuid, idx: Int): String = s"topic-idx-$idx-with-uuid-$uuid"
 
+    // We instrument every-topic partition so that the failure happens at the verifyGetReplicaLogInfoRequest assertion.
     metadataCache = mock(classOf[MetadataCache])
     uuids.zipWithIndex.foreach { case (uuid, idx) =>
       when(metadataCache.getTopicName(uuid)).thenReturn(Optional.of(mockTopicName(uuid, idx)))
     }
 
-    val expectedResponseData =
+    val expected =
       new GetReplicaLogInfoResponseData().setHasMoreData(true).setBrokerEpoch(brokerEpoch)
+    // Since each topic has 20 partitions, we only return the first 50 to reach topic-partition limit of 1000.
     uuids.take(50).zipWithIndex.foreach { case (uuid, idx) =>
       val tpli = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
         .setTopicId(uuid)
@@ -13567,22 +13566,21 @@ class KafkaApisTest extends Logging {
           .setLastWrittenLeaderEpoch(expectedLatestEpoch)
           .setCurrentLeaderEpoch(expectedLeaderEpoch))
       }
-      expectedResponseData.topicPartitionLogInfoList().add(tpli)
+      expected.topicPartitionLogInfoList().add(tpli)
     }
 
-    verifyGetReplicaLogInfoRequest(builder, { response =>
-      assertEquals(expectedResponseData, response.data())
-    })
+    verifyGetReplicaLogInfoRequest(builder, expected)
   }
 
   @Test
   def testGetReplicaInfoRequestHappyTrail(): Unit = {
+    // Return multiple successful topic-partitions. The first topic has 2 partitions, the second has 1.
     val topic1 = new GetReplicaLogInfoRequestData.TopicPartitions()
       .setTopicId(Uuid.randomUuid())
-      .setPartitions(util.List.of(1))
+      .setPartitions(util.List.of(1, 2))
     val topic2 = new GetReplicaLogInfoRequestData.TopicPartitions()
       .setTopicId(Uuid.randomUuid())
-      .setPartitions(util.List.of(2))
+      .setPartitions(util.List.of(3))
     val builder = new GetReplicaLogInfoRequest.Builder(List(topic1, topic2) asJava)
 
     metadataCache = mock(classOf[MetadataCache])
@@ -13605,10 +13603,20 @@ class KafkaApisTest extends Logging {
     when(partition2.getLeaderEpoch).thenReturn(2)
     when(partition2.partitionId).thenReturn(2)
 
+    val log3 = mock(classOf[UnifiedLog])
+    when(log3.logEndOffset).thenReturn(300L)
+    when(log3.latestEpoch).thenReturn(Optional.of(30))
+    val partition3 = mock(classOf[Partition])
+    when(partition3.log).thenReturn(Some(log3))
+    when(partition3.getLeaderEpoch).thenReturn(3)
+    when(partition3.partitionId).thenReturn(3)
+
     val tp1 = new TopicPartition("topic1", 1)
     when(replicaManager.getPartitionOrError(tp1)).thenReturn(Right(partition1))
-    val tp2 = new TopicPartition("topic2", 2)
+    val tp2 = new TopicPartition("topic1", 2)
     when(replicaManager.getPartitionOrError(tp2)).thenReturn(Right(partition2))
+    val tp3 = new TopicPartition("topic2", 3)
+    when(replicaManager.getPartitionOrError(tp3)).thenReturn(Right(partition3))
 
     val expected = new GetReplicaLogInfoResponseData()
       .setTopicPartitionLogInfoList(List(
@@ -13619,20 +13627,23 @@ class KafkaApisTest extends Logging {
               .setPartition(1)
               .setLogEndOffset(100L)
               .setLastWrittenLeaderEpoch(10)
-              .setCurrentLeaderEpoch(1))),
-        new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
-          .setTopicId(topic2.topicId())
-          .setPartitionLogInfo(util.List.of(
+              .setCurrentLeaderEpoch(1),
             new GetReplicaLogInfoResponseData.PartitionLogInfo()
               .setPartition(2)
               .setLogEndOffset(200L)
               .setLastWrittenLeaderEpoch(20)
-              .setCurrentLeaderEpoch(2)
+              .setCurrentLeaderEpoch(2))),
+        new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+          .setTopicId(topic2.topicId())
+          .setPartitionLogInfo(util.List.of(
+            new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setPartition(3)
+              .setLogEndOffset(300L)
+              .setLastWrittenLeaderEpoch(30)
+              .setCurrentLeaderEpoch(3)
           ))) asJava)
       .setBrokerEpoch(brokerEpoch)
-    verifyGetReplicaLogInfoRequest(builder, { response =>
-      assertEquals(expected, response.data())
-    })
+    verifyGetReplicaLogInfoRequest(builder, expected)
   }
 
   def getShareGroupDescribeResponse(groupIds: util.List[String], enableShareGroups: Boolean = true,
