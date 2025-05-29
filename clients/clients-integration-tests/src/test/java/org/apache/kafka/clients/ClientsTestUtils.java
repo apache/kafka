@@ -85,9 +85,11 @@ public class ClientsTestUtils {
         );
     }
 
-    public static void pollUntilTrue(Consumer<byte[], byte[]> consumer,
-                                     Supplier<Boolean> testCondition,
-                                     long waitTimeMs, String msg) throws InterruptedException {
+    public static void pollUntilTrue(
+            Consumer<byte[], byte[]> consumer,
+            Supplier<Boolean> testCondition,
+            long waitTimeMs, String msg
+    ) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             consumer.poll(Duration.ofMillis(100));
             return testCondition.get();

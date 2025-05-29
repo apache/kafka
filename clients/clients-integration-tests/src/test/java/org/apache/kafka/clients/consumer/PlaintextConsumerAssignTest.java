@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -76,20 +77,20 @@ public class PlaintextConsumerAssignTest {
 
     @ClusterTest
     public void testClassicAssignAndCommitAsyncNotCommitted() throws Exception {
-        testAssignAndCommitAsyncNotCommitted(GroupProtocol.CLASSIC.name);
+        testAssignAndCommitAsyncNotCommitted(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
     public void testAsyncAssignAndCommitAsyncNotCommitted() throws Exception {
-        testAssignAndCommitAsyncNotCommitted(GroupProtocol.CONSUMER.name);
+        testAssignAndCommitAsyncNotCommitted(GroupProtocol.CONSUMER);
     }
 
-    private void testAssignAndCommitAsyncNotCommitted(String groupProtocol) throws InterruptedException {
+    private void testAssignAndCommitAsyncNotCommitted(GroupProtocol groupProtocol) throws InterruptedException {
         int numRecords = 10000;
         long startingTimestamp = System.currentTimeMillis();
         CountConsumerCommitCallback cb = new CountConsumerCommitCallback();
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp);
             consumer.assign(List.of(tp));
             consumer.commitAsync(cb);
@@ -106,19 +107,19 @@ public class PlaintextConsumerAssignTest {
 
     @ClusterTest
     public void testClassicAssignAndCommitSyncNotCommitted() throws Exception {
-        testAssignAndCommitSyncNotCommitted(GroupProtocol.CLASSIC.name);
+        testAssignAndCommitSyncNotCommitted(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
     public void testAsyncAssignAndCommitSyncNotCommitted() {
-        testAssignAndCommitSyncNotCommitted(GroupProtocol.CONSUMER.name);
+        testAssignAndCommitSyncNotCommitted(GroupProtocol.CONSUMER);
     }
 
-    private void testAssignAndCommitSyncNotCommitted(String groupProtocol) {
+    private void testAssignAndCommitSyncNotCommitted(GroupProtocol groupProtocol) {
         int numRecords = 10000;
         long startingTimestamp = System.currentTimeMillis();
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp);
             consumer.assign(List.of(tp));
             consumer.commitSync();
@@ -133,18 +134,18 @@ public class PlaintextConsumerAssignTest {
 
     @ClusterTest
     public void testClassicAssignAndCommitSyncAllConsumed() throws Exception {
-        testAssignAndCommitSyncAllConsumed(GroupProtocol.CLASSIC.name);
+        testAssignAndCommitSyncAllConsumed(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
     public void testAsyncAssignAndCommitSyncAllConsumed() throws Exception {
-        testAssignAndCommitSyncAllConsumed(GroupProtocol.CONSUMER.name);
+        testAssignAndCommitSyncAllConsumed(GroupProtocol.CONSUMER);
     }
 
-    private void testAssignAndCommitSyncAllConsumed(String groupProtocol) throws InterruptedException {
+    private void testAssignAndCommitSyncAllConsumed(GroupProtocol groupProtocol) throws InterruptedException {
         int numRecords = 10000;
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
             long startingTimestamp = System.currentTimeMillis();
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp);
             consumer.assign(List.of(tp));
@@ -161,18 +162,18 @@ public class PlaintextConsumerAssignTest {
 
     @ClusterTest
     public void testClassicAssignAndConsume() throws InterruptedException {
-        testAssignAndConsume(GroupProtocol.CLASSIC.name);
+        testAssignAndConsume(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
     public void testAsyncAssignAndConsume() throws InterruptedException {
-        testAssignAndConsume(GroupProtocol.CONSUMER.name);
+        testAssignAndConsume(GroupProtocol.CONSUMER);
     }
 
-    private void testAssignAndConsume(String groupProtocol) throws InterruptedException {
+    private void testAssignAndConsume(GroupProtocol groupProtocol) throws InterruptedException {
         int numRecords = 10;
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
             long startingTimestamp = System.currentTimeMillis();
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp);
             consumer.assign(List.of(tp));
@@ -184,18 +185,18 @@ public class PlaintextConsumerAssignTest {
 
     @ClusterTest
     public void testClassicAssignAndConsumeSkippingPosition() throws InterruptedException {
-        testAssignAndConsumeSkippingPosition(GroupProtocol.CLASSIC.name);
+        testAssignAndConsumeSkippingPosition(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
     public void testAsyncAssignAndConsumeSkippingPosition() throws InterruptedException {
-        testAssignAndConsumeSkippingPosition(GroupProtocol.CONSUMER.name);
+        testAssignAndConsumeSkippingPosition(GroupProtocol.CONSUMER);
     }
 
-    private void testAssignAndConsumeSkippingPosition(String groupProtocol) throws InterruptedException {
+    private void testAssignAndConsumeSkippingPosition(GroupProtocol groupProtocol) throws InterruptedException {
         int numRecords = 10;
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
             long startingTimestamp = System.currentTimeMillis();
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp);
             consumer.assign(List.of(tp));
@@ -209,19 +210,19 @@ public class PlaintextConsumerAssignTest {
 
     @ClusterTest
     public void testClassicAssignAndFetchCommittedOffsets() throws InterruptedException {
-        testAssignAndFetchCommittedOffsets(GroupProtocol.CLASSIC.name);
+        testAssignAndFetchCommittedOffsets(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
     public void testAsyncAssignAndFetchCommittedOffsets() throws InterruptedException {
-        testAssignAndFetchCommittedOffsets(GroupProtocol.CONSUMER.name);
+        testAssignAndFetchCommittedOffsets(GroupProtocol.CONSUMER);
     }
 
-    private void testAssignAndFetchCommittedOffsets(String groupProtocol) throws InterruptedException {
+    private void testAssignAndFetchCommittedOffsets(GroupProtocol groupProtocol) throws InterruptedException {
         int numRecords = 100;
         long startingTimestamp = System.currentTimeMillis();
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name, GROUP_ID_CONFIG, "group1"))) {
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp);
             consumer.assign(List.of(tp));
             // First consumer consumes and commits offsets
@@ -232,7 +233,7 @@ public class PlaintextConsumerAssignTest {
         }
 
         // We should see the committed offsets from another consumer
-        try (Consumer<byte[], byte[]> anotherConsumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
+        try (Consumer<byte[], byte[]> anotherConsumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name, GROUP_ID_CONFIG, "group1"))) {
             anotherConsumer.assign(List.of(tp));
             assertEquals(numRecords, anotherConsumer.committed(Set.of(tp)).get(tp).offset());
         }
@@ -240,20 +241,21 @@ public class PlaintextConsumerAssignTest {
 
     @ClusterTest
     public void testClassicAssignAndConsumeFromCommittedOffsets() throws InterruptedException {
-        testAssignAndConsumeFromCommittedOffsets(GroupProtocol.CLASSIC.name);
+        testAssignAndConsumeFromCommittedOffsets(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
     public void testAsyncAssignAndConsumeFromCommittedOffsets() throws InterruptedException {
-        testAssignAndConsumeFromCommittedOffsets(GroupProtocol.CONSUMER.name);
+        testAssignAndConsumeFromCommittedOffsets(GroupProtocol.CONSUMER);
     }
 
-    private void testAssignAndConsumeFromCommittedOffsets(String groupProtocol) throws InterruptedException {
+    private void testAssignAndConsumeFromCommittedOffsets(GroupProtocol groupProtocol) throws InterruptedException {
         int numRecords = 100;
         int offset = 10;
         long startingTimestamp = System.currentTimeMillis();
+        Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name, GROUP_ID_CONFIG, "group1");
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(config)) {
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp);
             consumer.assign(List.of(tp));
             consumer.commitSync(Map.of(tp, new OffsetAndMetadata(offset)));
@@ -261,7 +263,7 @@ public class PlaintextConsumerAssignTest {
         }
 
         // We should see the committed offsets from another consumer
-        try (Consumer<byte[], byte[]> anotherConsumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
+        try (Consumer<byte[], byte[]> anotherConsumer = clusterInstance.consumer(config)) {
             assertEquals(offset, anotherConsumer.committed(Set.of(tp)).get(tp).offset());
             anotherConsumer.assign(List.of(tp));
             ClientsTestUtils.consumeAndVerifyRecords(anotherConsumer, tp, numRecords - offset, offset, offset, startingTimestamp + offset);
@@ -270,19 +272,19 @@ public class PlaintextConsumerAssignTest {
 
     @ClusterTest
     public void testClassicAssignAndRetrievingCommittedOffsetsMultipleTimes() throws InterruptedException {
-        testAssignAndRetrievingCommittedOffsetsMultipleTimes(GroupProtocol.CLASSIC.name);
+        testAssignAndRetrievingCommittedOffsetsMultipleTimes(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
     public void testAsyncAssignAndRetrievingCommittedOffsetsMultipleTimes() throws InterruptedException {
-        testAssignAndRetrievingCommittedOffsetsMultipleTimes(GroupProtocol.CONSUMER.name);
+        testAssignAndRetrievingCommittedOffsetsMultipleTimes(GroupProtocol.CONSUMER);
     }
 
-    private void testAssignAndRetrievingCommittedOffsetsMultipleTimes(String groupProtocol) throws InterruptedException {
+    private void testAssignAndRetrievingCommittedOffsetsMultipleTimes(GroupProtocol groupProtocol) throws InterruptedException {
         int numRecords = 100;
         long startingTimestamp = System.currentTimeMillis();
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol, GROUP_ID_CONFIG, "group1"))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
             ClientsTestUtils.sendRecords(clusterInstance, tp, numRecords, startingTimestamp);
             consumer.assign(List.of(tp));
 
