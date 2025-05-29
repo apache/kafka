@@ -18,6 +18,7 @@ package kafka.coordinator.transaction
 
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
+import java.util
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
 import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
@@ -72,7 +73,7 @@ class TransactionStateManagerTest {
   when(metadataCache.features()).thenReturn {
     new FinalizedFeatures(
       MetadataVersion.latestTesting(),
-      java.util.Map.of(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
+      util.Map.of(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
       0)
   }
   
@@ -1360,7 +1361,7 @@ class TransactionStateManagerTest {
     when(metadataCache.features()).thenReturn {
       new FinalizedFeatures(
         MetadataVersion.latestTesting(),
-        java.util.Map.of(TransactionVersion.FEATURE_NAME, transactionVersion.featureLevel()),
+        util.Map.of(TransactionVersion.FEATURE_NAME, transactionVersion.featureLevel()),
         0)
     }
     val transactionManager = new TransactionStateManager(0, scheduler,

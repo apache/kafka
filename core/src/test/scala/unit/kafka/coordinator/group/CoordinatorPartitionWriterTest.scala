@@ -34,6 +34,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.nio.charset.Charset
+import java.util
 import java.util.Optional
 import scala.collection.Map
 
@@ -74,8 +75,8 @@ class CoordinatorPartitionWriterTest {
       replicaManager
     )
 
-    when(replicaManager.getLogConfig(tp)).thenReturn(Some(new LogConfig(java.util.Map.of)))
-    assertEquals(new LogConfig(java.util.Map.of), partitionRecordWriter.config(tp))
+    when(replicaManager.getLogConfig(tp)).thenReturn(Some(new LogConfig(util.Map.of)))
+    assertEquals(new LogConfig(util.Map.of), partitionRecordWriter.config(tp))
 
     when(replicaManager.getLogConfig(tp)).thenReturn(None)
     assertThrows(classOf[NotLeaderOrFollowerException], () => partitionRecordWriter.config(tp))

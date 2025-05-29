@@ -67,6 +67,7 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.lang
 import java.util
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -495,7 +496,7 @@ class PartitionTest extends AbstractPartitionTest {
     val appendThread = new Thread {
       override def run(): Unit = {
         val records = createRecords(
-          List(
+          util.List.of(
             new SimpleRecord("k1".getBytes, "v1".getBytes),
             new SimpleRecord("k2".getBytes, "v2".getBytes)
           ),
@@ -1003,7 +1004,7 @@ class PartitionTest extends AbstractPartitionTest {
       classOf[UnexpectedAppendOffsetException],
       // append one record with offset = 3
       () => partition.appendRecordsToFollowerOrFutureReplica(
-        createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L),
+        createRecords(util.List.of(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L),
         isFuture = false,
         partitionLeaderEpoch = epoch
       )
@@ -1014,7 +1015,7 @@ class PartitionTest extends AbstractPartitionTest {
     // verify that we can append records that contain log start offset, even when first
     // offset < log start offset if the log is empty
     val newLogStartOffset = 4L
-    val records = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+    val records = createRecords(util.List.of(new SimpleRecord("k1".getBytes, "v1".getBytes),
                                      new SimpleRecord("k2".getBytes, "v2".getBytes),
                                      new SimpleRecord("k3".getBytes, "v3".getBytes)),
                                 baseOffset = newLogStartOffset)
@@ -1024,7 +1025,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // and we can append more records after that
     partition.appendRecordsToFollowerOrFutureReplica(
-      createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 7L),
+      createRecords(util.List.of(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 7L),
       isFuture = false,
       partitionLeaderEpoch = epoch
     )
@@ -1032,7 +1033,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(newLogStartOffset, log.logStartOffset, s"Log start offset not expected to change:")
 
     // but we cannot append to offset < log start if the log is not empty
-    val records2 = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+    val records2 = createRecords(util.List.of(new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes)),
       baseOffset = 3L)
     assertThrows(
@@ -1043,7 +1044,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // we still can append to next offset
     partition.appendRecordsToFollowerOrFutureReplica(
-      createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 8L),
+      createRecords(util.List.of(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 8L),
       isFuture = false,
       partitionLeaderEpoch = epoch
     )
@@ -1070,7 +1071,7 @@ class PartitionTest extends AbstractPartitionTest {
         .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
 
-    val records = createTransactionalRecords(List(
+    val records = createTransactionalRecords(util.List.of(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
@@ -1132,7 +1133,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertThrows(
       classOf[NotLeaderOrFollowerException],
       () => partition.appendRecordsToFollowerOrFutureReplica(
-        createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L),
+        createRecords(util.List.of(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L),
         isFuture = false,
         partitionLeaderEpoch = 0
       )
@@ -1260,38 +1261,38 @@ class PartitionTest extends AbstractPartitionTest {
       Set(leader, follower1, follower2), "AlterIsr")
   }
 
-  def createRecords(records: Iterable[SimpleRecord], baseOffset: Long, partitionLeaderEpoch: Int = 0): MemoryRecords = {
-    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+  def createRecords(records: lang.Iterable[SimpleRecord], baseOffset: Long, partitionLeaderEpoch: Int = 0): MemoryRecords = {
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records))
     val builder = MemoryRecords.builder(
       buf, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.LOG_APPEND_TIME,
       baseOffset, time.milliseconds, partitionLeaderEpoch)
-    records.foreach(builder.append)
+    records.forEach(builder.append)
     builder.build()
   }
 
-  def createIdempotentRecords(records: Iterable[SimpleRecord],
+  def createIdempotentRecords(records: lang.Iterable[SimpleRecord],
                               baseOffset: Long,
                               baseSequence: Int = 0,
                               producerId: Long = 1L): MemoryRecords = {
     val producerEpoch = 0.toShort
     val isTransactional = false
-    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records))
     val builder = MemoryRecords.builder(buf, Compression.NONE, baseOffset, producerId,
       producerEpoch, baseSequence, isTransactional)
-    records.foreach(builder.append)
+    records.forEach(builder.append)
     builder.build()
   }
 
-  def createTransactionalRecords(records: Iterable[SimpleRecord],
+  def createTransactionalRecords(records: lang.Iterable[SimpleRecord],
                                  baseOffset: Long,
                                  baseSequence: Int = 0,
                                  producerId: Long = 1L): MemoryRecords = {
     val producerEpoch = 0.toShort
     val isTransactional = true
-    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records))
     val builder = MemoryRecords.builder(buf, Compression.NONE, baseOffset, producerId,
       producerEpoch, baseSequence, isTransactional)
-    records.foreach(builder.append)
+    records.forEach(builder.append)
     builder.build()
   }
 
@@ -3595,7 +3596,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
 
-    val idempotentRecords = createIdempotentRecords(List(
+    val idempotentRecords = createIdempotentRecords(util.List.of(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
@@ -3603,7 +3604,7 @@ class PartitionTest extends AbstractPartitionTest {
       producerId = producerId)
     partition.appendRecordsToLeader(idempotentRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
 
-    def transactionRecords() = createTransactionalRecords(List(
+    def transactionRecords() = createTransactionalRecords(util.List.of(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),

@@ -21,62 +21,64 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import java.util
+
 import scala.jdk.CollectionConverters._
 
 object AssignmentStateTest {
   import AbstractPartitionTest._
 
-  def parameters: java.util.stream.Stream[Arguments] = java.util.List.of[Arguments](
+  def parameters: util.stream.Stream[Arguments] = util.List.of[Arguments](
     Arguments.of(
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer], java.util.List.of[Integer], java.util.List.of[Int], Boolean.box(false)),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer], util.List.of[Integer], util.List.of[Int], Boolean.box(false)),
     Arguments.of(
-      java.util.List.of[Integer](brokerId, brokerId + 1),
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer], java.util.List.of[Integer], java.util.List.of[Int], Boolean.box(true)),
+      util.List.of[Integer](brokerId, brokerId + 1),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer], util.List.of[Integer], util.List.of[Int], Boolean.box(true)),
     Arguments.of(
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId + 3, brokerId + 4),
-      java.util.List.of[Integer](brokerId + 1),
-      java.util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId + 3, brokerId + 4),
+      util.List.of[Integer](brokerId + 1),
+      util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId + 3, brokerId + 4),
-      java.util.List.of[Integer],
-      java.util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId + 3, brokerId + 4),
+      util.List.of[Integer],
+      util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer],
-      java.util.List.of[Integer](brokerId + 1),
-      java.util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer],
+      util.List.of[Integer](brokerId + 1),
+      util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
-      java.util.List.of[Integer](brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId),
-      java.util.List.of[Integer],
-      java.util.List.of(brokerId + 1, brokerId + 2), Boolean.box(false)),
+      util.List.of[Integer](brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId),
+      util.List.of[Integer],
+      util.List.of(brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
-      java.util.List.of[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
-      java.util.List.of[Integer],
-      java.util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+      util.List.of[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
+      util.List.of[Integer],
+      util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
-      java.util.List.of[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
-      java.util.List.of[Integer],
-      java.util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+      util.List.of[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
+      util.List.of[Integer],
+      util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
-      java.util.List.of[Integer](brokerId + 2, brokerId + 3),
-      java.util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
-      java.util.List.of[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
-      java.util.List.of[Integer],
-      java.util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(true))
+      util.List.of[Integer](brokerId + 2, brokerId + 3),
+      util.List.of[Integer](brokerId, brokerId + 1, brokerId + 2),
+      util.List.of[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
+      util.List.of[Integer],
+      util.List.of(brokerId, brokerId + 1, brokerId + 2), Boolean.box(true))
   ).stream()
 }
 
@@ -84,9 +86,9 @@ class AssignmentStateTest extends AbstractPartitionTest {
 
   @ParameterizedTest
   @MethodSource(Array("parameters"))
-  def testPartitionAssignmentStatus(isr: java.util.List[Integer], replicas: java.util.List[Integer],
-                                    adding: java.util.List[Integer], removing: java.util.List[Integer],
-                                    original: java.util.List[Int], isUnderReplicated: Boolean): Unit = {
+  def testPartitionAssignmentStatus(isr: util.List[Integer], replicas: util.List[Integer],
+                                    adding: util.List[Integer], removing: util.List[Integer],
+                                    original: util.List[Int], isUnderReplicated: Boolean): Unit = {
     val controllerEpoch = 3
 
     val leaderState = new LeaderAndIsrRequest.PartitionState()
