@@ -57,7 +57,7 @@ class ConsoleShareConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadSer
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, group_id="test-share-consumer-group",
+    def __init__(self, context, num_nodes, kafka, topic, group_id="test-share-group",
                  message_validator=None, share_consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-share-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False, print_partition=False,

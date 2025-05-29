@@ -26,9 +26,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -37,26 +35,12 @@ import java.util.Set;
  */
 public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     /**
-     * The map of topic Ids to the set of allowed partitions for each topic.
-     * If this is empty, all partitions are allowed.
-     */
-    private final Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap;
-
-    /**
      * The metadata image that contains the latest metadata information.
      */
     private final MetadataImage metadataImage;
 
     public SubscribedTopicDescriberImpl(MetadataImage metadataImage) {
-        this(metadataImage, Optional.empty());
-    }
-
-    public SubscribedTopicDescriberImpl(
-        MetadataImage metadataImage,
-        Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
-    ) {
         this.metadataImage = Objects.requireNonNull(metadataImage);
-        this.topicPartitionAllowedMap = Objects.requireNonNull(topicPartitionAllowedMap);
     }
 
     /**
@@ -100,50 +84,23 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
         return Set.of();
     }
 
-    /**
-     * Returns a set of assignable partitions from the metadata image.
-     * If the allowed partition map is Optional.empty(), all the partitions in the corresponding
-     * topic image are returned for the argument topic id. If allowed map is empty,
-     * empty set is returned.
-     *
-     * @param topicId The uuid of the topic
-     * @return Set of integers if assignable partitions available, empty otherwise.
-     */
-    @Override
-    public Set<Integer> assignablePartitions(Uuid topicId) {
-        TopicImage topic = metadataImage.topics().getTopic(topicId);
-        if (topic == null) {
-            return Set.of();
-        }
-
-        if (topicPartitionAllowedMap.isEmpty()) {
-            return Collections.unmodifiableSet(topic.partitions().keySet());
-        }
-
-        return topicPartitionAllowedMap.get().getOrDefault(topicId, Set.of());
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         SubscribedTopicDescriberImpl that = (SubscribedTopicDescriberImpl) o;
-        if (!topicPartitionAllowedMap.equals(that.topicPartitionAllowedMap)) return false;
         return metadataImage.equals(that.metadataImage);
     }
 
     @Override
     public int hashCode() {
-        int result = metadataImage.hashCode();
-        result = 31 * result + topicPartitionAllowedMap.hashCode();
-        return result;
+        return Objects.hashCode(metadataImage);
     }
 
     @Override
     public String toString() {
         return "SubscribedTopicMetadata(" +
             "metadataImage=" + metadataImage +
-            ", topicPartitionAllowedMap=" + topicPartitionAllowedMap +
             ')';
     }
 }
