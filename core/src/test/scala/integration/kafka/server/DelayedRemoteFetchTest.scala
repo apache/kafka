@@ -243,7 +243,7 @@ class DelayedRemoteFetchTest {
       -1L,
       -1L,
       OptionalLong.empty(),
-      if (error != Errors.NONE) Optional.of(error.exception).asInstanceOf[Optional[Throwable]] else Optional.empty[Throwable]())
+      if (error != Errors.NONE) Optional.of[Throwable](error.exception) else Optional.empty[Throwable]())
   }
 
 }
