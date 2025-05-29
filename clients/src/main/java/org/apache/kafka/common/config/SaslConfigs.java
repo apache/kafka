@@ -145,8 +145,7 @@ public class SaslConfigs {
         + "</ul>";
 
     public static final String SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "sasl.oauthbearer.jwt.validator.class";
-    public static final String DEFAULT_BROKER_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator";
-    public static final String DEFAULT_CLIENT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.ClientJwtValidator";
+    public static final String DEFAULT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator";
     public static final String SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS_DOC = "<p>The fully-qualified class name of a <code>JwtValidator</code> implementation used to"
         + " validate the JWT from the identity provider.</p>"
         + "<p>The default validator (<code>org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator</code>) maintains backward compatibility with previous"
@@ -398,7 +397,7 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC)
                 .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_BACKOFF_MS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS, ConfigDef.Type.CLASS, DEFAULT_SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, ConfigDef.Type.CLASS, DEFAULT_CLIENT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, ConfigDef.Type.CLASS, DEFAULT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_GRANT_TYPE, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_GRANT_TYPE_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_SCOPE_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID_DOC)
