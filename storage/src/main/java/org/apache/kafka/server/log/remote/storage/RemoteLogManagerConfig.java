@@ -407,18 +407,6 @@ public final class RemoteLogManagerConfig {
         return config.getLong(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP);
     }
 
-    public long remoteLogManagerTaskRetryBackoffMs() {
-        return config.getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP);
-    }
-
-    public long remoteLogManagerTaskRetryBackoffMaxMs() {
-        return config.getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP);
-    }
-
-    public double remoteLogManagerTaskRetryJitter() {
-        return config.getDouble(REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP);
-    }
-
     public int remoteLogReaderThreads() {
         return config.getInt(REMOTE_LOG_READER_THREADS_PROP);
     }
@@ -433,14 +421,6 @@ public final class RemoteLogManagerConfig {
 
     public int remoteLogMetadataCustomMetadataMaxBytes() {
         return config.getInt(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP);
-    }
-
-    public String remoteStorageManagerPrefix() {
-        return config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP);
-    }
-
-    public String remoteLogMetadataManagerPrefix() {
-        return config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP);
     }
 
     public Map<String, Object> remoteStorageManagerProps() {
