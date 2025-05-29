@@ -111,7 +111,6 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
             consumer.subscribe(topicsSubscription, rebalanceListener);
             subscriptionChanged = false;
         }
-        consumer.poll(Duration.ofMillis(50)).count();
         try {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
             receivedMessages += records.count();
