@@ -68,10 +68,10 @@ public class ClientQuotaManager {
         static final int CUSTOM_QUOTAS = 8; // No metric update optimizations are used with custom quotas
     }
 
-    private static final Logger log = LoggerFactory.getLogger(ClientQuotaManager.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ClientQuotaManager.class);
 
     // Purge sensors after 1 hour of inactivity
-    public static final int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
+    private static final int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
     private static final String DEFAULT_NAME = "<default>";
 
     public static final KafkaQuotaEntity DEFAULT_CLIENT_ID_QUOTA_ENTITY =
@@ -433,8 +433,8 @@ public class ClientQuotaManager {
             return 0;
         } catch (QuotaViolationException e) {
             int throttleTimeMs = (int) throttleTime(e, timeMs);
-            if (log.isDebugEnabled()) {
-                log.debug("Quota violated for sensor ({}). Delay time: ({})",
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Quota violated for sensor ({}). Delay time: ({})",
                         clientSensors.quotaSensor().name(), throttleTimeMs);
             }
             return throttleTimeMs;
@@ -503,8 +503,8 @@ public class ClientQuotaManager {
             ThrottledChannel throttledChannel = new ThrottledChannel(time, throttleTimeMs, throttleCallback);
             delayQueue.add(throttledChannel);
             delayQueueSensor.record();
-            if (log.isDebugEnabled()) {
-                log.debug("Channel throttled for sensor ({}). Delay time: ({})",
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Channel throttled for sensor ({}). Delay time: ({})",
                         clientSensors.quotaSensor().name(), throttleTimeMs);
             }
         }
@@ -726,7 +726,7 @@ public class ClientQuotaManager {
             KafkaMetric metric = allMetrics.get(quotaMetricName);
             if (metric != null) {
                 double newQuota = quotaLimit(metricTags);
-                log.info("Sensor for {} already exists. Changing quota to {} in MetricConfig",
+                LOG.info("Sensor for {} already exists. Changing quota to {} in MetricConfig",
                         quotaEntity, newQuota);
                 metric.config(getQuotaMetricConfig(newQuota));
             }
@@ -738,7 +738,7 @@ public class ClientQuotaManager {
                     Map<String, String> metricTags = metricName.tags();
                     double newQuota = quotaLimit(metricTags);
                     if (Double.compare(newQuota, metric.config().quota().bound()) != 0) {
-                        log.info("Sensor for quota-id {} already exists. Setting quota to {} in MetricConfig",
+                        LOG.info("Sensor for quota-id {} already exists. Setting quota to {} in MetricConfig",
                                 metricTags, newQuota);
                         metric.config(getQuotaMetricConfig(newQuota));
                     }
@@ -781,7 +781,7 @@ public class ClientQuotaManager {
         try {
             throttledChannelReaper.awaitShutdown();
         } catch (InterruptedException e) {
-            log.warn("Shutdown was interrupted", e);
+            LOG.warn("Shutdown was interrupted", e);
             Thread.currentThread().interrupt(); // Restore interrupt status
         }
     }
@@ -851,14 +851,14 @@ public class ClientQuotaManager {
         @Override
         public void updateQuota(ClientQuotaType quotaType, ClientQuotaEntity entity, double newValue) {
             KafkaQuotaEntity quotaEntity = (KafkaQuotaEntity) entity;
-            log.info("Changing {} quota for {} to {}", quotaType, quotaEntity, newValue);
+            LOG.info("Changing {} quota for {} to {}", quotaType, quotaEntity, newValue);
             overriddenQuotas.put(quotaEntity, new Quota(newValue, true));
         }
 
         @Override
         public void removeQuota(ClientQuotaType quotaType, ClientQuotaEntity entity) {
             KafkaQuotaEntity quotaEntity = (KafkaQuotaEntity) entity;
-            log.info("Removing {} quota for {}", quotaType, quotaEntity);
+            LOG.info("Removing {} quota for {}", quotaType, quotaEntity);
             overriddenQuotas.remove(quotaEntity);
         }
 
