@@ -425,6 +425,10 @@ public class ConsumerMembershipManagerTest {
 
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(new Assignment(), membershipManager.memberId()));
 
+        assertFalse(sendLeave.isDone(), "Send leave operation should not complete until a leave response is received");
+
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
+
         assertSendLeaveCompleted(membershipManager, sendLeave);
     }
 
@@ -955,6 +959,9 @@ public class ConsumerMembershipManagerTest {
         assertFalse(leaveResult.isDone());
 
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(createAssignment(true), membershipManager.memberId()));
+        assertFalse(leaveResult.isDone());
+
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
         assertSendLeaveCompleted(membershipManager, leaveResult);
     }
 
@@ -998,16 +1005,43 @@ public class ConsumerMembershipManagerTest {
 
         assertEquals(state, membershipManager.state());
         verify(responseData, never()).memberId();
-        verify(responseData, never()).memberEpoch();
+        // In unsubscribed, we check if we received a leave group response, so we do verify member epoch.
+        if (state != MemberState.UNSUBSCRIBED) {
+            verify(responseData, never()).memberEpoch();
+        }
         verify(responseData, never()).assignment();
     }
 
     @Test
-    public void testLeaveGroupWhenStateIsReconciling() {
-        ConsumerMembershipManager membershipManager = mockJoinAndReceiveAssignment(false);
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
+    public void testIgnoreLeaveResponseWhenNotLeavingGroup() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
 
-        testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(membershipManager);
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+
+        // Send leave request, transitioning to UNSUBSCRIBED state
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+
+        // Receive a previous heartbeat response, which should be ignored
+        membershipManager.onHeartbeatSuccess(new ConsumerGroupHeartbeatResponse(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(MEMBER_EPOCH)
+        ));
+        assertFalse(leaveResult.isDone());
+
+        // Receive a leave heartbeat response, which should unblock the consumer
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
+
+        // Consumer unblocks and updates subscription
+        membershipManager.onSubscriptionUpdated();
+        membershipManager.onConsumerPoll();
+
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
+
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        assertEquals(0, membershipManager.memberEpoch());
     }
 
     @Test
@@ -2899,6 +2933,13 @@ public class ConsumerMembershipManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(MEMBER_EPOCH)
                 .setAssignment(assignment));
+    }
+
+    private ConsumerGroupHeartbeatResponse createConsumerGroupLeaveResponse(String memberId) {
+        return new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setMemberId(memberId)
+            .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
     }
 
     /**
