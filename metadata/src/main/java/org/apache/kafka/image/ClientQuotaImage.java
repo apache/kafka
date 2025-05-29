@@ -45,7 +45,7 @@ public final class ClientQuotaImage {
     private final Map<String, Double> quotas;
 
     public ClientQuotaImage(Map<String, Double> quotas) {
-        this.quotas = quotas;
+        this.quotas = Collections.unmodifiableMap(quotas);
     }
 
     Map<String, Double> quotas() {
