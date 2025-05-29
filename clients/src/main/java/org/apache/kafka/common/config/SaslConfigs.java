@@ -273,7 +273,7 @@ public class SaslConfigs {
     public static final String SASL_OAUTHBEARER_ASSERTION_FILE_DOC = "<p>File that contains a <em>pre-generated</em> JWT assertion.</p>"
         + "<p>The underlying implementation caches the file contents to avoid the performance hit of loading the file on each access. The caching mechanism will detect when"
         + "the file changes to allow for the file to be reloaded on modifications. This allows for &quot;live&quot; assertion rotation without restarting the Kafka client.</p>"
-        + "<p>The file is the assertion in the serialized, three part JWT format:</p>"
+        + "<p>The file contains the assertion in the serialized, three part JWT format:</p>"
         + "<ol>"
         + "<li>The <em>header</em> section is a base 64-encoded JWT header that contains values like <code>alg</code> (Algorithm),"
         + " <code>typ</code> (Type, always the literal value <code>JWT</code>), etc.</li>"
