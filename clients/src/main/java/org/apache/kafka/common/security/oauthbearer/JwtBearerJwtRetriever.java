@@ -48,6 +48,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOF
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.layeredAssertionJwtTemplate;
@@ -157,7 +158,11 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         } else {
             String algorithm = cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
             File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
-            assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile, Optional.empty());
+            Optional<String> passphrase = cu.containsKey(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE) ?
+                Optional.of(cu.validatePassword(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE)) :
+                Optional.empty();
+
+            assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile, passphrase);
             assertionJwtTemplate = layeredAssertionJwtTemplate(cu, time);
         }
 

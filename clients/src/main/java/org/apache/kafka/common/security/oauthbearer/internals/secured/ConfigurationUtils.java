@@ -277,7 +277,7 @@ public class ConfigurationUtils {
     // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
     void throwIfURLIsNotAllowed(String configName, String configValue) {
         throwIfResourceIsNotAllowed(
-            "file",
+            "URL",
             configName,
             configValue,
             ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG,
