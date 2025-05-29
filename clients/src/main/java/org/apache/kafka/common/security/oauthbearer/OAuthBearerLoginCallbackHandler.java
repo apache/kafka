@@ -41,6 +41,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils.getConfiguredInstance;
 
 /**
  * <p>
@@ -182,7 +183,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        jwtRetriever = OAuthBearerUtils.getConfiguredInstanceOrDefault(
+        jwtRetriever = getConfiguredInstance(
             configs,
             saslMechanism,
             jaasConfigEntries,
@@ -190,7 +191,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
             JwtRetriever.class
         );
 
-        jwtValidator = OAuthBearerUtils.getConfiguredInstanceOrDefault(
+        jwtValidator = getConfiguredInstance(
             configs,
             saslMechanism,
             jaasConfigEntries,

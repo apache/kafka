@@ -27,7 +27,6 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils;
 import org.apache.kafka.common.utils.Exit;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
@@ -116,6 +115,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_DOC;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils.getConfiguredInstance;
 
 public class OAuthCompatibilityTool {
 
@@ -185,7 +185,7 @@ public class OAuthCompatibilityTool {
     }
 
     private static JwtRetriever createRetriever(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
-        return OAuthBearerUtils.getConfiguredInstanceOrDefault(
+        return getConfiguredInstance(
             configs,
             OAUTHBEARER_MECHANISM,
             jaasConfigEntries,
@@ -195,7 +195,7 @@ public class OAuthCompatibilityTool {
     }
 
     private static JwtValidator createValidator(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
-        return OAuthBearerUtils.getConfiguredInstanceOrDefault(
+        return getConfiguredInstance(
             configs,
             OAUTHBEARER_MECHANISM,
             jaasConfigEntries,

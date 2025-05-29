@@ -27,10 +27,13 @@ import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_DEFAULT;
@@ -271,6 +274,88 @@ public class ConfigurationUtils {
             return value;
 
         return (T) configs.get(name);
+    }
+
+    public static <T> T getConfiguredInstance(Map<String, ?> configs,
+                                              String saslMechanism,
+                                              List<AppConfigurationEntry> jaasConfigEntries,
+                                              String configName,
+                                              Class<T> expectedClass) {
+        Object configValue = configs.get(configName);
+        Object o;
+
+        if (configValue instanceof String) {
+            String implementationClassName = (String) configValue;
+
+            try {
+                o = Utils.newInstance(implementationClassName, expectedClass);
+            } catch (Exception e) {
+                throw new ConfigException(
+                    String.format(
+                        "The class %s defined in the %s configuration could not be instantiated: %s",
+                        implementationClassName,
+                        configName,
+                        e.getMessage()
+                    )
+                );
+            }
+        } else if (configValue instanceof Class<?>) {
+            Class<?> implementationClass = (Class<?>) configValue;
+
+            try {
+                o = Utils.newInstance(implementationClass);
+            } catch (Exception e) {
+                throw new ConfigException(
+                    String.format(
+                        "The class %s defined in the %s configuration could not be instantiated: %s",
+                        implementationClass.getName(),
+                        configName,
+                        e.getMessage()
+                    )
+                );
+            }
+        } else if (configValue != null) {
+            throw new ConfigException(
+                String.format(
+                    "The type for the %s configuration must be either %s or %s, but was %s",
+                    configName,
+                    String.class.getName(),
+                    Class.class.getName(),
+                    configValue.getClass().getName()
+                )
+            );
+        } else {
+            throw new ConfigException(String.format("The required configuration %s was null", configName));
+        }
+
+        if (!expectedClass.isInstance(o)) {
+            throw new ConfigException(
+                String.format(
+                    "The configured class (%s) for the %s configuration is not an instance of %s, as is required",
+                    o.getClass().getName(),
+                    configName,
+                    expectedClass.getName()
+                )
+            );
+        }
+
+        if (o instanceof OAuthBearerConfigurable) {
+            try {
+                ((OAuthBearerConfigurable) o).configure(configs, saslMechanism, jaasConfigEntries);
+            } catch (Exception e) {
+                Utils.maybeCloseQuietly(o, "Instance of class " + o.getClass().getName() + " failed call to configure()");
+                throw new ConfigException(
+                    String.format(
+                        "The class %s defined in the %s configuration encountered an error on configure(): %s",
+                        o.getClass().getName(),
+                        configName,
+                        e.getMessage()
+                    )
+                );
+            }
+        }
+
+        return expectedClass.cast(o);
     }
 
     // visible for testing
