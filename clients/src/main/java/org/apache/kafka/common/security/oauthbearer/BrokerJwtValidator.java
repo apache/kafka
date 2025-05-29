@@ -113,13 +113,9 @@ public class BrokerJwtValidator implements JwtValidator {
         String scopeClaimName = cu.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
         String subClaimName = cu.validateString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
 
-        CloseableVerificationKeyResolver verificationKeyResolver = null;
-
-        if (verificationKeyResolverOpt.isPresent()) {
-            verificationKeyResolver = verificationKeyResolverOpt.get();
-        } else {
-            verificationKeyResolver = VerificationKeyResolverFactory.get(configs, saslMechanism, jaasConfigEntries);
-        }
+        CloseableVerificationKeyResolver verificationKeyResolver = verificationKeyResolverOpt.orElseGet(
+            () -> VerificationKeyResolverFactory.get(configs, saslMechanism, jaasConfigEntries)
+        );
 
         final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 
