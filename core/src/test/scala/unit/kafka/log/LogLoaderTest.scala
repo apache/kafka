@@ -287,7 +287,7 @@ class LogLoaderTest {
           val wrapper = Mockito.spy(segment)
           Mockito.doAnswer { in =>
             segmentsWithReads += wrapper
-            segment.read(in.getArgument(0, classOf[java.lang.Long]), in.getArgument(1, classOf[java.lang.Integer]), in.getArgument(2, classOf[java.util.Optional[java.lang.Long]]), in.getArgument(3, classOf[java.lang.Boolean]))
+            segment.read(in.getArgument(0, classOf[java.lang.Long]), in.getArgument(1, classOf[java.lang.Integer]), in.getArgument(2, classOf[util.Optional[java.lang.Long]]), in.getArgument(3, classOf[java.lang.Boolean]))
           }.when(wrapper).read(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any())
           Mockito.doAnswer { in =>
             recoveredSegments += wrapper
@@ -392,7 +392,7 @@ class LogLoaderTest {
                                               codec: Compression = Compression.NONE,
                                               timestamp: Long = RecordBatch.NO_TIMESTAMP,
                                               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
-    val records = java.util.List.of(new SimpleRecord(timestamp, key, value))
+    val records = util.List.of(new SimpleRecord(timestamp, key, value))
 
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, offset,
@@ -560,7 +560,7 @@ class LogLoaderTest {
       false,
       LogOffsetsListener.NO_OP_OFFSETS_LISTENER)
 
-    verify(stateManager).removeStraySnapshots(any[java.util.List[java.lang.Long]])
+    verify(stateManager).removeStraySnapshots(any[util.List[java.lang.Long]])
     verify(stateManager, times(2)).updateMapEndOffset(0L)
     verify(stateManager, times(2)).takeSnapshot()
     verify(stateManager).isEmpty
@@ -1216,11 +1216,11 @@ class LogLoaderTest {
     val fourthBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 3, offset = 3)
     log.appendAsFollower(fourthBatch, Int.MaxValue)
 
-    assertEquals(java.util.List.of(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
+    assertEquals(util.List.of(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
 
     // deliberately remove some of the epoch entries
     leaderEpochCache.truncateFromEndAsyncFlush(2)
-    assertNotEquals(java.util.List.of(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
+    assertNotEquals(util.List.of(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
     log.close()
 
     // reopen the log and recover from the beginning
@@ -1228,7 +1228,7 @@ class LogLoaderTest {
     val recoveredLeaderEpochCache = recoveredLog.leaderEpochCache
 
     // epoch entries should be recovered
-    assertEquals(java.util.List.of(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), recoveredLeaderEpochCache.epochEntries)
+    assertEquals(util.List.of(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), recoveredLeaderEpochCache.epochEntries)
     recoveredLog.close()
   }
 

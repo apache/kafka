@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
 import org.mockito.Mockito.mock
 
+import java.util
 import java.util.function.Supplier
 import java.util.Optional
 
@@ -41,7 +42,7 @@ class ProcessorTest {
     val requestHeader = RequestTestUtils.serializeRequestHeader(
       new RequestHeader(ApiKeys.INIT_PRODUCER_ID, 0, "clientid", 0))
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER, true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), java.util.Map.of[String, java.lang.Short], 0))
+      () => new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0))
     val e = assertThrows(classOf[InvalidRequestException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "INIT_PRODUCER_ID with listener type CONTROLLER should throw InvalidRequestException exception")

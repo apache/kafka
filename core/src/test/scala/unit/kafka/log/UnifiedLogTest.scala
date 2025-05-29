@@ -231,7 +231,7 @@ class UnifiedLogTest {
 
     reopened.truncateFullyAndStartAt(2L, Optional.of(1L))
     assertEquals(Optional.empty, reopened.firstUnstableOffset)
-    assertEquals(java.util.Map.of, reopened.producerStateManager.activeProducers)
+    assertEquals(util.Map.of, reopened.producerStateManager.activeProducers)
     assertEquals(1L, reopened.logStartOffset)
     assertEquals(2L, reopened.logEndOffset)
   }
@@ -274,7 +274,7 @@ class UnifiedLogTest {
 
     truncateFunc(reopened, 0L)
     assertEquals(Optional.empty, reopened.firstUnstableOffset)
-    assertEquals(java.util.Map.of, reopened.producerStateManager.activeProducers)
+    assertEquals(util.Map.of, reopened.producerStateManager.activeProducers)
   }
 
   @Test
@@ -3110,7 +3110,7 @@ class UnifiedLogTest {
     log.deleteOldSegments()
 
     //The oldest epoch entry should have been removed
-    assertEquals(java.util.List.of(new EpochEntry(1, 5), new EpochEntry(2, 10)), cache.epochEntries)
+    assertEquals(util.List.of(new EpochEntry(1, 5), new EpochEntry(2, 10)), cache.epochEntries)
   }
 
   @Test
@@ -3135,7 +3135,7 @@ class UnifiedLogTest {
     log.deleteOldSegments()
 
     //The first entry should have gone from (0,0) => (0,5)
-    assertEquals(java.util.List.of(new EpochEntry(0, 5), new EpochEntry(1, 7), new EpochEntry(2, 10)), cache.epochEntries)
+    assertEquals(util.List.of(new EpochEntry(0, 5), new EpochEntry(1, 7), new EpochEntry(2, 10)), cache.epochEntries)
   }
 
   @Test
@@ -4599,7 +4599,7 @@ class UnifiedLogTest {
   def testGetFirstBatchTimestampForSegments(): Unit = {
     val log = createLog(logDir, LogTestUtils.createLogConfig())
 
-    val segments: java.util.List[LogSegment] = new java.util.ArrayList[LogSegment]()
+    val segments: util.List[LogSegment] = new util.ArrayList[LogSegment]()
     val seg1 = LogTestUtils.createSegment(1, logDir, 10, Time.SYSTEM)
     val seg2 = LogTestUtils.createSegment(2, logDir, 10, Time.SYSTEM)
     segments.add(seg1)
