@@ -215,14 +215,11 @@ class KafkaApisTest extends Logging {
   private def setupFeatures(featureVersions: Seq[FeatureVersion]): Unit = {
     if (featureVersions.isEmpty) return
 
-    when(metadataCache.features()).thenReturn {
-      new FinalizedFeatures(
-        MetadataVersion.latestTesting,
-        featureVersions.map { featureVersion =>
-          featureVersion.featureName -> featureVersion.featureLevel.asInstanceOf[java.lang.Short]
-        }.toMap.asJava,
-        0)
+    val featureMap = new java.util.HashMap[String, java.lang.Short]()
+    featureVersions.foreach { featureVersion =>
+      featureMap.put(featureVersion.featureName, featureVersion.featureLevel.asInstanceOf[java.lang.Short])
     }
+    when(metadataCache.features()).thenReturn(new FinalizedFeatures(MetadataVersion.latestTesting, featureMap, 0))
   }
 
   def initializeMetadataCacheWithShareGroupsEnabled(enableShareGroups: Boolean = true): MetadataCache = {
@@ -13157,14 +13154,14 @@ class KafkaApisTest extends Logging {
     topicCollection.addAll(util.List.of(
       new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
         .setTopicName(topicName1)
-        .setPartitions(List(
+        .setPartitions(util.List.of(
           new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
             .setPartitionIndex(0)
             .setStartOffset(0L),
           new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
             .setPartitionIndex(1)
             .setStartOffset(0L)
-        ).asJava)))
+        ))))
 
     val alterRequestData = new AlterShareGroupOffsetsRequestData()
       .setGroupId(groupId)
@@ -13202,33 +13199,33 @@ class KafkaApisTest extends Logging {
     topicCollection.addAll(util.List.of(
       new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
         .setTopicName(topicName1)
-        .setPartitions(List(
+        .setPartitions(util.List.of(
           new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
             .setPartitionIndex(0)
             .setStartOffset(0L),
           new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
             .setPartitionIndex(1)
             .setStartOffset(0L)
-        ).asJava),
+        )),
       new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
         .setTopicName(topicName2)
-        .setPartitions(List(
+        .setPartitions(util.List.of(
           new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
             .setPartitionIndex(0)
             .setStartOffset(0L)
-        ).asJava),
+        )),
       new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
         .setTopicName(topicName3)
-        setPartitions(List(
+        setPartitions(util.List.of(
         new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
           .setPartitionIndex(0)
           .setStartOffset(0L)
-        ).asJava))
+        )))
     )
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
-      .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava, Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
+      .thenReturn(util.List.of(AuthorizationResult.ALLOWED), util.List.of(AuthorizationResult.DENIED), util.List.of(AuthorizationResult.ALLOWED), util.List.of(AuthorizationResult.ALLOWED))
 
     val alterRequestData = new AlterShareGroupOffsetsRequestData()
       .setGroupId(groupId)
@@ -13246,17 +13243,17 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val alterShareGroupOffsetsResponse = new AlterShareGroupOffsetsResponseData()
-      .setResponses(List(
+      .setResponses(util.List.of(
         new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
           .setTopicName(topicName2)
           .setTopicId(topicId2)
-          .setPartitions(List(
+          .setPartitions(util.List.of(
             new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
               .setPartitionIndex(0)
               .setErrorCode(Errors.NONE.code())
               .setErrorMessage(Errors.NONE.message())
-          ).asJava)
-      ).asJava)
+          ))
+      ))
     resultFuture.complete(alterShareGroupOffsetsResponse)
     val response = verifyNoThrottling[AlterShareGroupOffsetsResponse](requestChannelRequest)
 
@@ -13290,14 +13287,14 @@ class KafkaApisTest extends Logging {
     topicCollection.addAll(util.List.of(
       new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
         .setTopicName(topicName1)
-        .setPartitions(List(
+        .setPartitions(util.List.of(
           new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
             .setPartitionIndex(0)
             .setStartOffset(0L),
           new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
             .setPartitionIndex(1)
             .setStartOffset(0L)
-        ).asJava)))
+        ))))
 
     val alterRequestData = new AlterShareGroupOffsetsRequestData()
       .setGroupId(groupId)
