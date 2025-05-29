@@ -70,7 +70,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
  * should be specified with a listener-based property:
  *
  * <pre>
- * listener.name.<listener name>.oauthbearer.sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever
+ * listener.name.&lt;listener name&gt;.oauthbearer.sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever
  * </pre>
  *
  * <p/>
