@@ -50,12 +50,14 @@ public class InternalTopicManager {
      * Configures the internal topics for the given topology. Given a topology and the topics image, this method determines the number of
      * partitions for all internal topics and returns a {@link ConfiguredTopology} object.
      *
-     * @param logContext    The log context.
-     * @param topology      The topology.
-     * @param topicsImage   The topics image.
+     * @param logContext   The log context.
+     * @param metadataHash The metadata hash of the group.
+     * @param topology     The topology.
+     * @param topicsImage  The topics image.
      * @return The configured topology.
      */
     public static ConfiguredTopology configureTopics(LogContext logContext,
+                                                     long metadataHash,
                                                      StreamsTopology topology,
                                                      TopicsImage topicsImage) {
         final Logger log = logContext.logger(InternalTopicManager.class);
@@ -100,6 +102,7 @@ public class InternalTopicManager {
 
             return new ConfiguredTopology(
                 topology.topologyEpoch(),
+                metadataHash,
                 Optional.of(configuredSubtopologies),
                 internalTopicsToCreate,
                 topicConfigurationException
@@ -110,6 +113,7 @@ public class InternalTopicManager {
                 topology.topologyEpoch(), e.toString());
             return new ConfiguredTopology(
                 topology.topologyEpoch(),
+                metadataHash,
                 Optional.empty(),
                 Map.of(),
                 Optional.of(e)

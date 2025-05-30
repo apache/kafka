@@ -42,7 +42,7 @@ public class ConfiguredTopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                null,
+                0, null,
                 Map.of(),
                 Optional.empty()
             )
@@ -54,7 +54,7 @@ public class ConfiguredTopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                Optional.of(new TreeMap<>()),
+                0, Optional.of(new TreeMap<>()),
                 null,
                 Optional.empty()
             )
@@ -66,7 +66,7 @@ public class ConfiguredTopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                Optional.empty(),
+                0, Optional.empty(),
                 Map.of(),
                 null
             )
@@ -78,7 +78,7 @@ public class ConfiguredTopologyTest {
         assertThrows(IllegalArgumentException.class,
             () -> new ConfiguredTopology(
                 -1,
-                Optional.of(new TreeMap<>()),
+                0, Optional.of(new TreeMap<>()),
                 Map.of(),
                 Optional.empty()
             )
@@ -90,7 +90,7 @@ public class ConfiguredTopologyTest {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> new ConfiguredTopology(
                 1,
-                Optional.empty(),
+                0, Optional.empty(),
                 Map.of(),
                 Optional.empty()
             )
@@ -101,11 +101,11 @@ public class ConfiguredTopologyTest {
     @Test
     public void testIsReady() {
         ConfiguredTopology readyTopology = new ConfiguredTopology(
-            1, Optional.of(new TreeMap<>()), new HashMap<>(), Optional.empty());
+            1, 0, Optional.of(new TreeMap<>()), new HashMap<>(), Optional.empty());
         assertTrue(readyTopology.isReady());
 
         ConfiguredTopology notReadyTopology = new ConfiguredTopology(
-            1, Optional.empty(), new HashMap<>(), Optional.of(TopicConfigurationException.missingSourceTopics("missing")));
+            1, 0, Optional.empty(), new HashMap<>(), Optional.of(TopicConfigurationException.missingSourceTopics("missing")));
         assertFalse(notReadyTopology.isReady());
     }
 
@@ -120,7 +120,7 @@ public class ConfiguredTopologyTest {
         Map<String, CreatableTopic> internalTopicsToBeCreated = new HashMap<>();
         Optional<TopicConfigurationException> topicConfigurationException = Optional.empty();
         ConfiguredTopology configuredTopology = new ConfiguredTopology(
-            topologyEpoch, Optional.of(subtopologies), internalTopicsToBeCreated, topicConfigurationException);
+            topologyEpoch, 0, Optional.of(subtopologies), internalTopicsToBeCreated, topicConfigurationException);
 
         StreamsGroupDescribeResponseData.Topology topology = configuredTopology.asStreamsGroupDescribeTopology();
 
