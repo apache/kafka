@@ -142,7 +142,7 @@ public class ConsumerMembershipManagerTest {
 
     private ConsumerMembershipManager createMembershipManager(String groupInstanceId) {
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
-            GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
+            GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
             subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
             backgroundEventHandler, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
@@ -152,7 +152,7 @@ public class ConsumerMembershipManagerTest {
     private ConsumerMembershipManager createMembershipManagerJoiningGroup(String groupInstanceId,
                                                                       String serverAssignor) {
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
-                GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT,
+                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
                 metadata, LOG_CONTEXT, backgroundEventHandler, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
@@ -231,7 +231,7 @@ public class ConsumerMembershipManagerTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         ConsumerMembershipManager membershipManager = new ConsumerMembershipManager(
-                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
+                GROUP_ID, Optional.empty(), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
             backgroundEventHandler, time, rebalanceMetricsManager, true);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());

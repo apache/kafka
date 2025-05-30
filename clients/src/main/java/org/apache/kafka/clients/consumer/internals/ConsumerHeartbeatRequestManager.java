@@ -262,6 +262,9 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             // InstanceId - set if present
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
+            // RackId - set if present
+            membershipManager.rackId().ifPresent(data::setRackId);
+
             boolean sendAllFields = membershipManager.state() == MemberState.JOINING;
 
             // RebalanceTimeoutMs - only sent when joining or if it has changed since the last heartbeat

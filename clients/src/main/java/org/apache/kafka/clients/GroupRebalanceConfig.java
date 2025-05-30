@@ -43,6 +43,7 @@ public class GroupRebalanceConfig {
     public final int heartbeatIntervalMs;
     public final String groupId;
     public final Optional<String> groupInstanceId;
+    public final Optional<String> rackId;
     public final long retryBackoffMs;
     public final long retryBackoffMaxMs;
     public final boolean leaveGroupOnClose;
@@ -73,6 +74,8 @@ public class GroupRebalanceConfig {
             this.groupInstanceId = Optional.empty();
         }
 
+        this.rackId = Optional.ofNullable(config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG));
+
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG);
 
@@ -98,6 +101,7 @@ public class GroupRebalanceConfig {
         this.heartbeatIntervalMs = heartbeatIntervalMs;
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
+        this.rackId = Optional.empty();
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.leaveGroupOnClose = leaveGroupOnClose;

@@ -248,6 +248,7 @@ public class RequestManagers implements Closeable {
                         membershipManager = new ConsumerMembershipManager(
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
+                            Optional.ofNullable(config.getString(ConsumerConfig.CLIENT_RACK_CONFIG)),
                             groupRebalanceConfig.rebalanceTimeoutMs,
                             serverAssignor,
                             subscriptions,
