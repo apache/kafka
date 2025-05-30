@@ -57,6 +57,7 @@ import java.util.concurrent.DelayQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class ClientQuotaManager {
 
@@ -740,44 +741,43 @@ public class ClientQuotaManager {
         public Double quotaLimit(ClientQuotaType quotaType, Map<String, String> metricTags) {
             String sanitizedUser = metricTags.get(DefaultTags.USER);
             String clientId = metricTags.get(DefaultTags.CLIENT_ID);
-            Quota quota = null;
+            Function<Quota, Double> value = quota -> quota == null ? null : quota.bound();
 
-            if (sanitizedUser != null && clientId != null) {
-                BaseUserEntity userEntity = new UserEntity(sanitizedUser);
-                ClientQuotaEntity.ConfigEntity clientIdEntity = new ClientIdEntity(clientId);
+            if (sanitizedUser == null || clientId == null) return value.apply(null);
+            var userEntity = new UserEntity(sanitizedUser);
+            var clientIdEntity = new ClientIdEntity(clientId);
 
-                if (!sanitizedUser.isEmpty() && !clientId.isEmpty()) {
-                    // /config/users/<user>/clients/<client-id>
-                    quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, clientIdEntity));
-                    if (quota == null) {
-                        // /config/users/<user>/clients/<default>
-                        quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, DefaultClientIdEntity.INSTANCE));
-                    }
-                    if (quota == null) {
-                        // /config/users/<default>/clients/<client-id>
-                        quota = overriddenQuotas.get(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity));
-                    }
-                    if (quota == null) {
-                        // /config/users/<default>/clients/<default>
-                        quota = overriddenQuotas.get(DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY);
-                    }
-                } else if (!sanitizedUser.isEmpty()) {
-                    // /config/users/<user>
-                    quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, null));
-                    if (quota == null) {
-                        // /config/users/<default>
-                        quota = overriddenQuotas.get(DEFAULT_USER_QUOTA_ENTITY);
-                    }
-                } else if (!clientId.isEmpty()) {
-                    // /config/clients/<client-id>
-                    quota = overriddenQuotas.get(new KafkaQuotaEntity(null, clientIdEntity));
-                    if (quota == null) {
-                        // /config/clients/<default>
-                        quota = overriddenQuotas.get(DEFAULT_CLIENT_ID_QUOTA_ENTITY);
-                    }
+            if (!sanitizedUser.isEmpty() && !clientId.isEmpty()) {
+                // /config/users/<user>/clients/<client-id>
+                var quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, clientIdEntity));
+                if (quota == null) {
+                    // /config/users/<user>/clients/<default>
+                    quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, DefaultClientIdEntity.INSTANCE));
                 }
+                // /config/users/<default>/clients/<client-id>
+                if (quota == null) quota = overriddenQuotas.get(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity));
+                // /config/users/<default>/clients/<default>
+                if (quota == null) quota = overriddenQuotas.get(DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY);
+                return value.apply(quota);
             }
-            return quota != null ? quota.bound() : null;
+
+            if (!sanitizedUser.isEmpty()) {
+                // /config/users/<user>
+                var quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, null));
+                // /config/users/<default>
+                if (quota == null) quota = overriddenQuotas.get(DEFAULT_USER_QUOTA_ENTITY);
+                return value.apply(quota);
+            }
+
+            if (!clientId.isEmpty()) {
+                // /config/clients/<client-id>
+                var quota = overriddenQuotas.get(new KafkaQuotaEntity(null, clientIdEntity));
+                // /config/clients/<default>
+                if (quota == null) quota = overriddenQuotas.get(DEFAULT_CLIENT_ID_QUOTA_ENTITY);
+                return value.apply(quota);
+            }
+
+            return value.apply(null);
         }
 
         @Override
@@ -810,7 +810,7 @@ public class ClientQuotaManager {
             String clientIdTag;
 
             // Access the outer class's quotaTypesEnabled field
-            switch (ClientQuotaManager.this.quotaTypesEnabled) {
+            switch (quotaTypesEnabled) {
                 case QuotaTypes.NO_QUOTAS:
                 case QuotaTypes.CLIENT_ID_QUOTA_ENABLED:
                     userTag = "";
@@ -826,45 +826,44 @@ public class ClientQuotaManager {
                     break;
                 default:
                     // Complex lookup logic for optimizing quota lookups when multiple types of quotas are defined
-                    BaseUserEntity userEntity = new UserEntity(sanitizedUser);
-                    ClientQuotaEntity.ConfigEntity clientIdEntity = new ClientIdEntity(clientId);
+                    var userEntity = new UserEntity(sanitizedUser);
+                    var clientIdEntity = new ClientIdEntity(clientId);
 
                     // Start with full tags (sanitizedUser, clientId)
+                    // 1) /config/users/<user>/clients/<client-id>
                     userTag = sanitizedUser;
                     clientIdTag = clientId;
 
-                    // 1) /config/users/<user>/clients/<client-id>
-                    if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, clientIdEntity))) {
-                        // 2) /config/users/<user>/clients/<default>
-                        userTag = sanitizedUser;
-                        clientIdTag = clientId;
-                        if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, DefaultClientIdEntity.INSTANCE))) {
-                            // 3) /config/users/<user>
-                            userTag = sanitizedUser;
-                            clientIdTag = "";
-                            if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, null))) {
-                                // 4) /config/users/<default>/clients/<client-id>
-                                userTag = sanitizedUser;
-                                clientIdTag = clientId;
-                                if (!overriddenQuotas.containsKey(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity))) {
-                                    // 5) /config/users/<default>/clients/<default>
-                                    userTag = sanitizedUser;
-                                    clientIdTag = clientId;
-                                    if (!overriddenQuotas.containsKey(DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY)) {
-                                        // 6) /config/users/<default>
-                                        userTag = sanitizedUser;
-                                        clientIdTag = "";
-                                        if (!overriddenQuotas.containsKey(DEFAULT_USER_QUOTA_ENTITY)) {
-                                            // 7) /config/clients/<client-id>
-                                            // 8) /config/clients/<default>
-                                            userTag = "";
-                                            clientIdTag = clientId;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // 2) /config/users/<user>/clients/<default>
+                    if (overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, clientIdEntity))) break;
+                    userTag = sanitizedUser;
+                    clientIdTag = clientId;
+
+                    // 3) /config/users/<user>
+                    if (overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, DefaultClientIdEntity.INSTANCE))) break;
+                    userTag = sanitizedUser;
+                    clientIdTag = "";
+
+                    // 4) /config/users/<default>/clients/<client-id>
+                    if (overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, null))) break;
+                    userTag = sanitizedUser;
+                    clientIdTag = clientId;
+
+                    // 5) /config/users/<default>/clients/<default>
+                    if (overriddenQuotas.containsKey(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity))) break;
+                    userTag = sanitizedUser;
+                    clientIdTag = clientId;
+
+                    // 6) /config/users/<default>
+                    if (overriddenQuotas.containsKey(DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY)) break;
+                    userTag = sanitizedUser;
+                    clientIdTag = "";
+
+                    // 7) /config/clients/<client-id>
+                    // 8) /config/clients/<default>
+                    if (overriddenQuotas.containsKey(DEFAULT_USER_QUOTA_ENTITY)) break;
+                    userTag = "";
+                    clientIdTag = clientId;
                     break;
             }
 
