@@ -285,7 +285,7 @@ class Benchmark(Test):
             kafka_node.account.ssh("mkdir -p %s" % PERSISTENT_ROOT, allow_fail=False)
             kafka_node.account.create_file(COMMAND_CONFIG_FILE, prop_file)
 
-        wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=share_group, strategy="earliest", command_config=COMMAND_CONFIG_FILE),
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=share_group, strategy="earliest", command_config=COMMAND_CONFIG_FILE),
                    timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
         self.share_consumer = ShareConsumerPerformanceService(
@@ -389,8 +389,8 @@ class Benchmark(Test):
             kafka_node.account.ssh("mkdir -p %s" % PERSISTENT_ROOT, allow_fail=False)
             kafka_node.account.create_file(COMMAND_CONFIG_FILE, prop_file)
 
-        wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=share_group, strategy="earliest", command_config=COMMAND_CONFIG_FILE),
-                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=share_group, strategy="earliest", command_config=COMMAND_CONFIG_FILE),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
         # consume
         self.share_consumer = ShareConsumerPerformanceService(

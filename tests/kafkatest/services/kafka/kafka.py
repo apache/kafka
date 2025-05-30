@@ -1727,7 +1727,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
-    def set_group_offset_reset_strategy(self, group, strategy=None, node=None, command_config=None):
+    def set_share_group_offset_reset_strategy(self, group, strategy=None, node=None, command_config=None):
         """ Set the offset reset strategy config for the given group.
         """
         if strategy is None:

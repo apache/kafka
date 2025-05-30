@@ -88,8 +88,8 @@ class PerformanceServiceTest(Test):
                 topic=self.topic, version=version, messages=self.num_records)
             share_group = "test-share-consumer-group"
             self.share_consumer_perf.group = share_group
-            wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=share_group, strategy="earliest"),
-                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+            wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=share_group, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
             self.share_consumer_perf.run()
             share_consumer_perf_data = compute_aggregate_throughput(self.share_consumer_perf)
             assert share_consumer_perf_data['records_per_sec'] > 0
