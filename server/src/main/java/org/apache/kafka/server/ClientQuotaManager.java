@@ -57,7 +57,6 @@ import java.util.concurrent.DelayQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 public class ClientQuotaManager {
 
@@ -739,43 +738,67 @@ public class ClientQuotaManager {
         public Double quotaLimit(ClientQuotaType quotaType, Map<String, String> metricTags) {
             String sanitizedUser = metricTags.get(DefaultTags.USER);
             String clientId = metricTags.get(DefaultTags.CLIENT_ID);
-            Function<Quota, Double> value = quota -> quota == null ? null : quota.bound();
 
-            if (sanitizedUser == null || clientId == null) return value.apply(null);
+            if (sanitizedUser == null || clientId == null) {
+                return null;
+            }
+
             var userEntity = new UserEntity(sanitizedUser);
             var clientIdEntity = new ClientIdEntity(clientId);
 
+            Quota quota = findQuota(sanitizedUser, clientId, userEntity, clientIdEntity);
+            return quota != null ? quota.bound() : null;
+        }
+
+        private Quota findQuota(String sanitizedUser, String clientId, UserEntity userEntity, ClientIdEntity clientIdEntity) {
             if (!sanitizedUser.isEmpty() && !clientId.isEmpty()) {
-                // /config/users/<user>/clients/<client-id>
-                var quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, clientIdEntity));
-                if (quota == null) {
-                    // /config/users/<user>/clients/<default>
-                    quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, DefaultClientIdEntity.INSTANCE));
-                }
-                // /config/users/<default>/clients/<client-id>
-                if (quota == null) quota = overriddenQuotas.get(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity));
-                // /config/users/<default>/clients/<default>
-                if (quota == null) quota = overriddenQuotas.get(DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY);
-                return value.apply(quota);
+                return findUserClientQuota(userEntity, clientIdEntity);
             }
 
             if (!sanitizedUser.isEmpty()) {
-                // /config/users/<user>
-                var quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, null));
-                // /config/users/<default>
-                if (quota == null) quota = overriddenQuotas.get(DEFAULT_USER_QUOTA_ENTITY);
-                return value.apply(quota);
+                return findUserQuota(userEntity);
             }
 
             if (!clientId.isEmpty()) {
-                // /config/clients/<client-id>
-                var quota = overriddenQuotas.get(new KafkaQuotaEntity(null, clientIdEntity));
-                // /config/clients/<default>
-                if (quota == null) quota = overriddenQuotas.get(DEFAULT_CLIENT_ID_QUOTA_ENTITY);
-                return value.apply(quota);
+                return findClientQuota(clientIdEntity);
             }
 
-            return value.apply(null);
+            return null;
+        }
+
+        private Quota findUserClientQuota(UserEntity userEntity, ClientIdEntity clientIdEntity) {
+            // /config/users/<user>/clients/<client-id>
+            Quota quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, clientIdEntity));
+            if (quota != null) return quota;
+
+            // /config/users/<user>/clients/<default>
+            quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, DefaultClientIdEntity.INSTANCE));
+            if (quota != null) return quota;
+
+            // /config/users/<default>/clients/<client-id>
+            quota = overriddenQuotas.get(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity));
+            if (quota != null) return quota;
+
+            // /config/users/<default>/clients/<default>
+            return overriddenQuotas.get(DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY);
+        }
+
+        private Quota findUserQuota(UserEntity userEntity) {
+            // /config/users/<user>
+            Quota quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, null));
+            if (quota != null) return quota;
+
+            // /config/users/<default>
+            return overriddenQuotas.get(DEFAULT_USER_QUOTA_ENTITY);
+        }
+
+        private Quota findClientQuota(ClientIdEntity clientIdEntity) {
+            // /config/clients/<client-id>
+            Quota quota = overriddenQuotas.get(new KafkaQuotaEntity(null, clientIdEntity));
+            if (quota != null) return quota;
+
+            // /config/clients/<default>
+            return overriddenQuotas.get(DEFAULT_CLIENT_ID_QUOTA_ENTITY);
         }
 
         @Override
