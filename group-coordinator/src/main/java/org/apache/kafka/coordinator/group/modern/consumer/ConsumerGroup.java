@@ -43,7 +43,7 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
-import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -152,6 +152,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     private final TimelineHashMap<String, ResolvedRegularExpression> resolvedRegularExpressions;
 
+    private final TimelineObject<Boolean> hasSubscriptionMetadataRecord;
+
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
         String groupId,
@@ -167,6 +169,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.resolvedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.hasSubscriptionMetadataRecord = new TimelineObject<>(snapshotRegistry, false);
     }
 
     /**
@@ -1130,8 +1133,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param snapshotRegistry  The SnapshotRegistry.
      * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
-     * @param topicsImage       The current metadata for all available topics.
-     * @param clusterImage      The current metadata for the Kafka cluster.
+     * @param topicHashCache    The cache for topic hashes.
+     * @param metadataImage     The current metadata image for the Kafka cluster.
      * @return  The created ConsumerGroup.
      *
      * @throws SchemaException if any member's subscription or assignment cannot be deserialized.
@@ -1141,8 +1144,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         SnapshotRegistry snapshotRegistry,
         GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
-        TopicsImage topicsImage,
-        ClusterImage clusterImage
+        Map<String, Long> topicHashCache,
+        MetadataImage metadataImage
     ) {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
@@ -1162,7 +1165,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 if (assignment.userData() != null && assignment.userData().hasRemaining()) {
                     throw new UnsupportedVersionException("userData from a custom assignor would be lost");
                 }
-                assignedPartitions = toTopicPartitionMap(assignment, topicsImage);
+                assignedPartitions = toTopicPartitionMap(assignment, metadataImage.topics());
             }
 
             // Every member is guaranteed to have metadata set when it joins,
@@ -1198,10 +1201,10 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             consumerGroup.updateMember(newMember);
         });
 
-        consumerGroup.setSubscriptionMetadata(consumerGroup.computeSubscriptionMetadata(
+        consumerGroup.setMetadataHash(ModernGroup.computeMetadataHash(
             consumerGroup.subscribedTopicNames(),
-            topicsImage,
-            clusterImage
+            topicHashCache,
+            metadataImage
         ));
 
         return consumerGroup;
@@ -1219,9 +1222,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId(), subscriptionMetadata()));
-
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), 0));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), metadataHash()));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
@@ -1308,5 +1309,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             }
         }
         return false;
+    }
+
+    public void setHasSubscriptionMetadataRecord(boolean hasSubscriptionMetadataRecord) {
+        this.hasSubscriptionMetadataRecord.set(hasSubscriptionMetadataRecord);
+    }
+
+    public boolean hasSubscriptionMetadataRecord() {
+        return hasSubscriptionMetadataRecord.get();
     }
 }
