@@ -98,16 +98,17 @@ class DelayedFetch(
               // Case F, this can happen when the new fetch operation is on a truncated leader
               debug(s"Satisfying fetch $this since it is fetching later segments of partition $topicIdPartition.")
               forceComplete()
-              return isCompleted
+              return true
             } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
               if (fetchOffset.onOlderSegment(endOffset)) {
                 // Case F, this can happen when the fetch operation is falling behind the current segment
                 // or the partition has just rolled a new segment
                 debug(s"Satisfying fetch $this immediately since it is fetching older segments.")
                 // We will not force complete the fetch request if a replica should be throttled.
-                if (!params.isFromFollower || !replicaManager.shouldLeaderThrottle(quota, partition, params.replicaId))
+                if (!params.isFromFollower || !replicaManager.shouldLeaderThrottle(quota, partition, params.replicaId)) {
                   forceComplete()
-                  return isCompleted
+                  return true
+                }
               } else if (fetchOffset.onSameSegment(endOffset)) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
@@ -124,40 +125,56 @@ class DelayedFetch(
                   || epochEndOffset.leaderEpoch == UNDEFINED_EPOCH) {
                 debug(s"Could not obtain last offset for leader epoch for partition $topicIdPartition, epochEndOffset=$epochEndOffset.")
                 forceComplete()
-                return isCompleted
+                return true
               } else if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchStatus.fetchInfo.fetchOffset) {
                 debug(s"Satisfying fetch $this since it has diverging epoch requiring truncation for partition " +
                   s"$topicIdPartition epochEndOffset=$epochEndOffset fetchEpoch=$fetchEpoch fetchOffset=${fetchStatus.fetchInfo.fetchOffset}.")
                 forceComplete()
-                return isCompleted
+                return true
               }
             }
           }
         } catch {
           case _: NotLeaderOrFollowerException =>  // Case A or Case B
             debug(s"Broker is no longer the leader or follower of $topicIdPartition, satisfy $this immediately")
-            forceComplete()
-            return isCompleted
+            if (isCompleted)
+              return false
+            else {
+              forceComplete()
+              return true
+            }
           case _: UnknownTopicOrPartitionException => // Case C
             debug(s"Broker no longer knows of partition $topicIdPartition, satisfy $this immediately")
-            forceComplete()
-            return isCompleted
+            if (isCompleted)
+              return false
+            else {
+              forceComplete()
+              return true
+            }
           case _: KafkaStorageException => // Case D
             debug(s"Partition $topicIdPartition is in an offline log directory, satisfy $this immediately")
-            forceComplete()
-            return isCompleted
+            if (isCompleted)
+              return false
+            else {
+              forceComplete()
+              return true
+            }
           case _: FencedLeaderEpochException => // Case E
             debug(s"Broker is the leader of partition $topicIdPartition, but the requested epoch " +
               s"$fetchLeaderEpoch is fenced by the latest leader epoch, satisfy $this immediately")
-            forceComplete()
-            return isCompleted
+            if (isCompleted)
+              return false
+            else {
+              forceComplete()
+              return true
+            }
         }
     }
 
     // Case G
     if (accumulatedSize >= params.minBytes) {
       forceComplete()
-      isCompleted
+      true
     } else
       false
   }

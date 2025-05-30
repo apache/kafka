@@ -380,8 +380,12 @@ public class DelayedShareFetch extends DelayedOperation {
                 partitionsAcquired.clear();
                 localPartitionsAlreadyFetched.clear();
             }
-            forceComplete();
-            return isCompleted();
+            if (isCompleted()) {
+                return false;
+            } else {
+                forceComplete();
+                return true;
+            }
         }
     }
 
@@ -783,7 +787,7 @@ public class DelayedShareFetch extends DelayedOperation {
 
         if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case d
             forceComplete();
-            return isCompleted();
+            return true;
         } else
             return false;
     }

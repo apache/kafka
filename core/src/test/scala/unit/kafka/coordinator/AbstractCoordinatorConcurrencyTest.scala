@@ -233,7 +233,7 @@ object AbstractCoordinatorConcurrencyTest {
         override def tryComplete(): Boolean = {
           if (completeAttempts.incrementAndGet() >= 3) {
             forceComplete()
-            isCompleted
+            true
           } else
             false
         }

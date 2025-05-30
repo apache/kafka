@@ -273,7 +273,7 @@ public class DelayedOperationTest {
         public boolean tryComplete() {
             if (completable) {
                 forceComplete();
-                return isCompleted();
+                return true;
             } else {
                 return false;
             }
@@ -323,7 +323,7 @@ public class DelayedOperationTest {
             }
             if (shouldComplete) {
                 forceComplete();
-                return isCompleted();
+                return true;
             } else
                 return false;
         }

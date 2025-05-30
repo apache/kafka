@@ -854,7 +854,7 @@ public class DelayedShareFetchTest {
 
         DelayedShareFetch spy = spy(delayedShareFetch);
         when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
-        doReturn(false).when(spy).forceComplete();
+        doReturn(false).when(spy).isCompleted();
 
         assertFalse(spy.tryComplete());
         Mockito.verify(sp0, times(1)).releaseFetchLock(fetchId);

@@ -171,7 +171,7 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
         });
         if (completable.get()) {
             forceComplete();
-            return isCompleted();
+            return true;
         } else {
             return false;
         }
