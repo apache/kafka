@@ -385,7 +385,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             setGroupAssignmentSnapshot(partitions);
         }
     };
-    
+
     public AsyncKafkaConsumer(final ConsumerConfig config,
                               final Deserializer<K> keyDeserializer,
                               final Deserializer<V> valueDeserializer,
@@ -927,7 +927,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        commitAsync(Optional.of(offsets), callback);
+        commitAsync(Optional.of(new HashMap<>(offsets)), callback);
     }
 
     private void commitAsync(Optional<Map<TopicPartition, OffsetAndMetadata>> offsets, OffsetCommitCallback callback) {
@@ -1599,12 +1599,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        commitSync(Optional.of(offsets), defaultApiTimeoutMs);
+        commitSync(Optional.of(new HashMap<>(offsets)), defaultApiTimeoutMs);
     }
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
-        commitSync(Optional.of(offsets), timeout);
+        commitSync(Optional.of(new HashMap<>(offsets)), timeout);
     }
 
     private void commitSync(Optional<Map<TopicPartition, OffsetAndMetadata>> offsets, Duration timeout) {
