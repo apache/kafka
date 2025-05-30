@@ -32,7 +32,7 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testRequestPercentageQuotaViolation(): Unit = {
     val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", Optional.empty())
-    val userEntity: ClientQuotaManager.BaseUserEntity = new ClientQuotaManager.UserEntity("ANONYMOUS")
+    val userEntity: ClientQuotaEntity.ConfigEntity = new ClientQuotaManager.UserEntity("ANONYMOUS")
     val clientEntity: ClientQuotaEntity.ConfigEntity = new ClientQuotaManager.ClientIdEntity("test-client")
 
     clientRequestQuotaManager.updateQuota(

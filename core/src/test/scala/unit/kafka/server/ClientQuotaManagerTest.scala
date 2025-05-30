@@ -505,7 +505,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   private case class UserClient(
     user: String,
     clientId: String,
-    configUser: Optional[ClientQuotaManager.BaseUserEntity] = Optional.empty,
+    configUser: Optional[ClientQuotaEntity.ConfigEntity] = Optional.empty,
     configClientEntity: Optional[ClientQuotaEntity.ConfigEntity] = Optional.empty
   )
 }

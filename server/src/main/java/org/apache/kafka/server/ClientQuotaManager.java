@@ -82,9 +82,7 @@ public class ClientQuotaManager {
     public static final KafkaQuotaEntity DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY =
             new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, DefaultClientIdEntity.INSTANCE);
 
-    public interface BaseUserEntity extends ClientQuotaEntity.ConfigEntity { }
-
-    public record UserEntity(String sanitizedUser) implements BaseUserEntity {
+    public record UserEntity(String sanitizedUser) implements ClientQuotaEntity.ConfigEntity {
 
         @Override
         public ClientQuotaEntity.ConfigEntityType entityType() {
@@ -122,7 +120,7 @@ public class ClientQuotaManager {
     }
 
     // Keep as class - uses singleton pattern which doesn't work well with records
-    public static class DefaultUserEntity implements BaseUserEntity {
+    public static class DefaultUserEntity implements ClientQuotaEntity.ConfigEntity {
         public static final DefaultUserEntity INSTANCE = new DefaultUserEntity();
 
         private DefaultUserEntity() {}
@@ -164,7 +162,7 @@ public class ClientQuotaManager {
         }
     }
 
-    public record KafkaQuotaEntity(BaseUserEntity userEntity,
+    public record KafkaQuotaEntity(ClientQuotaEntity.ConfigEntity userEntity,
                                           ClientQuotaEntity.ConfigEntity clientIdEntity) implements ClientQuotaEntity {
 
         @Override
@@ -573,7 +571,7 @@ public class ClientQuotaManager {
      * @param quota        custom quota to apply or None if quota override is being removed
      */
     public void updateQuota(
-            Optional<BaseUserEntity> userEntity,
+            Optional<ClientQuotaEntity.ConfigEntity> userEntity,
             Optional<ClientQuotaEntity.ConfigEntity> clientEntity,
             Optional<Quota> quota
     ) {

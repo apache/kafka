@@ -23,10 +23,9 @@ import kafka.server.metadata.ClientQuotaMetadataManager.transferToClientQuotaEnt
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
+import org.apache.kafka.server.quota.ClientQuotaEntity.ConfigEntity
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.server.quota.ClientQuotaEntity.{ConfigEntity => ClientQuotaConfigEntity}
 import org.apache.kafka.server.ClientQuotaManager
-import org.apache.kafka.server.ClientQuotaManager.BaseUserEntity
 
 import java.net.{InetAddress, UnknownHostException}
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
@@ -167,7 +166,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 
 object ClientQuotaMetadataManager {
 
-  def transferToClientQuotaEntity(quotaEntity: QuotaEntity): (Option[BaseUserEntity], Option[ClientQuotaConfigEntity]) = {
+  def transferToClientQuotaEntity(quotaEntity: QuotaEntity): (Option[ConfigEntity], Option[ConfigEntity]) = {
     quotaEntity match {
       case UserEntity(user) =>
         (Some(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
