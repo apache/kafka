@@ -908,7 +908,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * (in which case a {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
      * <p>
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method,
+     * but only when the consumer is using the consumer group protocol.
+     * This guarantee does not hold when using the classic group protocol.
      *
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This fatal error can only occur if you are using automatic group management with {@link #subscribe(Collection)},
@@ -952,7 +954,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * encountered (in which case it is thrown to the caller), or the passed timeout expires.
      * <p>
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method,
+     * but only when the consumer is using the consumer group protocol.
+     * This guarantee does not hold when using the classic group protocol.
      *
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
@@ -1001,7 +1005,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * (in which case a {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
      * <p>
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method,
+     * but only when the consumer is using the consumer group protocol.
+     * This guarantee does not hold when using the classic group protocol.
      *
      * @param offsets A map of offsets by partition with associated metadata
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
@@ -1052,7 +1058,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * encountered (in which case it is thrown to the caller), or the timeout expires.
      * <p>
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method,
+     * but only when the consumer is using the consumer group protocol.
+     * This guarantee does not hold when using the classic group protocol.
      *
      * @param offsets A map of offsets by partition with associated metadata
      * @param timeout The maximum amount of time to await completion of the offset commit
