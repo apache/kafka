@@ -23,8 +23,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -53,11 +51,6 @@ public class SubscribedTopicMetadataTest {
     @Test
     public void testMetadataImageCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(null));
-    }
-
-    @Test
-    public void testTopicPartitionAllowedMapCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(metadataImage, null));
     }
 
     @Test
@@ -99,33 +92,5 @@ public class SubscribedTopicMetadataTest {
             .addRacks()
             .build();
         assertNotEquals(new SubscribedTopicDescriberImpl(metadataImage2), subscribedTopicMetadata);
-    }
-
-    @Test
-    public void testAssignablePartitions() {
-        String t1Name = "t1";
-        Uuid t1Id = Uuid.randomUuid();
-        metadataImage = new MetadataImageBuilder().addTopic(t1Id, t1Name, numPartitions).build();
-        // Optional.empty() allow map (all partitions assignable)
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage, Optional.empty());
-        assertEquals(Set.of(0, 1, 2, 3, 4), subscribedTopicMetadata.assignablePartitions(t1Id));
-
-        // empty allow map (nothing assignable)
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage, Optional.of(Map.of()));
-        assertEquals(Set.of(), subscribedTopicMetadata.assignablePartitions(t1Id));
-
-        // few assignable partitions
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage,
-            Optional.of(Map.of(t1Id, Set.of(0, 5)))
-        );
-        assertEquals(Set.of(0, 5), subscribedTopicMetadata.assignablePartitions(t1Id));
-
-        // all assignable partitions
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage,
-            Optional.of(Map.of(t1Id, Set.of(0, 1, 2, 3, 4)))
-        );
-        assertEquals(Set.of(0, 1, 2, 3, 4), subscribedTopicMetadata.assignablePartitions(t1Id));
     }
 }
