@@ -2044,7 +2044,7 @@ class KafkaRaftClientTest {
         List<InetSocketAddress> bootstrapServers = voters
             .stream()
             .map(RaftClientTestContext::mockAddress)
-            .collect(Collectors.toList());
+            .toList();
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
