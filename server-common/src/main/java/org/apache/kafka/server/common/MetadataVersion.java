@@ -116,7 +116,7 @@ public enum MetadataVersion {
     // Streams groups are early access in 4.1 (KIP-1071).
     IBP_4_1_IV0(26, "4.1", "IV0", false),
 
-    // Send FETCH verion 18 in the replica fetcher (KIP-1166)
+    // Send FETCH version 18 in the replica fetcher (KIP-1166)
     IBP_4_1_IV1(27, "4.1", "IV1", false),
 
     // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of

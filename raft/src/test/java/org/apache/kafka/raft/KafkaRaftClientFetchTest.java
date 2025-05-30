@@ -33,6 +33,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.stream.IntStream;
@@ -73,7 +74,7 @@ public final class KafkaRaftClientFetchTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLog.empty());
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLong.empty());
 
         long oldLogEndOffset = context.log.endOffset().offset();
 
@@ -162,28 +163,48 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
+            .appendToLog(epoch, List.of("a", "b", "c"))
+            .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
             )
             .withElectedLeader(epoch, electedLeader.id())
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)
+            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
             .build();
+
+        var localLogEndOffset = context.log.endOffset().offset();
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLong.empty());
+        context.assertFetchRequestData(
+            fetchRequest,
+            epoch,
+            localLogEndOffset,
+            epoch,
+            OptionalLong.empty()
+        );
 
-        long logEndOffset = 100;
-
-        // Make the LEO and HWM equal logEndOffset
+        // Set the HWM to the LEO
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            context.divergingFetchResponse(epoch, electedLeader.id(), logEndOffset, epoch, logEndOffset)
+            context.fetchResponse(
+                epoch,
+                electedLeader.id(),
+                MemoryRecords.EMPTY,
+                localLogEndOffset,
+                Errors.NONE
+            )
         );
 
         context.pollUntilRequest();
-        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLong.of(logEndOffset));
+        fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(
+            fetchRequest,
+            epoch,
+            localLogEndOffset,
+            epoch,
+            OptionalLong.of(localLogEndOffset)
+        );
     }
 }

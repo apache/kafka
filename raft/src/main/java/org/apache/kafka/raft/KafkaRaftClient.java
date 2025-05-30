@@ -387,7 +387,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             // After updating the high-watermark, complete all of the deferred
             // fetch requests. This is always correct because all fetch request
-            // deffered have a HWM less or equal to the previous leader's HWM.
+            // deferred have a HWM less or equal to the previous leader's HWM.
             fetchPurgatory.completeAll(currentTimeMs);
 
             // It is also possible that the high watermark is being updated
@@ -1580,9 +1580,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     completionTimeMs
                 );
 
-                // It is safe to call tryCompleteFetchRequest because only the polling thread completes this
-                // future successfully. This is true because only the polling thread appends record batches to
-                // the log from maybeAppendBatches.
+                // It is safe to call tryCompleteFetchRequest because only the polling thread completes
+                // this future successfully. The future is completed successfully either because of an
+                // append (maybeAppendBatches) or because the HWM was updated (onUpdateLeaderHighWatermark)
                 return tryCompleteFetchRequest(
                     requestMetadata.listenerName(),
                     requestMetadata.apiVersion(),

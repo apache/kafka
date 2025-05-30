@@ -1114,13 +1114,14 @@ public final class RaftClientTestContext {
     RaftRequest.Outbound assertSentFetchRequest(
         int epoch,
         long fetchOffset,
-        int lastFetchedEpoch
+        int lastFetchedEpoch,
+        OptionalLong highWatermark
     ) {
         List<RaftRequest.Outbound> sentMessages = channel.drainSendQueue();
         assertEquals(1, sentMessages.size());
 
         RaftRequest.Outbound raftRequest = sentMessages.get(0);
-        assertFetchRequestData(raftRequest, epoch, fetchOffset, lastFetchedEpoch);
+        assertFetchRequestData(raftRequest, epoch, fetchOffset, lastFetchedEpoch, highWatermark);
         return raftRequest;
     }
 
@@ -1375,7 +1376,8 @@ public final class RaftClientTestContext {
 
     void discoverLeaderAsObserver(
         int leaderId,
-        int epoch
+        int epoch,
+        OptionalLong highWatermark
     ) throws Exception {
         pollUntilRequest();
         RaftRequest.Outbound fetchRequest = assertSentFetchRequest();
@@ -1384,7 +1386,7 @@ public final class RaftClientTestContext {
             startingVoters.voterIds().contains(destinationId) || bootstrapIds.contains(destinationId),
             String.format("id %d is not in sets %s or %s", destinationId, startingVoters, bootstrapIds)
         );
-        assertFetchRequestData(fetchRequest, 0, 0L, 0);
+        assertFetchRequestData(fetchRequest, 0, 0L, 0, highWatermark);
 
         deliverResponse(
             fetchRequest.correlationId(),
@@ -1692,7 +1694,7 @@ public final class RaftClientTestContext {
         assertEquals(fetchOffset, fetchPartition.fetchOffset());
         assertEquals(lastFetchedEpoch, fetchPartition.lastFetchedEpoch());
         assertEquals(localId.orElse(-1), request.replicaState().replicaId());
-        assertEquals(highWatermark.orElse(-1), request.highWatermark());
+        assertEquals(highWatermark.orElse(-1), fetchPartition.highWatermark());
 
         // Assert that voters have flushed up to the fetch offset
         if ((localId.isPresent() && startingVoters.voterIds().contains(localId.getAsInt())) ||
@@ -1934,7 +1936,9 @@ public final class RaftClientTestContext {
     }
 
     private short fetchRpcVersion() {
-        if (raftProtocol.isReconfigSupported()) {
+        if (raftProtocol.isHwmInFetchSupported()) {
+            return 18;
+        } else if (raftProtocol.isReconfigSupported()) {
             return 17;
         } else {
             return 16;
@@ -2238,7 +2242,9 @@ public final class RaftClientTestContext {
         // dynamic quorum reconfiguration support
         KIP_853_PROTOCOL,
         // preVote support
-        KIP_996_PROTOCOL;
+        KIP_996_PROTOCOL,
+        // HWM in FETCH request support
+        KIP_1166_PROTOCOL;
 
         boolean isKRaftSupported() {
             return isAtLeast(KIP_595_PROTOCOL);
@@ -2250,6 +2256,10 @@ public final class RaftClientTestContext {
 
         boolean isPreVoteSupported() {
             return isAtLeast(KIP_996_PROTOCOL);
+        }
+
+        boolean isHwmInFetchSupported() {
+            return isAtLeast(KIP_1166_PROTOCOL);
         }
 
         private boolean isAtLeast(RaftProtocol otherRpc) {
