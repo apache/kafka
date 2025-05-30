@@ -1749,6 +1749,27 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if type is not None:
             cmd += " --type %s" % type
         return self.run_cli_tool(node, cmd)
+    
+    def list_share_groups(self, node=None, command_config=None, state=None):
+        """ Get list of share groups.
+        """
+        if node is None:
+            node = self.nodes[0]
+        share_group_script = self.path.script("kafka-share-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --list" % \
+              (share_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config)
+        if state is not None:
+            cmd += " --state %s" % state
+        return self.run_cli_tool(node, cmd)
 
     def describe_consumer_group(self, group, node=None, command_config=None):
         """ Describe a consumer group.
@@ -1771,10 +1792,64 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
-            if not (line.startswith("SLF4J") or line.startswith("TOPIC") or line.startswith("Could not fetch offset")):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
                 output += line
         self.logger.debug(output)
         return output
+    
+    def describe_share_group(self, group, node=None, command_config=None):
+        """ Describe a share group.
+        """
+        if node is None:
+            node = self.nodes[0]
+        share_group_script = self.path.script("kafka-share-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --group %s --describe" % \
+              (share_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config, group)
+
+        output = ""
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
+                output += line
+        self.logger.debug(output)
+        return output
+    
+    def describe_share_group_members(self, group, node=None, command_config=None):
+        """ Describe members of a share group.
+        """
+        if node is None:
+            node = self.nodes[0]
+        share_group_script = self.path.script("kafka-share-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --group %s --describe" % \
+              (share_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config, group)
+        
+        cmd += " --members"
+
+        output_lines = []
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.strip() == ""):
+                output_lines.append(line.strip())
+        self.logger.debug(output_lines)
+        return output_lines
 
     def describe_quorum(self, node=None):
         """Run the describe quorum command.
