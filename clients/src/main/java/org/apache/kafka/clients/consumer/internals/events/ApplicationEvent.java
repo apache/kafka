@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerImpl;
-import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
