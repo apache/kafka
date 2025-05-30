@@ -45,6 +45,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.clients.ClientsTestUtils.TestClusterResourceListenerDeserializer.UPDATE_CONSUMER_COUNT;
+import static org.apache.kafka.clients.ClientsTestUtils.TestClusterResourceListenerSerializer.UPDATE_PRODUCER_COUNT;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -58,8 +60,6 @@ public class ClientsTestUtils {
 
     private static final String KEY_PREFIX = "key ";
     private static final String VALUE_PREFIX = "value ";
-    public static final AtomicInteger UPDATE_PRODUCER_COUNT = new AtomicInteger();
-    public static final AtomicInteger UPDATE_CONSUMER_COUNT = new AtomicInteger();
 
     private ClientsTestUtils() {}
 
@@ -342,6 +342,9 @@ public class ClientsTestUtils {
                 consumeAndVerifyRecords(consumer, TP, numRecords, 0, 0, startingTimestamp);
                 assertNotEquals(0, UPDATE_PRODUCER_COUNT.get());
                 assertNotEquals(0, UPDATE_CONSUMER_COUNT.get());
+
+                TestClusterResourceListenerSerializer.resetCount();
+                TestClusterResourceListenerDeserializer.resetCount();
             }
         }
 
@@ -387,6 +390,8 @@ public class ClientsTestUtils {
 
     public static class TestClusterResourceListenerSerializer implements Serializer<byte[]>, ClusterResourceListener {
 
+        public static final AtomicInteger UPDATE_PRODUCER_COUNT = new AtomicInteger();
+
         @Override
         public void onUpdate(ClusterResource clusterResource) {
             UPDATE_PRODUCER_COUNT.incrementAndGet();
@@ -396,9 +401,15 @@ public class ClientsTestUtils {
         public byte[] serialize(String topic, byte[] data) {
             return data;
         }
+        
+        public static void resetCount() {
+            UPDATE_PRODUCER_COUNT.set(0);
+        }
     }
 
     public static class TestClusterResourceListenerDeserializer implements Deserializer<byte[]>, ClusterResourceListener {
+
+        public static final AtomicInteger UPDATE_CONSUMER_COUNT = new AtomicInteger();
 
         @Override
         public void onUpdate(ClusterResource clusterResource) {
@@ -408,6 +419,10 @@ public class ClientsTestUtils {
         @Override
         public byte[] deserialize(String topic, byte[] data) {
             return data;
+        }
+
+        public static void resetCount() {
+            UPDATE_CONSUMER_COUNT.set(0);
         }
     }
 
