@@ -80,7 +80,8 @@ public class ProducerPerformance {
             if (config.warmupRecords > 0) {
                 System.out.println("Warmup first " + config.warmupRecords + " records. Steady state results will print after the complete test summary.");
             }
-            stats = new Stats(config.numRecords);
+            boolean isSteadyState = false;
+            stats = new Stats(config.numRecords, isSteadyState);
             long startMs = System.currentTimeMillis();
 
             ThroughputThrottler throttler = new ThroughputThrottler(config.throughput, startMs);
@@ -99,9 +100,9 @@ public class ProducerPerformance {
                 record = new ProducerRecord<>(config.topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
-                if ( config.warmupRecords > 0 && i == config.warmupRecords ) {
-                    steadyStateStats = new Stats(config.numRecords - config.warmupRecords, config.warmupRecords > 0);
-                    stats.steadyStateActive = true;
+                if ((isSteadyState = config.warmupRecords > 0) && i == config.warmupRecords) {
+                    steadyStateStats = new Stats(config.numRecords - config.warmupRecords, isSteadyState);
+                    stats.suppressPrinting();
                 }
                 cb = new PerfCallback(sendStartMs, payload.length, stats, steadyStateStats);
                 producer.send(record, cb);
@@ -378,11 +379,7 @@ public class ProducerPerformance {
         private long windowBytes;
         private long windowStart;
         private final boolean isSteadyState;
-        private boolean steadyStateActive;
-
-        public Stats(long numRecords) {
-            this(numRecords, false);
-        }
+        private boolean supressPrint;
 
         public Stats(long numRecords, boolean isSteadyState) {
             this.start = System.currentTimeMillis();
@@ -399,7 +396,7 @@ public class ProducerPerformance {
             this.totalLatency = 0;
             this.reportingInterval = 5000;
             this.isSteadyState = isSteadyState;
-            this.steadyStateActive = isSteadyState;
+            this.supressPrint = false;
         }
 
         public void record(int latency, int bytes, long time) {
@@ -418,13 +415,14 @@ public class ProducerPerformance {
             /* maybe report the recent perf */
             if (time - windowStart >= reportingInterval) {
                 if (this.isSteadyState && count == windowCount) {
-                    System.out.println("Beginning steady state.");
+                    System.out.println("In steady state.");
                 }
-                if (this.isSteadyState || !this.steadyStateActive) {
+                if (!this.supressPrint) {
                     printWindow();
                 }
                 newWindow();
             }
+            this.iteration++;
         }
 
         public long totalCount() {
@@ -495,6 +493,10 @@ public class ProducerPerformance {
             }
             return values;
         }
+
+        public void suppressPrinting() {
+            this.supressPrint = true;
+        }
     }
 
     static final class PerfCallback implements Callback {
@@ -517,10 +519,8 @@ public class ProducerPerformance {
             // magically printed when the sending fails.
             if (exception == null) {
                 this.stats.record(latency, bytes, now);
-                this.stats.iteration++;
                 if (steadyStateStats != null) {
                     this.steadyStateStats.record(latency, bytes, now);
-                    this.steadyStateStats.iteration++;
                 }
             }
             if (exception != null)

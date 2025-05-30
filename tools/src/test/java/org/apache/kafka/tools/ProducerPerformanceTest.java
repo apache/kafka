@@ -381,16 +381,16 @@ public class ProducerPerformanceTest {
     @Test
     public void testStatsInitializationWithLargeNumRecords() {
         long numRecords = Long.MAX_VALUE;
-        assertDoesNotThrow(() -> new ProducerPerformance.Stats(numRecords, 5000));
+        assertDoesNotThrow(() -> new ProducerPerformance.Stats(numRecords, false));
     }
 
     @Test
     public void testStatsCorrectness() throws Exception {
         ExecutorService singleThreaded = Executors.newSingleThreadExecutor();
         final long numRecords = 1000000;
-        ProducerPerformance.Stats stats = new ProducerPerformance.Stats(numRecords, 5000);
+        ProducerPerformance.Stats stats = new ProducerPerformance.Stats(numRecords, false);
         for (long i = 0; i < numRecords; i++) {
-            final Callback callback = new ProducerPerformance.PerfCallback(0, 100, stats);
+            final Callback callback = new ProducerPerformance.PerfCallback(0, 100, stats, null);
             CompletableFuture.runAsync(() -> {
                 callback.onCompletion(null, null);
             }, singleThreaded);
@@ -579,6 +579,7 @@ public class ProducerPerformanceTest {
             "--producer-props", "bootstrap.servers=localhost:9000"};
         ArgumentParser parser = ProducerPerformance.argParser();
         ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser.parseArgs(args));
+        thrown.printStackTrace();
     }
 
     @Test
@@ -592,6 +593,7 @@ public class ProducerPerformanceTest {
             "--producer-props", "bootstrap.servers=localhost:9000"};
         ArgumentParser parser = ProducerPerformance.argParser();
         ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser.parseArgs(args));
+        thrown.printStackTrace();
     }
 
     @Test
