@@ -2035,6 +2035,47 @@ class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
+    public void testUnattachedWithLeaderCanBecomeFollowerAfterFindingLeader(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int otherNodeId = localId + 1;
+        int leaderNodeId = localId + 2;
+        int epoch = 5;
+        Set<Integer> voters = Set.of(localId, otherNodeId, leaderNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(Optional.of(bootstrapServers))
+            .withElectedLeader(epoch, leaderNodeId)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        // after fetch timeout, node will become prospective with leader
+        context.time.sleep(context.fetchTimeoutMs);
+        context.client.poll();
+        assertTrue(context.client.quorum().isProspective());
+        assertEquals(leaderNodeId, context.client.quorum().leaderId().getAsInt());
+        assertEquals(epoch, context.currentEpoch());
+
+        // after election loss node will become follower because it had a last known leader
+        context.time.sleep(context.electionTimeoutMs() * 2L);
+        context.client.poll();
+        assertTrue(context.client.quorum().isFollower());
+        assertEquals(leaderNodeId, context.client.quorum().leaderId().getAsInt());
+        assertEquals(epoch, context.currentEpoch());
+
+        // node will send fetch request to leader
+        context.pollUntilRequest();
+        RaftRequest.Outbound request = context.assertSentFetchRequest(epoch, 0L, 0);
+        assertTrue(context.client.quorum().isFollower());
+        assertTrue(context.client.quorum().isVoter());
+        assertEquals(leaderNodeId, request.destination().id());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     public void testInitializeObserverNoPreviousState(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
@@ -2109,7 +2150,7 @@ class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    public void testObserverSendDiscoveryFetchAfterFetchTimeout(boolean withKip853Rpc) throws Exception {
+    public void testObserverSendDiscoveryFetchAfterFetchTimeoutAndResumesFetchingFromLeader(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int otherNodeId = localId + 2;
@@ -2145,7 +2186,19 @@ class KafkaRaftClientTest {
         fetchRequest = context.assertSentFetchRequest();
         assertNotEquals(leaderId, fetchRequest.destination().id());
         assertTrue(context.bootstrapIds.contains(fetchRequest.destination().id()));
+        assertTrue(context.client.quorum().followerStateOrThrow().hasFetchTimeoutExpired(context.time.milliseconds()));
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.NOT_LEADER_OR_FOLLOWER)
+        );
+
+        context.pollUntilRequest();
+        fetchRequest = context.assertSentFetchRequest();
+        assertEquals(leaderId, fetchRequest.destination().id());
+        assertFalse(context.client.quorum().followerStateOrThrow().hasFetchTimeoutExpired(context.time.milliseconds()));
     }
 
     @ParameterizedTest
