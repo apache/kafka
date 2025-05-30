@@ -913,7 +913,7 @@ public class TransactionManager {
                     log.debug("Not sending EndTxn for completed transaction since no partitions " +
                             "or offsets were successfully added");
                 }
-                completeTransaction();
+                resetTransactionState();
             }
             nextRequestHandler = pendingRequests.poll();
         }
@@ -1320,7 +1320,7 @@ public class TransactionManager {
         return coordinatorSupportsBumpingEpoch || isTransactionV2Enabled;
     }
 
-    private void completeTransaction() {
+    private void resetTransactionState() {
         if (clientSideEpochBumpRequired) {
             transitionTo(State.INITIALIZING);
         } else {
@@ -1332,6 +1332,7 @@ public class TransactionManager {
         newPartitionsInTransaction.clear();
         pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
+        preparedTxnState = new PreparedTxnState();
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
@@ -1743,7 +1744,7 @@ public class TransactionManager {
                     setProducerIdAndEpoch(producerIdAndEpoch);
                     resetSequenceNumbers();
                 }
-                completeTransaction();
+                resetTransactionState();
                 result.done();
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
