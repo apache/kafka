@@ -2195,6 +2195,7 @@ class KafkaRaftClientTest {
             context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.NOT_LEADER_OR_FOLLOWER)
         );
 
+        context.client.poll();
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
         assertEquals(leaderId, fetchRequest.destination().id());

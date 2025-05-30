@@ -557,7 +557,7 @@ public class QuorumState {
                 )
             );
         } else if (epoch == currentEpoch) {
-            if (isFollower() && state.leaderEndpoints().size() >= endpoints.size()) {
+            if (isFollowerVoter() && state.leaderEndpoints().size() >= endpoints.size()) {
                 throw new IllegalStateException(
                     String.format(
                         "Cannot transition to Follower with leader %s, epoch %s and endpoints %s from state %s",
@@ -844,6 +844,14 @@ public class QuorumState {
 
     public boolean isFollower() {
         return state instanceof FollowerState;
+    }
+
+    public boolean isFollowerVoter() {
+        return isFollower() && isVoter();
+    }
+
+    public boolean isFollowerObserver() {
+        return isFollower() && isObserver();
     }
 
     public boolean isUnattached() {
