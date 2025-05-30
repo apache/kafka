@@ -106,10 +106,11 @@ public class AclControlManager {
                 continue;
             }
             StandardAcl standardAcl = StandardAcl.fromAclBinding(acl);
-            if (existingAcls.add(standardAcl)) {
+            if (!existingAcls.contains(standardAcl)) {
                 StandardAclWithId standardAclWithId = new StandardAclWithId(newAclId(), standardAcl);
-                idToAcl.put(standardAclWithId.id(), standardAcl);
                 records.add(new ApiMessageAndVersion(standardAclWithId.toRecord(), (short) 0));
+            } else {
+                log.debug("Not creating ACL since it already exists: {}", standardAcl);
             }
             results.add(AclCreateResult.SUCCESS);
         }

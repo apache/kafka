@@ -62,8 +62,6 @@ import org.junit.jupiter.api.Assertions;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -73,8 +71,6 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
@@ -105,10 +101,10 @@ public class ClusterTestExtensionsTest {
     static List<ClusterConfig> generate1() {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put("foo", "bar");
-        return singletonList(ClusterConfig.defaultBuilder()
-                .setTypes(singleton(Type.KRAFT))
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
                 .setServerProperties(serverProperties)
-                .setTags(singletonList("Generated Test"))
+                .setTags(List.of("Generated Test"))
                 .build());
     }
 
@@ -126,7 +122,7 @@ public class ClusterTestExtensionsTest {
         assertEquals(Type.KRAFT, clusterInstance.type(),
             "generate1 provided a KRAFT cluster, so we should see that here");
         assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
-        assertEquals(singletonList("Generated Test"), clusterInstance.config().tags());
+        assertEquals(List.of("Generated Test"), clusterInstance.config().tags());
     }
 
     // Multiple @ClusterTest can be used with @ClusterTests
@@ -157,22 +153,22 @@ public class ClusterTestExtensionsTest {
         assertEquals("baz", clusterInstance.config().serverProperties().get("foo"));
         assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
         assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
-        assertEquals(Arrays.asList("default.display.key1", "default.display.key2"), clusterInstance.config().tags());
+        assertEquals(List.of("default.display.key1", "default.display.key2"), clusterInstance.config().tags());
 
         // assert broker server 0 contains property queued.max.requests 200 from ClusterTest which overrides
         // the value 100 in server property in ClusterTestDefaults
         try (Admin admin = clusterInstance.admin()) {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
-            Map<ConfigResource, Config> configs = admin.describeConfigs(singletonList(configResource)).all().get();
+            Map<ConfigResource, Config> configs = admin.describeConfigs(List.of(configResource)).all().get();
             assertEquals(1, configs.size());
             assertEquals("200", configs.get(configResource).get("queued.max.requests").value());
         }
         // In KRaft cluster non-combined mode, assert the controller server 3000 contains the property queued.max.requests 300
         if (clusterInstance.type() == Type.KRAFT) {
-            try (Admin admin = Admin.create(Collections.singletonMap(
+            try (Admin admin = Admin.create(Map.of(
                     AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
-                Map<ConfigResource, Config> configs = admin.describeConfigs(singletonList(configResource)).all().get();
+                Map<ConfigResource, Config> configs = admin.describeConfigs(List.of(configResource)).all().get();
                 assertEquals(1, configs.size());
                 assertEquals("300", configs.get(configResource).get("queued.max.requests").value());
             }
@@ -217,7 +213,7 @@ public class ClusterTestExtensionsTest {
         })
     })
     public void testNotSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
-        assertEquals(singleton(CLASSIC), clusterInstance.supportedGroupProtocols());
+        assertEquals(Set.of(CLASSIC), clusterInstance.supportedGroupProtocols());
     }
 
 
@@ -231,7 +227,7 @@ public class ClusterTestExtensionsTest {
 
         try (Admin admin = clusterInstance.admin()) {
             Assertions.assertTrue(admin.listTopics().listings().get().stream().anyMatch(s -> s.name().equals(topicName)));
-            List<TopicPartitionInfo> partitions = admin.describeTopics(singleton(topicName)).allTopicNames().get()
+            List<TopicPartitionInfo> partitions = admin.describeTopics(Set.of(topicName)).allTopicNames().get()
                     .get(topicName).partitions();
             assertEquals(numPartition, partitions.size());
             Assertions.assertTrue(partitions.stream().allMatch(partition -> partition.replicas().size() == numReplicas));
@@ -275,9 +271,9 @@ public class ClusterTestExtensionsTest {
     public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
         try (Admin admin = clusterInstance.admin()) {
             String testTopic = "testTopic";
-            admin.createTopics(singletonList(new NewTopic(testTopic, 1, (short) 1)));
+            admin.createTopics(List.of(new NewTopic(testTopic, 1, (short) 1)));
             clusterInstance.waitForTopic(testTopic, 1);
-            admin.deleteTopics(singletonList(testTopic));
+            admin.deleteTopics(List.of(testTopic));
             clusterInstance.waitTopicDeletion(testTopic);
             Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
                     topic -> topic.name().equals(testTopic)
@@ -299,12 +295,12 @@ public class ClusterTestExtensionsTest {
                  KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
                  VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()))
         ) {
-            adminClient.createTopics(singleton(new NewTopic(topic, 1, (short) 1)));
+            adminClient.createTopics(Set.of(new NewTopic(topic, 1, (short) 1)));
             assertNotNull(producer);
             assertNotNull(consumer);
             producer.send(new ProducerRecord<>(topic, key, value));
             producer.flush();
-            consumer.subscribe(singletonList(topic));
+            consumer.subscribe(List.of(topic));
             List<ConsumerRecord<String, String>> records = new ArrayList<>();
             TestUtils.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100)).forEach(records::add);
@@ -327,12 +323,12 @@ public class ClusterTestExtensionsTest {
              Producer<byte[], byte[]> producer = cluster.producer();
              Consumer<byte[], byte[]> consumer = cluster.consumer()
         ) {
-            adminClient.createTopics(singleton(new NewTopic(topic, 1, (short) 1)));
+            adminClient.createTopics(Set.of(new NewTopic(topic, 1, (short) 1)));
             assertNotNull(producer);
             assertNotNull(consumer);
             producer.send(new ProducerRecord<>(topic, key, value));
             producer.flush();
-            consumer.subscribe(singletonList(topic));
+            consumer.subscribe(List.of(topic));
             List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
             TestUtils.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100)).forEach(records::add);
