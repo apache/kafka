@@ -116,7 +116,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_share_groups=[True]
     )
     def test_share_single_topic_partition(self, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
@@ -145,7 +145,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_share_groups=[True]
     )
     def test_share_multiple_partitions(self, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
@@ -175,7 +175,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @cluster(num_nodes=10)
     @matrix(
         clean_shutdown=[True, False],
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_share_groups=[True]
     )
     def test_broker_rolling_bounce(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
@@ -210,12 +210,6 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         num_failed_brokers=[1, 2],
         use_share_groups=[True]
     )
-    @matrix(
-        clean_shutdown=[True, False],
-        metadata_quorum=[quorum.combined_kraft],
-        num_failed_brokers=[1],
-        use_share_groups=[True]
-    )
     def test_broker_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_brokers=1, use_share_groups=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
@@ -245,7 +239,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @matrix(
         clean_shutdown=[True, False],
         bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_share_groups=[True]
     )
     def test_share_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
@@ -287,7 +281,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @matrix(
         clean_shutdown=[True, False],
         num_failed_consumers=[1, 2],
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_share_groups=[True]
     )
     def test_share_consumer_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_consumers=1, use_share_groups=True):

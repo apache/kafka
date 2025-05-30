@@ -90,11 +90,11 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
         // Subscribed topic partitions for the share group.
         List<TopicIdPartition> targetPartitions = computeTargetPartitions(
-            subscribedTopicIds, subscribedTopicDescriber);
+            groupSpec, subscribedTopicIds, subscribedTopicDescriber);
 
         // The current assignment from topic partition to members.
         Map<TopicIdPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
-        return newAssignmentHomogeneous(groupSpec, subscribedTopicIds, targetPartitions, currentAssignment, subscribedTopicDescriber);
+        return newAssignmentHomogeneous(groupSpec, subscribedTopicIds, targetPartitions, currentAssignment);
     }
 
     private GroupAssignment assignHeterogeneous(
@@ -109,13 +109,13 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
             // Subscribed topic partitions for the share group member.
             List<TopicIdPartition> targetPartitions = computeTargetPartitions(
-                spec.subscribedTopicIds(), subscribedTopicDescriber);
+                groupSpec, spec.subscribedTopicIds(), subscribedTopicDescriber);
             memberToPartitionsSubscription.put(memberId, targetPartitions);
         }
 
         // The current assignment from topic partition to members.
         Map<TopicIdPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
-        return newAssignmentHeterogeneous(groupSpec, memberToPartitionsSubscription, currentAssignment, subscribedTopicDescriber);
+        return newAssignmentHeterogeneous(groupSpec, memberToPartitionsSubscription, currentAssignment);
     }
 
     /**
@@ -146,8 +146,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         GroupSpec groupSpec,
         Set<Uuid> subscribedTopicIds,
         List<TopicIdPartition> targetPartitions,
-        Map<TopicIdPartition, List<String>> currentAssignment,
-        SubscribedTopicDescriber subscribedTopicDescriber
+        Map<TopicIdPartition, List<String>> currentAssignment
     ) {
         // For entirely balanced assignment, we would expect (numTargetPartitions / numGroupMembers) partitions per member, rounded upwards.
         // That can be expressed as         Math.ceil(numTargetPartitions / (double) numGroupMembers)
@@ -196,7 +195,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             .filter(targetPartition -> !finalAssignmentByPartition.containsKey(targetPartition))
             .toList();
 
-        roundRobinAssignmentWithCount(groupSpec.memberIds(), unassignedPartitions, finalAssignment, desiredAssignmentCount, subscribedTopicDescriber);
+        roundRobinAssignmentWithCount(groupSpec.memberIds(), unassignedPartitions, finalAssignment, desiredAssignmentCount);
 
         return groupAssignment(finalAssignment, groupSpec.memberIds());
     }
@@ -211,8 +210,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
     private GroupAssignment newAssignmentHeterogeneous(
         GroupSpec groupSpec,
         Map<String, List<TopicIdPartition>> memberToPartitionsSubscription,
-        Map<TopicIdPartition, List<String>> currentAssignment,
-        SubscribedTopicDescriber subscribedTopicDescriber
+        Map<TopicIdPartition, List<String>> currentAssignment
     ) {
         int numGroupMembers = groupSpec.memberIds().size();
 
@@ -240,7 +238,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         });
 
         unassignedPartitions.keySet().forEach(unassignedTopic ->
-            roundRobinAssignment(topicToMemberSubscription.get(unassignedTopic), unassignedPartitions.get(unassignedTopic), newAssignment, subscribedTopicDescriber));
+            roundRobinAssignment(topicToMemberSubscription.get(unassignedTopic), unassignedPartitions.get(unassignedTopic), newAssignment));
 
         // Step 3: We combine current assignment and new assignment.
         Map<String, Set<TopicIdPartition>> finalAssignment = newHashMap(numGroupMembers);
@@ -288,14 +286,12 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
      * @param partitionsToAssign        The subscribed topic partitions which needs assignment.
      * @param assignment                The existing assignment by topic partition. We need to pass it as a parameter because this
      *                                  method can be called multiple times for heterogeneous assignment.
-     * @param subscribedTopicDescriber  The topic describer to fetch assignable partitions from.
      */
     // Visible for testing
     void roundRobinAssignment(
         Collection<String> memberIds,
         List<TopicIdPartition> partitionsToAssign,
-        Map<TopicIdPartition, List<String>> assignment,
-        SubscribedTopicDescriber subscribedTopicDescriber
+        Map<TopicIdPartition, List<String>> assignment
     ) {
         // We iterate through the target partitions and assign a memberId to them. In case we run out of members (members < targetPartitions),
         // we again start from the starting index of memberIds.
@@ -305,9 +301,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
                 memberIdIterator = memberIds.iterator();
             }
             String memberId = memberIdIterator.next();
-            if (subscribedTopicDescriber.assignablePartitions(topicPartition.topicId()).contains(topicPartition.partitionId())) {
-                assignment.computeIfAbsent(topicPartition, k -> new ArrayList<>()).add(memberId);
-            }
+            assignment.computeIfAbsent(topicPartition, k -> new ArrayList<>()).add(memberId);
         }
     }
 
@@ -320,14 +314,12 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
      * @param desiredAssignmentCount    The number of partitions which can be assigned to each member to give even balance.
      *                                  Note that this number can be exceeded by one to allow for situations
      *                                  in which we have hashing collisions.
-     * @param subscribedTopicDescriber  The topic describer to fetch assignable partitions from.
      */
     void roundRobinAssignmentWithCount(
         Collection<String> memberIds,
         List<TopicIdPartition> partitionsToAssign,
         Map<String, Set<TopicIdPartition>> assignment,
-        int desiredAssignmentCount,
-        SubscribedTopicDescriber subscribedTopicDescriber
+        int desiredAssignmentCount
     ) {
         Collection<String> memberIdsCopy = new LinkedHashSet<>(memberIds);
 
@@ -337,9 +329,6 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         ListIterator<TopicIdPartition> partitionListIterator = partitionsToAssign.listIterator();
         while (partitionListIterator.hasNext()) {
             TopicIdPartition partition = partitionListIterator.next();
-            if (!subscribedTopicDescriber.assignablePartitions(partition.topicId()).contains(partition.partitionId())) {
-                continue;
-            }
             if (!memberIdIterator.hasNext()) {
                 memberIdIterator = memberIdsCopy.iterator();
                 if (memberIdsCopy.isEmpty()) {
@@ -360,6 +349,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
     }
 
     private List<TopicIdPartition> computeTargetPartitions(
+        GroupSpec groupSpec,
         Set<Uuid> subscribedTopicIds,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) {
@@ -373,13 +363,11 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
                 );
             }
 
-            // Since we are returning a list here, we can keep it sorted
-            // to add determinism while testing and iterating.
-            targetPartitions.addAll(subscribedTopicDescriber.assignablePartitions(topicId).stream()
-                .sorted()
-                .map(partition -> new TopicIdPartition(topicId, partition))
-                .toList()
-            );
+            for (int partition = 0; partition < numPartitions; partition++) {
+                if (groupSpec.isPartitionAssignable(topicId, partition)) {
+                    targetPartitions.add(new TopicIdPartition(topicId, partition));
+                }
+            }
         });
         return targetPartitions;
     }

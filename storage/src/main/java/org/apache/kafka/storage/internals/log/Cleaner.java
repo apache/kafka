@@ -171,7 +171,7 @@ public class Cleaner {
 
         List<List<LogSegment>> groupedSegments = groupSegmentsBySize(
                 log.logSegments(0, endOffset),
-                log.config().segmentSize,
+                log.config().segmentSize(),
                 log.config().maxIndexSize,
                 cleanable.firstUncleanableOffset()
         );
