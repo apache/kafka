@@ -21,6 +21,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.MockTime;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 import java.util.Optional;
@@ -192,8 +194,9 @@ public class RequestManagerTest {
         assertTrue(cache.isReady(node, time.milliseconds(), fetch));
     }
 
-    @Test
-    public void testRequestToBootstrapList() {
+    @ParameterizedTest
+    @EnumSource(value = ApiKeys.class, names = {"FETCH", "FETCH_SNAPSHOT"})
+    public void testRequestToBootstrapList(ApiKeys apiKey) {
         List<Node> bootstrapList = makeBootstrapList(2);
         RequestManager cache = new RequestManager(
             bootstrapList,
@@ -206,22 +209,22 @@ public class RequestManagerTest {
         Node bootstrapNode1 = assertReadyBootstrapServer(cache, bootstrapList);
 
         // Send a request and check the cache state
-        cache.onRequestSent(bootstrapNode1, 1, time.milliseconds(), fetch);
+        cache.onRequestSent(bootstrapNode1, 1, time.milliseconds(), apiKey);
         assertNotReadyBootstrapServerOnSend(cache);
 
         // Fail the request. BootstrapNode1 begins backing off, meaning the other bootstrap
         // node is ready to serve a fetch request
-        cache.onResponseResult(bootstrapNode1, 1, false, time.milliseconds(), fetch);
+        cache.onResponseResult(bootstrapNode1, 1, false, time.milliseconds(), apiKey);
         Node bootstrapNode2 = assertReadyBootstrapServer(cache, bootstrapList);
         assertNotEquals(bootstrapNode1, bootstrapNode2);
 
         // Send a request to the second node and check the state
-        cache.onRequestSent(bootstrapNode2, 2, time.milliseconds(), fetch);
+        cache.onRequestSent(bootstrapNode2, 2, time.milliseconds(), apiKey);
         assertNotReadyBootstrapServerOnSend(cache);
 
         // Fail the second request before the bootstrapNode1's backoff is complete
         time.sleep(retryBackoffMs - 1);
-        cache.onResponseResult(bootstrapNode2, 2, false, time.milliseconds(), fetch);
+        cache.onResponseResult(bootstrapNode2, 2, false, time.milliseconds(), apiKey);
         assertEquals(
             Optional.empty(),
             cache.findReadyBootstrapServer(time.milliseconds())
@@ -235,8 +238,9 @@ public class RequestManagerTest {
         assertEquals(bootstrapNode1, bootstrapNode3);
     }
 
-    @Test
-    public void testRequestToBootstrapListMultipleRequestTypes() {
+    @ParameterizedTest
+    @EnumSource(value = ApiKeys.class, names = {"FETCH", "FETCH_SNAPSHOT"})
+    public void testRequestToBootstrapListMultipleRequestTypes(ApiKeys apiKey) {
         List<Node> bootstrapList = makeBootstrapList(2);
         RequestManager cache = new RequestManager(
             bootstrapList,
@@ -244,15 +248,14 @@ public class RequestManagerTest {
             requestTimeoutMs,
             random
         );
-        // Pending fetch snapshot requests should also result in no ready bootstrap server
-        Node bootstrapNode = assertReadyBootstrapServer(cache, bootstrapList);
 
-        // Other requests should not affect readiness of bootstrap servers
+        // Other requests should not affect readiness of bootstrap servers for fetching
+        Node bootstrapNode = assertReadyBootstrapServer(cache, bootstrapList);
         cache.onRequestSent(bootstrapNode, 1, time.milliseconds(), updateVoter);
         assertReadyBootstrapServer(cache, bootstrapList);
 
         // Send a request and check the cache state
-        cache.onRequestSent(bootstrapNode, 1, time.milliseconds(), fetchSnapshot);
+        cache.onRequestSent(bootstrapNode, 1, time.milliseconds(), apiKey);
         assertNotReadyBootstrapServerOnSend(cache);
 
         // Other requests should not affect readiness of bootstrap servers
@@ -261,8 +264,8 @@ public class RequestManagerTest {
         cache.onRequestSent(bootstrapNode, 2, time.milliseconds(), updateVoter);
         assertNotReadyBootstrapServerOnSend(cache);
 
-        // Complete the fetch snapshot request and show that node is ready
-        cache.onResponseResult(bootstrapNode, 1, true, time.milliseconds(), fetchSnapshot);
+        // Complete the fetch or fetch snapshot request and show that node is ready
+        cache.onResponseResult(bootstrapNode, 1, true, time.milliseconds(), apiKey);
         assertReadyBootstrapServer(cache, bootstrapList);
 
         // Other requests should not affect readiness of bootstrap servers
@@ -288,8 +291,9 @@ public class RequestManagerTest {
         assertEquals(requestTimeoutMs, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
     }
 
-    @Test
-    public void testFindReadyWithInflightFetchToNonBootstrapNode() {
+    @ParameterizedTest
+    @EnumSource(value = ApiKeys.class, names = {"FETCH", "FETCH_SNAPSHOT"})
+    public void testFindReadyWithInflightFetchToNonBootstrapNode(ApiKeys apiKey) {
         Node otherNode = new Node(1, "other-node", 1234);
         List<Node> bootstrapList = makeBootstrapList(3);
         RequestManager cache = new RequestManager(
@@ -299,22 +303,9 @@ public class RequestManagerTest {
             random
         );
 
-        // Send request to a node that is not in the bootstrap list
-        completeFetchAndCheckReadiness(cache, otherNode, bootstrapList, fetch);
-
-        // A pending fetch snapshot request also does not return a ready node
-        completeFetchAndCheckReadiness(cache, otherNode, bootstrapList, fetchSnapshot);
-    }
-
-    private void completeFetchAndCheckReadiness(
-        RequestManager cache,
-        Node destination,
-        List<Node> bootstrapList,
-        ApiKeys apiKey
-    ) {
-        cache.onRequestSent(destination, 1, time.milliseconds(), apiKey);
+        cache.onRequestSent(otherNode, 1, time.milliseconds(), apiKey);
         assertNotReadyBootstrapServerOnSend(cache);
-        cache.onResponseResult(destination, 1, true, time.milliseconds(), apiKey);
+        cache.onResponseResult(otherNode, 1, true, time.milliseconds(), apiKey);
         assertReadyBootstrapServer(cache, bootstrapList);
     }
 
@@ -396,8 +387,9 @@ public class RequestManagerTest {
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), updateVoter));
     }
 
-    @Test
-    public void testAnyInflightRequestWithAnyRequest() {
+    @ParameterizedTest
+    @EnumSource(value = ApiKeys.class, names = {"FETCH", "FETCH_SNAPSHOT"})
+    public void testAnyInflightRequestWithFetchOrFetchSnapshot(ApiKeys apiKey) {
         Node otherNode = new Node(1, "other-node", 1234);
         List<Node> bootstrapList = makeBootstrapList(3);
         RequestManager cache = new RequestManager(
@@ -408,24 +400,70 @@ public class RequestManagerTest {
         );
 
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
 
         // Send a request and check state
-        cache.onRequestSent(otherNode, 11, time.milliseconds(), fetch);
+        cache.onRequestSent(otherNode, 11, time.milliseconds(), apiKey);
         assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
 
         // Wait until the request times out
         time.sleep(requestTimeoutMs);
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
 
         // Send another request and fail it
-        cache.onRequestSent(otherNode, 12, time.milliseconds(), fetch);
-        cache.onResponseResult(otherNode, 12, false, time.milliseconds(), fetch);
+        cache.onRequestSent(otherNode, 12, time.milliseconds(), apiKey);
+        cache.onResponseResult(otherNode, 12, false, time.milliseconds(), apiKey);
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
 
         // Send another request and mark it successful
-        cache.onRequestSent(otherNode, 12, time.milliseconds(), fetch);
-        cache.onResponseResult(otherNode, 12, true, time.milliseconds(), fetch);
+        cache.onRequestSent(otherNode, 12, time.milliseconds(), apiKey);
+        cache.onResponseResult(otherNode, 12, true, time.milliseconds(), apiKey);
         assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetch));
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), fetchSnapshot));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+        value = ApiKeys.class,
+        names = {
+            "VOTE",
+            "BEGIN_QUORUM_EPOCH",
+            "END_QUORUM_EPOCH",
+            "API_VERSIONS",
+            "UPDATE_RAFT_VOTER"
+        })
+    public void testAnyInflightRequestWithOtherKRaftRequests(ApiKeys apiKey) {
+        Node otherNode = new Node(1, "other-node", 1234);
+        List<Node> bootstrapList = makeBootstrapList(3);
+        RequestManager cache = new RequestManager(
+            bootstrapList,
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
+
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), apiKey));
+
+        // Send a request and check state
+        cache.onRequestSent(otherNode, 11, time.milliseconds(), apiKey);
+        assertTrue(cache.hasAnyInflightRequest(time.milliseconds(), apiKey));
+
+        // Wait until the request times out
+        time.sleep(requestTimeoutMs);
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), apiKey));
+
+        // Send another request and fail it
+        cache.onRequestSent(otherNode, 12, time.milliseconds(), apiKey);
+        cache.onResponseResult(otherNode, 12, false, time.milliseconds(), apiKey);
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), apiKey));
+
+        // Send another request and mark it successful
+        cache.onRequestSent(otherNode, 12, time.milliseconds(), apiKey);
+        cache.onResponseResult(otherNode, 12, true, time.milliseconds(), apiKey);
+        assertFalse(cache.hasAnyInflightRequest(time.milliseconds(), apiKey));
     }
 
     private List<Node> makeBootstrapList(int numberOfNodes) {
