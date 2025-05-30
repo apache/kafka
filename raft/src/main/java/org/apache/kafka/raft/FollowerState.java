@@ -137,6 +137,11 @@ public class FollowerState implements EpochState {
         hasFetchedFromLeader = true;
     }
 
+    public void resetFetchTimeoutAfterDiscoveringLeader(long currentTimeMs) {
+        fetchTimer.update(currentTimeMs);
+        fetchTimer.reset(fetchTimeoutMs);
+    }
+
     public void overrideFetchTimeout(long currentTimeMs, long timeoutMs) {
         fetchTimer.update(currentTimeMs);
         fetchTimer.reset(timeoutMs);
