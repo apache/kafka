@@ -554,7 +554,7 @@ public class GroupMetadataManagerTestContext {
                 groupConfigManager
             );
 
-            consumerGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
+            consumerGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
             shareGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
             streamsGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
 

@@ -312,6 +312,10 @@ public class ShareMembershipManagerTest {
 
         membershipManager.onHeartbeatSuccess(createShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData.Assignment(), membershipManager.memberId()));
 
+        assertFalse(sendLeave.isDone(), "Send leave operation should not complete until a leave response is received");
+
+        membershipManager.onHeartbeatSuccess(createShareGroupLeaveResponse(membershipManager.memberId()));
+
         assertSendLeaveCompleted(membershipManager, sendLeave);
     }
 
@@ -518,6 +522,9 @@ public class ShareMembershipManagerTest {
         assertFalse(leaveResult.isDone());
 
         membershipManager.onHeartbeatSuccess(createShareGroupHeartbeatResponse(createAssignment(true), membershipManager.memberId()));
+        assertFalse(leaveResult.isDone());
+
+        membershipManager.onHeartbeatSuccess(createShareGroupLeaveResponse(membershipManager.memberId()));
         assertSendLeaveCompleted(membershipManager, leaveResult);
     }
 
@@ -561,8 +568,44 @@ public class ShareMembershipManagerTest {
 
         assertEquals(state, membershipManager.state());
         verify(responseData, never()).memberId();
-        verify(responseData, never()).memberEpoch();
+        // In unsubscribed, we check if we received a leave group response, so we do verify member epoch.
+        if (state != MemberState.UNSUBSCRIBED) {
+            verify(responseData, never()).memberEpoch();
+        }
         verify(responseData, never()).assignment();
+    }
+
+    @Test
+    public void testIgnoreLeaveResponseWhenNotLeavingGroup() {
+        ShareMembershipManager membershipManager = createMemberInStableState();
+
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+
+        // Send leave request, transitioning to UNSUBSCRIBED state
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+
+        // Receive a previous heartbeat response, which should be ignored
+        membershipManager.onHeartbeatSuccess(new ShareGroupHeartbeatResponse(
+            new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(MEMBER_EPOCH)
+        ));
+        assertFalse(leaveResult.isDone());
+
+        // Receive a leave heartbeat response, which should unblock the consumer
+        membershipManager.onHeartbeatSuccess(createShareGroupLeaveResponse(membershipManager.memberId()));
+        assertTrue(leaveResult.isDone());
+
+        // Share unblocks and updates subscription
+        membershipManager.onSubscriptionUpdated();
+        membershipManager.onConsumerPoll();
+
+        membershipManager.onHeartbeatSuccess(createShareGroupLeaveResponse(membershipManager.memberId()));
+
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        assertEquals(0, membershipManager.memberEpoch());
     }
 
     @Test
@@ -943,7 +986,6 @@ public class ShareMembershipManagerTest {
 
     @Test
     public void testReconcileNewPartitionsAssignedWhenOtherPartitionsOwned() {
-        // ANDREW MANGLED THIS
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         TopicIdPartition ownedPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0));
@@ -1577,6 +1619,13 @@ public class ShareMembershipManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(MEMBER_EPOCH)
                 .setAssignment(assignment));
+    }
+    
+    private ShareGroupHeartbeatResponse createShareGroupLeaveResponse(String memberId) {
+        return new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setMemberId(memberId)
+            .setMemberEpoch(ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH));
     }
 
     private ShareGroupHeartbeatResponse createShareGroupHeartbeatResponseWithError(String memberId) {
