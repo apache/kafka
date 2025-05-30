@@ -341,7 +341,6 @@ public class Utils {
      * The computed hash value is stored as the metadata hash in the *GroupMetadataValue.
      * <p>
      * If there is no topic, the hash value is set to 0.
-     * If a topic hash is 0, ignore the topic.
      * The hashing process involves the following steps:
      * 1. Sort the topic hashes by topic name.
      * 2. Write each topic hash in order.
