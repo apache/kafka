@@ -60,13 +60,15 @@ public class GroupCoordinatorConfig {
     ///
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols." +
-            "The " + Group.GroupType.SHARE + " rebalance protocol is in early access and therefore must not be used in production.";
+            "The " + Group.GroupType.SHARE + " and " + Group.GroupType.STREAMS + " rebalance protocols are in early access and therefore must not be used in production.";
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = List.of(
         Group.GroupType.CLASSIC.toString(),
         Group.GroupType.CONSUMER.toString());
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
-        "wait for writes to accumulate before flushing them to disk. Transactional writes are not accumulated.";
+        "wait for writes to accumulate before flushing them to disk. Increasing this value improves write efficiency and batch size, " +
+        "but also increases the response latency for requests, as the coordinator must wait for batches to be flushed to " +
+        "disk before completing request processing. Transactional writes are not accumulated.";
     public static final int GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT = 5;
 
     public static final String GROUP_COORDINATOR_NUM_THREADS_CONFIG = "group.coordinator.threads";
@@ -553,7 +555,7 @@ public class GroupCoordinatorConfig {
     public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
         Map<String, Integer> defaultConfigs = new HashMap<>();
         defaultConfigs.putAll(extractConsumerGroupConfigMap());
-        defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap());
+        defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap(this));
         return Collections.unmodifiableMap(defaultConfigs);
     }
 

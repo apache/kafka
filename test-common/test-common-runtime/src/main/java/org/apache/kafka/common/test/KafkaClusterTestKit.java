@@ -40,6 +40,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.storage.Formatter;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.DynamicVoters;
+import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -140,11 +141,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     Integer.toString(node.id()));
             // In combined mode, always prefer the metadata log directory of the controller node.
             if (controllerNode != null) {
-                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
+                props.put(MetadataLogConfig.METADATA_LOG_DIR_CONFIG,
                         controllerNode.metadataDirectory());
                 setSecurityProtocolProps(props, controllerSecurityProtocol);
             } else {
-                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
+                props.put(MetadataLogConfig.METADATA_LOG_DIR_CONFIG,
                         node.metadataDirectory());
             }
             if (brokerNode != null) {
@@ -391,16 +392,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
         List<Future<?>> futures = new ArrayList<>();
         try {
             for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(() -> {
-                    formatNode(controller.sharedServer().metaPropsEnsemble(), true);
-                }));
+                futures.add(executorService.submit(() -> formatNode(controller.sharedServer().metaPropsEnsemble(), true)));
             }
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 BrokerServer broker = entry.getValue();
-                futures.add(executorService.submit(() -> {
-                    formatNode(broker.sharedServer().metaPropsEnsemble(),
-                        !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()));
-                }));
+                futures.add(executorService.submit(() -> formatNode(broker.sharedServer().metaPropsEnsemble(),
+                    !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()))));
             }
             for (Future<?> future: futures) {
                 future.get();
@@ -502,7 +499,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public class ClientPropertiesBuilder {
-        private Properties properties;
+        private final Properties properties;
         private boolean usingBootstrapControllers = false;
 
         public ClientPropertiesBuilder() {

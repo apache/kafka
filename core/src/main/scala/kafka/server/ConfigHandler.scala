@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.StopPartition
+import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator, UnifiedLog}
 
 import scala.jdk.CollectionConverters._
@@ -53,7 +54,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
     val wasCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
 
-    logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
+    logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled,
       wasRemoteLogEnabled)
     maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabled, wasCopyDisabled)
   }
@@ -74,13 +75,13 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     if (isRemoteLogEnabled && (!wasRemoteLogEnabled || (wasCopyDisabled && !isCopyDisabled))) {
       val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
-        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
+        rlm.onLeadershipChange((leaderPartitions.toSet: Set[TopicPartitionLog]).asJava, (followerPartitions.toSet: Set[TopicPartitionLog]).asJava, topicIds))
     }
 
     // When copy disabled, we should stop leaderCopyRLMTask, but keep expirationTask
     if (isRemoteLogEnabled && !wasCopyDisabled && isCopyDisabled) {
       replicaManager.remoteLogManager.foreach(rlm => {
-        rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava)
+        rlm.stopLeaderCopyRLMTasks((leaderPartitions.toSet: Set[TopicPartitionLog] ).asJava)
       })
     }
 

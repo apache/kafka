@@ -32,7 +32,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
@@ -67,7 +67,7 @@ class StorageToolTest {
   @Test
   def testConfigToLogDirectoriesWithMetaLogDir(): Unit = {
     val properties = newSelfManagedProperties()
-    properties.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, "/tmp/baz")
+    properties.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, "/tmp/baz")
     val config = new KafkaConfig(properties)
     assertEquals(Seq("/tmp/bar", "/tmp/baz", "/tmp/foo"),
       StorageTool.configToLogDirectories(config))
@@ -325,7 +325,7 @@ Found problem:
     properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     assertEquals("Unsupported feature: non.existent.feature. Supported features are: " +
-      "eligible.leader.replicas.version, group.version, kraft.version, transaction.version",
+      "eligible.leader.replicas.version, group.version, kraft.version, share.version, transaction.version",
         assertThrows(classOf[FormatterException], () =>
           runFormatCommand(new ByteArrayOutputStream(), properties,
             Seq("--feature", "non.existent.feature=20"))).getMessage)
