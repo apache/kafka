@@ -667,9 +667,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records)
                     .ifPresent(req -> responseMap.put(groupId, Map.entry(req, Errors.NONE)));
             } catch (GroupIdNotFoundException exception) {
-                log.debug("GroupId {} not found as a share group.", groupId);
+                log.debug("Unable to delete share group. GroupId {} not found.", groupId);
+                responseMap.put(groupId, Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(exception)));
             } catch (GroupNotEmptyException exception) {
-                log.debug("Share group {} is not empty.", groupId);
+                log.debug("Unable to delete share group. Provided group {} is not empty.", groupId);
                 responseMap.put(groupId, Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(exception)));
             }
         }
@@ -729,13 +730,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             );
 
         } catch (GroupIdNotFoundException exception) {
-            log.error("groupId {} not found", groupId, exception);
+            log.debug("Unable to delete share group offsets. GroupId {} not found.", groupId);
             return new CoordinatorResult<>(
                 records,
                 new DeleteShareGroupOffsetsResultHolder(Errors.GROUP_ID_NOT_FOUND.code(), exception.getMessage())
             );
         } catch (GroupNotEmptyException exception) {
-            log.error("Provided group {} is not empty", groupId);
+            log.debug("Unable to delete share group offsets. Provided group {} is not empty.", groupId);
             return new CoordinatorResult<>(
                 records,
                 new DeleteShareGroupOffsetsResultHolder(Errors.NON_EMPTY_GROUP.code(), exception.getMessage())
