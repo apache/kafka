@@ -74,7 +74,15 @@ public class GroupRebalanceConfig {
             this.groupInstanceId = Optional.empty();
         }
 
-        this.rackId = Optional.ofNullable(config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG));
+        // The WorkerGroupMember in connect module also uses this class, but there is no client.rack in DistributedConfig.
+        // Ignore the rackId in that case to avoid ConfigException.
+        // The GroupCoordinatorService throws error if the rackId is empty. The default value of client.rack is empty string.
+        // Skip empty rackId to avoid InvalidRequestException.
+        if (config.values().containsKey(CommonClientConfigs.CLIENT_RACK_CONFIG) && !config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG).isEmpty()) {
+            this.rackId = Optional.ofNullable(config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG));
+        } else {
+            this.rackId = Optional.empty();
+        }
 
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG);
