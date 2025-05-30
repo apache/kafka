@@ -66,6 +66,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1396,7 +1397,33 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Collection<ConfigResource>> future = new KafkaFutureImpl<>();
+        Set<ConfigResource> configResources = new HashSet<>();
+        if (configResourceTypes.isEmpty() || configResourceTypes.contains(ConfigResource.Type.TOPIC)) {
+            allTopics.keySet().forEach(name -> configResources.add(new ConfigResource(ConfigResource.Type.TOPIC, name)));
+        }
+
+        if (configResourceTypes.isEmpty() || configResourceTypes.contains(ConfigResource.Type.BROKER)) {
+            for (int i = 0; i < brokers.size(); i++) {
+                configResources.add(new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(i)));
+            }
+        }
+
+        if (configResourceTypes.isEmpty() || configResourceTypes.contains(ConfigResource.Type.BROKER_LOGGER)) {
+            for (int i = 0; i < brokers.size(); i++) {
+                configResources.add(new ConfigResource(ConfigResource.Type.BROKER_LOGGER, String.valueOf(i)));
+            }
+        }
+
+        if (configResourceTypes.isEmpty() || configResourceTypes.contains(ConfigResource.Type.CLIENT_METRICS)) {
+            clientMetricsConfigs.keySet().forEach(name -> configResources.add(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name)));
+        }
+
+        if (configResourceTypes.isEmpty() || configResourceTypes.contains(ConfigResource.Type.GROUP)) {
+            groupConfigs.keySet().forEach(name -> configResources.add(new ConfigResource(ConfigResource.Type.GROUP, name)));
+        }
+        future.complete(configResources);
+        return new ListConfigResourcesResult(future);
     }
 
     @Override

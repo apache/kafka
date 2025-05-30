@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class AdminClientTestUtils {
@@ -161,6 +162,14 @@ public class AdminClientTestUtils {
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
         future.completeExceptionally(exception);
         return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
+    }
+
+    public static ListConfigResourcesResult listConfigResourcesResult(Map<ConfigResource.Type, Set<String>> resourceNames) {
+        Collection<ConfigResource> resources = resourceNames.entrySet().stream()
+            .flatMap(entry -> entry.getValue().stream()
+                .map(name -> new ConfigResource(entry.getKey(), name)))
+            .collect(Collectors.toList());
+        return new ListConfigResourcesResult(KafkaFuture.completedFuture(resources));
     }
 
     public static ListConfigResourcesResult listConfigResourcesResult(String... names) {

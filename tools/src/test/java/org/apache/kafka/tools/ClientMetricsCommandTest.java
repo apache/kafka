@@ -35,6 +35,7 @@ import org.mockito.ArgumentCaptor;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -232,6 +233,10 @@ public class ClientMetricsCommandTest {
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
 
         ConfigResource cr = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName);
+        ListConfigResourcesResult listConfigResourcesResult = AdminClientTestUtils.listConfigResourcesResult(Map.of(
+            ConfigResource.Type.CLIENT_METRICS, Set.of(clientMetricsName)
+        ));
+        when(adminClient.listConfigResources(any(), any())).thenReturn(listConfigResourcesResult);
         Config cfg = new Config(Collections.singleton(new ConfigEntry("metrics", "org.apache.kafka.producer.")));
         DescribeConfigsResult describeResult = AdminClientTestUtils.describeConfigsResult(cr, cfg);
         when(adminClient.describeConfigs(any())).thenReturn(describeResult);
@@ -247,6 +252,28 @@ public class ClientMetricsCommandTest {
         });
         assertTrue(capturedOutput.contains("Client metrics configs for " + clientMetricsName + " are:"));
         assertTrue(capturedOutput.contains("metrics=org.apache.kafka.producer."));
+    }
+
+    @Test
+    public void testDescribeNonExistentClientMetric() {
+        Admin adminClient = mock(Admin.class);
+        ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
+
+        ListConfigResourcesResult listConfigResourcesResult = AdminClientTestUtils.listConfigResourcesResult(Map.of(
+            ConfigResource.Type.CLIENT_METRICS, Set.of()
+        ));
+        when(adminClient.listConfigResources(any(), any())).thenReturn(listConfigResourcesResult);
+
+        String capturedOutput = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                service.describeClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
+                    new String[]{"--bootstrap-server", bootstrapServer, "--describe",
+                        "--name", clientMetricsName}));
+            } catch (Throwable t) {
+                fail(t);
+            }
+        });
+        assertTrue(capturedOutput.contains("The client metric resource " + clientMetricsName + " doesn't exist and doesn't have dynamic config."));
     }
 
     @Test
