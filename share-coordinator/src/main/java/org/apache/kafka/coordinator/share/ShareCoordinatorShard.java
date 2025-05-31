@@ -657,6 +657,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         SharePartitionKey key
     ) {
         long timestamp = time.milliseconds();
+        int updatesPerSnapshotLimit = config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot();
         if (!shareStateMap.containsKey(key)) {
             // Since this is the first time we are getting a write request for key, we should be creating a share snapshot record.
             // The incoming partition data could have overlapping state batches, we must merge them
@@ -671,7 +672,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
                     .build());
-        } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
+        } else if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit || partitionData.stateEpoch() > shareStateMap.get(key).stateEpoch()) {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
             int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? currentState.leaderEpoch() : partitionData.leaderEpoch();
             int newStateEpoch = partitionData.stateEpoch() == -1 ? currentState.stateEpoch() : partitionData.stateEpoch();
@@ -697,7 +698,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             // Share snapshot is present and number of share snapshot update records < snapshotUpdateRecordsPerSnapshot
             // so create a share update record.
             // The incoming partition data could have overlapping state batches, we must merge them.
-            return ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
+            return ShareCoordinatorRecordHelpers.newShareUpdateRecord(
                 key.groupId(), key.topicId(), partitionData.partition(),
                 new ShareGroupOffset.Builder()
                     .setSnapshotEpoch(currentState.snapshotEpoch()) // Use same snapshotEpoch as last share snapshot.
