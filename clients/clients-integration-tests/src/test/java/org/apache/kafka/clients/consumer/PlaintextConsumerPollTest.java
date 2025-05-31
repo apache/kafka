@@ -571,32 +571,6 @@ public class PlaintextConsumerPollTest {
         }
     }
 
-    private void ensureNoRebalance(
-        Consumer<byte[], byte[]> consumer,
-        TestConsumerReassignmentListener rebalanceListener
-    ) throws InterruptedException {
-        // The best way to verify that the current membership is still active is to commit offsets.
-        // This would fail if the group had rebalanced.
-        var initialRevokeCalls = rebalanceListener.callsToRevoked;
-        sendAndAwaitAsyncCommit(consumer);
-        assertEquals(initialRevokeCalls, rebalanceListener.callsToRevoked);
-    }
-
-    private void sendAndAwaitAsyncCommit(
-        Consumer<byte[], byte[]> consumer
-    ) throws InterruptedException {
-        java.util.function.Consumer<OffsetCommitCallback> sendAsyncCommit = consumer::commitAsync;
-
-        var commitCallback = new RetryCommitCallback(sendAsyncCommit);
-        sendAsyncCommit.accept(commitCallback);
-        TestUtils.waitForCondition(() -> {
-                consumer.poll(Duration.ofMillis(100));
-                return commitCallback.isComplete;
-            }, 10000, "Failed to observe commit callback before timeout"
-        );
-        assertEquals(Optional.empty(), commitCallback.error);
-    }
-
     /**
      * Subscribes consumer 'consumer' to a given list of topics 'topicsToSubscribe', creates
      * consumer poller and starts polling.
@@ -700,25 +674,5 @@ public class PlaintextConsumerPollTest {
             return !records.records(partition).isEmpty();
         }, "Consumer did not consume any messages for partition " + partition + " before timeout.");
         return result.get(result.size() - 1);
-    }
-
-    private static class RetryCommitCallback implements OffsetCommitCallback {
-        public boolean isComplete = false;
-        public Optional<Exception> error = Optional.empty();
-        java.util.function.Consumer<OffsetCommitCallback> sendAsyncCommit;
-
-        public RetryCommitCallback(java.util.function.Consumer<OffsetCommitCallback> sendAsyncCommit) {
-            this.sendAsyncCommit = sendAsyncCommit;
-        }
-
-        @Override
-        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-            if (exception instanceof RetriableCommitFailedException) {
-                sendAsyncCommit.accept(this);
-            } else {
-                isComplete = true;
-                error = Optional.ofNullable(exception);
-            }
-        }
     }
 }

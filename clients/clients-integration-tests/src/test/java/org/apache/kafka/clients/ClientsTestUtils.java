@@ -288,6 +288,21 @@ public class ClientsTestUtils {
         assertEquals(initialRevokeCalls, rebalanceListener.callsToRevoked);
     }
 
+
+    public static void waitForPollThrowException(
+        Consumer<byte[], byte[]> consumer,
+        Class<? extends Exception> exceptedException
+    ) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            try {
+                consumer.poll(Duration.ZERO);
+                return false;
+            } catch (Exception e) {
+                return exceptedException.isInstance(e);
+            }
+        }, "Continuous poll not fail");
+    }
+
     /**
      * This class is intended to replace the test cases in BaseConsumerTest.scala.
      * When converting tests that extend from BaseConsumerTest.scala to Java,
@@ -449,47 +464,6 @@ public class ClientsTestUtils {
                 error = Optional.ofNullable(exception);
             }
         }
-    }
-
-    public static class TestConsumerReassignmentListener implements ConsumerRebalanceListener {
-        public int callsToAssigned = 0;
-        public int callsToRevoked = 0;
-
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            callsToAssigned += 1;
-        }
-
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            callsToRevoked += 1;
-        }
-    }
-
-    public static void waitForPollThrowException(
-        Consumer<byte[], byte[]> consumer,
-        Class<? extends Exception> exceptedException
-    ) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
-            try {
-                consumer.poll(Duration.ZERO);
-                return false;
-            } catch (Exception e) {
-                return exceptedException.isInstance(e);
-            }
-        }, "Continuous poll not fail");
-    }
-
-    public static void awaitRebalance(
-        Consumer<byte[], byte[]> consumer,
-        TestConsumerReassignmentListener rebalanceListener
-    ) throws InterruptedException {
-        var numReassignments = rebalanceListener.callsToAssigned;
-        TestUtils.waitForCondition(() -> {
-                    consumer.poll(Duration.ofMillis(100));
-                    return rebalanceListener.callsToAssigned > numReassignments;
-                }, "Timed out before expected rebalance completed"
-        );
     }
 
     public static class TestConsumerReassignmentListener implements ConsumerRebalanceListener {
