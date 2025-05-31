@@ -356,7 +356,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     partitionsAcquired = topicPartitionData;
                     localPartitionsAlreadyFetched = replicaManagerReadResponse;
                     forceComplete();
-                    return isCompleted();
+                    return true;
                 } else {
                     log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
                             "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
