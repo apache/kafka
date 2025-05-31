@@ -113,7 +113,6 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         }
         try {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
-            System.err.println("QQQ " + records.nextOffsets());
             receivedMessages += records.count();
         } catch (WakeupException e) {
             // ignore for shutdown

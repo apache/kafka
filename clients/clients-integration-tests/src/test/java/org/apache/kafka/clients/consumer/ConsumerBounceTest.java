@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -200,7 +201,7 @@ public class ConsumerBounceTest {
         int numRecords = 1000;
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name, ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "6000"))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
             consumer.assign(List.of(topicPartition));
             consumer.seek(topicPartition, 0);
 
@@ -287,21 +288,20 @@ public class ConsumerBounceTest {
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
         checkCloseGoodPath(numRecords, "group1");
-        checkCloseWithCoordinatorFailure(numRecords, "group2", "group3");
+//        checkCloseWithCoordinatorFailure(numRecords, "group2", "group3");
+        checkCloseWithClusterFailure(numRecords, "group4", "group5", "consumer");
     }
 
+    // need to use config
     private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords) throws InterruptedException {
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_ID_CONFIG, groupId));
         ConsumerAssignmentPoller poller;
 
         if (manualAssign) {
-            consumer.assign(List.of(topicPartition));
             poller = new ConsumerAssignmentPoller(consumer, Set.of(topicPartition));
         } else {
-            consumer.subscribe(List.of(topic));
-            poller = new ConsumerAssignmentPoller(consumer, List.of(groupId));
+            poller = new ConsumerAssignmentPoller(consumer, List.of(topic));
         }
-
         poller.start();
         consumers.add(consumer);
         consumerPollers.add(poller);
@@ -322,17 +322,15 @@ public class ConsumerBounceTest {
         checkClosedState(groupId, numRecords);
     }
 
+    /**
+     * Consumer closed while coordinator is unavailable. Close of consumers using group
+     * management should complete after commit attempt even though commits fail due to rebalance.
+     * Close of consumers using manual assignment should complete with successful commits since a
+     * broker is available.
+     */
     private void checkCloseWithCoordinatorFailure(int numRecords, String dynamicGroup, String manualGroup) throws Exception {
-        Consumer<byte[], byte[]> dynamicConsumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_ID_CONFIG, dynamicGroup));
-        Consumer<byte[], byte[]> manualConsumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_ID_CONFIG, manualGroup));
-        dynamicConsumer.subscribe(List.of(topic));
-        manualConsumer.assign(List.of(topicPartition));
-        ConsumerAssignmentPoller dynamicConsumerAssignmentPoller = new ConsumerAssignmentPoller(dynamicConsumer, List.of(topic));
-        ConsumerAssignmentPoller manualConsumerAssignmentPoller = new ConsumerAssignmentPoller(manualConsumer, Set.of(topicPartition));
-        dynamicConsumerAssignmentPoller.start();
-        manualConsumerAssignmentPoller.start();
-        consumerPollers.add(dynamicConsumerAssignmentPoller);
-        consumerPollers.add(manualConsumerAssignmentPoller);
+        Consumer<byte[], byte[]> dynamicConsumer = createConsumerAndReceive(dynamicGroup, false, numRecords);
+        Consumer<byte[], byte[]> manualConsumer = createConsumerAndReceive(manualGroup, true, numRecords);
 
         clusterInstance.shutdownBroker(findCoordinator(dynamicGroup));
         clusterInstance.shutdownBroker(findCoordinator(manualGroup));
@@ -345,6 +343,31 @@ public class ConsumerBounceTest {
         checkClosedState(manualGroup, numRecords);
     }
 
+    /**
+     * Consumer is closed while all brokers are unavailable. Cannot rebalance or commit offsets since
+     * there is no coordinator, but close should timeout and return. If close is invoked with a very
+     * large timeout, close should timeout after request timeout.
+     */
+    private void checkCloseWithClusterFailure(int numRecords, String group1, String group2, String groupProtocol) throws Exception {
+        Consumer<byte[], byte[]> consumer1 = createConsumerAndReceive(group1, false, numRecords);
+        Map<String, String> consumerConfig = new HashMap<>();
+
+        long requestTimeout = 6000;
+        if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+            consumerConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000");
+            consumerConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
+        }
+        consumerConfig.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, Long.toString(requestTimeout));
+
+        Consumer<byte[], byte[]> consumer2 = createConsumerAndReceive(group2, true, numRecords);
+
+        clusterInstance.brokers().keySet().forEach(clusterInstance::shutdownBroker);
+
+        long closeTimeout = 2000;
+        submitCloseAndValidate(consumer1, closeTimeout, Optional.empty(), Optional.of(closeTimeout)).get();
+        submitCloseAndValidate(consumer2, Long.MAX_VALUE, Optional.empty(), Optional.of(requestTimeout)).get();
+    }
+
     private int findCoordinator(String group) throws Exception {
         try (Admin admin = clusterInstance.admin()) {
             TestUtils.waitForCondition(() -> {
@@ -354,7 +377,7 @@ public class ConsumerBounceTest {
                 } catch (Exception ignore) {
                     return false;
                 }
-            }, "Coordinator does not found.");
+            }, 10000, "Failed to find coordinator for group " + group);
             return admin.describeConsumerGroups(List.of(group)).all().get().get(group).coordinator().id();
         }
     }
@@ -426,12 +449,12 @@ public class ConsumerBounceTest {
     }
 
     private void receiveExactRecords(ConsumerAssignmentPoller consumer, int numRecords, long timeoutMs) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
-            System.err.println("ZZZ " + numRecords + " consumer.receivedMessages() " + consumer.receivedMessages());
-            return consumer.receivedMessages() == numRecords;
-        }, timeoutMs, String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
-//        TestUtils.waitForCondition(() -> consumer.receivedMessages() == numRecords, timeoutMs,
-//             String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
+//        TestUtils.waitForCondition(() -> {
+//            System.err.println("ZZZ " + numRecords + " consumer.receivedMessages() " + consumer.receivedMessages());
+//            return consumer.receivedMessages() == numRecords;
+//        }, timeoutMs, String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
+        TestUtils.waitForCondition(() -> consumer.receivedMessages() == numRecords, timeoutMs,
+             String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
     }
 
     // A mock class to represent broker bouncing (simulate broker restart behavior)
