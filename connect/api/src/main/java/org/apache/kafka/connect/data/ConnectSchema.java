@@ -20,8 +20,6 @@ import org.apache.kafka.connect.errors.DataException;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -44,31 +42,31 @@ public class ConnectSchema implements Schema {
     private static final Map<Class<?>, Type> JAVA_CLASS_SCHEMA_TYPES = new HashMap<>();
 
     static {
-        SCHEMA_TYPE_CLASSES.put(Type.INT8, Collections.singletonList(Byte.class));
-        SCHEMA_TYPE_CLASSES.put(Type.INT16, Collections.singletonList(Short.class));
-        SCHEMA_TYPE_CLASSES.put(Type.INT32, Collections.singletonList(Integer.class));
-        SCHEMA_TYPE_CLASSES.put(Type.INT64, Collections.singletonList(Long.class));
-        SCHEMA_TYPE_CLASSES.put(Type.FLOAT32, Collections.singletonList(Float.class));
-        SCHEMA_TYPE_CLASSES.put(Type.FLOAT64, Collections.singletonList(Double.class));
-        SCHEMA_TYPE_CLASSES.put(Type.BOOLEAN, Collections.singletonList(Boolean.class));
-        SCHEMA_TYPE_CLASSES.put(Type.STRING, Collections.singletonList(String.class));
+        SCHEMA_TYPE_CLASSES.put(Type.INT8, List.of(Byte.class));
+        SCHEMA_TYPE_CLASSES.put(Type.INT16, List.of(Short.class));
+        SCHEMA_TYPE_CLASSES.put(Type.INT32, List.of(Integer.class));
+        SCHEMA_TYPE_CLASSES.put(Type.INT64, List.of(Long.class));
+        SCHEMA_TYPE_CLASSES.put(Type.FLOAT32, List.of(Float.class));
+        SCHEMA_TYPE_CLASSES.put(Type.FLOAT64, List.of(Double.class));
+        SCHEMA_TYPE_CLASSES.put(Type.BOOLEAN, List.of(Boolean.class));
+        SCHEMA_TYPE_CLASSES.put(Type.STRING, List.of(String.class));
         // Bytes are special and have 2 representations. byte[] causes problems because it doesn't handle equals() and
         // hashCode() like we want objects to, so we support both byte[] and ByteBuffer. Using plain byte[] can cause
         // those methods to fail, so ByteBuffers are recommended
-        SCHEMA_TYPE_CLASSES.put(Type.BYTES, Arrays.asList(byte[].class, ByteBuffer.class));
-        SCHEMA_TYPE_CLASSES.put(Type.ARRAY, Collections.singletonList(List.class));
-        SCHEMA_TYPE_CLASSES.put(Type.MAP, Collections.singletonList(Map.class));
-        SCHEMA_TYPE_CLASSES.put(Type.STRUCT, Collections.singletonList(Struct.class));
+        SCHEMA_TYPE_CLASSES.put(Type.BYTES, List.of(byte[].class, ByteBuffer.class));
+        SCHEMA_TYPE_CLASSES.put(Type.ARRAY, List.of(List.class));
+        SCHEMA_TYPE_CLASSES.put(Type.MAP, List.of(Map.class));
+        SCHEMA_TYPE_CLASSES.put(Type.STRUCT, List.of(Struct.class));
 
         for (Map.Entry<Type, List<Class<?>>> schemaClasses : SCHEMA_TYPE_CLASSES.entrySet()) {
             for (Class<?> schemaClass : schemaClasses.getValue())
                 JAVA_CLASS_SCHEMA_TYPES.put(schemaClass, schemaClasses.getKey());
         }
 
-        LOGICAL_TYPE_CLASSES.put(Decimal.LOGICAL_NAME, Collections.singletonList(BigDecimal.class));
-        LOGICAL_TYPE_CLASSES.put(Date.LOGICAL_NAME, Collections.singletonList(java.util.Date.class));
-        LOGICAL_TYPE_CLASSES.put(Time.LOGICAL_NAME, Collections.singletonList(java.util.Date.class));
-        LOGICAL_TYPE_CLASSES.put(Timestamp.LOGICAL_NAME, Collections.singletonList(java.util.Date.class));
+        LOGICAL_TYPE_CLASSES.put(Decimal.LOGICAL_NAME, List.of(BigDecimal.class));
+        LOGICAL_TYPE_CLASSES.put(Date.LOGICAL_NAME, List.of(java.util.Date.class));
+        LOGICAL_TYPE_CLASSES.put(Time.LOGICAL_NAME, List.of(java.util.Date.class));
+        LOGICAL_TYPE_CLASSES.put(Timestamp.LOGICAL_NAME, List.of(java.util.Date.class));
         // We don't need to put these into JAVA_CLASS_SCHEMA_TYPES since that's only used to determine schemas for
         // schemaless data and logical types will have ambiguous schemas (e.g. many of them use the same Java class) so
         // they should not be used without schemas.
@@ -110,7 +108,7 @@ public class ConnectSchema implements Schema {
         this.parameters = parameters;
 
         if (this.type == Type.STRUCT) {
-            this.fields = fields == null ? Collections.emptyList() : fields;
+            this.fields = fields == null ? List.of() : fields;
             this.fieldsByName = new HashMap<>(this.fields.size());
             for (Field field : this.fields)
                 fieldsByName.put(field.name(), field);
@@ -285,7 +283,7 @@ public class ConnectSchema implements Schema {
     private static List<Class<?>> expectedClassesFor(Schema schema) {
         List<Class<?>> expectedClasses = LOGICAL_TYPE_CLASSES.get(schema.name());
         if (expectedClasses == null)
-            expectedClasses = SCHEMA_TYPE_CLASSES.getOrDefault(schema.type(), Collections.emptyList());
+            expectedClasses = SCHEMA_TYPE_CLASSES.getOrDefault(schema.type(), List.of());
         return expectedClasses;
     }
 

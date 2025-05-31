@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
@@ -54,7 +53,7 @@ import jakarta.ws.rs.core.SecurityContext;
 public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JaasBasicAuthFilter.class);
-    private static final Set<RequestMatcher> INTERNAL_REQUEST_MATCHERS = new HashSet<>(Arrays.asList(
+    private static final Set<RequestMatcher> INTERNAL_REQUEST_MATCHERS = new HashSet<>(List.of(
             new RequestMatcher(HttpMethod.POST, "/?connectors/([^/]+)/tasks/?"),
             new RequestMatcher(HttpMethod.PUT, "/?connectors/[^/]+/fence/?")
     ));

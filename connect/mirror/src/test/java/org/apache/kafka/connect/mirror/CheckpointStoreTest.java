@@ -23,7 +23,6 @@ import org.apache.kafka.connect.util.Callback;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -63,7 +62,7 @@ public class CheckpointStoreTest {
             assertTrue(store.isInitialized());
 
             Map<String, Map<TopicPartition, Checkpoint>> expected = new HashMap<>();
-            expected.put("group1", Collections.singletonMap(new TopicPartition("t1", 0),
+            expected.put("group1", Map.of(new TopicPartition("t1", 0),
                     new Checkpoint("group1", new TopicPartition("t1", 0), 1, 1, "")));
             assertEquals(expected, store.checkpointsPerConsumerGroup);
         }

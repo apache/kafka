@@ -32,7 +32,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -261,8 +260,8 @@ public class JaasBasicAuthFilterTest {
     private JaasBasicAuthFilter setupJaasFilter(String name, String credentialFilePath) {
         TestJaasConfig configuration = new TestJaasConfig();
         Map<String, Object> moduleOptions = credentialFilePath != null
-            ? Collections.singletonMap("file", credentialFilePath)
-            : Collections.emptyMap();
+            ? Map.of("file", credentialFilePath)
+            : Map.of();
         configuration.addEntry(name, LOGIN_MODULE, moduleOptions);
         return new JaasBasicAuthFilter(configuration);
     }

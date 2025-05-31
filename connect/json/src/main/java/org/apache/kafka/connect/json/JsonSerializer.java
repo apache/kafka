@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.module.blackbird.BlackbirdModule;
 
-import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -39,7 +38,7 @@ public class JsonSerializer implements Serializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonSerializer() {
-        this(Collections.emptySet(), new JsonNodeFactory(true), true);
+        this(Set.of(), new JsonNodeFactory(true), true);
     }
 
     /**
