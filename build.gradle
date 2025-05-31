@@ -54,6 +54,9 @@ ext {
   defaultMaxHeapSize = "2g"
   defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
 
+  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17))
+    defaultJvmArgs.add("-XX:+EnableDynamicAgentLoading")
+
   // "JEP 403: Strongly Encapsulate JDK Internals" causes some tests to fail when they try
   // to access internals (often via mocking libraries). We use `--add-opens` as a workaround
   // for now and we'll fix it properly (where possible) via KAFKA-13275.
@@ -521,6 +524,15 @@ subprojects {
     maxHeapSize = "3g"
     jvmArgs = defaultJvmArgs
 
+    doFirst {
+      systemProperty("mockito.mockmaker", "inline")
+      systemProperty("mockito.inline.extended", "true")
+
+      if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) {
+        jvmArgs.add("-XX:+EnableDynamicAgentLoading")
+      }
+    }
+
     // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
     systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
     systemProperty("kafka.test.catalog.file", project.findProperty("kafka.test.catalog.file"))
@@ -619,6 +631,15 @@ subprojects {
     cleanTest {
       delete t.reports.junitXml.outputLocation
       delete t.reports.html.outputLocation
+    }
+
+    t.doFirst {
+      systemProperty("mockito.mockmaker", "inline")
+      systemProperty("mockito.inline.extended", "true")
+
+      if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) {
+        jvmArgs.add("-XX:+EnableDynamicAgentLoading")
+      }
     }
   }
 
