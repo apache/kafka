@@ -24,7 +24,6 @@ import org.apache.kafka.connect.connector.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -91,7 +90,7 @@ public class MockConnector extends Connector {
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         log.debug("Creating single task for MockConnector");
-        return Collections.singletonList(config);
+        return List.of(config);
     }
 
     @Override

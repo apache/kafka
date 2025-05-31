@@ -29,7 +29,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -55,7 +54,7 @@ public class ValueToKeyTest {
 
     @Test
     public void schemaless() {
-        xform.configure(Collections.singletonMap("fields", "a,b"));
+        xform.configure(Map.of("fields", "a,b"));
 
         final HashMap<String, Integer> value = new HashMap<>();
         value.put("a", 1);
@@ -75,7 +74,7 @@ public class ValueToKeyTest {
 
     @Test
     public void withSchema() {
-        xform.configure(Collections.singletonMap("fields", "a,b"));
+        xform.configure(Map.of("fields", "a,b"));
 
         final Schema valueSchema = SchemaBuilder.struct()
                 .field("a", Schema.INT32_SCHEMA)
@@ -106,7 +105,7 @@ public class ValueToKeyTest {
 
     @Test
     public void nonExistingField() {
-        xform.configure(Collections.singletonMap("fields", "not_exist"));
+        xform.configure(Map.of("fields", "not_exist"));
 
         final Schema valueSchema = SchemaBuilder.struct()
             .field("a", Schema.INT32_SCHEMA)

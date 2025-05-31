@@ -231,38 +231,26 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     }
 
     private SchemaBuilder convertFieldType(Schema.Type type) {
-        switch (type) {
-            case INT8:
-                return SchemaBuilder.int8();
-            case INT16:
-                return SchemaBuilder.int16();
-            case INT32:
-                return SchemaBuilder.int32();
-            case INT64:
-                return SchemaBuilder.int64();
-            case FLOAT32:
-                return SchemaBuilder.float32();
-            case FLOAT64:
-                return SchemaBuilder.float64();
-            case BOOLEAN:
-                return SchemaBuilder.bool();
-            case STRING:
-                return SchemaBuilder.string();
-            default:
-                throw new DataException("Unexpected type in Cast transformation: " + type);
-        }
+        return switch (type) {
+            case INT8 -> SchemaBuilder.int8();
+            case INT16 -> SchemaBuilder.int16();
+            case INT32 -> SchemaBuilder.int32();
+            case INT64 -> SchemaBuilder.int64();
+            case FLOAT32 -> SchemaBuilder.float32();
+            case FLOAT64 -> SchemaBuilder.float64();
+            case BOOLEAN -> SchemaBuilder.bool();
+            case STRING -> SchemaBuilder.string();
+            default -> throw new DataException("Unexpected type in Cast transformation: " + type);
+        };
     }
 
     private static Object encodeLogicalType(Schema schema, Object value) {
-        switch (schema.name()) {
-            case Date.LOGICAL_NAME:
-                return Date.fromLogical(schema, (java.util.Date) value);
-            case Time.LOGICAL_NAME:
-                return Time.fromLogical(schema, (java.util.Date) value);
-            case Timestamp.LOGICAL_NAME:
-                return Timestamp.fromLogical(schema, (java.util.Date) value);
-        }
-        return value;
+        return switch (schema.name()) {
+            case Date.LOGICAL_NAME -> Date.fromLogical(schema, (java.util.Date) value);
+            case Time.LOGICAL_NAME -> Time.fromLogical(schema, (java.util.Date) value);
+            case Timestamp.LOGICAL_NAME -> Timestamp.fromLogical(schema, (java.util.Date) value);
+            default -> value;
+        };
     }
 
     private static Object castValueToType(Schema schema, Object value, Schema.Type targetType) {
@@ -283,26 +271,17 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                 value = encodeLogicalType(schema, value);
             }
 
-            switch (targetType) {
-                case INT8:
-                    return castToInt8(value);
-                case INT16:
-                    return castToInt16(value);
-                case INT32:
-                    return castToInt32(value);
-                case INT64:
-                    return castToInt64(value);
-                case FLOAT32:
-                    return castToFloat32(value);
-                case FLOAT64:
-                    return castToFloat64(value);
-                case BOOLEAN:
-                    return castToBoolean(value);
-                case STRING:
-                    return castToString(value);
-                default:
-                    throw new DataException(targetType + " is not supported in the Cast transformation.");
-            }
+            return switch (targetType) {
+                case INT8 -> castToInt8(value);
+                case INT16 -> castToInt16(value);
+                case INT32 -> castToInt32(value);
+                case INT64 -> castToInt64(value);
+                case FLOAT32 -> castToFloat32(value);
+                case FLOAT64 -> castToFloat64(value);
+                case BOOLEAN -> castToBoolean(value);
+                case STRING -> castToString(value);
+                default -> throw new DataException(targetType + " is not supported in the Cast transformation.");
+            };
         } catch (NumberFormatException e) {
             throw new DataException("Value (" + value.toString() + ") was out of range for requested data type", e);
         }

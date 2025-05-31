@@ -53,7 +53,7 @@ public class SingleFieldPath {
         this.version = version;
         switch (version) {
             case V1: // backward compatibility
-                this.steps = Collections.singletonList(pathText);
+                this.steps = List.of(pathText);
                 break;
             case V2:
                 this.steps = buildFieldPathV2(pathText);

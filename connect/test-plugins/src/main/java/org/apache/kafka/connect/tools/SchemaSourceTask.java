@@ -27,7 +27,6 @@ import org.apache.kafka.server.util.ThroughputThrottler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -104,7 +103,7 @@ public class SchemaSourceTask extends SourceTask {
         }
 
         throttler = new ThroughputThrottler(throughput, System.currentTimeMillis());
-        partition = Collections.singletonMap(ID_FIELD, id);
+        partition = Map.of(ID_FIELD, id);
         Map<String, Object> previousOffset = this.context.offsetStorageReader().offset(partition);
         if (previousOffset != null) {
             seqno = (Long) previousOffset.get(SEQNO_FIELD) + 1;
@@ -124,7 +123,7 @@ public class SchemaSourceTask extends SourceTask {
                 throttler.throttle();
             }
 
-            Map<String, Long> ccOffset = Collections.singletonMap(SEQNO_FIELD, seqno);
+            Map<String, Long> ccOffset = Map.of(SEQNO_FIELD, seqno);
             int partitionVal = (int) (seqno % partitionCount);
             final Struct data;
             final SourceRecord srcRecord;
@@ -158,10 +157,10 @@ public class SchemaSourceTask extends SourceTask {
             System.out.println("{\"task\": " + id + ", \"seqno\": " + seqno + "}");
             seqno++;
             count++;
-            return Collections.singletonList(srcRecord);
+            return List.of(srcRecord);
         } else {
             throttler.throttle();
-            return Collections.emptyList();
+            return List.of();
         }
     }
 
