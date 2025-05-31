@@ -20,13 +20,16 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
+import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collections;
@@ -89,6 +92,11 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
 
     /**
+     * The metadata hash which is computed based on the all subscribed topics.
+     */
+    protected final TimelineLong metadataHash;
+
+    /**
      * The group's subscription type.
      * This value is set to Homogeneous by default.
      */
@@ -134,6 +142,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.metadataHash = new TimelineLong(snapshotRegistry);
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -356,6 +365,13 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
+     * @return The metadata hash.
+     */
+    public long metadataHash() {
+        return metadataHash.get();
+    }
+
+    /**
      * Updates the subscription metadata. This replaces the previous one.
      *
      * @param subscriptionMetadata The new subscription metadata.
@@ -365,6 +381,15 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     ) {
         this.subscribedTopicMetadata.clear();
         this.subscribedTopicMetadata.putAll(subscriptionMetadata);
+    }
+
+    /**
+     * Updates the metadata hash.
+     *
+     * @param metadataHash The new metadata hash.
+     */
+    public void setMetadataHash(long metadataHash) {
+        this.metadataHash.set(metadataHash);
     }
 
     /**
@@ -396,6 +421,24 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         });
 
         return Collections.unmodifiableMap(newSubscriptionMetadata);
+    }
+
+    public static long computeMetadataHash(
+        Map<String, SubscriptionCount> subscribedTopicNames,
+        Map<String, Long> topicHashCache,
+        MetadataImage metadataImage
+    ) {
+        Map<String, Long> topicHash = new HashMap<>(subscribedTopicNames.size());
+        subscribedTopicNames.keySet().forEach(topicName -> {
+            TopicImage topicImage = metadataImage.topics().getTopic(topicName);
+            if (topicImage != null) {
+                topicHash.put(
+                    topicName,
+                    topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
+                );
+            }
+        });
+        return Utils.computeGroupHash(topicHash);
     }
 
     /**
