@@ -33,7 +33,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -140,8 +139,8 @@ public class CreateTopicsRequestWithPolicyTest {
 
             validateValidCreateTopicsRequests(
                 new NewTopic("topic4", Map.of(
-                    0, Arrays.asList(1, 0),
-                    1, Arrays.asList(0, 1)
+                    0, List.of(1, 0),
+                    1, List.of(0, 1)
                 )),
                 admin,
                 false
@@ -152,7 +151,7 @@ public class CreateTopicsRequestWithPolicyTest {
     private void validateErrorCreateTopicsRequests(NewTopic topic, Admin admin, boolean validateOnly, Class<? extends Throwable> expectedExceptionClass, String expectedErrorMessage) {
         ExecutionException exception = assertThrows(ExecutionException.class, () ->
                 admin.createTopics(List.of(topic), new CreateTopicsOptions().validateOnly(validateOnly)).all().get());
-        assertInstanceOf(expectedExceptionClass, exception.getCause());
+        assertInstanceOf(expectedExceptionClass, exception.getCause(), "Expected " + expectedExceptionClass.getSimpleName() + ", but got " + exception.getCause().getClass().getSimpleName());
         assertTrue(exception.getMessage().contains(expectedErrorMessage));
     }
 
