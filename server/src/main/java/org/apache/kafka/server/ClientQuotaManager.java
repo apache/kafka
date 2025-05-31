@@ -482,10 +482,9 @@ public class ClientQuotaManager {
      * This function either returns the sensors for a given client id or creates them if they don't exist
      */
     public ClientSensors getOrCreateQuotaSensors(Session session, String clientId) {
-        Map<String, String> metricTags = Map.copyOf(
-                quotaCallback instanceof DefaultQuotaCallback defaultCallback
+        Map<String, String> metricTags = quotaCallback instanceof DefaultQuotaCallback defaultCallback
                         ? defaultCallback.quotaMetricTags(session.sanitizedUser, clientId)
-                        : quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId));
+                        : quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId);
         ClientSensors sensors = new ClientSensors(
                 metricTags,
                 sensorAccessor.getOrCreate(
@@ -516,22 +515,6 @@ public class ClientQuotaManager {
     }
 
     private String metricTagsToSensorSuffix(Map<String, String> metricTags) {
-        if (metricTags.isEmpty()) {
-            return "";
-        }
-
-        // Handle GroupedUserQuotaCallback case
-        if (metricTags.containsKey("group")) {
-            return metricTags.get("group");
-        }
-
-        // Handle DefaultQuotaCallback case
-        if (metricTags.containsKey(DefaultTags.USER) || metricTags.containsKey(DefaultTags.CLIENT_ID)) {
-            String userTag = metricTags.getOrDefault(DefaultTags.USER, "");
-            String clientIdTag = metricTags.getOrDefault(DefaultTags.CLIENT_ID, "");
-            return userTag + ":" + clientIdTag;
-        }
-
         return String.join(":", metricTags.values());
     }
 
