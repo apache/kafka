@@ -37,7 +37,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteShareGroupOffsetsRequestData, DeleteShareGroupStateRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeShareGroupOffsetsRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, InitializeShareGroupStateRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, OffsetFetchResponseData, ProduceRequestData, ReadShareGroupStateRequestData, ReadShareGroupStateSummaryRequestData, ShareAcknowledgeRequestData, ShareFetchRequestData, ShareGroupDescribeRequestData, ShareGroupHeartbeatRequestData, SyncGroupRequestData, WriteShareGroupStateRequestData, WriteTxnMarkersRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, AlterShareGroupOffsetsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteShareGroupOffsetsRequestData, DeleteShareGroupStateRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeShareGroupOffsetsRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, InitializeShareGroupStateRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, OffsetFetchResponseData, ProduceRequestData, ReadShareGroupStateRequestData, ReadShareGroupStateSummaryRequestData, ShareAcknowledgeRequestData, ShareFetchRequestData, ShareGroupDescribeRequestData, ShareGroupHeartbeatRequestData, SyncGroupRequestData, WriteShareGroupStateRequestData, WriteTxnMarkersRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
@@ -221,6 +221,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS -> ((resp: DescribeShareGroupOffsetsResponse) => Errors.forCode(
       resp.data.groups.asScala.find(g => shareGroup == g.groupId).head.errorCode)),
     ApiKeys.DELETE_SHARE_GROUP_OFFSETS -> ((resp: DeleteShareGroupOffsetsResponse) => Errors.forCode(
+      resp.data.errorCode)),
+    ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> ((resp: AlterShareGroupOffsetsResponse) => Errors.forCode(
       resp.data.errorCode))
   )
 
@@ -288,7 +290,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     ApiKeys.DELETE_SHARE_GROUP_STATE -> clusterAcl,
     ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY -> clusterAcl,
     ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS -> (shareGroupDescribeAcl ++ topicDescribeAcl),
-    ApiKeys.DELETE_SHARE_GROUP_OFFSETS -> (shareGroupDeleteAcl ++ topicReadAcl)
+    ApiKeys.DELETE_SHARE_GROUP_OFFSETS -> (shareGroupDeleteAcl ++ topicReadAcl),
+    ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> (shareGroupReadAcl ++ topicReadAcl)
   )
 
   private def createMetadataRequest(allowAutoTopicCreation: Boolean) = {
@@ -809,6 +812,19 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setTopicName(topic)
       ).asJava)).build(ApiKeys.DELETE_SHARE_GROUP_OFFSETS.latestVersion)
 
+  private def alterShareGroupOffsetsRequest = {
+    val data = new AlterShareGroupOffsetsRequestData
+    val topicCollection = new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection()
+    topicCollection.add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+      .setTopicName(topic)
+      .setPartitions(List(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+        .setPartitionIndex(part)
+        .setStartOffset(0)
+      ).asJava))
+    data.setGroupId(shareGroup).setTopics(topicCollection)
+    new AlterShareGroupOffsetsRequest.Builder(data).build(ApiKeys.ALTER_SHARE_GROUP_OFFSETS.latestVersion)
+  }
+
   private def sendRequests(requestKeyToRequest: mutable.Map[ApiKeys, AbstractRequest], topicExists: Boolean = true,
                            topicNames: Map[Uuid, String] = getTopicNames()) = {
     for ((key, request) <- requestKeyToRequest) {
@@ -891,6 +907,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY -> readShareGroupStateSummaryRequest,
       ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS -> describeShareGroupOffsetsRequest,
       ApiKeys.DELETE_SHARE_GROUP_OFFSETS -> deleteShareGroupOffsetsRequest,
+      ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> alterShareGroupOffsetsRequest,
 
       // Delete the topic last
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
@@ -3521,6 +3538,55 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val response = connectAndReceive[DeleteShareGroupOffsetsResponse](request, listenerName = listenerName)
     assertEquals(1, response.data.responses.size)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.responses.get(0).errorCode, s"Unexpected response $response")
+  }
+
+  @Test
+  def testAlterShareGroupOffsetsWithGroupReadAndTopicReadAcl(): Unit = {
+    addAndVerifyAcls(shareGroupReadAcl(shareGroupResource), shareGroupResource)
+    addAndVerifyAcls(topicReadAcl(topicResource), topicResource)
+
+    val request = alterShareGroupOffsetsRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @Test
+  def testAlterShareGroupOffsetsWithOperationAll(): Unit = {
+    val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
+    addAndVerifyAcls(Set(allowAllOpsAcl), shareGroupResource)
+    addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
+
+    val request = alterShareGroupOffsetsRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @Test
+  def testAlterShareGroupOffsetsWithoutGroupReadOrTopicReadAcl(): Unit = {
+    removeAllClientAcls()
+
+    val request = alterShareGroupOffsetsRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @Test
+  def testAlterShareGroupOffsetsWithoutGroupReadAcl(): Unit = {
+    addAndVerifyAcls(topicReadAcl(topicResource), topicResource)
+
+    val request = alterShareGroupOffsetsRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @Test
+  def testAlterShareGroupOffsetsWithoutTopicReadAcl(): Unit = {
+    addAndVerifyAcls(shareGroupReadAcl(shareGroupResource), shareGroupResource)
+
+    val request = alterShareGroupOffsetsRequest
+    val response = connectAndReceive[AlterShareGroupOffsetsResponse](request, listenerName = listenerName)
+    assertEquals(1, response.data.responses.size)
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.responses.get(0).partitions.get(0).errorCode, s"Unexpected response $response")
   }
 
   private def sendAndReceiveFirstRegexHeartbeat(memberId: String,
