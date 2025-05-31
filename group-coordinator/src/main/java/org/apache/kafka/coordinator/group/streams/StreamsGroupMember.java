@@ -31,7 +31,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Contains all information related to a member within a Streams group.
+ * Contains all information related to a member within a streams group.
  * <p>
  * This class is immutable and is fully backed by records stored in the __consumer_offsets topic.
  *
@@ -322,7 +322,7 @@ public record StreamsGroupMember(String memberId,
     }
 
     /**
-     * Creates a member description for the Streams group describe response from this member.
+     * Creates a member description for the streams group describe response from this member.
      *
      * @param targetAssignment The target assignment of this member in the corresponding group.
      *

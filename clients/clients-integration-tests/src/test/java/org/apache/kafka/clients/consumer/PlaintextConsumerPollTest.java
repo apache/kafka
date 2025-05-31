@@ -38,7 +38,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -47,6 +46,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.ClientsTestUtils.awaitRebalance;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
+import static org.apache.kafka.clients.ClientsTestUtils.ensureNoRebalance;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.waitForPollThrowException;
 import static org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
@@ -252,7 +252,7 @@ public class PlaintextConsumerPollTest {
 
     private void testMaxPollIntervalMsDelayInAssignment(Map<String, Object> config) throws InterruptedException {
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
-            TestConsumerReassignmentListener listener = new TestConsumerReassignmentListener() {
+            var listener = new TestConsumerReassignmentListener() {
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
                     // sleep longer than the session timeout, we should still be in the group after invocation

@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,7 +21,7 @@ import joptsimple._
 import kafka.server.DynamicConfig
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListConfigResourcesOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
@@ -342,6 +342,42 @@ object ConfigCommand extends Logging {
   }
 
   private def describeResourceConfig(adminClient: Admin, entityType: String, entityName: Option[String], describeAll: Boolean): Unit = {
+    if (!describeAll) {
+      entityName.foreach { name =>
+        entityType match {
+          case TopicType =>
+            Topic.validate(name)
+            if (!adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names.get.contains(name)) {
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
+              return
+            }
+          case BrokerType | BrokerLoggerConfigType =>
+            if (adminClient.describeCluster.nodes.get.stream.anyMatch(_.idString == name)) {
+              // valid broker id
+            } else if (name == BrokerDefaultEntityName) {
+              // default broker configs
+            } else {
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
+              return
+            }
+          case ClientMetricsType =>
+            if (adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions).all.get
+              .stream.noneMatch(_.name == name)) {
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
+              return
+            }
+          case GroupType =>
+            if (adminClient.listGroups().all.get.stream.noneMatch(_.groupId() == name) &&
+              adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all.get
+                .stream.noneMatch(_.name == name)) {
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
+              return
+            }
+          case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
+        }
+      }
+    }
+
     val entities = entityName
       .map(name => List(name))
       .getOrElse(entityType match {
@@ -350,9 +386,10 @@ object ConfigCommand extends Logging {
         case BrokerType | BrokerLoggerConfigType =>
           adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ BrokerDefaultEntityName
         case ClientMetricsType =>
-          adminClient.listClientMetricsResources().all().get().asScala.map(_.name).toSeq
+          adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions).all().get().asScala.map(_.name).toSeq
         case GroupType =>
-          adminClient.listGroups().all.get.asScala.map(_.groupId).toSeq
+          adminClient.listGroups().all.get.asScala.map(_.groupId).toSet ++
+            adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all().get().asScala.map(_.name).toSet
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 
