@@ -67,7 +67,7 @@ class TestUtils {
      * Create a temporary relative directory in the specified parent directory with the given prefix.
      *
      */
-    static File tempDirectory() {
+    public static File tempDirectory() {
         final File file;
         String prefix = "kafka-";
         try {
