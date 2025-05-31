@@ -2695,8 +2695,8 @@ public class GroupMetadataManager {
             if (topicImage != null) {
                 Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicImage.id()) ? alreadyInitialized.get(topicImage.id()).partitions() : Set.of();
                 if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicImage.partitions().size()) {
-                    Set<Integer> partitionSet = IntStream.range(0, topicImage.partitions().size()).boxed().collect(Collectors.toSet());
-                    partitionSet.removeAll(alreadyInitializedPartSet);
+                    Set<Integer> partitionSet = IntStream.range(0, topicImage.partitions().size()).boxed()
+                        .filter(p -> !alreadyInitializedPartSet.contains(p)).collect(Collectors.toSet());
                     // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
                     // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
                     // are also updating the timestamp here which means, old initializing will not be included repeatedly.
