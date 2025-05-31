@@ -88,7 +88,7 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
 
     /**
      * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
-     * specified time, returns throttle time in milliseconds. The quota is strict meaning that it
+     * specified time, returns throttle time in milliseconds. The quota is strict, meaning that it
      * does not accept any mutations once the quota is exhausted until it gets back to the defined rate.
      *
      * @param session The session from which the user is extracted
@@ -121,7 +121,7 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
 
     /**
      * Returns a StrictControllerMutationQuota for the given user/clientId pair or
-     * a UnboundedControllerMutationQuota if the quota is disabled.
+     * a UNBOUNDED_CONTROLLER_MUTATION_QUOTA if the quota is disabled.
      *
      * @param session The session from which the user is extracted
      * @param clientId The client id
@@ -142,7 +142,7 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
 
     /**
      * Returns a PermissiveControllerMutationQuota for the given user/clientId pair or
-     * a UnboundedControllerMutationQuota if the quota is disabled.
+     * a UNBOUNDED_CONTROLLER_MUTATION_QUOTA if the quota is disabled.
      *
      * @param session The session from which the user is extracted
      * @param clientId The client id
@@ -181,7 +181,7 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
      * This calculates the amount of time needed to bring the TokenBucket within quota
      * assuming that no new metrics are recorded.
      * Basically, if a value < 0 is observed, the time required to bring it to zero is
-     * -value / refill rate (quota bound) * 1000.
+     * -value/ refill rate (quota bound) * 1000.
      */
     public static long throttleTimeMs(QuotaViolationException e) {
         if (e.metric().measurable() instanceof TokenBucket) {

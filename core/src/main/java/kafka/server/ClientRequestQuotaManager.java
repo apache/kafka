@@ -71,8 +71,8 @@ public class ClientRequestQuotaManager extends ClientQuotaManager {
     }
 
     /**
-     * Records that a user/clientId changed request processing time being throttled. If quota has been violated, return
-     * throttle time in milliseconds. Throttle time calculation may be overridden by sub-classes.
+     * Records that a user/clientId changed request processing time being throttled. If the quota has been violated, return
+     * throttle time in milliseconds. Subclasses may override throttle time calculation.
      * @param request client request
      * @return Number of milliseconds to throttle in case of quota violation. Zero otherwise
      */

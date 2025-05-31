@@ -118,7 +118,7 @@ public class ClientQuotaManager {
         }
     }
 
-    // Keep as class - uses singleton pattern which doesn't work well with records
+    // Keep as a class-uses a singleton pattern which doesn't work well with records
     public static class DefaultUserEntity implements ClientQuotaEntity.ConfigEntity {
         public static final DefaultUserEntity INSTANCE = new DefaultUserEntity();
 
@@ -277,7 +277,7 @@ public class ClientQuotaManager {
                 .map(Plugin::get)
                 .orElse(new DefaultQuotaCallback());
 
-        start(); // Use start method to keep spotbugs happy
+        start(); // Use the start method to keep spotbugs happy
     }
 
     public ClientQuotaManager(ClientQuotaManagerConfig config,
@@ -330,10 +330,10 @@ public class ClientQuotaManager {
 
     /**
      * Returns true if any quotas are enabled for this quota manager. This is used
-     * to determine if quota related metrics should be created.
+     * to determine if quota-related metrics should be created.
      * Note: If any quotas (static defaults, dynamic defaults or quota overrides) have
      * been configured for this broker at any time for this quota type, quotasEnabled will
-     * return true until the next broker restart, even if all quotas are subsequently deleted.
+     * return true until the next broker restarts, even if all quotas are subsequently deleted.
      */
     public boolean quotasEnabled() {
         return quotaTypesEnabled != QuotaTypes.NO_QUOTAS;
@@ -402,7 +402,7 @@ public class ClientQuotaManager {
     }
 
     /**
-     * Returns maximum value that could be recorded without guaranteed throttling.
+     * Returns the maximum value that could be recorded without guaranteed throttling.
      * Recording any larger value will always be throttled, even if no other values were recorded in the quota window.
      * This is used for deciding the maximum bytes that can be fetched at once
      */
@@ -625,9 +625,9 @@ public class ClientQuotaManager {
 
 
     /**
-     * Updates metrics configs. This is invoked when quota configs are updated when partitions leaders change
+     * Updates metrics configs. This is invoked when quota configs are updated when partition leaders change,
      * and custom callbacks that implement partition-based quotas have updated quotas.
-     * param updatedQuotaEntity If set to one entity and quotas have only been enabled at one
+     * Param updatedQuotaEntity If set to one entity and quotas have only been enabled at one
      *    level, then an optimized update is performed with a single metric update. If None is provided,
      *    or if custom callbacks are used or if multi-level quotas have been enabled, all metric configs
      *    are checked and updated if required.
@@ -702,7 +702,7 @@ public class ClientQuotaManager {
 
     public void initiateShutdown() {
         throttledChannelReaper.initiateShutdown();
-        // improve shutdown time by waking up any ShutdownableThread(s) blocked on poll by sending a no-op
+        // improve shutdown time by waking up any ShutdownThread(s) blocked on poll by sending a no-op
         delayQueue.add(new ThrottledChannel(time, 0, new ThrottleCallback() {
             @Override
             public void startThrottling() {}
@@ -803,7 +803,7 @@ public class ClientQuotaManager {
 
         @Override
         public boolean updateClusterMetadata(Cluster cluster) {
-            // Default quota callback does not use any cluster metadata
+            // The default quota callback does not use any cluster metadata
             return false;
         }
 
