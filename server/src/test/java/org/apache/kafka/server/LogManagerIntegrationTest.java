@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
 import org.apache.kafka.test.TestUtils;
 
@@ -58,10 +59,10 @@ public class LogManagerIntegrationTest {
         this.cluster = cluster;
     }
 
-    @ClusterTest(types = {Type.KRAFT}, brokers = 3)
+    @ClusterTest(types = {Type.KRAFT})
     public void testIOExceptionOnLogSegmentCloseResultsInRecovery() throws IOException, InterruptedException, ExecutionException {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic("foo", 1, (short) 3))).all().get();
+            admin.createTopics(List.of(new NewTopic("foo", 1, (short) 1))).all().get();
         }
         cluster.waitForTopic("foo", 1);
 
@@ -87,13 +88,11 @@ public class LogManagerIntegrationTest {
         assertTrue(timeIndexFile.setReadOnly());
 
         cluster.brokers().get(0).shutdown();
-        try (Admin admin = cluster.admin()) {
-            TestUtils.waitForCondition(() -> {
-                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
-                        .topicNameValues().get("foo").get().partitions();
-                return partitionInfos.get(0).isr().size() == 2;
-            }, "isr size is not shrink to 2");
-        }
+
+        assertEquals(1, cluster.brokers().get(0).config().logDirs().size());
+        String logDir = cluster.brokers().get(0).config().logDirs().get(0);
+        CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir);
+        assertFalse(cleanShutdownFileHandler.exists(), "Did not expect the clean shutdown file to exist");
 
         // Ensure we have a corrupt index on broker shutdown
         long maxIndexSize = cluster.brokers().get(0).config().logIndexSizeMaxBytes();
@@ -110,8 +109,8 @@ public class LogManagerIntegrationTest {
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
                         .topicNameValues().get("foo").get().partitions();
-                return partitionInfos.get(0).isr().size() == 3;
-            }, "isr size is not expand to 3");
+                return partitionInfos.get(0).leader().id() == 0;
+            }, "Partition does not have a leader assigned");
         }
 
         // Ensure that sanity check does not fail
