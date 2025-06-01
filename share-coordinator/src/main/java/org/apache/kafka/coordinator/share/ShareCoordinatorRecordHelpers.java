@@ -51,7 +51,7 @@ public class ShareCoordinatorRecordHelpers {
         );
     }
 
-    public static CoordinatorRecord newShareSnapshotUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
+    public static CoordinatorRecord newShareUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
         return CoordinatorRecord.record(
             new ShareUpdateKey()
                 .setGroupId(groupId)
