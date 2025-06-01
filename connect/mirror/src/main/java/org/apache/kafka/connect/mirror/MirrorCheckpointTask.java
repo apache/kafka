@@ -16,23 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.GroupState;
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.GroupIdNotFoundException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.source.SourceRecord;
-import org.apache.kafka.connect.source.SourceTask;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,7 +30,22 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.data.Schema;
 import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.source.SourceTask;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Emits checkpoints for upstream consumer groups. */
 public class MirrorCheckpointTask extends SourceTask {
@@ -368,6 +366,22 @@ public class MirrorCheckpointTask extends SourceTask {
                     // `targetOffsetAndMetadata` here is null. For this case, just sync the offset to target.
                     log.warn("Group {} offset for partition {} may has been reset to a negative offset, just sync the offset to target.",
                             consumerGroupId, topicPartition);
+                }
+
+                // In bidirectional replication, ensure we're using the latest offset
+                // Check if the converted offset is actually behind what's already in the primary
+                // for this consumer group and topic partition
+                Checkpoint existingCheckpoint = checkpointStore.get(consumerGroupId) != null ?
+                    checkpointStore.get(consumerGroupId).get(topicPartition) : null;
+                if (existingCheckpoint != null) {
+                    long existingDownstreamOffset = existingCheckpoint.downstreamOffset();
+                    // If we have a more recent checkpoint for this topicPartition with a higher downstream offset,
+                    // we should not revert back to a lower offset
+                    if (existingDownstreamOffset > convertedOffset.offset()) {
+                        log.trace("Skipping sync for group {} topic partition {} because existing downstream offset {} is greater than converted offset {}",
+                                consumerGroupId, topicPartition, existingDownstreamOffset, convertedOffset.offset());
+                        continue;
+                    }
                 }
                 offsetToSync.put(topicPartition, convertedOffset);
             }
