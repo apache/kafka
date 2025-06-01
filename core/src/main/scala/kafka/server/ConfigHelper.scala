@@ -89,20 +89,19 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
       def createResponseConfig(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-        val configEntries = if (resource.configurationKeys == null || resource.configurationKeys.isEmpty) {
-          configs.view
-            .map { case (name, value) => createConfigEntry(name, value) }
-            .toList
-        } else {
-          val keys = resource.configurationKeys.asScala.toSet
-          configs.view
-            .filter { case (name, _) => keys.contains(name) }
-            .map { case (name, value) => createConfigEntry(name, value) }
-            .toList
-        }
+        val configEntries: Iterable[DescribeConfigsResponseData.DescribeConfigsResourceResult] =
+          if (resource.configurationKeys == null || resource.configurationKeys.isEmpty) {
+            configs.view.map { case (name, value) => createConfigEntry(name, value) }
+          } else {
+            val keys = resource.configurationKeys.asScala.toSet
+            configs.view
+              .filter { case (name, _) => keys.contains(name) }
+              .map { case (name, value) => createConfigEntry(name, value) }
+          }
+
         new DescribeConfigsResponseData.DescribeConfigsResult()
           .setErrorCode(Errors.NONE.code)
-          .setConfigs(configEntries.asJava)
+          .setConfigs(configEntries.toList.asJava)
       }
 
       try {
