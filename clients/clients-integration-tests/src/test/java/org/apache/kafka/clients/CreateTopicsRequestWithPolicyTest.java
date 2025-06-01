@@ -37,7 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -151,7 +151,11 @@ public class CreateTopicsRequestWithPolicyTest {
     private void validateErrorCreateTopicsRequests(NewTopic topic, Admin admin, boolean validateOnly, Class<? extends Throwable> expectedExceptionClass, String expectedErrorMessage) {
         ExecutionException exception = assertThrows(ExecutionException.class, () ->
                 admin.createTopics(List.of(topic), new CreateTopicsOptions().validateOnly(validateOnly)).all().get());
-        assertInstanceOf(expectedExceptionClass, exception.getCause(), "Expected " + expectedExceptionClass.getSimpleName() + ", but got " + exception.getCause().getClass().getSimpleName());
+        assertEquals(
+                expectedExceptionClass,
+                exception.getCause().getClass(),
+                "Expected " + expectedExceptionClass.getSimpleName() + ", but got " + exception.getCause().getClass().getSimpleName()
+        );
         assertTrue(exception.getMessage().contains(expectedErrorMessage));
     }
 
