@@ -25,13 +25,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public class ConsumerAssignmentPoller extends ShutdownableThread {
     private final Consumer<byte[], byte[]> consumer;
     private final Set<TopicPartition> partitionsToAssign;
     private final ConsumerRebalanceListener userRebalanceListener;
-    private volatile Throwable thrownException = null;
+    private volatile Optional<Throwable> thrownException = Optional.empty();
     private volatile int receivedMessages = 0;
     private final Set<TopicPartition> partitionAssignment = Collections.synchronizedSet(new HashSet<>());
     private volatile boolean subscriptionChanged = false;
@@ -117,12 +118,12 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         } catch (WakeupException e) {
             // ignore for shutdown
         } catch (Throwable e) {
-            thrownException = e;
+            thrownException = Optional.of(e);
             throw e;
         }
     }
 
-    public Throwable getThrownException() {
+    public Optional<Throwable> getThrownException() {
         return thrownException;
     }
 

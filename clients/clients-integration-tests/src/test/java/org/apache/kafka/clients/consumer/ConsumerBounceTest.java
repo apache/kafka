@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -43,6 +44,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,6 +62,7 @@ import static org.apache.kafka.common.test.TestUtils.SEEDED_RANDOM;
 import static org.apache.kafka.common.test.TestUtils.randomSelect;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -104,8 +107,8 @@ public class ConsumerBounceTest {
 
     private final ClusterInstance clusterInstance;
 
-    private List<Consumer<byte[], byte[]>> consumers;
-    private List<ConsumerAssignmentPoller> consumerPollers;
+    private final List<Consumer<byte[], byte[]>> consumers = new ArrayList<>();
+    private final List<ConsumerAssignmentPoller> consumerPollers = new ArrayList<>();
 
     ConsumerBounceTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
@@ -113,8 +116,8 @@ public class ConsumerBounceTest {
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        consumerPollers = new ArrayList<>();
-        consumers = new ArrayList<>();
+        consumerPollers.clear();
+        consumers.clear();
         clusterInstance.createTopic(topic, numPartitions, numReplica);
     }
 
@@ -149,6 +152,7 @@ public class ConsumerBounceTest {
      */
     private void consumeWithBrokerFailures(int numIters, GroupProtocol groupProtocol) throws InterruptedException {
         int numRecords = 1000;
+        // FIXME: Semantic is not same as before, need to check all usage
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
         AtomicInteger consumed = new AtomicInteger(0);
@@ -298,34 +302,8 @@ public class ConsumerBounceTest {
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
         checkCloseGoodPath(numRecords, "group1");
-//        checkCloseWithCoordinatorFailure(numRecords, "group2", "group3");
+        checkCloseWithCoordinatorFailure(numRecords, "group2", "group3");
         checkCloseWithClusterFailure(numRecords, "group4", "group5", groupProtocol.name);
-    }
-
-    // need to use config
-    private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords,
-                                                            Map<String, String> consumerConfig) throws InterruptedException {
-        Map<String, Object> configs = new HashMap<>(consumerConfig);
-        configs.put(GROUP_ID_CONFIG, groupId);
-        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(configs);
-        ConsumerAssignmentPoller poller;
-
-        if (manualAssign) {
-            poller = new ConsumerAssignmentPoller(consumer, Set.of(topicPartition));
-        } else {
-            poller = new ConsumerAssignmentPoller(consumer, List.of(topic));
-        }
-        poller.start();
-        consumers.add(consumer);
-        consumerPollers.add(poller);
-        receiveExactRecords(poller, numRecords, 60000L);
-        poller.shutdown();
-
-        return consumer;
-    }
-
-    private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords) throws InterruptedException {
-        return createConsumerAndReceive(groupId, manualAssign, numRecords, Map.of());
     }
 
     /**
@@ -399,6 +377,213 @@ public class ConsumerBounceTest {
         }
     }
 
+    @ClusterTest
+    public void testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize() throws Exception {
+//        String groupProtocol = GroupProtocol.CLASSIC.name;
+        String group = "fatal-exception-test";
+        String topic = "fatal-exception-test";
+
+//        this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000");
+//        if (groupProtocol.equals(GroupProtocol.CLASSIC.name())) {
+//            this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
+//        }
+//        this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+//
+
+        clusterInstance.createTopic(topic, Integer.parseInt(MAX_GROUP_SIZE), (short) BROKER_COUNT);
+        Set<TopicPartition> partitions = new HashSet<>();
+        for (int i = 0; i < Integer.parseInt(MAX_GROUP_SIZE); ++i)
+            partitions.add(new TopicPartition(topic, i));
+
+        addConsumersToGroupAndWaitForGroupAssignment(
+                Integer.parseInt(MAX_GROUP_SIZE),
+                List.of(topic),
+                partitions,
+                group
+        );
+
+        addConsumersToGroup(
+                1,
+                List.of(topic),
+                group
+        );
+
+        ConsumerAssignmentPoller rejectedConsumer = consumerPollers.get(consumerPollers.size() - 1);
+
+        TestUtils.waitForCondition(
+                () -> rejectedConsumer.getThrownException().isPresent(),
+                "Extra consumer did not throw an exception"
+        );
+
+        assertInstanceOf(GroupMaxSizeReachedException.class, rejectedConsumer.getThrownException().get());
+
+        // assert group continues to live
+        ClientsTestUtils.sendRecords(clusterInstance, topicPartition, Integer.parseInt(MAX_GROUP_SIZE) * 100);
+
+        TestUtils.waitForCondition(
+                () -> consumerPollers.stream().allMatch(p -> p.receivedMessages() >= 100),
+                10000L, "The consumers in the group could not fetch the expected records"
+        );
+    }
+
+    /**
+     * Create 'numOfConsumersToAdd' consumers, add them to the consumer group, and create corresponding
+     * pollers. Wait for partition re-assignment and validate.
+     *
+     * Assignment validation requires that total number of partitions is greater than or equal to
+     * the resulting number of consumers in the group.
+     *
+     * @param numOfConsumersToAdd number of consumers to create and add to the consumer group
+     * @param topicsToSubscribe topics to subscribe
+     * @param subscriptions set of all topic partitions
+     * @param group consumer group ID
+     * @return updated consumers and pollers
+     */
+    public void addConsumersToGroupAndWaitForGroupAssignment(
+            int numOfConsumersToAdd,
+            List<String> topicsToSubscribe,
+            Set<TopicPartition> subscriptions,
+            String group
+    ) throws InterruptedException {
+        // Validation: number of consumers should not exceed number of partitions
+        assertTrue(consumers.size() + numOfConsumersToAdd <= subscriptions.size(),
+                "Total consumers exceed number of partitions");
+
+        // Add consumers and pollers
+        addConsumersToGroup(numOfConsumersToAdd, topicsToSubscribe, group);
+
+        // Validate that all pollers have assigned partitions
+        validateGroupAssignment(consumerPollers, subscriptions);
+    }
+
+    /**
+     * Check whether partition assignment is valid.
+     * Assumes partition assignment is valid iff:
+     * 1. Every consumer got assigned at least one partition
+     * 2. Each partition is assigned to only one consumer
+     * 3. Every partition is assigned to one of the consumers
+     * 4. The assignment is the same as expected assignment (if provided)
+     *
+     * @param assignments        List of assignments, one set per consumer
+     * @param partitions         All expected partitions
+     * @param expectedAssignment Optional expected assignment
+     * @return true if assignment is valid
+     */
+    public boolean isPartitionAssignmentValid(
+            List<Set<TopicPartition>> assignments,
+            Set<TopicPartition> partitions,
+            List<Set<TopicPartition>> expectedAssignment
+    ) {
+        // 1. Check that every consumer has non-empty assignment
+        boolean allNonEmpty = assignments.stream().noneMatch(Set::isEmpty);
+        if (!allNonEmpty) return false;
+
+        // 2. Check that total assigned partitions equals number of unique partitions
+        Set<TopicPartition> allAssignedPartitions = new HashSet<>();
+        for (Set<TopicPartition> assignment : assignments) {
+            allAssignedPartitions.addAll(assignment);
+        }
+
+        if (allAssignedPartitions.size() != partitions.size()) {
+            // Either some partitions were assigned multiple times or some were not assigned
+            return false;
+        }
+
+        // 3. Check that assigned partitions exactly match the expected set
+        if (!allAssignedPartitions.equals(partitions)) {
+            return false;
+        }
+
+        // 4. If expected assignment is given, check for exact match
+        if (expectedAssignment != null && !expectedAssignment.isEmpty()) {
+            if (assignments.size() != expectedAssignment.size()) return false;
+            for (int i = 0; i < assignments.size(); i++) {
+                if (!assignments.get(i).equals(expectedAssignment.get(i))) return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Wait for consumers to get partition assignment and validate it.
+     *
+     * @param consumerPollers       Consumer pollers corresponding to the consumer group being tested
+     * @param subscriptions         Set of all topic partitions
+     * @param msg                   Optional message to print if validation fails
+     * @param waitTimeMs            Wait timeout in milliseconds
+     * @param expectedAssignments   Expected assignments (optional)
+     */
+    public void validateGroupAssignment(
+            List<ConsumerAssignmentPoller> consumerPollers,
+            Set<TopicPartition> subscriptions,
+            Optional<String> msg,
+            long waitTimeMs,
+            List<Set<TopicPartition>> expectedAssignments
+    ) throws InterruptedException {
+        List<Set<TopicPartition>> assignments = new ArrayList<>();
+
+        TestUtils.waitForCondition(() -> {
+            assignments.clear();
+            consumerPollers.forEach(poller -> assignments.add(poller.consumerAssignment()));
+            return isPartitionAssignmentValid(assignments, subscriptions, expectedAssignments);
+        }, waitTimeMs, msg.orElse("Did not get valid assignment for partitions " + subscriptions + ". Instead got: " + assignments));
+    }
+
+    // Overload for convenience (optional msg and expectedAssignments)
+    public void validateGroupAssignment(
+            List<ConsumerAssignmentPoller> consumerPollers,
+            Set<TopicPartition> subscriptions
+    ) throws InterruptedException {
+        validateGroupAssignment(consumerPollers, subscriptions, Optional.empty(), 10000L, new ArrayList<>());
+    }
+
+    /**
+     * Create 'numOfConsumersToAdd' consumers, add them to the consumer group, and create corresponding pollers.
+     *
+     * @param numOfConsumersToAdd number of consumers to create and add to the consumer group
+     * @param topicsToSubscribe topics to which new consumers will subscribe
+     * @param group consumer group ID
+     */
+    private void addConsumersToGroup(
+            int numOfConsumersToAdd,
+            List<String> topicsToSubscribe,
+            String group) {
+
+        for (int i = 0; i < numOfConsumersToAdd; i++) {
+            Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_ID_CONFIG, group));
+            consumers.add(consumer);
+
+            ConsumerAssignmentPoller poller = new ConsumerAssignmentPoller(consumer, topicsToSubscribe);
+            poller.start();
+            consumerPollers.add(poller);
+        }
+    }
+
+    private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords,
+                                                              Map<String, String> consumerConfig) throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>(consumerConfig);
+        configs.put(GROUP_ID_CONFIG, groupId);
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(configs);
+        ConsumerAssignmentPoller poller;
+
+        if (manualAssign) {
+            poller = new ConsumerAssignmentPoller(consumer, Set.of(topicPartition));
+        } else {
+            poller = new ConsumerAssignmentPoller(consumer, List.of(topic));
+        }
+        poller.start();
+        consumers.add(consumer);
+        consumerPollers.add(poller);
+        receiveExactRecords(poller, numRecords, 60000L);
+        poller.shutdown();
+
+        return consumer;
+    }
+
+    private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords) throws InterruptedException {
+        return createConsumerAndReceive(groupId, manualAssign, numRecords, Map.of());
+    }
 
     private void restartDeadBrokers() {
         clusterInstance.brokers().forEach((id, broker) -> {
