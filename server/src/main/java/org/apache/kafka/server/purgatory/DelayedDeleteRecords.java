@@ -91,8 +91,13 @@ public class DelayedDeleteRecords extends DelayedOperation {
             }
         });
         //  check if every partition has satisfied at least one of case A or B
-        forceComplete();
-        return deleteRecordsStatus.values().stream().noneMatch(DeleteRecordsPartitionStatus::acksPending) && isCompleted();
+        boolean noPendingPartition = deleteRecordsStatus.values()
+                .stream()
+                .noneMatch(DeleteRecordsPartitionStatus::acksPending);
+        if (noPendingPartition) {
+            forceComplete();
+        }
+        return noPendingPartition && isCompleted();
     }
 
     @Override
