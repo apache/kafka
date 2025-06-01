@@ -39,14 +39,30 @@ import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
+import java.util.stream.Collectors
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
+import java.util.{HashMap, HashSet, List => JList, Map => JMap}
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
 
-  def allConfigs(config: AbstractConfig): mutable.Map[String, Any] = {
-    config.originals.asScala.filter(_._2 != null) ++ config.nonInternalValues.asScala
+  def allConfigs(config: AbstractConfig): JMap[String, Object] = {
+    val result = new HashMap[String, Object]()
+
+    config.originals.forEach { (k, v) =>
+      if (v != null) {
+        result.put(k, v)
+      }
+    }
+
+    config.nonInternalValues.forEach { (k, v) =>
+      if (v != null) {
+        result.put(k, v.asInstanceOf[Object])
+      }
+    }
+
+    result
   }
 
   def handleDescribeConfigsRequest(
@@ -87,21 +103,26 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                       includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
     resourceToConfigNames.map { resource =>
 
-      def createResponseConfig(configs: Map[String, Any],
-                               createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-        val configEntries: Iterable[DescribeConfigsResponseData.DescribeConfigsResourceResult] =
-          if (resource.configurationKeys == null || resource.configurationKeys.isEmpty) {
-            configs.view.map { case (name, value) => createConfigEntry(name, value) }
-          } else {
-            val keys = resource.configurationKeys.asScala.toSet
-            configs.view
-              .filter { case (name, _) => keys.contains(name) }
-              .map { case (name, value) => createConfigEntry(name, value) }
-          }
+      def createResponseConfig(configs: JMap[String, _ <: Object],
+                               createConfigEntry: (String, Object) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
+        val keySet: HashSet[String] =
+          if (resource.configurationKeys == null || resource.configurationKeys.isEmpty) null
+          else new HashSet[String](resource.configurationKeys)
+
+        val configEntries: JList[DescribeConfigsResponseData.DescribeConfigsResourceResult] = {
+          val baseStream = configs.entrySet().stream()
+          val filtered = if (keySet == null) baseStream
+          else baseStream.filter(entry => keySet.contains(entry.getKey))
+          filtered
+            .map[DescribeConfigsResponseData.DescribeConfigsResourceResult](entry =>
+              createConfigEntry(entry.getKey, entry.getValue)
+            )
+            .collect(Collectors.toList())
+        }
 
         new DescribeConfigsResponseData.DescribeConfigsResult()
           .setErrorCode(Errors.NONE.code)
-          .setConfigs(configEntries.toList.asJava)
+          .setConfigs(configEntries)
       }
 
       try {
@@ -120,7 +141,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
           case ConfigResource.Type.BROKER =>
             if (resource.resourceName == null || resource.resourceName.isEmpty)
-              createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs,
+              createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs.asJava,
                 createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation))
             else if (resourceNameToBrokerId(resource.resourceName) == config.brokerId)
               createResponseConfig(allConfigs(config),
@@ -134,7 +155,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             else if (resourceNameToBrokerId(resource.resourceName) != config.brokerId)
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.resourceName}")
             else
-              createResponseConfig(LoggingController.loggers.asScala,
+              createResponseConfig(LoggingController.loggers,
                 (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
