@@ -282,19 +282,32 @@ public class ConsumerBounceTest {
         receiveExactRecords(poller2, numRecords, 10000L);
     }
 
+
     @ClusterTest
-    public void testClose() throws Exception {
+    public void testClassicClose() throws Exception {
+        testClose(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncClose() throws Exception {
+        testClose(GroupProtocol.CONSUMER);
+    }
+
+    private void testClose(GroupProtocol groupProtocol) throws Exception {
         int numRecords = 10;
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
         checkCloseGoodPath(numRecords, "group1");
 //        checkCloseWithCoordinatorFailure(numRecords, "group2", "group3");
-        checkCloseWithClusterFailure(numRecords, "group4", "group5", "consumer");
+        checkCloseWithClusterFailure(numRecords, "group4", "group5", groupProtocol.name);
     }
 
     // need to use config
-    private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords) throws InterruptedException {
-        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_ID_CONFIG, groupId));
+    private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords,
+                                                            Map<String, String> consumerConfig) throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>(consumerConfig);
+        configs.put(GROUP_ID_CONFIG, groupId);
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(configs);
         ConsumerAssignmentPoller poller;
 
         if (manualAssign) {
@@ -309,6 +322,10 @@ public class ConsumerBounceTest {
         poller.shutdown();
 
         return consumer;
+    }
+
+    private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords) throws InterruptedException {
+        return createConsumerAndReceive(groupId, manualAssign, numRecords, Map.of());
     }
 
     /**
@@ -359,7 +376,7 @@ public class ConsumerBounceTest {
         }
         consumerConfig.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, Long.toString(requestTimeout));
 
-        Consumer<byte[], byte[]> consumer2 = createConsumerAndReceive(group2, true, numRecords);
+        Consumer<byte[], byte[]> consumer2 = createConsumerAndReceive(group2, true, numRecords, consumerConfig);
 
         clusterInstance.brokers().keySet().forEach(clusterInstance::shutdownBroker);
 
