@@ -83,6 +83,8 @@ public class PlaintextConsumerCommitTest {
 
     @BeforeEach
     public void setup() throws InterruptedException {
+        // Create offsets topic
+        cluster.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), Short.parseShort(OFFSETS_TOPIC_REPLICATION));
         cluster.createTopic(topic, 2, (short) BROKER_COUNT);
     }
 
