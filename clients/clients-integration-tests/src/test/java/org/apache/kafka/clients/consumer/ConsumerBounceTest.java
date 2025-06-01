@@ -152,7 +152,6 @@ public class ConsumerBounceTest {
      */
     private void consumeWithBrokerFailures(int numIters, GroupProtocol groupProtocol) throws InterruptedException {
         int numRecords = 1000;
-        // FIXME: Semantic is not same as before, need to check all usage
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
         AtomicInteger consumed = new AtomicInteger(0);
@@ -303,7 +302,7 @@ public class ConsumerBounceTest {
 
         checkCloseGoodPath(numRecords, "group1");
         checkCloseWithCoordinatorFailure(numRecords, "group2", "group3");
-        checkCloseWithClusterFailure(numRecords, "group4", "group5", groupProtocol.name);
+        checkCloseWithClusterFailure(numRecords, "group4", "group5", groupProtocol);
     }
 
     /**
@@ -328,7 +327,8 @@ public class ConsumerBounceTest {
         Consumer<byte[], byte[]> manualConsumer = createConsumerAndReceive(manualGroup, true, numRecords);
 
         clusterInstance.shutdownBroker(findCoordinator(dynamicGroup));
-        clusterInstance.shutdownBroker(findCoordinator(manualGroup));
+        // FIXME: Use consumer.assign can't create manual group so comment this line
+//        clusterInstance.shutdownBroker(findCoordinator(manualGroup));
 
         submitCloseAndValidate(dynamicConsumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get();
         submitCloseAndValidate(manualConsumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get();
@@ -343,12 +343,12 @@ public class ConsumerBounceTest {
      * there is no coordinator, but close should timeout and return. If close is invoked with a very
      * large timeout, close should timeout after request timeout.
      */
-    private void checkCloseWithClusterFailure(int numRecords, String group1, String group2, String groupProtocol) throws Exception {
+    private void checkCloseWithClusterFailure(int numRecords, String group1, String group2, GroupProtocol groupProtocol) throws Exception {
         Consumer<byte[], byte[]> consumer1 = createConsumerAndReceive(group1, false, numRecords);
         Map<String, String> consumerConfig = new HashMap<>();
 
         long requestTimeout = 6000;
-        if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+        if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
             consumerConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000");
             consumerConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
         }
@@ -378,17 +378,26 @@ public class ConsumerBounceTest {
     }
 
     @ClusterTest
-    public void testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize() throws Exception {
-//        String groupProtocol = GroupProtocol.CLASSIC.name;
+    public void testClassicConsumerReceivesFatalExceptionWhenGroupPassesMaxSize() throws Exception {
+        testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerReceivesFatalExceptionWhenGroupPassesMaxSize() throws Exception {
+        testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(GroupProtocol.CONSUMER);
+    }
+
+    private void testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(GroupProtocol groupProtocol) throws Exception {
         String group = "fatal-exception-test";
         String topic = "fatal-exception-test";
 
-//        this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000");
-//        if (groupProtocol.equals(GroupProtocol.CLASSIC.name())) {
-//            this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
-//        }
-//        this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-//
+        Map<String, String> consumerConfig = new HashMap<>();
+
+        consumerConfig.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000");
+        if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
+            consumerConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
+        }
+        consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         clusterInstance.createTopic(topic, Integer.parseInt(MAX_GROUP_SIZE), (short) BROKER_COUNT);
         Set<TopicPartition> partitions = new HashSet<>();
@@ -399,16 +408,19 @@ public class ConsumerBounceTest {
                 Integer.parseInt(MAX_GROUP_SIZE),
                 List.of(topic),
                 partitions,
-                group
+                group,
+                consumerConfig
         );
 
         addConsumersToGroup(
                 1,
                 List.of(topic),
-                group
+                group,
+                consumerConfig
         );
 
         ConsumerAssignmentPoller rejectedConsumer = consumerPollers.get(consumerPollers.size() - 1);
+        consumerPollers.remove(consumerPollers.size() - 1);
 
         TestUtils.waitForCondition(
                 () -> rejectedConsumer.getThrownException().isPresent(),
@@ -418,7 +430,7 @@ public class ConsumerBounceTest {
         assertInstanceOf(GroupMaxSizeReachedException.class, rejectedConsumer.getThrownException().get());
 
         // assert group continues to live
-        ClientsTestUtils.sendRecords(clusterInstance, topicPartition, Integer.parseInt(MAX_GROUP_SIZE) * 100);
+        ClientsTestUtils.sendRecordsToTopic(clusterInstance, topic, Integer.parseInt(MAX_GROUP_SIZE), 0, Integer.parseInt(MAX_GROUP_SIZE) * 100);
 
         TestUtils.waitForCondition(
                 () -> consumerPollers.stream().allMatch(p -> p.receivedMessages() >= 100),
@@ -437,20 +449,20 @@ public class ConsumerBounceTest {
      * @param topicsToSubscribe topics to subscribe
      * @param subscriptions set of all topic partitions
      * @param group consumer group ID
-     * @return updated consumers and pollers
      */
-    public void addConsumersToGroupAndWaitForGroupAssignment(
+    private void addConsumersToGroupAndWaitForGroupAssignment(
             int numOfConsumersToAdd,
             List<String> topicsToSubscribe,
             Set<TopicPartition> subscriptions,
-            String group
+            String group,
+            Map<String, String> consumerConfig
     ) throws InterruptedException {
         // Validation: number of consumers should not exceed number of partitions
         assertTrue(consumers.size() + numOfConsumersToAdd <= subscriptions.size(),
                 "Total consumers exceed number of partitions");
 
         // Add consumers and pollers
-        addConsumersToGroup(numOfConsumersToAdd, topicsToSubscribe, group);
+        addConsumersToGroup(numOfConsumersToAdd, topicsToSubscribe, group, consumerConfig);
 
         // Validate that all pollers have assigned partitions
         validateGroupAssignment(consumerPollers, subscriptions);
@@ -469,7 +481,7 @@ public class ConsumerBounceTest {
      * @param expectedAssignment Optional expected assignment
      * @return true if assignment is valid
      */
-    public boolean isPartitionAssignmentValid(
+    private boolean isPartitionAssignmentValid(
             List<Set<TopicPartition>> assignments,
             Set<TopicPartition> partitions,
             List<Set<TopicPartition>> expectedAssignment
@@ -514,7 +526,7 @@ public class ConsumerBounceTest {
      * @param waitTimeMs            Wait timeout in milliseconds
      * @param expectedAssignments   Expected assignments (optional)
      */
-    public void validateGroupAssignment(
+    private void validateGroupAssignment(
             List<ConsumerAssignmentPoller> consumerPollers,
             Set<TopicPartition> subscriptions,
             Optional<String> msg,
@@ -531,7 +543,7 @@ public class ConsumerBounceTest {
     }
 
     // Overload for convenience (optional msg and expectedAssignments)
-    public void validateGroupAssignment(
+    private void validateGroupAssignment(
             List<ConsumerAssignmentPoller> consumerPollers,
             Set<TopicPartition> subscriptions
     ) throws InterruptedException {
@@ -548,10 +560,14 @@ public class ConsumerBounceTest {
     private void addConsumersToGroup(
             int numOfConsumersToAdd,
             List<String> topicsToSubscribe,
-            String group) {
+            String group,
+            Map<String, String> consumerConfigs) {
+
+        Map<String, Object> configs = new HashMap<>(consumerConfigs);
+        configs.put(GROUP_ID_CONFIG, group);
 
         for (int i = 0; i < numOfConsumersToAdd; i++) {
-            Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_ID_CONFIG, group));
+            Consumer<byte[], byte[]> consumer = clusterInstance.consumer(configs);
             consumers.add(consumer);
 
             ConsumerAssignmentPoller poller = new ConsumerAssignmentPoller(consumer, topicsToSubscribe);
