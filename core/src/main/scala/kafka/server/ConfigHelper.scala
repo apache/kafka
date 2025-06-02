@@ -39,8 +39,7 @@ import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
-import java.util.{HashMap, HashSet}
-import java.util.stream.Collectors
+import java.util.HashMap
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
@@ -48,7 +47,7 @@ import scala.jdk.OptionConverters.RichOptional
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
 
   def allConfigs(config: AbstractConfig): java.util.Map[String, Object] = {
-    val result = new HashMap[String, Object]()
+    val result = new java.util.HashMap[String, Object]()
 
     config.originals.forEach { (k, v) =>
       if (v != null) {
