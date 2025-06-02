@@ -288,7 +288,7 @@ public class MirrorCheckpointConnectorTest {
 
         Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(null, Map.of(
                 sourcePartition("consumer-app-6", "t", 5),
-                Map.of(MirrorUtils.OFFSET_KEY, offset)
+                Collections.singletonMap(MirrorUtils.OFFSET_KEY, offset)
         ));
 
         assertThrows(ConnectException.class, () -> alterOffsets.apply("nan"));

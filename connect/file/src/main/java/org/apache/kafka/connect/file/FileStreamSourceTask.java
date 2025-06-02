@@ -34,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -233,11 +234,11 @@ public class FileStreamSourceTask extends SourceTask {
     }
 
     private Map<String, String> offsetKey(String filename) {
-        return Map.of(FILENAME_FIELD, filename);
+        return Collections.singletonMap(FILENAME_FIELD, filename);
     }
 
     private Map<String, Long> offsetValue(Long pos) {
-        return Map.of(POSITION_FIELD, pos);
+        return Collections.singletonMap(POSITION_FIELD, pos);
     }
 
     private String logFilename() {

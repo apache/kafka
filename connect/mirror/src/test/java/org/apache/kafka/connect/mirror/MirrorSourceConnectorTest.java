@@ -707,7 +707,7 @@ public class MirrorSourceConnectorTest {
 
         Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(null, Map.of(
                 sourcePartition("t", 5, "backup"),
-                Map.of(MirrorUtils.OFFSET_KEY, offset)
+                Collections.singletonMap(MirrorUtils.OFFSET_KEY, offset)
         ));
 
         assertThrows(ConnectException.class, () -> alterOffsets.apply("nan"));

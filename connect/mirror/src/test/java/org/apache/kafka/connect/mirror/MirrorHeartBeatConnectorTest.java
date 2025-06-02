@@ -129,7 +129,7 @@ public class MirrorHeartBeatConnectorTest {
 
         Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(null, Map.of(
                 sourcePartition("primary", "backup"),
-                Map.of(MirrorUtils.OFFSET_KEY, offset)
+                Collections.singletonMap(MirrorUtils.OFFSET_KEY, offset)
         ));
 
         assertThrows(ConnectException.class, () -> alterOffsets.apply("nan"));

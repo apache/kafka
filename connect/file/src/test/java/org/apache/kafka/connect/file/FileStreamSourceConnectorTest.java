@@ -200,7 +200,7 @@ public class FileStreamSourceConnectorTest {
     public void testAlterOffsetsOffsetPositionValues() {
         Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(sourceProperties, Map.of(
                 Map.of(FILENAME_FIELD, FILENAME),
-                Map.of(POSITION_FIELD, offset)
+                Collections.singletonMap(POSITION_FIELD, offset)
         ));
 
         assertThrows(ConnectException.class, () -> alterOffsets.apply("nan"));
