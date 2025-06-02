@@ -2378,17 +2378,23 @@ class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
 
         // null cluster id is accepted
-        context.deliverRequest(context.fetchRequest(epoch, null, otherNodeKey, -5L, 0, 0));
+        context.deliverRequest(
+            context.fetchRequest(epoch, null, otherNodeKey, -5L, 0, OptionalLong.of(Long.MAX_VALUE), 0)
+        );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
 
         // empty cluster id is rejected
-        context.deliverRequest(context.fetchRequest(epoch, "", otherNodeKey, -5L, 0, 0));
+        context.deliverRequest(
+            context.fetchRequest(epoch, "", otherNodeKey, -5L, 0, OptionalLong.of(Long.MAX_VALUE), 0)
+        );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.INCONSISTENT_CLUSTER_ID);
 
         // invalid cluster id is rejected
-        context.deliverRequest(context.fetchRequest(epoch, "invalid-uuid", otherNodeKey, -5L, 0, 0));
+        context.deliverRequest(
+            context.fetchRequest(epoch, "invalid-uuid", otherNodeKey, -5L, 0, OptionalLong.of(Long.MAX_VALUE), 0)
+        );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.INCONSISTENT_CLUSTER_ID);
     }
