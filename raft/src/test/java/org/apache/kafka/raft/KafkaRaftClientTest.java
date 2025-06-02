@@ -2054,23 +2054,16 @@ class KafkaRaftClientTest {
 
         // after fetch timeout, node will become prospective with leader
         context.time.sleep(context.fetchTimeoutMs);
-        context.client.poll();
-        assertTrue(context.client.quorum().isProspective());
-        assertEquals(leaderNodeId, context.client.quorum().leaderId().getAsInt());
-        assertEquals(epoch, context.currentEpoch());
+        context.pollUntilRequest();
+        context.assertSentPreVoteRequest(epoch, 0, 0L, 2);
+        context.assertElectedLeader(epoch, leaderNodeId);
 
         // after election loss node will become follower because it had a last known leader
         context.time.sleep(context.electionTimeoutMs() * 2L);
-        context.client.poll();
-        assertTrue(context.client.quorum().isFollower());
-        assertEquals(leaderNodeId, context.client.quorum().leaderId().getAsInt());
-        assertEquals(epoch, context.currentEpoch());
-
-        // node will send fetch request to leader
         context.pollUntilRequest();
+        context.assertElectedLeader(epoch, leaderNodeId);
+        assertEquals(epoch, context.currentEpoch());
         RaftRequest.Outbound request = context.assertSentFetchRequest(epoch, 0L, 0);
-        assertTrue(context.client.quorum().isFollower());
-        assertTrue(context.client.quorum().isVoter());
         assertEquals(leaderNodeId, request.destination().id());
     }
 
@@ -2186,7 +2179,6 @@ class KafkaRaftClientTest {
         fetchRequest = context.assertSentFetchRequest();
         assertNotEquals(leaderId, fetchRequest.destination().id());
         assertTrue(context.bootstrapIds.contains(fetchRequest.destination().id()));
-        assertTrue(context.client.quorum().followerStateOrThrow().hasFetchTimeoutExpired(context.time.milliseconds()));
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
         context.deliverResponse(
@@ -2199,7 +2191,6 @@ class KafkaRaftClientTest {
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
         assertEquals(leaderId, fetchRequest.destination().id());
-        assertFalse(context.client.quorum().followerStateOrThrow().hasFetchTimeoutExpired(context.time.milliseconds()));
     }
 
     @ParameterizedTest
