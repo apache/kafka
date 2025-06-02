@@ -247,14 +247,6 @@ public class FetchResponse extends AbstractResponse {
     public static FetchResponse of(Errors error,
                                    int throttleTimeMs,
                                    int sessionId,
-                                   LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData) {
-        return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator(), Collections.emptyList()));
-    }
-
-    // TODO: remove as a part of KAFKA-12410
-    public static FetchResponse of(Errors error,
-                                   int throttleTimeMs,
-                                   int sessionId,
                                    LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData,
                                    List<Node> nodeEndpoints) {
         return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator(), nodeEndpoints));
