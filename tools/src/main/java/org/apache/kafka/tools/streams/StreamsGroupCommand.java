@@ -18,6 +18,7 @@ package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
@@ -37,6 +38,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -403,8 +405,17 @@ public class StreamsGroupCommand {
 
         Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
             try {
-                return adminClient.listStreamsGroupOffsets(
-                    Map.of(groupId, new ListStreamsGroupOffsetsSpec())).partitionsToOffsetAndMetadata(groupId).get();
+                var sourceTopics = adminClient.describeStreamsGroups(List.of(groupId))
+                    .all().get().get(groupId)
+                    .subtopologies().stream()
+                    .flatMap(subtopology -> subtopology.sourceTopics().stream())
+                    .collect(Collectors.toSet());
+
+                var allTopicPartitions = adminClient.listStreamsGroupOffsets(Map.of(groupId, new ListStreamsGroupOffsetsSpec()))
+                    .partitionsToOffsetAndMetadata(groupId).get();
+
+                allTopicPartitions.keySet().removeIf(tp -> !sourceTopics.contains(tp.topic()));
+                return allTopicPartitions;
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
@@ -424,7 +435,17 @@ public class StreamsGroupCommand {
                         switch (state) {
                             case "Empty":
                             case "Dead":
+                                // reset offsets in source topics
                                 result.put(groupId, resetOffsetsForInactiveGroup(groupId));
+                                // delete internal topics
+                                List<String> internalTopics = retrieveInternalTopics(List.of(groupId)).get(groupId);
+                                if (internalTopics != null && !internalTopics.isEmpty()) {
+                                    try {
+                                        adminClient.deleteTopics(internalTopics).all().get();
+                                    } catch (InterruptedException | ExecutionException e) {
+                                        printError("Deleting internal topics for group '" + groupId + "' failed due to " + e.getMessage(), Optional.of(e));
+                                    }
+                                }
                                 break;
                             default:
                                 printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
@@ -442,6 +463,50 @@ public class StreamsGroupCommand {
                 });
             }
             return result;
+        }
+
+        // Visibility for testing
+        Map<String, List<String>> retrieveInternalTopics(List<String> groupIds) {
+            Map<String, List<String>> groupToInternalTopics = new HashMap<>();
+            try {
+                Map<String, StreamsGroupDescription> descriptionMap = adminClient.describeStreamsGroups(groupIds).all().get();
+                for (StreamsGroupDescription description : descriptionMap.values()) {
+
+                    List<String> nonInternalTopics = description.subtopologies().stream()
+                        .flatMap(subtopology -> Stream.concat(
+                            subtopology.sourceTopics().stream(),
+                            subtopology.repartitionSinkTopics().stream()))
+                        .distinct()
+                        .toList();
+
+
+                    List<String> internalTopics = description.subtopologies().stream()
+                        .flatMap(subtopology -> Stream.concat(
+                            subtopology.repartitionSourceTopics().keySet().stream(),
+                            subtopology.stateChangelogTopics().keySet().stream()))
+                        .filter(topic -> !nonInternalTopics.contains(topic))
+                        .collect(Collectors.toList());
+                    internalTopics.removeIf(topic -> {
+                        if (!isInferredInternalTopic(topic, description.groupId())) {
+                            printError("The internal topic '" + topic + "' is not inferred as internal " +
+                                "and thus will not be deleted with the group '" + description.groupId() + "'.", Optional.empty());
+                            return true;
+                        }
+                        return false;
+                    });
+                    if (!internalTopics.isEmpty()) {
+                        groupToInternalTopics.put(description.groupId(), internalTopics);
+                    }
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                if (e.getCause() instanceof UnsupportedVersionException) {
+                    printError("Retrieving internal topics is not supported by the broker version. " +
+                        "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
+                } else {
+                    printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
+                }
+            }
+            return groupToInternalTopics;
         }
 
         private Map<TopicPartition, OffsetAndMetadata> resetOffsetsForInactiveGroup(String groupId) {
@@ -814,6 +879,18 @@ public class StreamsGroupCommand {
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
+        }
+
+        private boolean isInferredInternalTopic(final String topicName, final String applicationId) {
+            return topicName.startsWith(applicationId + "-") && matchesInternalTopicFormat(topicName);
+        }
+
+        public static boolean matchesInternalTopicFormat(final String topicName) {
+            return topicName.endsWith("-changelog") || topicName.endsWith("-repartition")
+                || topicName.endsWith("-subscription-registration-topic")
+                || topicName.endsWith("-subscription-response-topic")
+                || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-\\d+-topic")
+                || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-\\d+-topic");
         }
 
         interface LogOffsetResult { }

@@ -26,11 +26,13 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -526,9 +528,17 @@ public class ResetStreamsGroupOffsetTest {
         final KStream<String, String> inputStream2 = builder.stream(topic2);
 
         final AtomicInteger recordCount = new AtomicInteger(0);
+//
+//        final KTable<String, String> valueCounts = inputStream1.merge(inputStream2)
+//            .groupByKey()
+//            .aggregate(
+//                () -> "()",
+//                (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")",
+//                Materialized.as("aggregated_value"));
 
         final KTable<String, String> valueCounts = inputStream1.merge(inputStream2)
-            .groupByKey()
+            // Explicit repartition step with a custom internal topic name
+            .groupBy((key, value) -> key, Grouped.with(Serdes.String(), Serdes.String()))
             .aggregate(
                 () -> "()",
                 (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")",
