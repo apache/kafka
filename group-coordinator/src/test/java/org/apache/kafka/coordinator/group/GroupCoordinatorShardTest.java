@@ -1886,13 +1886,7 @@ public class GroupCoordinatorShardTest {
         when(groupMetadataManager.shareGroupBuildPartitionDeleteRequest(eq(groupId), anyList())).thenReturn(Optional.of(params));
 
         CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> expectedResult =
-            new CoordinatorResult<>(
-                List.of(),
-                Map.of(
-                    groupId, Map.entry(params, Errors.NONE),
-                    "non-share-group", Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(new GroupIdNotFoundException("bad stuff")))
-                )
-            );
+            new CoordinatorResult<>(List.of(), Map.of(groupId, Map.entry(params, Errors.NONE)));
 
         assertEquals(expectedResult, coordinator.sharePartitionDeleteRequests(List.of(groupId, "non-share-group")));
         verify(groupMetadataManager, times(1)).shareGroup(eq(groupId));

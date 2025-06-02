@@ -648,10 +648,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     /**
      * Method returns a Map keyed on groupId and value as pair of {@link DeleteShareGroupStateParameters}
-     * and any ERRORS while building the request corresponding
-     * to the valid share groups passed as the input.
+     * and any ERRORS while building the request corresponding to the valid share groups passed as the input.
      * <p>
-     * The groupIds are first filtered by type to restrict the list to share groups.
+     * The groupIds are first filtered by type to restrict the list to share groups. If a group isn't
+     * found or isn't a share group, it won't trigger an error in the response since group deletions
+     * are chained. Instead, that group should be retried against other group types.
      * @param groupIds - A list of groupIds as string
      * @return A result object containing a map keyed on groupId and value pair (req, error) and related coordinator records.
      */
@@ -668,7 +669,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .ifPresent(req -> responseMap.put(groupId, Map.entry(req, Errors.NONE)));
             } catch (GroupIdNotFoundException exception) {
                 log.debug("Unable to delete share group. GroupId {} not found.", groupId);
-                responseMap.put(groupId, Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(exception)));
+                // Do not include the error in response map, as the deletion of groups is chained hence
+                // the respective group should be re-tried for deletion against other group types.
             } catch (GroupNotEmptyException exception) {
                 log.debug("Unable to delete share group. Provided group {} is not empty.", groupId);
                 responseMap.put(groupId, Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(exception)));
