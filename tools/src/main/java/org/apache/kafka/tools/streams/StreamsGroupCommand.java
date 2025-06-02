@@ -486,7 +486,7 @@ public class StreamsGroupCommand {
             for (String groupId : groupIdSet) {
                 Optional<GroupListing> listing = streamsGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
                 if (listing.isEmpty()) {
-                    failed.put(groupId, new IllegalArgumentException("Group '" + groupId + "' does not exist or is not a Kafka Streams group."));
+                    failed.put(groupId, new IllegalArgumentException("Group '" + groupId + "' does not exist or is not a streams group."));
                 } else {
                     Optional<GroupState> groupState = listing.get().groupState();
                     groupState.ifPresent(state -> {

@@ -324,7 +324,7 @@ public class StreamsGroupCommandTest {
 
         assertNotNull(result.get(groupId));
         assertEquals(result.get(groupId).getMessage(),
-            "Group '" + groupId + "' does not exist or is not a Kafka Streams group.");
+            "Group '" + groupId + "' does not exist or is not a streams group.");
         assertInstanceOf(IllegalArgumentException.class, result.get(groupId));
         verify(adminClient, times(1)).listGroups(any(ListGroupsOptions.class));
         // we do not expect any further API to be called
