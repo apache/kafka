@@ -54,8 +54,15 @@ public class GroupRebalanceConfig {
         // Consumer and Connect use different config names for defining rebalance timeout
         if ((protocolType == ProtocolType.CONSUMER) || (protocolType == ProtocolType.SHARE)) {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+            // Connect doesn't support rack id.
+            // The GroupCoordinatorService throws error if the rackId is empty. The default value of client.rack is empty string.
+            // Skip empty rackId to avoid InvalidRequestException.
+            this.rackId = config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG).isEmpty() ?
+                Optional.empty() :
+                Optional.of(config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG));
         } else {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);
+            this.rackId = Optional.empty();
         }
 
         this.heartbeatIntervalMs = config.getInt(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -72,16 +79,6 @@ public class GroupRebalanceConfig {
             }
         } else {
             this.groupInstanceId = Optional.empty();
-        }
-
-        // The WorkerGroupMember in connect module also uses this class, but there is no client.rack in DistributedConfig.
-        // Ignore the rackId in that case to avoid ConfigException.
-        // The GroupCoordinatorService throws error if the rackId is empty. The default value of client.rack is empty string.
-        // Skip empty rackId to avoid InvalidRequestException.
-        if (config.values().containsKey(CommonClientConfigs.CLIENT_RACK_CONFIG) && !config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG).isEmpty()) {
-            this.rackId = Optional.ofNullable(config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG));
-        } else {
-            this.rackId = Optional.empty();
         }
 
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);

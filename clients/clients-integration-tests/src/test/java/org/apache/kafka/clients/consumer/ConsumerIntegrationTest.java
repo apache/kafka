@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager;
@@ -42,7 +43,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -232,7 +235,7 @@ public class ConsumerIntegrationTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor")
         }
     )
-    public void testRackAwareAssignment(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testRackAwareAssignment(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String topic = "test-topic";
         try (Admin admin = clusterInstance.admin();
              Producer<byte[], byte[]> producer = clusterInstance.producer();
@@ -305,6 +308,30 @@ public class ConsumerIntegrationTest {
                     consumer1.assignment().equals(Set.of(new TopicPartition(topic, 1), new TopicPartition(topic, 2))) &&
                     consumer2.assignment().equals(Set.of(new TopicPartition(topic, 3), new TopicPartition(topic, 4), new TopicPartition(topic, 5)));
             }, "Consumer 2 should be assigned to topic partition 3, 4, and 5");
+
+            // Change partitions to different brokers.
+            // partition 0 -> broker 2
+            // partition 1 -> broker 2
+            // partition 2 -> broker 2
+            // partition 3 -> broker 1
+            // partition 4 -> broker 1
+            // partition 5 -> broker 0
+            admin.alterPartitionReassignments(Map.of(
+                new TopicPartition(topic, 0), Optional.of(new NewPartitionReassignment(List.of(2))),
+                new TopicPartition(topic, 1), Optional.of(new NewPartitionReassignment(List.of(2))),
+                new TopicPartition(topic, 2), Optional.of(new NewPartitionReassignment(List.of(2))),
+                new TopicPartition(topic, 3), Optional.of(new NewPartitionReassignment(List.of(1))),
+                new TopicPartition(topic, 4), Optional.of(new NewPartitionReassignment(List.of(1))),
+                new TopicPartition(topic, 5), Optional.of(new NewPartitionReassignment(List.of(0)))
+            )).all().get();
+            TestUtils.waitForCondition(() -> {
+                consumer0.poll(Duration.ofMillis(1000));
+                consumer1.poll(Duration.ofMillis(1000));
+                consumer2.poll(Duration.ofMillis(1000));
+                return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 5))) &&
+                    consumer1.assignment().equals(Set.of(new TopicPartition(topic, 3), new TopicPartition(topic, 4))) &&
+                    consumer2.assignment().equals(Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(topic, 2)));
+            }, "Consumer with topic partition mapping should be 0 -> 5 | 1 -> 3, 4 | 2 -> 0, 1, 2");
         }
     }
 

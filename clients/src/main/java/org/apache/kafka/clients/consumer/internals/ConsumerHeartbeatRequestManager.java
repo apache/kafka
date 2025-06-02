@@ -247,6 +247,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             sentFields.reset();
         }
 
+        @SuppressWarnings("NPathComplexity")
         public ConsumerGroupHeartbeatRequestData buildRequestData() {
             ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
 
@@ -261,9 +262,6 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
 
             // InstanceId - set if present
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
-
-            // RackId - set if present
-            membershipManager.rackId().ifPresent(data::setRackId);
 
             boolean sendAllFields = membershipManager.state() == MemberState.JOINING;
 
@@ -309,6 +307,13 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                 sentFields.localAssignment = local;
             }
 
+            // RackId - sent when joining or if it has changed since the last heartbeat
+            String rackId = membershipManager.rackId().orElse(null);
+            if (sendAllFields || !Objects.equals(rackId, sentFields.rackId)) {
+                data.setRackId(rackId);
+                sentFields.rackId = rackId;
+            }
+
             return data;
         }
 
@@ -327,6 +332,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             private SubscriptionPattern pattern = null;
             private String serverAssignor = null;
             private AbstractMembershipManager.LocalAssignment localAssignment = null;
+            private String rackId = null;
 
             SentFields() {}
 
@@ -336,6 +342,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                 serverAssignor = null;
                 localAssignment = null;
                 pattern = null;
+                rackId = null;
             }
         }
     }
