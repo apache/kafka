@@ -32,13 +32,11 @@ class ShareConsumeBenchTest(Test):
         self.kafka = KafkaService(test_context, num_nodes=3, zk=None)
         self.producer_workload_service = ProduceBenchWorkloadService(test_context, self.kafka)
         self.share_consumer_workload_service = ShareConsumeBenchWorkloadService(test_context, self.kafka)
-        self.share_consumer_workload_service_2 = ShareConsumeBenchWorkloadService(test_context, self.kafka)
         self.topics_with_multiple_partitions = {"share_consume_bench_topic[0-5]": {"numPartitions": 5, "replicationFactor": 3}}
         self.topic_with_single_partitions = {"share_consume_bench_topic6": {"numPartitions": 1, "replicationFactor": 3}}
         self.trogdor = TrogdorService(context=self.test_context,
                                       client_services=[self.kafka, self.producer_workload_service,
-                                                       self.share_consumer_workload_service,
-                                                       self.share_consumer_workload_service_2])
+                                                       self.share_consumer_workload_service])
         self.share_group="share-group"
 
     def setUp(self):
@@ -84,8 +82,8 @@ class ShareConsumeBenchTest(Test):
                                                 common_client_conf={},
                                                 active_topics=["share_consume_bench_topic[0-5]"],
                                                 share_group=self.share_group)
-        wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
-                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
         share_consume_workload = self.trogdor.create_task("share_consume_workload", share_consume_spec)
         share_consume_workload.wait_for_done(timeout_sec=360)
         self.logger.debug("Share consume workload finished")
@@ -113,8 +111,8 @@ class ShareConsumeBenchTest(Test):
                                                 threads_per_worker=2,
                                                 active_topics=["share_consume_bench_topic[0-5]"],
                                                 share_group=self.share_group)
-        wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
-                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
         share_consume_workload = self.trogdor.create_task("share_consume_workload", share_consume_spec)
         share_consume_workload.wait_for_done(timeout_sec=360)
         self.logger.debug("Share consume workload finished")
@@ -141,8 +139,8 @@ class ShareConsumeBenchTest(Test):
                                                 common_client_conf={},
                                                 active_topics=["share_consume_bench_topic6"],
                                                 share_group=self.share_group)
-        wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
-                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
         share_consume_workload = self.trogdor.create_task("share_consume_workload", share_consume_spec)
         share_consume_workload.wait_for_done(timeout_sec=360)
         self.logger.debug("Share consume workload finished")
@@ -154,7 +152,7 @@ class ShareConsumeBenchTest(Test):
         metadata_quorum=[quorum.isolated_kraft],
         use_share_groups=[True],
     )
-    def test_multiple_share_consumer_subscribed_to_single_topic(self, metadata_quorum, use_share_groups=True):
+    def test_multiple_share_consumers_subscribed_to_single_topic(self, metadata_quorum, use_share_groups=True):
         """
         Runs multiple share consumers in a share group to read messages from topic with single partition.
         """
@@ -170,8 +168,8 @@ class ShareConsumeBenchTest(Test):
                                                 threads_per_worker=5,
                                                 active_topics=["share_consume_bench_topic6"],
                                                 share_group=self.share_group)
-        wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
-                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
         share_consume_workload = self.trogdor.create_task("share_consume_workload", share_consume_spec)
         share_consume_workload.wait_for_done(timeout_sec=360)
         self.logger.debug("Share consume workload finished")

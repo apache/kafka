@@ -1771,7 +1771,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             cmd += " --state %s" % state
         return self.run_cli_tool(node, cmd)
 
-    def set_group_offset_reset_strategy(self, group, strategy=None, node=None):
+    def set_share_group_offset_reset_strategy(self, group, strategy=None, node=None):
         """ Set the offset reset strategy config for the given group.
         """
         if strategy is None:
