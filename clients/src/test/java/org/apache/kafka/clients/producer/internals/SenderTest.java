@@ -3035,7 +3035,7 @@ public class SenderTest {
 
     @ParameterizedTest
     @EnumSource(value = Errors.class, names = {"COORDINATOR_LOAD_IN_PROGRESS", "INVALID_TXN_STATE"})
-    public void testSenderShouldTransitionToAbortableAfterRetriesExhausted(Errors error) throws InterruptedException {
+    public void testTransactionShouldTransitionToAbortableForSenderAPI(Errors error) throws InterruptedException {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         TransactionManager txnManager = new TransactionManager(
                 logContext,
@@ -3078,7 +3078,6 @@ public class SenderTest {
         sender.runOnce();
         assertFutureFailure(future2, TransactionAbortableException.class);
 
-
         // Verify transaction API requests also fail with TransactionAbortableException
         try {
             txnManager.beginCommit();
@@ -3086,7 +3085,6 @@ public class SenderTest {
         } catch (KafkaException e) {
             assertEquals(TransactionAbortableException.class, e.getCause().getClass());
         }
-
     }
 
     @Test

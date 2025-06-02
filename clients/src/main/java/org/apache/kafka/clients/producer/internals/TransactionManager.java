@@ -773,6 +773,15 @@ public class TransactionManager {
                 || exception instanceof InvalidPidMappingException) {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
+            // RetriableExceptions from the Sender thread are converted to Abortable errors
+            // because they indicate that the transaction cannot be completed after all retry attempts.
+            // This conversion ensures the application layer treats these errors as abortable,
+            // preventing duplicate message delivery.
+            if (exception instanceof RetriableException ||
+                    exception instanceof InvalidTxnStateException) {
+                exception = new TransactionAbortableException("Transaction Request was aborted after exhausting retries.", exception);
+            }
+
             if (needToTriggerEpochBumpFromClient() && !isCompleting()) {
                 clientSideEpochBumpRequired = true;
             }
@@ -1126,16 +1135,6 @@ public class TransactionManager {
         } else if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
             if (error == null)
                 throw new IllegalArgumentException("Cannot transition to " + target + " with a null exception");
-
-            // RetriableExceptions from the Sender thread are converted to Abortable errors
-            // because they indicate that the transaction cannot be completed after all retry attempts.
-            // This conversion ensures the application layer treats these errors as abortable,
-            // preventing duplicate message delivery.
-            if (error instanceof RetriableException ||
-                error instanceof InvalidTxnStateException) {
-                error = new TransactionAbortableException("Transaction Request was aborted after exhausting retries.", error);
-            }
-
             lastError = error;
         } else {
             lastError = null;
