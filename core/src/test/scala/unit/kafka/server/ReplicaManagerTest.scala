@@ -69,6 +69,8 @@ import org.apache.kafka.server.share.SharePartitionKey
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchGroupKey, DelayedShareFetchKey, ShareFetch}
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.{TransactionSupportedOperation, ADD_PARTITION, GENERIC_ERROR_SUPPORTED}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
@@ -155,7 +157,7 @@ class ReplicaManagerTest {
     // Anytime we try to verify, just automatically run the callback as though the transaction was verified.
     when(addPartitionsToTxnManager.addOrVerifyTransaction(any(), any(), any(), any(), any(), any())).thenAnswer { invocationOnMock =>
       val callback = invocationOnMock.getArgument(4, classOf[AddPartitionsToTxnManager.AppendCallback])
-      callback(Map.empty[TopicPartition, Errors].toMap)
+      callback.complete(util.Map.of())
     }
     // make sure metadataCache can map between topic name and id
     setupMetadataCacheWithTopicIds(topicIds, metadataCache)
@@ -2195,7 +2197,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         any[AddPartitionsToTxnManager.AppendCallback](),
         any()
       )
@@ -2232,7 +2234,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2241,7 +2243,7 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> Errors.INVALID_TXN_STATE).toMap)
+      callback.complete(util.Map.of(tp0, Errors.INVALID_TXN_STATE))
       assertEquals(Errors.INVALID_TXN_STATE, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2252,14 +2254,14 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback2.capture(),
         any()
       )
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue
-      callback2(Map.empty[TopicPartition, Errors].toMap)
+      callback2.complete(util.Map.of())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
     } finally {
@@ -2295,13 +2297,13 @@ class ReplicaManagerTest {
 
       // We should add these partitions to the manager to verify.
       val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, origin = AppendOrigin.CLIENT,
-        transactionalId = transactionalId, transactionSupportedOperation = addPartition)
+        transactionalId = transactionalId, transactionSupportedOperation = ADD_PARTITION)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2310,7 +2312,7 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       var callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> error).toMap)
+      callback.complete(util.Map.of(tp0, error))
 
       if (error != Errors.CONCURRENT_TRANSACTIONS) {
         // NOT_COORDINATOR is converted to NOT_ENOUGH_REPLICAS
@@ -2327,12 +2329,12 @@ class ReplicaManagerTest {
           ArgumentMatchers.eq(transactionalId),
           ArgumentMatchers.eq(producerId),
           ArgumentMatchers.eq(producerEpoch),
-          ArgumentMatchers.eq(Seq(tp0)),
+          ArgumentMatchers.eq(util.List.of(tp0)),
           appendCallback.capture(),
           any()
         )
         callback = appendCallback.getValue
-        callback(Map.empty[TopicPartition, Errors].toMap)
+        callback.complete(util.Map.of())
         assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
         assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
       }
@@ -2366,7 +2368,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2375,7 +2377,7 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> Errors.INVALID_PRODUCER_ID_MAPPING).toMap)
+      callback.complete(util.Map.of(tp0, Errors.INVALID_PRODUCER_ID_MAPPING))
       assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2389,7 +2391,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback2.capture(),
         any()
       )
@@ -2397,7 +2399,7 @@ class ReplicaManagerTest {
 
       // Verification should succeed, but we expect to fail with OutOfOrderSequence and for the VerificationGuard to remain.
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue
-      callback2(Map.empty[TopicPartition, Errors].toMap)
+      callback2.complete(util.Map.of())
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
       assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, result2.assertFired.error)
     } finally {
@@ -2576,7 +2578,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2593,7 +2595,7 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> Errors.INVALID_TXN_STATE).toMap)
+      callback.complete(util.Map.of(tp0, Errors.INVALID_TXN_STATE))
       assertEquals(Errors.INVALID_TXN_STATE, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2635,20 +2637,20 @@ class ReplicaManagerTest {
 
       // Start verification and return the coordinator related errors.
       val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"
-      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionSupportedOperation = addPartition)
+      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionSupportedOperation = ADD_PARTITION)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
 
       // Confirm we did not write to the log and instead returned the converted error with the correct error message.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> error).toMap)
+      callback.complete(util.Map.of(tp0, error))
       assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
       assertEquals(expectedMessage, result.assertFired.errorMessage)
     } finally {
@@ -2691,14 +2693,14 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
 
       // Confirm we did not write to the log and instead returned the converted error with the correct error message.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> error).toMap)
+      callback.complete(util.Map.of(tp0, error))
       assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
       assertEquals(expectedMessage, result.assertFired.errorMessage)
     } finally {
@@ -2722,7 +2724,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -3012,7 +3014,7 @@ class ReplicaManagerTest {
                                                   entriesToAppend: Map[TopicPartition, MemoryRecords],
                                                   transactionalId: String,
                                                   requiredAcks: Short = -1,
-                                                  transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
+                                                  transactionSupportedOperation: TransactionSupportedOperation = GENERIC_ERROR_SUPPORTED
                                                  ): CallbackResult[Map[TopicIdPartition, PartitionResponse]] = {
     val result = new CallbackResult[Map[TopicIdPartition, PartitionResponse]]()
     def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
@@ -3039,7 +3041,7 @@ class ReplicaManagerTest {
                                   origin: AppendOrigin = AppendOrigin.CLIENT,
                                   requiredAcks: Short = -1,
                                   transactionalId: String,
-                                  transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
+                                  transactionSupportedOperation: TransactionSupportedOperation = GENERIC_ERROR_SUPPORTED
                                  ): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
 
@@ -3072,7 +3074,7 @@ class ReplicaManagerTest {
                                                             producerId: Long,
                                                             producerEpoch: Short,
                                                             baseSequence: Int = 0,
-                                                            transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
+                                                            transactionSupportedOperation: TransactionSupportedOperation = GENERIC_ERROR_SUPPORTED
                                                            ): CallbackResult[Either[Errors, VerificationGuard]] = {
     val result = new CallbackResult[Either[Errors, VerificationGuard]]()
     def postVerificationCallback(errorAndGuard: (Errors, VerificationGuard)): Unit = {

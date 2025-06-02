@@ -126,7 +126,7 @@ object StorageTool extends Logging {
       setClusterId(namespace.getString("cluster_id")).
       setUnstableFeatureVersionsEnabled(config.unstableFeatureVersionsEnabled).
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
-      setControllerListenerName(config.controllerListenerNames.head).
+      setControllerListenerName(config.controllerListenerNames.stream.findFirst.orElseThrow).
       setMetadataLogDirectory(config.metadataLogDir)
     Option(namespace.getString("release_version")).foreach(
       releaseVersion => formatter.

@@ -973,7 +973,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     val oldListeners = oldConfig.listeners.map(l => ListenerName.normalised(l.listener)).toSet
     if (!oldAdvertisedListeners.subsetOf(newListeners))
       throw new ConfigException(s"Advertised listeners '$oldAdvertisedListeners' must be a subset of listeners '$newListeners'")
-    if (!newListeners.subsetOf(newConfig.effectiveListenerSecurityProtocolMap.keySet))
+    if (!newListeners.subsetOf(newConfig.effectiveListenerSecurityProtocolMap.keySet.asScala))
       throw new ConfigException(s"Listeners '$newListeners' must be subset of listener map '${newConfig.effectiveListenerSecurityProtocolMap}'")
     newListeners.intersect(oldListeners).foreach { listenerName =>
       def immutableListenerConfigs(kafkaConfig: KafkaConfig, prefix: String): Map[String, AnyRef] = {
@@ -985,7 +985,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       if (immutableListenerConfigs(newConfig, listenerName.configPrefix) != immutableListenerConfigs(oldConfig, listenerName.configPrefix))
         throw new ConfigException(s"Configs cannot be updated dynamically for existing listener $listenerName, " +
           "restart broker or create a new listener for update")
-      if (oldConfig.effectiveListenerSecurityProtocolMap(listenerName) != newConfig.effectiveListenerSecurityProtocolMap(listenerName))
+      if (oldConfig.effectiveListenerSecurityProtocolMap.get(listenerName) != newConfig.effectiveListenerSecurityProtocolMap.get(listenerName))
         throw new ConfigException(s"Security protocol cannot be updated for existing listener $listenerName")
     }
   }
