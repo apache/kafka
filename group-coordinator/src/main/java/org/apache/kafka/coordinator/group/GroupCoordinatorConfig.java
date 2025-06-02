@@ -204,6 +204,11 @@ public class GroupCoordinatorConfig {
         ConsumerGroupMigrationPolicy.DOWNGRADE + ": only downgrade from consumer group to classic group is enabled, " +
         ConsumerGroupMigrationPolicy.DISABLED + ": neither upgrade nor downgrade is enabled.";
 
+    public static final String CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_CONFIG = "group.consumer.regex.refresh.interval.ms";
+    public static final String CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_DOC = "The interval at which the group coordinator will atomatically" +
+        "refresh the topics matching the group subscribed regexes. This is only applicable to consumer groups using the consumer group protocol. ";
+    public static final int CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_DEFAULT = 10 * 60 * 1000; // 10 minutes
+
     ///
     /// Share group configs
     ///
@@ -308,6 +313,7 @@ public class GroupCoordinatorConfig {
         .define(CONSUMER_GROUP_MAX_SIZE_CONFIG, INT, CONSUMER_GROUP_MAX_SIZE_DEFAULT, atLeast(1), MEDIUM, CONSUMER_GROUP_MAX_SIZE_DOC)
         .define(CONSUMER_GROUP_ASSIGNORS_CONFIG, LIST, CONSUMER_GROUP_ASSIGNORS_DEFAULT, null, MEDIUM, CONSUMER_GROUP_ASSIGNORS_DOC)
         .define(CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, STRING, CONSUMER_GROUP_MIGRATION_POLICY_DEFAULT, ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(ConsumerGroupMigrationPolicy.class)), MEDIUM, CONSUMER_GROUP_MIGRATION_POLICY_DOC)
+        .define(CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_CONFIG, INT, CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_DEFAULT, atLeast(1), MEDIUM, CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_DOC)
 
         // Share group configs
         .define(SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, INT, SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_SESSION_TIMEOUT_MS_DOC)
@@ -359,6 +365,7 @@ public class GroupCoordinatorConfig {
     private final int consumerGroupMaxSessionTimeoutMs;
     private final int consumerGroupMinHeartbeatIntervalMs;
     private final int consumerGroupMaxHeartbeatIntervalMs;
+    private final int consumerGroupRegexRefreshIntervalMs;
     // Share group configurations
     private final int shareGroupMaxSize;
     private final int shareGroupSessionTimeoutMs;
@@ -407,6 +414,7 @@ public class GroupCoordinatorConfig {
         this.consumerGroupMaxSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
         this.consumerGroupMinHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.consumerGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.consumerGroupRegexRefreshIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_CONFIG);
         // Share group configurations
         this.shareGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG);
         this.shareGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
@@ -758,6 +766,13 @@ public class GroupCoordinatorConfig {
      */
     public int consumerGroupMaxHeartbeatIntervalMs() {
         return consumerGroupMaxHeartbeatIntervalMs;
+    }
+
+    /**
+     * The consumer group regex refresh interval in milliseconds.
+     */
+    public int consumerGroupRegexRefreshIntervalMs() {
+        return consumerGroupRegexRefreshIntervalMs;
     }
 
     /**
