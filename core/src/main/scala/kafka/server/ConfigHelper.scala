@@ -55,13 +55,9 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
         result.put(k, v)
       }
     }
-
     config.nonInternalValues.forEach { (k, v) =>
-      if (v != null) {
         result.put(k, v.asInstanceOf[Object])
-      }
     }
-
     result
   }
 
