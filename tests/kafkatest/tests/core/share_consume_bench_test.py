@@ -33,7 +33,8 @@ class ShareConsumeBenchTest(Test):
         self.producer_workload_service = ProduceBenchWorkloadService(test_context, self.kafka)
         self.share_consumer_workload_service = ShareConsumeBenchWorkloadService(test_context, self.kafka)
         self.share_consumer_workload_service_2 = ShareConsumeBenchWorkloadService(test_context, self.kafka)
-        self.active_topics = {"share_consume_bench_topic[0-5]": {"numPartitions": 5, "replicationFactor": 3}}
+        self.topics_with_multiple_partitions = {"share_consume_bench_topic[0-5]": {"numPartitions": 5, "replicationFactor": 3}}
+        self.topic_with_single_partitions = {"share_consume_bench_topic6": {"numPartitions": 1, "replicationFactor": 3}}
         self.trogdor = TrogdorService(context=self.test_context,
                                       client_services=[self.kafka, self.producer_workload_service,
                                                        self.share_consumer_workload_service,
@@ -68,11 +69,11 @@ class ShareConsumeBenchTest(Test):
         metadata_quorum=[quorum.isolated_kraft],
         use_share_groups=[True],
     )
-    def test_consume_bench(self, metadata_quorum, use_share_groups=True):
+    def test_share_consume_bench(self, metadata_quorum, use_share_groups=True):
         """
         Runs a ShareConsumeBench workload to consume messages
         """
-        self.produce_messages(self.active_topics)
+        self.produce_messages(self.topics_with_multiple_partitions)
         share_consume_spec = ShareConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.share_consumer_workload_service.share_consumer_node,
                                                 self.share_consumer_workload_service.bootstrap_servers,
@@ -100,7 +101,7 @@ class ShareConsumeBenchTest(Test):
         """
         Runs two share consumers in the same share group to read messages from topics.
         """
-        self.produce_messages(self.active_topics)
+        self.produce_messages(self.topics_with_multiple_partitions)
         share_consume_spec = ShareConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.share_consumer_workload_service.share_consumer_node,
                                                 self.share_consumer_workload_service.bootstrap_servers,
@@ -111,6 +112,63 @@ class ShareConsumeBenchTest(Test):
                                                 common_client_conf={},
                                                 threads_per_worker=2,
                                                 active_topics=["share_consume_bench_topic[0-5]"],
+                                                share_group=self.share_group)
+        wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+        share_consume_workload = self.trogdor.create_task("share_consume_workload", share_consume_spec)
+        share_consume_workload.wait_for_done(timeout_sec=360)
+        self.logger.debug("Share consume workload finished")
+        tasks = self.trogdor.tasks()
+        self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
+
+    @cluster(num_nodes=10)
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_share_groups=[True],
+    )
+    def test_one_share_consumer_subscribed_to_single_topic(self, metadata_quorum, use_share_groups=True):
+        """
+        Runs one share consumers in a share group to read messages from topic with single partition.
+        """
+        self.produce_messages(self.topic_with_single_partitions)
+        share_consume_spec = ShareConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
+                                                self.share_consumer_workload_service.share_consumer_node,
+                                                self.share_consumer_workload_service.bootstrap_servers,
+                                                target_messages_per_sec=1000,
+                                                max_messages=10000,
+                                                consumer_conf={},
+                                                admin_client_conf={},
+                                                common_client_conf={},
+                                                active_topics=["share_consume_bench_topic6"],
+                                                share_group=self.share_group)
+        wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
+        share_consume_workload = self.trogdor.create_task("share_consume_workload", share_consume_spec)
+        share_consume_workload.wait_for_done(timeout_sec=360)
+        self.logger.debug("Share consume workload finished")
+        tasks = self.trogdor.tasks()
+        self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
+
+    @cluster(num_nodes=10)
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_share_groups=[True],
+    )
+    def test_multiple_share_consumer_subscribed_to_single_topic(self, metadata_quorum, use_share_groups=True):
+        """
+        Runs multiple share consumers in a share group to read messages from topic with single partition.
+        """
+        self.produce_messages(self.topic_with_single_partitions)
+        share_consume_spec = ShareConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
+                                                self.share_consumer_workload_service.share_consumer_node,
+                                                self.share_consumer_workload_service.bootstrap_servers,
+                                                target_messages_per_sec=1000,
+                                                max_messages=100, # all should read at least 100 messages
+                                                consumer_conf={},
+                                                admin_client_conf={},
+                                                common_client_conf={},
+                                                threads_per_worker=5,
+                                                active_topics=["share_consume_bench_topic6"],
                                                 share_group=self.share_group)
         wait_until(lambda: self.kafka.set_group_offset_reset_strategy(group=self.share_group, strategy="earliest"),
                    timeout_sec=20, backoff_sec=2, err_msg="auto.offset.reset not set to earliest")
