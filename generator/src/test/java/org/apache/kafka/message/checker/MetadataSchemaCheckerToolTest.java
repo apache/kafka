@@ -17,8 +17,6 @@
 
 package org.apache.kafka.message.checker;
 
-import org.junit.jupiter.api.Test;
-
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -27,6 +25,7 @@ import java.nio.file.Paths;
 
 import static org.apache.kafka.message.checker.CheckerTestUtils.messageSpecStringToTempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
 
 public class MetadataSchemaCheckerToolTest {
     @Test
@@ -73,6 +72,192 @@ public class MetadataSchemaCheckerToolTest {
             MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
                 "--path", path, "--parent_path", path}, new PrintStream(stream));
             assertEquals("Successfully verified evolution of path: " + path + " from parent: " + path,
+                stream.toString().trim());
+        }
+    }
+
+    @Test
+    public void testVerifyEvolutionWithDifferentSchemas() throws Exception {
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            String parentPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-1', 'flexibleVersions': '0+', " +
+                "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
+
+            String childPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
+
+            MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
+                "--path", childPath, "--parent_path", parentPath}, new PrintStream(stream));
+
+            assertEquals("Successfully verified evolution of path: " + childPath + " from parent: " + parentPath,
+                stream.toString().trim());
+        }
+    }
+
+    @Test
+    public void testVerifyEvolutionWithMultipleMatchingFields() throws Exception {
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            String parentPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-1', 'flexibleVersions': '0+', " +
+                "'fields': [" +
+                "  {'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'BrokerHost', 'type': 'string', 'versions': '0+'}," +
+                "  {'name': 'Port', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'Rack', 'type': 'string', 'versions': '0+'}" +
+                "]}");
+
+            String childPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'fields': [" +
+                "  {'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'BrokerHost', 'type': 'string', 'versions': '0+'}," +
+                "  {'name': 'Port', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'Rack', 'type': 'string', 'versions': '0+'}" +
+                "]}");
+
+            MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
+                "--path", childPath, "--parent_path", parentPath}, new PrintStream(stream));
+
+            assertEquals("Successfully verified evolution of path: " + childPath + " from parent: " + parentPath,
+                stream.toString().trim());
+        }
+    }
+
+    @Test
+    public void testVerifyEvolutionWithNestedStructs() throws Exception {
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            String parentPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-1', 'flexibleVersions': '0+', " +
+                "'fields': [" +
+                "  {'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'Feature', 'type': 'FeatureInfo', 'versions': '0+', " +
+                "   'fields': [" +
+                "     {'name': 'FeatureName', 'type': 'string', 'versions': '0+'}," +
+                "     {'name': 'FeatureVersion', 'type': 'int16', 'versions': '0+'}" +
+                "   ]}" +
+                "]}");
+
+            String childPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'fields': [" +
+                "  {'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'Feature', 'type': 'FeatureInfo', 'versions': '0+', " +
+                "   'fields': [" +
+                "     {'name': 'FeatureName', 'type': 'string', 'versions': '0+'}," +
+                "     {'name': 'FeatureVersion', 'type': 'int16', 'versions': '0+'}" +
+                "   ]}" +
+                "]}");
+
+            MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
+                "--path", childPath, "--parent_path", parentPath}, new PrintStream(stream));
+
+            assertEquals("Successfully verified evolution of path: " + childPath + " from parent: " + parentPath,
+                stream.toString().trim());
+        }
+    }
+
+    @Test
+    public void testStandardizedCommandPathArguments() throws Exception {
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            String path = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
+
+            // Test with --path format (new standardized format)
+            MetadataSchemaCheckerTool.run(new String[] {"parse", "--path", path}, new PrintStream(stream));
+            assertEquals("Successfully parsed file as MessageSpec: " + path, stream.toString().trim());
+            stream.reset();
+
+            // Test with -p format (legacy format)
+            MetadataSchemaCheckerTool.run(new String[] {"parse", "-p", path}, new PrintStream(stream));
+            assertEquals("Successfully parsed file as MessageSpec: " + path, stream.toString().trim());
+            stream.reset();
+
+            // Test verify-evolution with --path and --parent_path format
+            MetadataSchemaCheckerTool.run(new String[] {"verify-evolution", "--path", path,
+                "--parent_path", path}, new PrintStream(stream));
+            assertEquals("Successfully verified evolution of path: " + path + " from parent: " + path,
+                stream.toString().trim());
+            stream.reset();
+
+            MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
+                "--path", path, "--parent_path", path}, new PrintStream(stream));
+            assertEquals("Successfully verified evolution of path: " + path + " from parent: " + path,
+                stream.toString().trim());
+        }
+    }
+
+    @Test
+    public void testVerifyEvolutionWithArrayAndComplexTypes() throws Exception {
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            String parentPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-1', 'flexibleVersions': '0+', " +
+                "'fields': [" +
+                "  {'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'Features', 'type': '[]FeatureInfo', 'versions': '0+', " +
+                "   'fields': [" +
+                "     {'name': 'FeatureName', 'type': 'string', 'versions': '0+'}," +
+                "     {'name': 'FeatureVersion', 'type': 'int16', 'versions': '0+'}" +
+                "   ]}" +
+                "]}");
+
+            String childPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'fields': [" +
+                "  {'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'Features', 'type': '[]FeatureInfo', 'versions': '0+', " +
+                "   'fields': [" +
+                "     {'name': 'FeatureName', 'type': 'string', 'versions': '0+'}," +
+                "     {'name': 'FeatureVersion', 'type': 'int16', 'versions': '0+'}" +
+                "   ]}" +
+                "]}");
+
+            MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
+                "--path", childPath, "--parent_path", parentPath}, new PrintStream(stream));
+
+            assertEquals("Successfully verified evolution of path: " + childPath + " from parent: " + parentPath,
+                stream.toString().trim());
+        }
+    }
+
+    @Test
+    public void testVerifyEvolutionWithDifferentFieldVersions() throws Exception {
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            String parentPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-1', 'flexibleVersions': '0+', " +
+                "'fields': [" +
+                "  {'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'BrokerHost', 'type': 'string', 'versions': '0+'}," +
+                "  {'name': 'Port', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'Rack', 'type': 'string', 'versions': '0-1'}" + // Only in versions 0-1
+                "]}");
+
+            String childPath = messageSpecStringToTempFile(
+                "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'fields': [" +
+                "  {'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'BrokerHost', 'type': 'string', 'versions': '0+'}," +
+                "  {'name': 'Port', 'type': 'int32', 'versions': '0+'}," +
+                "  {'name': 'Rack', 'type': 'string', 'versions': '0-1'}," + // Still only in versions 0-1
+                "  {'name': 'SecurityProtocol', 'type': 'int8', 'versions': '2+'}" + // New field in version 2+
+                "]}");
+
+            MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
+                "--path", childPath, "--parent_path", parentPath}, new PrintStream(stream));
+
+            assertEquals("Successfully verified evolution of path: " + childPath + " from parent: " + parentPath,
                 stream.toString().trim());
         }
     }
