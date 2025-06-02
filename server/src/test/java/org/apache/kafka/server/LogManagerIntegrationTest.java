@@ -78,7 +78,9 @@ public class LogManagerIntegrationTest {
             producer.flush();
         }
 
-        File timeIndexFile = cluster.brokers().get(0).logManager()
+        var broker = cluster.brokers().get(0);
+
+        File timeIndexFile = broker.logManager()
                 .getLog(new TopicPartition("foo", 0), false).get()
                 .activeSegment()
                 .timeIndexFile();
@@ -87,22 +89,22 @@ public class LogManagerIntegrationTest {
         assertTrue(timeIndexFile.exists());
         assertTrue(timeIndexFile.setReadOnly());
 
-        cluster.brokers().get(0).shutdown();
+        broker.shutdown();
 
-        assertEquals(1, cluster.brokers().get(0).config().logDirs().size());
-        String logDir = cluster.brokers().get(0).config().logDirs().get(0);
+        assertEquals(1, broker.config().logDirs().size());
+        String logDir = broker.config().logDirs().get(0);
         CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir);
         assertFalse(cleanShutdownFileHandler.exists(), "Did not expect the clean shutdown file to exist");
 
         // Ensure we have a corrupt index on broker shutdown
-        long maxIndexSize = cluster.brokers().get(0).config().logIndexSizeMaxBytes();
+        long maxIndexSize = broker.config().logIndexSizeMaxBytes();
         long expectedIndexSize = 12 * (maxIndexSize / 12);
         assertEquals(expectedIndexSize, timeIndexFile.length());
 
         // Allow write permissions before startup
         assertTrue(timeIndexFile.setWritable(true));
 
-        cluster.brokers().get(0).startup();
+        broker.startup();
         // make sure there is no error during load logs
         assertTrue(cluster.firstFatalException().isEmpty());
         try (Admin admin = cluster.admin()) {
@@ -114,7 +116,7 @@ public class LogManagerIntegrationTest {
         }
 
         // Ensure that sanity check does not fail
-        cluster.brokers().get(0).logManager()
+        broker.logManager()
                 .getLog(new TopicPartition("foo", 0), false).get()
                 .activeSegment()
                 .timeIndex()
