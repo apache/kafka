@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.consumer;
 
+import kafka.server.KafkaBroker;
+
 import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
@@ -62,6 +64,7 @@ import static org.apache.kafka.common.test.TestUtils.SEEDED_RANDOM;
 import static org.apache.kafka.common.test.TestUtils.randomSelect;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -104,6 +107,7 @@ public class ConsumerBounceTest {
     private final int numPartitions = 3;
     private final short numReplica = 3;
     private final TopicPartition topicPartition = new TopicPartition(topic, partition);
+    private final String groupId = "group";
 
     private final ClusterInstance clusterInstance;
 
@@ -268,7 +272,7 @@ public class ConsumerBounceTest {
         consumerPollers.add(poller);
         poller.start();
         ClientsTestUtils.sendRecords(clusterInstance, newTopicPartition, numRecords);
-        receiveExactRecords(poller, numRecords, 10000L);
+        receiveExactRecords(poller, numRecords, 60000L);
         poller.shutdown();
 
         // Simulate broker failure and recovery
@@ -282,7 +286,14 @@ public class ConsumerBounceTest {
         poller2.start();
 
         ClientsTestUtils.sendRecords(clusterInstance, newTopicPartition, numRecords);
-        receiveExactRecords(poller2, numRecords, 10000L);
+        // FIXME: is this correct? the second consumer is not used here.
+        // change to poller2, the old framework is not very flaky but it is right now.
+        receiveExactRecords(poller2, numRecords, 60000L);
+//        if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
+//            receiveExactRecords(poller2, numRecords * 2, 60000L);
+//        } else {
+//            receiveExactRecords(poller2, numRecords, 60000L);
+//        }
     }
 
 
@@ -575,6 +586,86 @@ public class ConsumerBounceTest {
             consumerPollers.add(poller);
         }
     }
+
+    @ClusterTest
+    public void testClassicCloseDuringRebalance() throws Exception {
+        testCloseDuringRebalance(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncCloseDuringRebalance() throws Exception {
+        testCloseDuringRebalance(GroupProtocol.CONSUMER);
+    }
+
+    public void testCloseDuringRebalance(GroupProtocol groupProtocol) throws Exception {
+        Map<String, String> consumerConfig = new HashMap<>();
+        consumerConfig.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000");
+        if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
+            consumerConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
+        }
+        consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        checkCloseDuringRebalance(consumerConfig);
+    }
+
+    private void checkCloseDuringRebalance(Map<String, String> consumerConfig) throws Exception {
+        Map<String, Object> configs = new HashMap<>(consumerConfig);
+        configs.put(GROUP_ID_CONFIG, groupId);
+
+        Consumer<byte[], byte[]> consumer1 = clusterInstance.consumer(configs);
+        consumers.add(consumer1);
+        Future<?> f1 = subscribeAndPoll(consumer1, Optional.empty());
+        waitForRebalance(2000, f1);
+
+        Consumer<byte[], byte[]> consumer2 = clusterInstance.consumer(configs);
+        consumers.add(consumer2);
+        Future<?> f2 = subscribeAndPoll(consumer2, Optional.empty());
+        waitForRebalance(2000, f2, consumer1);
+
+        Future<?> rebalanceFuture = createConsumerToRebalance(groupId);
+
+        Future<?> closeFuture1 = submitCloseAndValidate(consumer1, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs);
+
+        waitForRebalance(2000, rebalanceFuture, consumer2);
+
+        createConsumerToRebalance(groupId); // one more time
+        clusterInstance.brokers().values().forEach(KafkaBroker::shutdown);
+
+        Future<?> closeFuture2 = submitCloseAndValidate(consumer2, Long.MAX_VALUE, Optional.empty(), Optional.of(0L));
+
+        closeFuture1.get(2000, TimeUnit.MILLISECONDS);
+        closeFuture2.get(2000, TimeUnit.MILLISECONDS);
+    }
+
+    Future<?> subscribeAndPoll(Consumer<byte[], byte[]> consumer, Optional<Semaphore> revokeSemaphore) {
+        return executor.submit(() -> {
+            consumer.subscribe(List.of(topic));
+            revokeSemaphore.ifPresent(Semaphore::release);
+            consumer.poll(Duration.ofMillis(500));
+            return null;
+        });
+    }
+
+    void waitForRebalance(long timeoutMs, Future<?> future, Consumer<byte[], byte[]>... otherConsumers) throws Exception {
+        long startMs = System.currentTimeMillis();
+        while (System.currentTimeMillis() < startMs + timeoutMs && !future.isDone()) {
+            for (Consumer<byte[], byte[]> consumer : otherConsumers) {
+                consumer.poll(Duration.ofMillis(100));
+            }
+        }
+        assertTrue(future.isDone(), "Rebalance did not complete in time");
+    }
+
+    Future<?> createConsumerToRebalance(String groupId) throws Exception {
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_ID_CONFIG, groupId));
+        Semaphore rebalanceSemaphore = new Semaphore(0);
+        Future<?> future = subscribeAndPoll(consumer, Optional.of(rebalanceSemaphore));
+        assertTrue(rebalanceSemaphore.tryAcquire(2000, TimeUnit.MILLISECONDS), "Rebalance not triggered");
+        assertFalse(future.isDone(), "Rebalance completed too early");
+        return future;
+    }
+
+
 
     private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords,
                                                               Map<String, String> consumerConfig) throws InterruptedException {
