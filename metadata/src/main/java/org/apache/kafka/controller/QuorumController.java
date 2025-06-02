@@ -222,7 +222,6 @@ public final class QuorumController implements Controller {
         private long delegationTokenExpiryTimeMs;
         private long delegationTokenExpiryCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
         private long uncleanLeaderElectionCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
-        private String interBrokerListenerName = "PLAINTEXT";
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -383,10 +382,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setInterBrokerListenerName(String interBrokerListenerName) {
-            this.interBrokerListenerName = interBrokerListenerName;
-            return this;
-        }
 
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -445,7 +440,6 @@ public final class QuorumController implements Controller {
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs,
                     uncleanLeaderElectionCheckIntervalMs,
-                    interBrokerListenerName,
                     controllerPerformanceSamplePeriodMs,
                     controllerPerformanceAlwaysLogThresholdMs
                 );
@@ -1494,7 +1488,6 @@ public final class QuorumController implements Controller {
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs,
         long uncleanLeaderElectionCheckIntervalMs,
-        String interBrokerListenerName,
         long controllerPerformanceSamplePeriodMs,
         long controllerPerformanceAlwaysLogThresholdMs
     ) {
@@ -1536,7 +1529,6 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setFeatureControlManager(featureControl).
             setBrokerShutdownHandler(this::handleBrokerShutdown).
-            setInterBrokerListenerName(interBrokerListenerName).
             setMetrics(controllerMetrics).
             build();
         this.configurationControl = new ConfigurationControlManager.Builder().
