@@ -646,7 +646,7 @@ class ReplicaFetcherThreadTest {
     responseData.put(tid1p0, new FetchResponseData.PartitionData())
     responseData.put(tid1p1, new FetchResponseData.PartitionData())
     responseData.put(tid2p1, new FetchResponseData.PartitionData())
-    val fetchResponse = FetchResponse.of(Errors.NONE, 0, 123, responseData)
+    val fetchResponse = FetchResponse.of(Errors.NONE, 0, 123, responseData,  List.empty.asJava)
 
     leader.fetchSessionHandler.handleResponse(fetchResponse, ApiKeys.FETCH.latestVersion())
 
