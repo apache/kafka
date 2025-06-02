@@ -108,7 +108,7 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
             }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 max_messages=-1, acknowledgement_mode="auto", offset_reset_strategy="",
+                 max_messages=-1, acknowledgement_mode="auto", offset_reset_strategy=None,
                  version=DEV_BRANCH, stop_timeout_sec=60, log_level="INFO", jaas_override_variables=None,
                  on_record_consumed=None):
         """
@@ -227,7 +227,8 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
 
         cmd += " --acknowledgement-mode %s" % self.acknowledgement_mode
 
-        cmd += " --offset-reset-strategy %s" % self.offset_reset_strategy
+        if self.offset_reset_strategy is not None and self.offset_reset_strategy != "":
+            cmd += " --offset-reset-strategy %s" % self.offset_reset_strategy
 
         cmd += " --bootstrap-server %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
 

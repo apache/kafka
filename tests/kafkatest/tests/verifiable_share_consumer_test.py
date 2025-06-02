@@ -49,7 +49,7 @@ class VerifiableShareConsumerTest(KafkaTest):
         """Override this since we're adding services outside of the constructor"""
         return super(VerifiableShareConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
 
-    def setup_share_group(self, topic, acknowledgement_mode="auto", group_id="test_group_id", offset_reset_strategy="", **kwargs):
+    def setup_share_group(self, topic, acknowledgement_mode="auto", group_id="test_group_id", offset_reset_strategy=None, **kwargs):
         return VerifiableShareConsumer(self.test_context, self.num_consumers, self.kafka,
                                   topic, group_id, acknowledgement_mode=acknowledgement_mode,
                                   offset_reset_strategy=offset_reset_strategy, log_level="TRACE", **kwargs)
