@@ -34,7 +34,6 @@ import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterFeature;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -47,6 +46,7 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
 import java.util.ArrayList;
