@@ -59,4 +59,9 @@ public class RequestType {
     public int hashCode() {
         return apiKey.hashCode();
     }
+
+    @Override
+    public String toString() {
+        return String.format("RequestType(apiKey=%s)", apiKey.name());
+    }
 }

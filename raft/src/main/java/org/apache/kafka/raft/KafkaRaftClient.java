@@ -2823,7 +2823,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private RequestSupplier buildEndQuorumEpochRequest(
+    private RequestSupplier endQuorumEpochRequestSupplier(
         ResignedState state
     ) {
         return RequestSupplier.of(
@@ -2875,7 +2875,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return minBackoffMs;
     }
 
-    private RequestSupplier buildBeginQuorumEpochRequest(ReplicaKey remoteVoter) {
+    private RequestSupplier beginQuorumEpochRequestSupplier(ReplicaKey remoteVoter) {
         return RequestSupplier.of(
             () -> RaftUtil.singletonBeginQuorumEpochRequest(
                 log.topicPartition(),
@@ -2889,7 +2889,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private RequestSupplier buildVoteRequest(ReplicaKey remoteVoter, boolean preVote) {
+    private RequestSupplier voteRequestSupplier(ReplicaKey remoteVoter, boolean preVote) {
         return RequestSupplier.of(
             () -> {
                 OffsetAndEpoch endOffset = endOffset();
@@ -2908,7 +2908,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private RequestSupplier buildFetchRequest() {
+    private RequestSupplier fetchRequestSupplier() {
         return RequestSupplier.of(
             () -> {
                 FetchRequestData request = RaftUtil.singletonFetchRequest(
@@ -2939,12 +2939,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             node -> maybeSendRequest(
                 currentTimeMs,
                 node,
-                buildFetchRequest()
+                fetchRequestSupplier()
             ).timeToWaitMs()
         ).orElseGet(() -> requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs));
     }
 
-    private RequestSupplier buildFetchSnapshotRequest(OffsetAndEpoch snapshotId, long snapshotSize) {
+    private RequestSupplier fetchSnapshotRequestSupplier(
+        OffsetAndEpoch snapshotId,
+        long snapshotSize
+    ) {
         return RequestSupplier.of(
             () -> RaftUtil.singletonFetchSnapshotRequest(
                 clusterId,
@@ -3069,7 +3072,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     .filter(key -> key.id() != quorum.localIdOrThrow())
                     .collect(Collectors.toSet()),
                 nodeSupplier,
-                this::buildBeginQuorumEpochRequest
+                this::beginQuorumEpochRequestSupplier
             );
             state.resetBeginQuorumEpochTimer(currentTimeMs);
         }
@@ -3083,7 +3086,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             partitionState
                 .lastVoterSet()
                 .voterNodes(state.unackedVoters().stream(), channel.listenerName()),
-            buildEndQuorumEpochRequest(state)
+            endQuorumEpochRequestSupplier(state)
         );
 
         GracefulShutdown shutdown = this.shutdown.get();
@@ -3163,7 +3166,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                             )
                         )
                     ),
-                voterId -> buildVoteRequest(voterId, preVote)
+                voterId -> voteRequestSupplier(voterId, preVote)
             );
         }
         return Long.MAX_VALUE;
@@ -3336,9 +3339,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             RawSnapshotWriter snapshot = state.fetchingSnapshot().get();
             long snapshotSize = snapshot.sizeInBytes();
 
-            requestSupplier = buildFetchSnapshotRequest(snapshot.snapshotId(), snapshotSize);
+            requestSupplier = fetchSnapshotRequestSupplier(snapshot.snapshotId(), snapshotSize);
         } else {
-            requestSupplier = buildFetchRequest();
+            requestSupplier = fetchRequestSupplier();
         }
 
         return maybeSendRequest(
@@ -3348,7 +3351,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         ).timeToWaitMs();
     }
 
-    private RequestSupplier buildUpdateVoterRequest() {
+    private RequestSupplier updateVoterRequestSupplier() {
         return RequestSupplier.of(
             () -> RaftUtil.updateVoterRequest(
                 clusterId,
@@ -3365,7 +3368,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
-            buildUpdateVoterRequest()
+            updateVoterRequestSupplier()
         );
     }
 
