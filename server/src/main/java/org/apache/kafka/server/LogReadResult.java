@@ -18,8 +18,11 @@ package org.apache.kafka.server;
 
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -91,6 +94,18 @@ public record LogReadResult(
             OptionalInt preferredReadReplica) {
         this(info, divergingEpoch, highWatermark, leaderLogStartOffset, leaderLogEndOffset, followerLogStartOffset,
             fetchTimeMs, lastStableOffset, preferredReadReplica, Optional.empty());
+    }
+
+    public LogReadResult(Throwable e) {
+        this(new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+            Optional.empty(),
+            UnifiedLog.UNKNOWN_OFFSET,
+            UnifiedLog.UNKNOWN_OFFSET,
+            UnifiedLog.UNKNOWN_OFFSET,
+            UnifiedLog.UNKNOWN_OFFSET,
+            -1L,
+            OptionalLong.empty(),
+            Optional.of(e));
     }
 
     public Errors error() {

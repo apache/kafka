@@ -832,7 +832,7 @@ public class DelayedShareFetch extends DelayedOperation {
                             new ShareFetchPartitionData(
                                 remoteFetch.topicIdPartition(),
                                 partitionsAcquired.get(remoteFetch.topicIdPartition()),
-                                ReplicaManager.createLogReadResult(error).toFetchPartitionData(false)
+                                new LogReadResult(error).toFetchPartitionData(false)
                             )
                         );
                     } else {
