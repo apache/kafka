@@ -1741,6 +1741,17 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return columnFamilyOptions.blobFileStartingLevel();
     }
 
+    @Override
+    public Options setDailyOffpeakTimeUTC(final String offpeakTimeUTC) {
+        dbOptions.setDailyOffpeakTimeUTC(offpeakTimeUTC);
+        return this;
+    }
+
+    @Override
+    public String dailyOffpeakTimeUTC() {
+        return dbOptions.dailyOffpeakTimeUTC();
+    }
+
     //
     // END options for blobs (integrated BlobDB)
     //
