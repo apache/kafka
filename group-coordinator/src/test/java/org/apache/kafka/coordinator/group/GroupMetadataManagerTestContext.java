@@ -460,7 +460,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public static class Builder {
-        private final MockTime time = new MockTime(0, 0, 0);
+        private MockTime time = new MockTime(0, 0, 0);
         private final MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
         private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
         private final LogContext logContext = new LogContext();
@@ -516,6 +516,11 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
+        public Builder withTime(MockTime time) {
+            this.time = time;
+            return this;
+        }
+
         public GroupMetadataManagerTestContext build() {
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (groupConfigManager == null) groupConfigManager = createConfigManager();
@@ -551,7 +556,7 @@ public class GroupMetadataManagerTestContext {
                 groupConfigManager
             );
 
-            consumerGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
+            consumerGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
             shareGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
             streamsGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
 
