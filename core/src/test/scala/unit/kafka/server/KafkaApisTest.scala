@@ -9658,7 +9658,7 @@ class KafkaApisTest extends Logging {
         topicIds.put(tp.topicPartition.topic, tp.topicId)
         topicNames.put(tp.topicId, tp.topicPartition.topic)
       }
-      FetchResponse.of(Errors.NONE, 100, 100, responseData)
+      FetchResponse.of(Errors.NONE, 100, 100, responseData, List.empty.asJava)
     }
 
     val throttledPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("throttledData", 0))
