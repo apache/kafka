@@ -575,17 +575,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
-    public Options setRandomAccessMaxBufferSize(final long randomAccessMaxBufferSize) {
-        dbOptions.setRandomAccessMaxBufferSize(randomAccessMaxBufferSize);
-        return this;
-    }
-
-    @Override
-    public long randomAccessMaxBufferSize() {
-        return dbOptions.randomAccessMaxBufferSize();
-    }
-
-    @Override
     public Options setWritableFileMaxBufferSize(final long writableFileMaxBufferSize) {
         dbOptions.setWritableFileMaxBufferSize(writableFileMaxBufferSize);
         return this;
@@ -1228,17 +1217,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public boolean paranoidFileChecks() {
         return columnFamilyOptions.paranoidFileChecks();
-    }
-
-    @Override
-    public Options setMaxWriteBufferNumberToMaintain(final int maxWriteBufferNumberToMaintain) {
-        columnFamilyOptions.setMaxWriteBufferNumberToMaintain(maxWriteBufferNumberToMaintain);
-        return this;
-    }
-
-    @Override
-    public int maxWriteBufferNumberToMaintain() {
-        return columnFamilyOptions.maxWriteBufferNumberToMaintain();
     }
 
     @Override
