@@ -39,15 +39,15 @@ import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
+import java.util.{HashMap, HashSet}
 import java.util.stream.Collectors
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
-import java.util.{HashMap, HashSet, List => JList, Map => JMap}
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
 
-  def allConfigs(config: AbstractConfig): JMap[String, Object] = {
+  def allConfigs(config: AbstractConfig): java.util.Map[String, Object] = {
     val result = new HashMap[String, Object]()
 
     config.originals.forEach { (k, v) =>
@@ -103,21 +103,18 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                       includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
     resourceToConfigNames.map { resource =>
 
-      def createResponseConfig(configs: JMap[String, _ <: Object],
+      def createResponseConfig(configs: java.util.Map[String, _ <: Object],
                                createConfigEntry: (String, Object) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-        val keySet: HashSet[String] =
-          if (resource.configurationKeys == null || resource.configurationKeys.isEmpty) null
-          else new HashSet[String](resource.configurationKeys)
-
-        val configEntries: JList[DescribeConfigsResponseData.DescribeConfigsResourceResult] = {
+        val configEntries: java.util.List[DescribeConfigsResponseData.DescribeConfigsResourceResult] = {
           val baseStream = configs.entrySet().stream()
-          val filtered = if (keySet == null) baseStream
-          else baseStream.filter(entry => keySet.contains(entry.getKey))
+          val filtered = if (resource.configurationKeys == null || resource.configurationKeys.isEmpty) baseStream
+          else baseStream.filter(entry => resource.configurationKeys.contains(entry.getKey))
+
           filtered
             .map[DescribeConfigsResponseData.DescribeConfigsResourceResult](entry =>
               createConfigEntry(entry.getKey, entry.getValue)
             )
-            .collect(Collectors.toList())
+            .toList
         }
 
         new DescribeConfigsResponseData.DescribeConfigsResult()
