@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -290,15 +288,10 @@ public class LogSegmentsTest {
 
         doThrow(new IOException("Failure")).when(seg2).close();
 
-        try {
-            segments.close();
-            fail("Expected IOException to be thrown");
-        } catch (IOException e) {
-            verify(seg1).close();
-            verify(seg2).close();
-            verify(seg3).close();
-        }
-
+        assertThrows(IOException.class, segments::close, "Expected IOException to be thrown");
+        verify(seg1).close();
+        verify(seg2).close();
+        verify(seg3).close();
     }
 
 }
