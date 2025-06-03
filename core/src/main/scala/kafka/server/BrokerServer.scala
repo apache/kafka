@@ -441,6 +441,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
+        config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong,
         persister,
         groupConfigManager,
         brokerTopicStats
@@ -700,10 +701,7 @@ class BrokerServer(
       val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
       val endpoint = if (listenerName != null) {
         Some(listenerInfo.listeners().values().stream
-          .filter(e =>
-            e.listenerName().isPresent &&
-              ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
-          )
+          .filter(e => ListenerName.normalised(e.listener()).equals(ListenerName.normalised(listenerName)))
           .findFirst()
           .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
             listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values())))

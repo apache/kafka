@@ -950,24 +950,24 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List the Streams group offsets available in the cluster for the specified Streams groups.
+     * List the streams group offsets available in the cluster for the specified streams groups.
      *
      * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#listConsumerGroupOffsets} does.
      *
-     * @param groupSpecs Map of Streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @param groupSpecs Map of streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
      *
-     * @param options The options to use when listing the Streams group offsets.
+     * @param options The options to use when listing the streams group offsets.
      * @return The ListStreamsGroupOffsetsResult
      */
     ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs, ListStreamsGroupOffsetsOptions options);
 
     /**
-     * List the Streams group offsets available in the cluster for the specified groups with the default options.
+     * List the streams group offsets available in the cluster for the specified groups with the default options.
      * <p>
      * This is a convenience method for
      * {@link #listStreamsGroupOffsets(Map, ListStreamsGroupOffsetsOptions)} with default options.
      *
-     * @param groupSpecs Map of Streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @param groupSpecs Map of streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
      * @return The ListStreamsGroupOffsetsResult.
      */
     default ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs) {
@@ -992,17 +992,17 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Delete Streams groups from the cluster.
+     * Delete streams groups from the cluster.
      *
      * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroups} does.
      *
-     * @param options The options to use when deleting a Streams group.
+     * @param options The options to use when deleting a streams group.
      * @return The DeleteStreamsGroupsResult.
      */
     DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options);
 
     /**
-     * Delete Streams groups from the cluster with the default options.
+     * Delete streams groups from the cluster with the default options.
      *
      * @return The DeleteStreamsGroupResult.
      */
@@ -1034,13 +1034,13 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Delete committed offsets for a set of partitions in a Streams group. This will
+     * Delete committed offsets for a set of partitions in a streams group. This will
      * succeed at the partition level only if the group is not actively subscribed
      * to the corresponding topic.
      *
      * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroupOffsets} does.
      *
-     * @param options The options to use when deleting offsets in a Streams group.
+     * @param options The options to use when deleting offsets in a streams group.
      * @return The DeleteStreamsGroupOffsetsResult.
      */
     DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId,
@@ -1048,7 +1048,7 @@ public interface Admin extends AutoCloseable {
                                                                 DeleteStreamsGroupOffsetsOptions options);
 
     /**
-     * Delete committed offsets for a set of partitions in a Streams group with the default
+     * Delete committed offsets for a set of partitions in a streams group with the default
      * options. This will succeed at the partition level only if the group is not actively
      * subscribed to the corresponding topic.
      *
@@ -1776,11 +1776,35 @@ public interface Admin extends AutoCloseable {
                                         FenceProducersOptions options);
 
     /**
+     * List the configuration resources available in the cluster which matches config resource type.
+     * If no config resource types are specified, all configuration resources will be listed.
+     *
+     * @param configResourceTypes The set of configuration resource types to list.
+     * @param options The options to use when listing the configuration resources.
+     * @return The ListConfigurationResourcesResult.
+     */
+    ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options);
+
+    /**
+     * List all configuration resources available in the cluster with the default options.
+     * <p>
+     * This is a convenience method for {@link #listConfigResources(Set, ListConfigResourcesOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @return The ListConfigurationResourcesResult.
+     */
+    default ListConfigResourcesResult listConfigResources() {
+        return listConfigResources(Set.of(), new ListConfigResourcesOptions());
+    }
+
+    /**
      * List the client metrics configuration resources available in the cluster.
      *
      * @param options The options to use when listing the client metrics resources.
      * @return The ListClientMetricsResourcesResult.
+     * @deprecated Since 4.1. Use {@link #listConfigResources(Set, ListConfigResourcesOptions)} instead.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options);
 
     /**
@@ -1790,7 +1814,9 @@ public interface Admin extends AutoCloseable {
      * with default options. See the overload for more details.
      *
      * @return The ListClientMetricsResourcesResult.
+     * @deprecated Since 4.1. Use {@link #listConfigResources()} instead.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     default ListClientMetricsResourcesResult listClientMetricsResources() {
         return listClientMetricsResources(new ListClientMetricsResourcesOptions());
     }
