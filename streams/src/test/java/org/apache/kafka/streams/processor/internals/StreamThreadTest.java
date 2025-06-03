@@ -69,6 +69,7 @@ import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.ConsumerWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -3924,6 +3925,38 @@ public class StreamThreadTest {
             )
         );
     }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldWrapMainConsumerFromClassConfig(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        streamsConfigProps.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsConfigProps.put(InternalConfig.INTERNAL_CONSUMER_WRAPPER, TestWrapper.class);
+
+        thread = createStreamThread("clientId", new StreamsConfig(streamsConfigProps));
+
+        assertInstanceOf(
+            AsyncKafkaConsumer.class,
+            assertInstanceOf(TestWrapper.class, thread.mainConsumer()).consumer()
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldWrapMainConsumerFromStringConfig(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        streamsConfigProps.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsConfigProps.put(InternalConfig.INTERNAL_CONSUMER_WRAPPER, TestWrapper.class.getName());
+
+        thread = createStreamThread("clientId", new StreamsConfig(streamsConfigProps));
+
+        assertInstanceOf(
+            AsyncKafkaConsumer.class,
+            assertInstanceOf(TestWrapper.class, thread.mainConsumer()).consumer()
+        );
+    }
+
+    public static final class TestWrapper extends ConsumerWrapper { }
 
     private StreamThread setUpThread(final Properties streamsConfigProps) {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);

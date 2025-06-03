@@ -31,8 +31,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import com.yammer.metrics.core.MetricsRegistry;
 
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -91,7 +91,7 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
     @Override
     public void close() throws Exception {
-        Arrays.asList(
+        List.of(
             SHARE_COORDINATOR_WRITE_SENSOR_NAME,
             SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME
         ).forEach(metrics::removeSensor);
