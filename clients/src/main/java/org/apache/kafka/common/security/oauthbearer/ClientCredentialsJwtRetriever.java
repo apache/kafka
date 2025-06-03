@@ -38,6 +38,7 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
@@ -220,15 +221,35 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
                                 boolean isRequired,
                                 Function<String, String> configValueGetter,
                                 Function<String, String> jaasValueGetter) {
-            if (cu.containsKey(configName)) {
+            boolean isPresentInConfig = cu.containsKey(configName);
+            boolean isPresentInJaas = jou.containsKey(jaasName);
+
+            if (isPresentInConfig) {
+                if (isPresentInJaas) {
+                    // Log if the user is using the deprecated JAAS option.
+                    LOG.warn(
+                        "Both the OAuth configuration {} as well as the JAAS option {} (from the {} configuration) were provided. " +
+                        "Since the {} JAAS option is deprecated, it will be ignored and the value from the {} configuration will be used. " +
+                        "Please update your configuration to only use {}.",
+                        configName,
+                        jaasName,
+                        SASL_JAAS_CONFIG,
+                        jaasName,
+                        configName,
+                        configName
+                    );
+                }
+
                 return configValueGetter.apply(configName);
-            } else if (jou.containsKey(jaasName)) {
+            } else if (isPresentInJaas) {
                 String value = jaasValueGetter.apply(jaasName);
 
                 // Log if the user is using the deprecated JAAS option.
                 LOG.warn(
-                    "The OAuth JAAS option {} is deprecated and will be removed. Please use the top-level {} configuration instead.",
+                    "The OAuth JAAS option {} was configured in {}, but that JAAS option is deprecated and will be removed. " +
+                    "Please update your configuration to use the {} configuration instead.",
                     jaasName,
+                    SASL_JAAS_CONFIG,
                     configName
                 );
 
