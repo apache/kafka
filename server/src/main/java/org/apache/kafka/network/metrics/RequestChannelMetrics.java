@@ -34,7 +34,12 @@ public class RequestChannelMetrics {
         for (ApiKeys apiKey : enabledApis) {
             metricsMap.put(apiKey.name, new RequestMetrics(apiKey.name));
         }
-        for (String name : Arrays.asList(RequestMetrics.CONSUMER_FETCH_METRIC_NAME, RequestMetrics.FOLLOW_FETCH_METRIC_NAME, RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME)) {
+        for (String name : Arrays.asList(
+            RequestMetrics.CONSUMER_FETCH_METRIC_NAME,
+            RequestMetrics.FOLLOW_FETCH_METRIC_NAME,
+            RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME,
+            RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME
+        )) {
             metricsMap.put(name, new RequestMetrics(name));
         }
     }
