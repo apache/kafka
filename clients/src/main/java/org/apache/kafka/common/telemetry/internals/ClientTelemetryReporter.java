@@ -718,7 +718,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             try {
                 compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
             } catch (Throwable e) {
-                log.info("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
+                log.debug("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
                 compressedPayload = ByteBuffer.wrap(payload.toByteArray());
                 compressionType = CompressionType.NONE;
             }
