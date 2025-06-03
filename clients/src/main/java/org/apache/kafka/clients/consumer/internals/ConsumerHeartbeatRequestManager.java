@@ -307,11 +307,10 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                 sentFields.localAssignment = local;
             }
 
-            // RackId - sent when joining or if it has changed since the last heartbeat
+            // RackId - sent when joining
             String rackId = membershipManager.rackId().orElse(null);
-            if (sendAllFields || !Objects.equals(rackId, sentFields.rackId)) {
+            if (sendAllFields) {
                 data.setRackId(rackId);
-                sentFields.rackId = rackId;
             }
 
             return data;
@@ -332,7 +331,6 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             private SubscriptionPattern pattern = null;
             private String serverAssignor = null;
             private AbstractMembershipManager.LocalAssignment localAssignment = null;
-            private String rackId = null;
 
             SentFields() {}
 
@@ -342,7 +340,6 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                 serverAssignor = null;
                 localAssignment = null;
                 pattern = null;
-                rackId = null;
             }
         }
     }

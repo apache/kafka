@@ -178,7 +178,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
-                               String rackId,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this(rebalanceConfig,
             logContext,
@@ -193,7 +192,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             autoCommitIntervalMs,
             interceptors,
             throwOnFetchStableOffsetsUnsupported,
-            rackId,
             clientTelemetryReporter,
             Optional.empty());
     }
@@ -214,7 +212,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
-                               String rackId,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
         super(rebalanceConfig,
@@ -228,7 +225,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
-        this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
+        this.rackId = rebalanceConfig.rackId;
         this.metadataSnapshot = new MetadataSnapshot(this.rackId, subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();

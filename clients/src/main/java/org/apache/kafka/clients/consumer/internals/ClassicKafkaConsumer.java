@@ -230,7 +230,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors,
                         config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
-                        config.getString(ConsumerConfig.CLIENT_RACK_CONFIG),
                         clientTelemetryReporter);
             }
             this.fetcher = new Fetcher<>(
@@ -330,6 +329,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 heartbeatIntervalMs,
                 groupId.get(),
                 groupInstanceId,
+                rackId,
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 true
@@ -348,7 +348,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 autoCommitIntervalMs,
                 interceptors,
                 throwOnStableOffsetNotSupported,
-                rackId,
                 clientTelemetryReporter
             );
         } else {

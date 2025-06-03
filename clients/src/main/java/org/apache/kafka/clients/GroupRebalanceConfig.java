@@ -57,9 +57,8 @@ public class GroupRebalanceConfig {
             // Connect doesn't support rack id.
             // The GroupCoordinatorService throws error if the rackId is empty. The default value of client.rack is empty string.
             // Skip empty rackId to avoid InvalidRequestException.
-            this.rackId = config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG).isEmpty() ?
-                Optional.empty() :
-                Optional.of(config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG));
+            String rackId = config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG);
+            this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
         } else {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);
             this.rackId = Optional.empty();
@@ -98,6 +97,7 @@ public class GroupRebalanceConfig {
                                 final int heartbeatIntervalMs,
                                 String groupId,
                                 Optional<String> groupInstanceId,
+                                String rackId,
                                 long retryBackoffMs,
                                 long retryBackoffMaxMs,
                                 boolean leaveGroupOnClose) {
@@ -106,7 +106,7 @@ public class GroupRebalanceConfig {
         this.heartbeatIntervalMs = heartbeatIntervalMs;
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
-        this.rackId = Optional.empty();
+        this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.leaveGroupOnClose = leaveGroupOnClose;
