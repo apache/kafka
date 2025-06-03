@@ -207,10 +207,16 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
-//        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-//            CommandLineUtils.printUsageAndExit(parser,
-//                "Option " + resetOffsetsOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + resetOffsetsOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
 
+        checkOffsetResetArgs();
+
+        CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
+    }
+
+    private void checkOffsetResetArgs() {
         if (options.has(resetOffsetsOpt)) {
             if (options.has(dryRunOpt) && options.has(executeOpt))
                 CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
@@ -231,7 +237,5 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, minus(allResetOffsetScenarioOpts, resetShiftByOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetScenarioOpts, resetFromFileOpt));
         }
-
-        CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
     }
 }

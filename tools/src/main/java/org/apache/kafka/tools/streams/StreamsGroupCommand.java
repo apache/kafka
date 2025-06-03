@@ -502,19 +502,14 @@ public class StreamsGroupCommand {
                 Map<String, StreamsGroupDescription> descriptionMap = adminClient.describeStreamsGroups(groupIds).all().get();
                 for (StreamsGroupDescription description : descriptionMap.values()) {
 
-                    List<String> nonInternalTopics = description.subtopologies().stream()
-                        .flatMap(subtopology -> Stream.concat(
-                            subtopology.sourceTopics().stream(),
-                            subtopology.repartitionSinkTopics().stream()))
-                        .distinct()
-                        .toList();
-
+                    List<String> sourceTopics = description.subtopologies().stream()
+                        .flatMap(subtopology -> subtopology.sourceTopics().stream()).toList();
 
                     List<String> internalTopics = description.subtopologies().stream()
                         .flatMap(subtopology -> Stream.concat(
                             subtopology.repartitionSourceTopics().keySet().stream(),
                             subtopology.stateChangelogTopics().keySet().stream()))
-                        .filter(topic -> !nonInternalTopics.contains(topic))
+                        .filter(topic -> !sourceTopics.contains(topic))
                         .collect(Collectors.toList());
                     internalTopics.removeIf(topic -> {
                         if (!isInferredInternalTopic(topic, description.groupId())) {
