@@ -266,33 +266,52 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleGetReplicaLogInfo(request: RequestChannel.Request): Unit = {
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    var partitionCount = 0
+    def processPartitions(topicLogInfo: GetReplicaLogInfoResponseData.TopicPartitionLogInfo,
+                          partitionIter: util.Iterator[Integer],
+                          action: Integer => GetReplicaLogInfoResponseData.PartitionLogInfo): Unit = {
+      while (partitionIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
+        topicLogInfo.partitionLogInfo().add(action(partitionIter.next()))
+        partitionCount += 1
+      }
+    }
+
+    val isClusterAction = authorizeClusterOperation(request, CLUSTER_ACTION)
+    def isAuthorized(topicName: String): Boolean =
+      isClusterAction || authHelper.authorize(request.context, DESCRIBE, TOPIC, topicName)
+
     val getReplicaLogInfoRequest = request.body[GetReplicaLogInfoRequest]
     val data = getReplicaLogInfoRequest.data()
-    var partitionCount = 0
-    val topicPartitionIter = data.topicPartitions().iterator()
+
+    val topicIter = data.topicPartitions().iterator()
+    var maybePartitionIter: Option[util.Iterator[Integer]] = None
     val responseData = new GetReplicaLogInfoResponseData()
       .setBrokerEpoch(brokerEpochSupplier.get())
-    while (topicPartitionIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
-      val topic = topicPartitionIter.next()
-      val maybeTopicName = metadataCache.getTopicName(topic.topicId())
-      val topicPartitionLogInfo = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
-          .setTopicId(topic.topicId())
+
+    while (topicIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
+      val topic = topicIter.next()
       val partitionIter = topic.partitions().iterator()
+      maybePartitionIter = Some(partitionIter)
+
+      val topicPartitionLogInfo = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+        .setTopicId(topic.topicId())
+
+      val maybeTopicName = metadataCache.getTopicName(topic.topicId())
       if (maybeTopicName.isEmpty) {
-        while (partitionIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
-          val partitionId = partitionIter.next()
-          topicPartitionLogInfo.partitionLogInfo().add(new GetReplicaLogInfoResponseData.PartitionLogInfo()
-              .setPartition(partitionId)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
-          partitionCount += 1
-        }
+        processPartitions(topicPartitionLogInfo, partitionIter,
+          new GetReplicaLogInfoResponseData.PartitionLogInfo()
+            .setPartition(_)
+            .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
+      } else if (!isAuthorized(maybeTopicName.get())) {
+        processPartitions(topicPartitionLogInfo, partitionIter,
+          new GetReplicaLogInfoResponseData.PartitionLogInfo()
+            .setPartition(_)
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()))
       } else {
         val topicName = maybeTopicName.get()
-        while (partitionIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
-          val partitionId = partitionIter.next()
+        processPartitions(topicPartitionLogInfo, partitionIter, { partitionId: Integer =>
           val topicPartition = new TopicPartition(topicName, partitionId)
-          val partitionLogInfo = replicaManager.getPartitionOrError(topicPartition) match {
+          replicaManager.getPartitionOrError(topicPartition) match {
             case Left(err) => new GetReplicaLogInfoResponseData.PartitionLogInfo()
               .setPartition(topicPartition.partition())
               .setErrorCode(err.code())
@@ -311,13 +330,11 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
             }
           }
-          topicPartitionLogInfo.partitionLogInfo().add(partitionLogInfo)
-          partitionCount += 1
-        }
+        })
       }
       responseData.topicPartitionLogInfoList().add(topicPartitionLogInfo)
     }
-    responseData.setHasMoreData(partitionCount == GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST)
+    responseData.setHasMoreData(topicIter.hasNext || maybePartitionIter.map(_.hasNext).getOrElse(false))
     requestHelper.sendMaybeThrottle(request, new GetReplicaLogInfoResponse(responseData))
   }
 

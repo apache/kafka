@@ -74,7 +74,7 @@ public class GetReplicaLogInfoRequest extends AbstractRequest {
         Errors error = Errors.forException(e);
         GetReplicaLogInfoResponseData responseData = new GetReplicaLogInfoResponseData();
         for (GetReplicaLogInfoRequestData.TopicPartitions topicPartition : data().topicPartitions()) {
-            ArrayList<GetReplicaLogInfoResponseData.PartitionLogInfo> partitionLogInfos = new ArrayList<>();
+            ArrayList<GetReplicaLogInfoResponseData.PartitionLogInfo> partitionLogInfos = new ArrayList<>(topicPartition.partitions().size());
             for (Integer partition: topicPartition.partitions()) {
                 partitionLogInfos.add(new GetReplicaLogInfoResponseData.PartitionLogInfo()
                     .setPartition(partition)

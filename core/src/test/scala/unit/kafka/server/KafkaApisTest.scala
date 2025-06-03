@@ -13357,31 +13357,128 @@ class KafkaApisTest extends Logging {
     assertEquals(alterShareGroupOffsetsResponseData, response.data)
   }
 
-  def verifyGetReplicaLogInfoRequest(builder: GetReplicaLogInfoRequest.Builder, expectedResponseData: GetReplicaLogInfoResponseData): Unit = {
-    val request = buildRequest(builder.build())
+  def verifyGetReplicaLogInfoRequest(builder: GetReplicaLogInfoRequest.Builder, validate: GetReplicaLogInfoResponseData => Unit): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
-    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val clusterActions = util.List.of(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
-    val allowList = util.List.of(AuthorizationResult.ALLOWED)
-    when(authorizer.authorize(request.context, clusterActions)).thenReturn(allowList)
+    authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER, Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    val request = buildRequest(builder.build())
     kafkaApis.handleGetReplicaLogInfo(request)
-    val response = verifyNoThrottling[GetReplicaLogInfoResponse](request)
-    assertEquals(expectedResponseData, response.data())
+    validate(verifyNoThrottling[GetReplicaLogInfoResponse](request).data())
+  }
+
+  def verifyGetReplicaLogInfoRequestWithResponse(builder: GetReplicaLogInfoRequest.Builder, expectedResponseData: GetReplicaLogInfoResponseData): Unit = {
+    verifyGetReplicaLogInfoRequest(builder, { response =>
+      assertEquals(expectedResponseData, response)
+    })
   }
 
   @Test
   def testUnauthorizedGetReplicaLogInfo(): Unit = {
-    val builder = new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData())
-    val request = buildRequest(builder.build(0))
-    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val clusterActions = util.List.of(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
-    val allowList = util.List.of(AuthorizationResult.DENIED)
+    val authorizedUuid = Uuid.randomUuid()
+    val unauthorizedUuid = Uuid.randomUuid()
+    val requestData = new GetReplicaLogInfoRequestData()
+    requestData.topicPartitions().add(
+      new GetReplicaLogInfoRequestData.TopicPartitions()
+        .setTopicId(authorizedUuid)
+        .setPartitions(util.List.of(0)))
+    requestData.topicPartitions().add(
+      new GetReplicaLogInfoRequestData.TopicPartitions()
+        .setTopicId(unauthorizedUuid)
+        .setPartitions(util.List.of(0)))
+    val builder = new GetReplicaLogInfoRequest.Builder(requestData)
+
+    metadataCache = mock(classOf[MetadataCache])
+    when(metadataCache.getTopicName(authorizedUuid)).thenReturn(Optional.of("authorized"))
+    when(metadataCache.getTopicName(unauthorizedUuid)).thenReturn(Optional.of("unauthorized"))
+
+    val log = mock(classOf[UnifiedLog])
+    when(log.logEndOffset).thenReturn(100L)
+    when(log.latestEpoch).thenReturn(Optional.of(10))
+    val partition = mock(classOf[Partition])
+    when(partition.log).thenReturn(Some(log))
+    when(partition.getLeaderEpoch).thenReturn(1)
+    when(partition.partitionId).thenReturn(0)
+    val valid = new TopicPartition("authorized", 0)
+    when(replicaManager.getPartitionOrError(valid)).thenReturn(Right(partition))
+
+    val expected = new GetReplicaLogInfoResponseData().setBrokerEpoch(brokerEpoch)
+    expected.topicPartitionLogInfoList().add(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+      .setTopicId(authorizedUuid)
+      .setPartitionLogInfo(util.List.of(new GetReplicaLogInfoResponseData.PartitionLogInfo()
+        .setPartition(0)
+        .setLogEndOffset(100L)
+        .setLastWrittenLeaderEpoch(10)
+        .setCurrentLeaderEpoch(1))))
+    expected.topicPartitionLogInfoList().add(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+      .setTopicId(unauthorizedUuid)
+      .setPartitionLogInfo(util.List.of(
+        new GetReplicaLogInfoResponseData.PartitionLogInfo()
+          .setPartition(0)
+          .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()))))
+
     val authorizer: Authorizer = mock(classOf[Authorizer])
-    when(authorizer.authorize(request.context, clusterActions)).thenReturn(allowList)
+    authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER, Resource.CLUSTER_NAME, AuthorizationResult.DENIED)
+    authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TOPIC, "authorized", AuthorizationResult.ALLOWED)
+    authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TOPIC, "unauthorized", AuthorizationResult.DENIED)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-    assertThrows(classOf[ClusterAuthorizationException],
-      () => kafkaApis.handleGetReplicaLogInfo(request))
+    val request = buildRequest(builder.build())
+    kafkaApis.handleGetReplicaLogInfo(request)
+    val responseData = verifyNoThrottling[GetReplicaLogInfoResponse](request).data()
+    assertEquals(expected, responseData)
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints=Array(GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST, GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST+1))
+  def testGetReplicaLogInfoSingleTopicManyPartitionsHasMoreData(partitionCount: Int): Unit = {
+    val expectedMoreData = GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST < partitionCount
+    val uuid = Uuid.randomUuid()
+    val expected = new GetReplicaLogInfoResponseData().setBrokerEpoch(brokerEpoch).setHasMoreData(expectedMoreData)
+    val topicPartitionResponses = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+      .setTopicId(uuid)
+    expected.topicPartitionLogInfoList().add(topicPartitionResponses)
+    val topicPartitionRequests = new GetReplicaLogInfoRequestData.TopicPartitions()
+      .setTopicId(uuid)
+    val topicName = "topic1"
+    (1 to partitionCount).foreach { pid =>
+      topicPartitionRequests.partitions().add(pid)
+      // Now setup the request itself
+      when(replicaManager.getPartitionOrError(new TopicPartition(topicName, pid))).thenReturn(Left(Errors.UNKNOWN_TOPIC_ID))
+      topicPartitionResponses.partitionLogInfo().add(new GetReplicaLogInfoResponseData.PartitionLogInfo().setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
+      expected.topicPartitionLogInfoList().add(topicPartitionResponses)
+    }
+    val builder = new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData()
+      .setTopicPartitions(util.List.of(topicPartitionRequests)))
+    verifyGetReplicaLogInfoRequest(builder, { response =>
+      assertEquals(expectedMoreData, response.hasMoreData)
+    })
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints=Array(GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST, GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST+1))
+  def testGetReplicaLogInfoSingleTopicPartitionHasMoreData(topicCount: Int): Unit = {
+    val expectedMoreData = GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST < topicCount
+    val expected = new GetReplicaLogInfoResponseData().setBrokerEpoch(brokerEpoch).setHasMoreData(expectedMoreData)
+    val uuids = (1 to topicCount).map(_ => Uuid.randomUuid())
+    val topicName = "topic1"
+    val requestData = new GetReplicaLogInfoRequestData()
+    uuids.foreach { uuid =>
+      // setup response
+      val topicResponse = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo().setTopicId(uuid)
+      topicResponse.partitionLogInfo().add(new GetReplicaLogInfoResponseData.PartitionLogInfo().setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
+      expected.topicPartitionLogInfoList().add(topicResponse)
+      when(replicaManager.getPartitionOrError(new TopicPartition(topicName, 0))).thenReturn(Left(Errors.UNKNOWN_TOPIC_ID))
+
+      // setup request
+      requestData.topicPartitions().add(
+        new GetReplicaLogInfoRequestData.TopicPartitions()
+          .setTopicId(uuid)
+          .setPartitions(util.List.of(0)))
+    }
+    val builder = new GetReplicaLogInfoRequest.Builder(requestData)
+    // Tests a specific edge case; when we have exactly 1000 results we should return hasMoreData=false
+    verifyGetReplicaLogInfoRequest(builder, { response =>
+      assertEquals(expectedMoreData, response.hasMoreData)
+    })
   }
 
   @Test
@@ -13437,7 +13534,7 @@ class KafkaApisTest extends Logging {
     val builder = new GetReplicaLogInfoRequest.Builder(
       new GetReplicaLogInfoRequestData().setTopicPartitions(tps asJava)
     )
-    verifyGetReplicaLogInfoRequest(builder, expected)
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
   }
 
   @Test
@@ -13469,7 +13566,7 @@ class KafkaApisTest extends Logging {
           ))) asJava)
       .setBrokerEpoch(brokerEpoch)
 
-    verifyGetReplicaLogInfoRequest(builder, expected)
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
   }
 
   @Test
@@ -13517,7 +13614,7 @@ class KafkaApisTest extends Logging {
                 .setLogEndOffset(100L)
                 .setCurrentLeaderEpoch(1)
                 .setLastWrittenLeaderEpoch(10)))))
-    verifyGetReplicaLogInfoRequest(builder, expected)
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
   }
 
   @Test
@@ -13569,7 +13666,7 @@ class KafkaApisTest extends Logging {
       expected.topicPartitionLogInfoList().add(tpli)
     }
 
-    verifyGetReplicaLogInfoRequest(builder, expected)
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
   }
 
   @Test
@@ -13643,7 +13740,7 @@ class KafkaApisTest extends Logging {
               .setCurrentLeaderEpoch(3)
           ))) asJava)
       .setBrokerEpoch(brokerEpoch)
-    verifyGetReplicaLogInfoRequest(builder, expected)
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
   }
 
   def getShareGroupDescribeResponse(groupIds: util.List[String], enableShareGroups: Boolean = true,
