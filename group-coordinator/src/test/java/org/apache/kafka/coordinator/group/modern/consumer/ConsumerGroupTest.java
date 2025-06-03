@@ -48,7 +48,6 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -631,212 +630,6 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testUpdateSubscriptionMetadata() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-        Uuid zarTopicId = Uuid.randomUuid();
-
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(fooTopicId, "foo", 1)
-            .addTopic(barTopicId, "bar", 2)
-            .addTopic(zarTopicId, "zar", 3)
-            .addRacks()
-            .build();
-
-        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(List.of("foo"))
-            .build();
-        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(List.of("bar"))
-            .build();
-        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
-            .setSubscribedTopicNames(List.of("zar"))
-            .build();
-
-        ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
-
-        // It should be empty by default.
-        assertEquals(
-            Map.of(),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account member 1.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, member1),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Updating the group with member1.
-        consumerGroup.updateMember(member1);
-
-        // It should return foo now.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 1.
-        assertEquals(
-            Map.of(),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(member1, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account member 2.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, member2),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Updating the group with member2.
-        consumerGroup.updateMember(member2);
-
-        // It should return foo and bar.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 2.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(member2, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Removing member1 results in returning bar.
-        assertEquals(
-            mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(member1, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account member 3.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, member3),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Updating group with member3.
-        consumerGroup.updateMember(member3);
-
-        // It should return foo, bar and zar.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 1, member 2 and member 3
-        assertEquals(
-            Map.of(),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member1, member2, member3))),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 2 and member 3.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member2, member3))),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 1.
-        assertEquals(
-            mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(Set.of(member1)),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // It should return foo, bar and zar.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(Set.of()),
-                image.topics(),
-                image.cluster()
-            )
-        );
-    }
-
-    @Test
     public void testUpdateSubscribedTopicNamesAndSubscriptionType() {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(List.of("foo"))
@@ -1215,15 +1008,6 @@ public class ConsumerGroupTest {
 
     @Test
     public void testIsSubscribedToTopic() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(fooTopicId, "foo", 1)
-            .addTopic(barTopicId, "bar", 2)
-            .addRacks()
-            .build();
-
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(List.of("foo"))
             .build();
@@ -1235,18 +1019,6 @@ public class ConsumerGroupTest {
 
         consumerGroup.updateMember(member1);
         consumerGroup.updateMember(member2);
-
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
 
         assertTrue(consumerGroup.isSubscribedToTopic("foo"));
         assertTrue(consumerGroup.isSubscribedToTopic("bar"));
@@ -1585,7 +1357,6 @@ public class ConsumerGroupTest {
         assertEquals(expectedConsumerGroup.groupEpoch(), consumerGroup.groupEpoch());
         assertEquals(expectedConsumerGroup.state(), consumerGroup.state());
         assertEquals(expectedConsumerGroup.preferredServerAssignor(), consumerGroup.preferredServerAssignor());
-        assertEquals(Map.copyOf(expectedConsumerGroup.subscriptionMetadata()), Map.copyOf(consumerGroup.subscriptionMetadata()));
         assertEquals(expectedConsumerGroup.members(), consumerGroup.members());
     }
 
