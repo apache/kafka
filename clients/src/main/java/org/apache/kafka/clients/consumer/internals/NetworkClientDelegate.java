@@ -154,6 +154,7 @@ public class NetworkClientDelegate implements AutoCloseable {
      *
      * @param timeoutMs     timeout time
      * @param currentTimeMs current time
+     * @param onClose       True when the network thread is closing.
      */
     public void poll(final long timeoutMs, final long currentTimeMs, boolean onClose) {
         trySend(currentTimeMs);
@@ -196,7 +197,6 @@ public class NetworkClientDelegate implements AutoCloseable {
         Iterator<UnsentRequest> iterator = unsentRequests.iterator();
         while (iterator.hasNext()) {
             UnsentRequest unsent = iterator.next();
-            System.out.println("Processing unsent request: " + unsent);
             unsent.timer.update(currentTimeMs);
             if (unsent.timer.isExpired()) {
                 iterator.remove();
@@ -429,7 +429,6 @@ public class NetworkClientDelegate implements AutoCloseable {
             if (e != null) {
                 this.future.completeExceptionally(e);
             } else {
-                System.out.println("Disconnect onFailure");
                 this.future.completeExceptionally(DisconnectException.INSTANCE);
             }
         }
