@@ -986,7 +986,6 @@ public class ShareMembershipManagerTest {
 
     @Test
     public void testReconcileNewPartitionsAssignedWhenOtherPartitionsOwned() {
-        // ANDREW MANGLED THIS
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         TopicIdPartition ownedPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0));

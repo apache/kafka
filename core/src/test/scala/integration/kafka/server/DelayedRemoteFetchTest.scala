@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
+import org.apache.kafka.server.LogReadResult
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.storage.internals.log._
@@ -29,7 +30,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.{mock, verify, when}
 
-import java.util.Optional
+import java.util.{Optional, OptionalLong}
 import java.util.concurrent.{CompletableFuture, Future}
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -233,16 +234,16 @@ class DelayedRemoteFetchTest {
   private def buildReadResult(error: Errors,
                               highWatermark: Int = 0,
                               leaderLogStartOffset: Int = 0): LogReadResult = {
-    LogReadResult(
-      exception = if (error != Errors.NONE) Some(error.exception) else None,
-      info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
-      divergingEpoch = None,
-      highWatermark = highWatermark,
-      leaderLogStartOffset = leaderLogStartOffset,
-      leaderLogEndOffset = -1L,
-      followerLogStartOffset = -1L,
-      fetchTimeMs = -1L,
-      lastStableOffset = None)
+    new LogReadResult(
+      new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+      Optional.empty(),
+      highWatermark,
+      leaderLogStartOffset,
+      -1L,
+      -1L,
+      -1L,
+      OptionalLong.empty(),
+      if (error != Errors.NONE) Optional.of[Throwable](error.exception) else Optional.empty[Throwable]())
   }
 
 }
