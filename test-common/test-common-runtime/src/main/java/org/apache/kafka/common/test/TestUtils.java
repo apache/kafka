@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.common.test;
 
-import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
@@ -94,18 +92,6 @@ class TestUtils {
         });
 
         return file;
-    }
-
-    /**
-     * Convert EndPoint to String
-     */
-    public static String endpointToString(Endpoint endPoint) {
-        String host = endPoint.host();
-        int port = endPoint.port();
-        ListenerName listenerName = ListenerName.normalised(endPoint.listener());
-
-        String hostport = (host == null) ? (":" + port) : Utils.formatAddress(host, port);
-        return listenerName.value() + "://" + hostport;
     }
 
     /**
