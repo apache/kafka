@@ -29,9 +29,7 @@ import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupState;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -142,212 +140,6 @@ public class ShareGroupTest {
         // Test case insensitivity.
         assertEquals(Group.GroupType.parse("Share"), Group.GroupType.SHARE);
         assertEquals(Group.GroupType.parse("SHare"), Group.GroupType.SHARE);
-    }
-
-    @Test
-    public void testUpdateSubscriptionMetadata() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-        Uuid zarTopicId = Uuid.randomUuid();
-
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(fooTopicId, "foo", 1)
-            .addTopic(barTopicId, "bar", 2)
-            .addTopic(zarTopicId, "zar", 3)
-            .addRacks()
-            .build();
-
-        ShareGroupMember member1 = new ShareGroupMember.Builder("member1")
-            .setSubscribedTopicNames(List.of("foo"))
-            .build();
-        ShareGroupMember member2 = new ShareGroupMember.Builder("member2")
-            .setSubscribedTopicNames(List.of("bar"))
-            .build();
-        ShareGroupMember member3 = new ShareGroupMember.Builder("member3")
-            .setSubscribedTopicNames(List.of("zar"))
-            .build();
-
-        ShareGroup shareGroup = createShareGroup("group-foo");
-
-        // It should be empty by default.
-        assertEquals(
-            Map.of(),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account member 1.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(null, member1),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Updating the group with member1.
-        shareGroup.updateMember(member1);
-
-        // It should return foo now.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 1.
-        assertEquals(
-            Map.of(),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(member1, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account member 2.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(null, member2),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Updating the group with member2.
-        shareGroup.updateMember(member2);
-
-        // It should return foo and bar.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 2.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(member2, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Removing member1 results in returning bar.
-        assertEquals(
-            mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(member1, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account member 3.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(null, member3),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Updating group with member3.
-        shareGroup.updateMember(member3);
-
-        // It should return foo, bar and zar.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 1, member 2 and member 3
-        assertEquals(
-            Map.of(),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member1, member2, member3))),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 2 and member 3.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member2, member3))),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 1.
-        assertEquals(
-            mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(Set.of(member1)),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // It should return foo, bar and zar.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(Set.of()),
-                image.topics(),
-                image.cluster()
-            )
-        );
     }
 
     @Test
@@ -622,15 +414,6 @@ public class ShareGroupTest {
 
     @Test
     public void testIsSubscribedToTopic() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(fooTopicId, "foo", 1)
-            .addTopic(barTopicId, "bar", 2)
-            .addRacks()
-            .build();
-
         ShareGroupMember member1 = new ShareGroupMember.Builder("member1")
             .setSubscribedTopicNames(List.of("foo"))
             .build();
@@ -642,18 +425,6 @@ public class ShareGroupTest {
 
         shareGroup.updateMember(member1);
         shareGroup.updateMember(member2);
-
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            shareGroup.computeSubscriptionMetadata(
-                shareGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
 
         assertTrue(shareGroup.isSubscribedToTopic("foo"));
         assertTrue(shareGroup.isSubscribedToTopic("bar"));
