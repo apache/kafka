@@ -4992,7 +4992,6 @@ public class KafkaAdminClient extends AdminClient {
                     future.completeExceptionally(error.exception(addResponse.data().errorMessage()));
                 else
                     future.complete(null);
-
             }
 
             @Override
@@ -5035,7 +5034,6 @@ public class KafkaAdminClient extends AdminClient {
                     future.completeExceptionally(error.exception(addResponse.data().errorMessage()));
                 else
                     future.complete(null);
-
             }
 
             @Override
