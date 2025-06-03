@@ -36,6 +36,7 @@ import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -405,5 +406,43 @@ public interface ClusterInstance {
                     .findFirst()
                     .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
+    }
+
+    /**
+     * Wait for a leader to be elected or changed using the provided admin client.
+     */
+    default int waitUntilLeaderIsElectedOrChangedWithAdmin(Admin admin,
+                                                           String topic,
+                                                           int partitionNumber,
+                                                           long timeoutMs) throws Exception {
+        long startTime = System.currentTimeMillis();
+        TopicPartition topicPartition = new TopicPartition(topic, partitionNumber);
+
+        while (System.currentTimeMillis() < startTime + timeoutMs) {
+            try {
+                TopicDescription topicDescription = admin.describeTopics(List.of(topic))
+                        .allTopicNames().get().get(topic);
+
+                Optional<Integer> leader = topicDescription.partitions().stream()
+                        .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
+                        .findFirst()
+                        .map(partitionInfo -> {
+                            int leaderId = partitionInfo.leader().id();
+                            return leaderId == Node.noNode().id() ? null : leaderId;
+                        });
+
+                if (leader.isPresent()) {
+                    return leader.get();
+                }
+
+            } catch (Exception ignored) {
+                // Continue retrying on any exception (network issues, topic not ready, etc.)
+            }
+
+            Thread.sleep(Math.min(100L, timeoutMs));
+        }
+
+        throw new AssertionError("Timing out after " + timeoutMs +
+                " ms since a leader was not elected for partition " + topicPartition);
     }
 }
