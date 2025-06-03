@@ -46,6 +46,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.MetadataImage;
@@ -57,6 +58,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +72,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.Utils.computeGroupHash;
+import static org.apache.kafka.coordinator.group.Utils.computeTopicHash;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
@@ -1198,7 +1202,7 @@ public class ConsumerGroupTest {
         long currentTimestamp = 30000L;
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
-        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty(), Uuid.ZERO_UUID);
         ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id", mock(GroupCoordinatorMetricsShard.class));
 
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
@@ -1532,7 +1536,8 @@ public class ConsumerGroupTest {
             new SnapshotRegistry(logContext),
             mock(GroupCoordinatorMetricsShard.class),
             classicGroup,
-            metadataImage.topics()
+            new HashMap<>(),
+            metadataImage
         );
 
         ConsumerGroup expectedConsumerGroup = new ConsumerGroup(
@@ -1544,6 +1549,10 @@ public class ConsumerGroupTest {
         expectedConsumerGroup.setTargetAssignmentEpoch(10);
         expectedConsumerGroup.updateTargetAssignment(memberId, new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 0)
+        )));
+        expectedConsumerGroup.setMetadataHash(computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage),
+            barTopicName, computeTopicHash(barTopicName, metadataImage)
         )));
         expectedConsumerGroup.updateMember(new ConsumerGroupMember.Builder(memberId)
             .setMemberEpoch(classicGroup.generationId())
@@ -1576,6 +1585,7 @@ public class ConsumerGroupTest {
         assertEquals(expectedConsumerGroup.groupEpoch(), consumerGroup.groupEpoch());
         assertEquals(expectedConsumerGroup.state(), consumerGroup.state());
         assertEquals(expectedConsumerGroup.preferredServerAssignor(), consumerGroup.preferredServerAssignor());
+        assertEquals(Map.copyOf(expectedConsumerGroup.subscriptionMetadata()), Map.copyOf(consumerGroup.subscriptionMetadata()));
         assertEquals(expectedConsumerGroup.members(), consumerGroup.members());
     }
 
@@ -2254,6 +2264,107 @@ public class ConsumerGroupTest {
                     .setSubscribedTopicRegex("bar*")
                     .build()
             )
+        );
+    }
+
+    @Test
+    public void testComputeMetadataHash() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "foo", 1)
+            .addTopic(Uuid.randomUuid(), "bar", 1)
+            .addRacks()
+            .build();
+        Map<String, Long> cache = new HashMap<>();
+        assertEquals(
+            computeGroupHash(Map.of(
+                "foo", computeTopicHash("foo", metadataImage),
+                "bar", computeTopicHash("bar", metadataImage)
+            )),
+            ModernGroup.computeMetadataHash(
+                Map.of(
+                    "foo", new SubscriptionCount(1, 0),
+                    "bar", new SubscriptionCount(1, 0)
+                ),
+                cache,
+                metadataImage
+            )
+        );
+        assertEquals(
+            Map.of(
+                "foo", computeTopicHash("foo", metadataImage),
+                "bar", computeTopicHash("bar", metadataImage)
+            ),
+            cache
+        );
+    }
+
+    @Test
+    public void testComputeMetadataHashUseCacheData() {
+        // Use hash map because topic hash cache cannot be immutable.
+        Map<String, Long> cache = new HashMap<>();
+        cache.put("foo", 1234L);
+        cache.put("bar", 4321L);
+
+        assertEquals(
+            computeGroupHash(cache),
+            ModernGroup.computeMetadataHash(
+                Map.of(
+                    "foo", new SubscriptionCount(1, 0),
+                    "bar", new SubscriptionCount(1, 0)
+                ),
+                cache,
+                new MetadataImageBuilder()
+                    .addTopic(Uuid.randomUuid(), "foo", 1)
+                    .addTopic(Uuid.randomUuid(), "bar", 1)
+                    .addRacks()
+                    .build()
+            )
+        );
+        assertEquals(
+            Map.of(
+                "foo", 1234L,
+                "bar", 4321L
+            ),
+            cache
+        );
+    }
+
+    @Test
+    public void testComputeMetadataHashIgnoreTopicHashIfItIsNotInMetadataImage() {
+        // Use hash map because topic hash cache cannot be immutable.
+        // The zar is not in metadata image, so it should not be used.
+        Map<String, Long> cache = new HashMap<>();
+        cache.put("foo", 1234L);
+        cache.put("bar", 4321L);
+        cache.put("zar", 0L);
+
+        assertEquals(
+            computeGroupHash(Map.of(
+                "foo", 1234L,
+                "bar", 4321L
+            )),
+            ModernGroup.computeMetadataHash(
+                Map.of(
+                    "foo", new SubscriptionCount(1, 0),
+                    "bar", new SubscriptionCount(1, 0)
+                ),
+                cache,
+                new MetadataImageBuilder()
+                    .addTopic(Uuid.randomUuid(), "foo", 1)
+                    .addTopic(Uuid.randomUuid(), "bar", 1)
+                    .addRacks()
+                    .build()
+            )
+        );
+
+        // Although the zar is not in metadata image, it should not be removed from computeMetadataHash function.
+        assertEquals(
+            Map.of(
+                "foo", 1234L,
+                "bar", 4321L,
+                "zar", 0L
+            ),
+            cache
         );
     }
 }

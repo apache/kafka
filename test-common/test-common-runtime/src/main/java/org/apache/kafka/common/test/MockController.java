@@ -70,7 +70,6 @@ import org.apache.kafka.server.authorizer.AclDeleteResult;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -388,7 +387,7 @@ public class MockController implements Controller {
                         configs.computeIfAbsent(resource, __ -> new HashMap<>()).put(key, value);
                         break;
                     case DELETE:
-                        configs.getOrDefault(resource, Collections.emptyMap()).remove(key);
+                        configs.getOrDefault(resource, Map.of()).remove(key);
                         break;
                     default:
                         break;

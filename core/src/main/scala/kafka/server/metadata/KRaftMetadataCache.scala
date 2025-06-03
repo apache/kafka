@@ -373,6 +373,8 @@ class KRaftMetadataCache(
 
   override def topicIdsToNames(): util.Map[Uuid, String] = _currentImage.topics.topicIdToNameView()
 
+  override def topicNamesToIds(): util.Map[String, Uuid] = _currentImage.topics().topicNameToIdView()
+
   // if the leader is not known, return None;
   // if the leader is known and corresponding node is available, return Some(node)
   // if the leader is known but corresponding node with the listener name is not available, return Some(NO_NODE)

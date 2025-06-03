@@ -97,6 +97,8 @@ def split_paragraphs(text: str):
         else:
             if line[0] in ("#", "*", "-", "=") or line[0].isdigit():
                 markdown = True
+            if "```" in line:
+                markdown = True
             paragraph.append(line)
     yield paragraph, markdown
 

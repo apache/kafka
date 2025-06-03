@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.InvalidRecordException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -93,5 +95,30 @@ public class TransactionExceptionHierarchyTest {
     void testApplicationRecoverableExceptionHierarchy(Class<? extends Exception> exceptionClass) {
         assertTrue(ApplicationRecoverableException.class.isAssignableFrom(exceptionClass),
                 exceptionClass.getSimpleName() + " should extend ApplicationRecoverableException");
+    }
+
+    /**
+     * Verifies that the given exception class extends `InvalidConfigurationException`
+     *
+     * @param exceptionClass the exception class to check
+     */
+    @ParameterizedTest
+    @ValueSource(classes = {
+        AuthenticationException.class,
+        AuthorizationException.class,
+        ClusterAuthorizationException.class,
+        TransactionalIdAuthorizationException.class,
+        UnsupportedVersionException.class,
+        UnsupportedForMessageFormatException.class,
+        InvalidRecordException.class,
+        InvalidRequiredAcksException.class,
+        RecordBatchTooLargeException.class,
+        InvalidTopicException.class,
+        TopicAuthorizationException.class,
+        GroupAuthorizationException.class
+    })
+    void testInvalidConfigurationExceptionHierarchy(Class<? extends Exception> exceptionClass) {
+        assertTrue(InvalidConfigurationException.class.isAssignableFrom(exceptionClass),
+                exceptionClass.getSimpleName() + " should extend InvalidConfigurationException");
     }
 }

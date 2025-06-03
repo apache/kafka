@@ -793,6 +793,10 @@ class KafkaConfigTest {
         case MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG => // no op
+        case MetadataLogConfig.INTERNAL_MAX_BATCH_SIZE_IN_BYTES_CONFIG => // no op
+        case MetadataLogConfig.INTERNAL_MAX_FETCH_SIZE_IN_BYTES_CONFIG => // no op
+        case MetadataLogConfig.INTERNAL_DELETE_DELAY_MILLIS_CONFIG => // no op
         case KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG => // ignore string
         case MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG  => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
@@ -1135,6 +1139,8 @@ class KafkaConfigTest {
         // topic only config
         case QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
+        case "internal.segment.bytes" =>
+        // topic internal config
         case prop =>
           fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
       }
@@ -1164,7 +1170,7 @@ class KafkaConfigTest {
     assertEquals(1, config.brokerId)
     assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedBrokerListeners.map(JTestUtils.endpointToString))
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
-    assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
+    assertEquals(util.List.of("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
@@ -1499,7 +1505,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(metadataDir, config.metadataLogDir)
-    assertEquals(Seq(dataDir), config.logDirs)
+    assertEquals(util.List.of(dataDir), config.logDirs)
   }
 
   @Test
@@ -1517,7 +1523,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
-    assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
+    assertEquals(util.List.of(dataDir1, dataDir2), config.logDirs)
   }
 
   @Test

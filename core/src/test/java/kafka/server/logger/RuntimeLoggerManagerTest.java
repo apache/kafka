@@ -16,13 +16,12 @@
  */
 package kafka.server.logger;
 
-import kafka.utils.LoggingController;
-
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
+import org.apache.kafka.server.logger.LoggingController;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -82,18 +81,18 @@ public class RuntimeLoggerManagerTest {
     @Test
     public void testValidateSetRootLogLevelConfig() {
         MANAGER.validateLogLevelConfigs(List.of(new AlterableConfig().
-                setName(LoggingController.ROOT_LOGGER()).
+                setName(LoggingController.ROOT_LOGGER).
                 setConfigOperation(OpType.SET.id()).
                 setValue("TRACE")));
     }
 
     @Test
     public void testValidateRemoveRootLogLevelConfigNotAllowed() {
-        assertEquals("Removing the log level of the " + LoggingController.ROOT_LOGGER() +
+        assertEquals("Removing the log level of the " + LoggingController.ROOT_LOGGER +
             " logger is not allowed",
             Assertions.assertThrows(InvalidRequestException.class,
                 () -> MANAGER.validateLogLevelConfigs(List.of(new AlterableConfig().
-                    setName(LoggingController.ROOT_LOGGER()).
+                    setName(LoggingController.ROOT_LOGGER).
                     setConfigOperation(OpType.DELETE.id()).
                     setValue("")))).getMessage());
     }
