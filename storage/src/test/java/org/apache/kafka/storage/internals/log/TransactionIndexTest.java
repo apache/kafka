@@ -23,20 +23,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.ClosedByInterruptException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,7 +44,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testPositionSetCorrectlyWhenOpened() throws IOException {
-        List<AbortedTxn> abortedTxns = new ArrayList<>(Arrays.asList(
+        List<AbortedTxn> abortedTxns = new ArrayList<>(List.of(
                 new AbortedTxn(0L, 0, 10, 11),
                 new AbortedTxn(1L, 5, 15, 13),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -68,7 +61,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testSanityCheck() throws IOException {
-        List<AbortedTxn> abortedTxns = Arrays.asList(
+        List<AbortedTxn> abortedTxns = List.of(
                 new AbortedTxn(0L, 0, 10, 11),
                 new AbortedTxn(1L, 5, 15, 13),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -98,7 +91,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testCollectAbortedTransactions() {
-        List<AbortedTxn> abortedTransactions = Arrays.asList(
+        List<AbortedTxn> abortedTransactions = List.of(
                 new AbortedTxn(0L, 0, 10, 11),
                 new AbortedTxn(1L, 5, 15, 13),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -133,7 +126,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testTruncate() throws IOException {
-        List<AbortedTxn> abortedTransactions = Arrays.asList(
+        List<AbortedTxn> abortedTransactions = List.of(
                 new AbortedTxn(0L, 0, 10, 2),
                 new AbortedTxn(1L, 5, 15, 16),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -148,7 +141,7 @@ public class TransactionIndexTest {
         assertEquals(abortedTransactions.subList(0, 3), index.collectAbortedTxns(0L, 100L).abortedTransactions);
 
         index.reset();
-        assertEquals(Collections.emptyList(), index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(List.of(), index.collectAbortedTxns(0L, 100L).abortedTransactions);
     }
 
     @Test
@@ -226,100 +219,5 @@ public class TransactionIndexTest {
     public void testIsEmptyWhenFileIsNotEmpty() throws IOException {
         index.append(new AbortedTxn(0L, 0, 10, 2));
         assertFalse(index.isEmpty());
-    }
-
-    @Test
-    void testDoNotCreateFileUntilNeeded() throws IOException {
-        // Given that index file does not exist yet
-        file.delete();
-        // When index is created, reset, or flushed
-        // Then it is not created
-        final TransactionIndex index = assertDoesNotThrow(() -> new TransactionIndex(0, file));
-        assertFalse(file.exists());
-        index.reset();
-        assertFalse(file.exists());
-        index.flush();
-        assertFalse(file.exists());
-        // only when modifying it, it gets created
-        index.append(new AbortedTxn(0L, 0, 10, 2));
-        assertTrue(file.exists());
-    }
-
-    @Test
-    void testAppendAndCollectAfterClose() throws IOException {
-        // Given the index
-        // When closed
-        index.close();
-        // Then it should still append data
-        index.append(new AbortedTxn(0L, 0, 10, 2));
-        // When channel is closed
-        index.txnFile.closeChannel();
-        // Then it should still append data
-        assertDoesNotThrow(() -> index.append(new AbortedTxn(1L, 5, 15, 16)));
-        // When closed
-        index.close();
-        // Then it should still read data
-        List<AbortedTxn> abortedTxns = assertDoesNotThrow(() ->
-            index.collectAbortedTxns(0L, 100L).abortedTransactions);
-        assertEquals(2, abortedTxns.size());
-        assertEquals(0, abortedTxns.get(0).firstOffset());
-        assertEquals(5, abortedTxns.get(1).firstOffset());
-        // When channel is closed
-        index.txnFile.closeChannel();
-        // Then it should still read data
-        abortedTxns = assertDoesNotThrow(() ->
-            index.collectAbortedTxns(0L, 100L).abortedTransactions);
-        assertEquals(2, abortedTxns.size());
-    }
-
-    @Test
-    void testAppendAndCollectAfterInterrupted() throws Exception {
-        // Given the index
-        // When closed
-        index.close();
-        // Then it should still append data
-        index.append(new AbortedTxn(0L, 0, 10, 2));
-
-        // Given a thread reading from the channel
-        final CountDownLatch ready = new CountDownLatch(1);
-        final Exception[] exceptionHolder = new Exception[1];
-
-        Thread t = new Thread(() -> {
-            try {
-                ByteBuffer buffer = ByteBuffer.allocate(100);
-
-                while (index.txnFile.isChannelOpen()) {
-                    index.txnFile.readFully(buffer, 0);
-                    buffer.clear();
-                    // wait until first reading happens to mark it as ready
-                    if (ready.getCount() > 0) ready.countDown();
-                }
-            } catch (ClosedByInterruptException e) {
-                // Expected exception
-                exceptionHolder[0] = e;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
-        t.start();
-
-        assertTrue(ready.await(5, TimeUnit.SECONDS), "Timeout waiting for thread to finish");
-
-        // When thread is interrupted
-        t.interrupt();
-
-        t.join();
-
-        // Check if ClosedByInterruptException was thrown
-        assertNotNull(exceptionHolder[0], "An exception should have been thrown");
-        assertTrue(exceptionHolder[0] instanceof ClosedByInterruptException,
-                "Expected ClosedByInterruptException, but got: " + exceptionHolder[0].getClass().getName());
-
-        assertFalse(index.txnFile.isChannelOpen());
-
-        // Then it should still read data
-        List<AbortedTxn> abortedTxns = assertDoesNotThrow(() ->
-            index.collectAbortedTxns(0L, 100L).abortedTransactions);
-        assertEquals(1, abortedTxns.size());
     }
 }

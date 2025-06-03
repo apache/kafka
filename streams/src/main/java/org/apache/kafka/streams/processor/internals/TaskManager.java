@@ -278,7 +278,7 @@ public class TaskManager {
                     // we do not need to take the returned offsets since we are not going to commit anyways;
                     // this call is only used for active tasks to flush the cache before suspending and
                     // closing the topology
-                    task.prepareCommit();
+                    task.prepareCommit(false);
                 } catch (final RuntimeException swallow) {
                     log.warn("Error flushing cache for corrupted task {}. " +
                         "Since the task is closing dirty, the following exception is swallowed: {}",
@@ -552,8 +552,14 @@ public class TaskManager {
 
     private void handleTasksPendingInitialization() {
         // All tasks pending initialization are not part of the usual bookkeeping
+
+        final Set<Task> tasksToCloseDirty = new HashSet<>();
+
         for (final Task task : tasks.drainPendingTasksToInit()) {
-            closeTaskClean(task, Collections.emptySet(), Collections.emptyMap());
+            closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
+        }
+        for (final Task task : tasksToCloseDirty) {
+            closeTaskDirty(task, false);
         }
     }
 
@@ -812,7 +818,7 @@ public class TaskManager {
                 //    and their changelog positions should not change at all postCommit would not write the checkpoint again.
                 // 2) for standby tasks prepareCommit should always return empty, and then in postCommit we would probably
                 //    write the checkpoint file.
-                final Map<TopicPartition, OffsetAndMetadata> offsets = task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> offsets = task.prepareCommit(true);
                 if (!offsets.isEmpty()) {
                     log.error("Task {} should have been committed when it was suspended, but it reports non-empty " +
                                     "offsets {} to commit; this means it failed during last commit and hence should be closed dirty",
@@ -1264,7 +1270,7 @@ public class TaskManager {
                                                  final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask) {
         for (final Task task : tasksToPrepare) {
             try {
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit(true);
                 if (!committableOffsets.isEmpty()) {
                     consumedOffsetsPerTask.put(task, committableOffsets);
                 }
@@ -1312,7 +1318,6 @@ public class TaskManager {
     private void removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit() {
         if (stateUpdater != null) {
             final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
-            final Map<TaskId, RuntimeException> failedTasksDuringCleanClose = new HashMap<>();
             final Set<Task> tasksToCloseClean = new HashSet<>(tasks.drainPendingActiveTasksToInit());
             final Set<Task> tasksToCloseDirty = new HashSet<>();
             for (final Task restoringTask : stateUpdater.tasks()) {
@@ -1323,7 +1328,7 @@ public class TaskManager {
 
             addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
             for (final Task task : tasksToCloseClean) {
-                closeTaskClean(task, tasksToCloseDirty, failedTasksDuringCleanClose);
+                closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
             }
             for (final Task task : tasksToCloseDirty) {
                 closeTaskDirty(task, false);
@@ -1479,7 +1484,7 @@ public class TaskManager {
         try {
             // we call this function only to flush the case if necessary
             // before suspending and closing the topology
-            task.prepareCommit();
+            task.prepareCommit(false);
         } catch (final RuntimeException swallow) {
             log.warn("Error flushing cache of dirty task {}. " +
                 "Since the task is closing dirty, the following exception is swallowed: {}",
@@ -1630,7 +1635,7 @@ public class TaskManager {
         // first committing all tasks and then suspend and close them clean
         for (final Task task : activeTasksToClose) {
             try {
-                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit(true);
                 tasksToCommit.add(task);
                 if (!committableOffsets.isEmpty()) {
                     consumedOffsetsAndMetadataPerTask.put(task, committableOffsets);
@@ -1719,7 +1724,7 @@ public class TaskManager {
         // first committing and then suspend / close clean
         for (final Task task : standbyTasksToClose) {
             try {
-                task.prepareCommit();
+                task.prepareCommit(true);
                 task.postCommit(true);
                 task.suspend();
                 closeTaskClean(task);

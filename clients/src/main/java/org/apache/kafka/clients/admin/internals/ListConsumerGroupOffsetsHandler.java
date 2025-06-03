@@ -20,11 +20,13 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
@@ -35,7 +37,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -86,15 +87,32 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     }
 
     public OffsetFetchRequest.Builder buildBatchedRequest(Set<CoordinatorKey> groupIds) {
-        // Create a map that only contains the consumer groups owned by the coordinator.
-        Map<String, List<TopicPartition>> coordinatorGroupIdToTopicPartitions = new HashMap<>(groupIds.size());
-        groupIds.forEach(g -> {
-            ListConsumerGroupOffsetsSpec spec = groupSpecs.get(g.idValue);
-            List<TopicPartition> partitions = spec.topicPartitions() != null ? new ArrayList<>(spec.topicPartitions()) : null;
-            coordinatorGroupIdToTopicPartitions.put(g.idValue, partitions);
-        });
+        // Create a request that only contains the consumer groups owned by the coordinator.
+        return OffsetFetchRequest.Builder.forTopicNames(
+            new OffsetFetchRequestData()
+                .setRequireStable(requireStable)
+                .setGroups(groupIds.stream().map(groupId -> {
+                    ListConsumerGroupOffsetsSpec spec = groupSpecs.get(groupId.idValue);
 
-        return new OffsetFetchRequest.Builder(coordinatorGroupIdToTopicPartitions, requireStable, false);
+                    List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = null;
+                    if (spec.topicPartitions() != null) {
+                        topics = spec.topicPartitions().stream()
+                            .collect(Collectors.groupingBy(TopicPartition::topic))
+                            .entrySet()
+                            .stream()
+                            .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName(entry.getKey())
+                                .setPartitionIndexes(entry.getValue().stream()
+                                    .map(TopicPartition::partition)
+                                    .collect(Collectors.toList())))
+                            .collect(Collectors.toList());
+                    }
+                    return new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId(groupId.idValue)
+                        .setTopics(topics);
+                }).collect(Collectors.toList())),
+            false
+        );
     }
 
     @Override
@@ -121,40 +139,52 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     ) {
         validateKeys(groupIds);
 
-        final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
+        var response = (OffsetFetchResponse) abstractResponse;
+        var completed = new HashMap<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>>();
+        var failed = new HashMap<CoordinatorKey, Throwable>();
+        var unmapped = new ArrayList<CoordinatorKey>();
 
-        Map<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        List<CoordinatorKey> unmapped = new ArrayList<>();
         for (CoordinatorKey coordinatorKey : groupIds) {
-            String group = coordinatorKey.idValue;
-            if (response.groupHasError(group)) {
-                handleGroupError(CoordinatorKey.byGroupId(group), response.groupLevelError(group), failed, unmapped);
-            } else {
-                final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
-                Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = response.partitionDataMap(group);
-                for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> partitionEntry : responseData.entrySet()) {
-                    final TopicPartition topicPartition = partitionEntry.getKey();
-                    OffsetFetchResponse.PartitionData partitionData = partitionEntry.getValue();
-                    final Errors error = partitionData.error;
+            var groupId = coordinatorKey.idValue;
+            var group = response.group(groupId);
+            var error = Errors.forCode(group.errorCode());
 
-                    if (error == Errors.NONE) {
-                        final long offset = partitionData.offset;
-                        final String metadata = partitionData.metadata;
-                        final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
-                        // Negative offset indicates that the group has no committed offset for this partition
-                        if (offset < 0) {
-                            groupOffsetsListing.put(topicPartition, null);
+            if (error != Errors.NONE) {
+                handleGroupError(
+                    coordinatorKey,
+                    error,
+                    failed,
+                    unmapped
+                );
+            } else {
+                var offsets = new HashMap<TopicPartition, OffsetAndMetadata>();
+
+                group.topics().forEach(topic ->
+                    topic.partitions().forEach(partition -> {
+                        var tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                        var partitionError = Errors.forCode(partition.errorCode());
+
+                        if (partitionError == Errors.NONE) {
+                            // Negative offset indicates that the group has no committed offset for this partition.
+                            if (partition.committedOffset() < 0) {
+                                offsets.put(tp, null);
+                            } else {
+                                offsets.put(tp, new OffsetAndMetadata(
+                                    partition.committedOffset(),
+                                    RequestUtils.getLeaderEpoch(partition.committedLeaderEpoch()),
+                                    partition.metadata()
+                                ));
+                            }
                         } else {
-                            groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
+                            log.warn("Skipping return offset for {} due to error {}.", tp, partitionError);
                         }
-                    } else {
-                        log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
-                    }
-                }
-                completed.put(CoordinatorKey.byGroupId(group), groupOffsetsListing);
+                    })
+                );
+
+                completed.put(coordinatorKey, offsets);
             }
         }
+
         return new ApiResult<>(completed, failed, unmapped);
     }
 

@@ -28,7 +28,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
@@ -47,6 +46,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
@@ -54,6 +55,7 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -125,36 +127,6 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupPartitionMetadata record.
-     *
-     * @param groupId                   The consumer group id.
-     * @param newSubscriptionMetadata   The subscription metadata.
-     * @return The record.
-     */
-    public static CoordinatorRecord newConsumerGroupSubscriptionMetadataRecord(
-        String groupId,
-        Map<String, TopicMetadata> newSubscriptionMetadata
-    ) {
-        ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) ->
-            value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                .setTopicId(topicMetadata.id())
-                .setTopicName(topicMetadata.name())
-                .setNumPartitions(topicMetadata.numPartitions())
-            )
-        );
-
-        return CoordinatorRecord.record(
-            new ConsumerGroupPartitionMetadataKey()
-                .setGroupId(groupId),
-            new ApiMessageAndVersion(
-                value,
-                (short) 0
-            )
-        );
-    }
-
-    /**
      * Creates a ConsumerGroupPartitionMetadata tombstone.
      *
      * @param groupId   The consumer group id.
@@ -174,18 +146,21 @@ public class GroupCoordinatorRecordHelpers {
      *
      * @param groupId       The consumer group id.
      * @param newGroupEpoch The consumer group epoch.
+     * @param metadataHash  The consumer group metadata hash.
      * @return The record.
      */
     public static CoordinatorRecord newConsumerGroupEpochRecord(
         String groupId,
-        int newGroupEpoch
+        int newGroupEpoch,
+        long metadataHash
     ) {
         return CoordinatorRecord.record(
             new ConsumerGroupMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
+                    .setEpoch(newGroupEpoch)
+                    .setMetadataHash(metadataHash),
                 (short) 0
             )
         );
@@ -512,7 +487,8 @@ public class GroupCoordinatorRecordHelpers {
                     .setMetadata(offsetAndMetadata.metadata)
                     .setCommitTimestamp(offsetAndMetadata.commitTimestampMs)
                     // Version 1 has a non-empty expireTimestamp field
-                    .setExpireTimestamp(offsetAndMetadata.expireTimestampMs.orElse(OffsetCommitRequest.DEFAULT_TIMESTAMP)),
+                    .setExpireTimestamp(offsetAndMetadata.expireTimestampMs.orElse(OffsetCommitRequest.DEFAULT_TIMESTAMP))
+                    .setTopicId(offsetAndMetadata.topicId),
                 version
             )
         );
@@ -522,9 +498,7 @@ public class GroupCoordinatorRecordHelpers {
         if (expireTimestampMs) {
             return 1;
         } else {
-            // Serialize with the highest supported non-flexible version
-            // until a tagged field is introduced or the version is bumped.
-            return  3;
+            return  4;
         }
     }
 
@@ -645,18 +619,21 @@ public class GroupCoordinatorRecordHelpers {
      *
      * @param groupId       The group id.
      * @param newGroupEpoch The group epoch.
+     * @param metadataHash  The group metadata hash.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupEpochRecord(
         String groupId,
-        int newGroupEpoch
+        int newGroupEpoch,
+        long metadataHash
     ) {
         return CoordinatorRecord.record(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ShareGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
+                    .setEpoch(newGroupEpoch)
+                    .setMetadataHash(metadataHash),
                 (short) 0
             )
         );
@@ -809,6 +786,68 @@ public class GroupCoordinatorRecordHelpers {
             new ShareGroupCurrentMemberAssignmentKey()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
+        );
+    }
+
+    /**
+     * Creates a ShareGroupStatePartitionMetadata tombstone.
+     *
+     * @param groupId   The share group id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataTombstoneRecord(
+        String groupId
+    ) {
+        return CoordinatorRecord.tombstone(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId)
+        );
+    }
+
+    /**
+     * Creates a ShareGroupStatePartitionMetadata record.
+     *
+     * @param groupId   The share group id.
+     * @param initializedTopics  Topics which have been initialized.
+     * @param deletingTopics  Topics which are being deleted.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
+        String groupId,
+        Map<Uuid, InitMapValue> initializingTopics,
+        Map<Uuid, InitMapValue> initializedTopics,
+        Map<Uuid, String> deletingTopics
+    ) {
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializingTopicPartitionInfo = initializingTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue().name())
+                .setPartitions(entry.getValue().partitions().stream().toList()))
+            .toList();
+
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue().name())
+                .setPartitions(entry.getValue().partitions().stream().toList()))
+            .toList();
+
+        List<ShareGroupStatePartitionMetadataValue.TopicInfo> deletingTopicsInfo = deletingTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue()))
+            .toList();
+
+        return CoordinatorRecord.record(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ApiMessageAndVersion(
+                new ShareGroupStatePartitionMetadataValue()
+                    .setInitializingTopics(initializingTopicPartitionInfo)
+                    .setInitializedTopics(initializedTopicPartitionInfo)
+                    .setDeletingTopics(deletingTopicsInfo),
+                (short) 0
+            )
         );
     }
 

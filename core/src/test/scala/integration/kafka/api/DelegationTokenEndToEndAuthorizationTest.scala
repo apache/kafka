@@ -66,7 +66,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ")
     formatter.setScramArguments(
-      List(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]").asJava)
+      java.util.List.of(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
   }
 
   override def createPrivilegedAdminClient(): Admin = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
@@ -99,14 +99,14 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCreateUserWithDelegationToken(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCreateUserWithDelegationToken(groupProtocol: String): Unit = {
     val privilegedAdminClient = Admin.create(privilegedAdminClientConfig)
     try {
       val user = "user"
-      val results = privilegedAdminClient.alterUserScramCredentials(List[UserScramCredentialAlteration](
-        new UserScramCredentialUpsertion(user, new ScramCredentialInfo(PublicScramMechanism.SCRAM_SHA_256, 4096), "password")).asJava)
+      val results = privilegedAdminClient.alterUserScramCredentials(java.util.List.of[UserScramCredentialAlteration](
+        new UserScramCredentialUpsertion(user, new ScramCredentialInfo(PublicScramMechanism.SCRAM_SHA_256, 4096), "password")))
       assertEquals(1, results.values.size)
       val future = results.values.get(user)
       future.get // make sure we haven't completed exceptionally

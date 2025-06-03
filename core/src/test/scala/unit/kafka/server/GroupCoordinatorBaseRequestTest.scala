@@ -19,12 +19,12 @@ package kafka.server
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicCollection, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AddOffsetsToTxnResponseData, ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, EndTxnRequestData, HeartbeatRequestData, HeartbeatResponseData, InitProducerIdRequestData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AddOffsetsToTxnResponseData, ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, EndTxnRequestData, HeartbeatRequestData, HeartbeatResponseData, InitProducerIdRequestData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AddOffsetsToTxnRequest, AddOffsetsToTxnResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, EndTxnRequest, EndTxnResponse, HeartbeatRequest, HeartbeatResponse, InitProducerIdRequest, InitProducerIdResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, SyncGroupRequest, SyncGroupResponse, TxnOffsetCommitRequest, TxnOffsetCommitResponse}
 import org.apache.kafka.common.serialization.StringSerializer
@@ -33,9 +33,11 @@ import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
+import java.net.Socket
 import java.util.{Comparator, Properties}
 import java.util.stream.Collectors
 import scala.collection.Seq
+import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -45,6 +47,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   private def controllerServers(): Seq[ControllerServer] = cluster.controllers().values().asScala.toSeq
 
   protected var producer: KafkaProducer[String, String] = _
+
+  protected var openSockets: ListBuffer[Socket] = ListBuffer[Socket]()
 
   protected def createOffsetsTopic(): Unit = {
     val admin = cluster.admin()
@@ -75,7 +79,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def createTopic(
     topic: String,
     numPartitions: Int
-  ): Unit = {
+  ): Uuid = {
     val admin = cluster.admin()
     try {
       TestUtils.createTopicWithAdmin(
@@ -85,6 +89,26 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         topic = topic,
         numPartitions = numPartitions
       )
+      admin
+        .describeTopics(TopicCollection.ofTopicNames(List(topic).asJava))
+        .allTopicNames()
+        .get()
+        .get(topic)
+        .topicId()
+    } finally {
+      admin.close()
+    }
+  }
+
+  protected def deleteTopic(
+    topic: String
+  ): Unit = {
+    val admin = cluster.admin()
+    try {
+      admin
+        .deleteTopics(TopicCollection.ofTopicNames(List(topic).asJava))
+        .all()
+        .get()
     } finally {
       admin.close()
     }
@@ -117,10 +141,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     cluster.brokers.values.stream.allMatch(b => b.config.unstableApiVersionsEnabled)
   }
 
-  protected def isNewGroupCoordinatorEnabled: Boolean = {
-    cluster.brokers.values.stream.allMatch(b => b.config.isNewGroupCoordinatorEnabled)
-  }
-
   protected def getTopicIds: Map[String, Uuid] = {
     cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
   }
@@ -138,8 +158,16 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
+  protected def closeSockets(): Unit = {
+    while (openSockets.nonEmpty) {
+      val socket = openSockets.head
+      socket.close()
+      openSockets.remove(0)
+    }
+  }
+
   protected def closeProducer(): Unit = {
-    if( producer != null )
+    if(producer != null)
       producer.close()
   }
 
@@ -170,18 +198,24 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     memberId: String,
     memberEpoch: Int,
     topic: String,
+    topicId: Uuid,
     partition: Int,
     offset: Long,
     expectedError: Errors,
     version: Short = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
   ): Unit = {
-    val request = new OffsetCommitRequest.Builder(
+    if (version >= 10 && topicId == Uuid.ZERO_UUID) {
+      throw new IllegalArgumentException(s"Cannot call OffsetCommit API version $version without a topic id")
+    }
+
+    val request = OffsetCommitRequest.Builder.forTopicIdsOrNames(
       new OffsetCommitRequestData()
         .setGroupId(groupId)
         .setMemberId(memberId)
         .setGenerationIdOrMemberEpoch(memberEpoch)
         .setTopics(List(
           new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setTopicId(topicId)
             .setName(topic)
             .setPartitions(List(
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
@@ -195,7 +229,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     val expectedResponse = new OffsetCommitResponseData()
       .setTopics(List(
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName(topic)
+          .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
+          .setName(if (version < 10) topic else "")
           .setPartitions(List(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(partition)
@@ -316,20 +351,41 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def fetchOffsets(
-    groupId: String,
-    memberId: String,
-    memberEpoch: Int,
-    partitions: List[TopicPartition],
+    groups: List[OffsetFetchRequestData.OffsetFetchRequestGroup],
+    requireStable: Boolean,
+    version: Short
+  ): List[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    if (version < 8) {
+      fail(s"OffsetFetch API version $version cannot fetch multiple groups.")
+    }
+
+    val request = OffsetFetchRequest.Builder.forTopicIdsOrNames(
+      new OffsetFetchRequestData()
+        .setRequireStable(requireStable)
+        .setGroups(groups.asJava),
+      false,
+      true
+    ).build(version)
+
+    val response = connectAndReceive[OffsetFetchResponse](request)
+
+    // Sort topics and partitions within the response as their order is not guaranteed.
+    response.data.groups.asScala.foreach(sortTopicPartitions)
+
+    response.data.groups.asScala.toList
+  }
+
+  protected def fetchOffsets(
+    group: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean,
     version: Short
   ): OffsetFetchResponseData.OffsetFetchResponseGroup = {
-    val request = new OffsetFetchRequest.Builder(
-      groupId,
-      memberId,
-      memberEpoch,
-      requireStable,
-      if (partitions == null) null else partitions.asJava,
-      false
+    val request = OffsetFetchRequest.Builder.forTopicIdsOrNames(
+      new OffsetFetchRequestData()
+        .setRequireStable(requireStable)
+        .setGroups(List(group).asJava),
+      false,
+      true
     ).build(version)
 
     val response = connectAndReceive[OffsetFetchResponse](request)
@@ -338,11 +394,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     // same format to the caller.
     val groupResponse = if (version >= 8) {
       assertEquals(1, response.data.groups.size)
-      assertEquals(groupId, response.data.groups.get(0).groupId)
+      assertEquals(group.groupId, response.data.groups.get(0).groupId)
       response.data.groups.asScala.head
     } else {
       new OffsetFetchResponseData.OffsetFetchResponseGroup()
-        .setGroupId(groupId)
+        .setGroupId(group.groupId)
         .setErrorCode(response.data.errorCode)
         .setTopics(response.data.topics.asScala.map { topic =>
           new OffsetFetchResponseData.OffsetFetchResponseTopics()
@@ -362,29 +418,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     sortTopicPartitions(groupResponse)
 
     groupResponse
-  }
-
-  protected def fetchOffsets(
-    groups: Map[String, List[TopicPartition]],
-    requireStable: Boolean,
-    version: Short
-  ): List[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
-    if (version < 8) {
-      fail(s"OffsetFetch API version $version cannot fetch multiple groups.")
-    }
-
-    val request = new OffsetFetchRequest.Builder(
-      groups.map { case (k, v) => (k, v.asJava) }.asJava,
-      requireStable,
-      false
-    ).build(version)
-
-    val response = connectAndReceive[OffsetFetchResponse](request)
-
-    // Sort topics and partitions within the response as their order is not guaranteed.
-    response.data.groups.asScala.foreach(sortTopicPartitions)
-
-    response.data.groups.asScala.toList
   }
 
   protected def deleteOffset(
@@ -674,8 +707,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     val shareGroupDescribeRequest = new ShareGroupDescribeRequest.Builder(
       new ShareGroupDescribeRequestData()
         .setGroupIds(groupIds.asJava)
-        .setIncludeAuthorizedOperations(includeAuthorizedOperations),
-      true
+        .setIncludeAuthorizedOperations(includeAuthorizedOperations)
     ).build(version)
 
     val shareGroupDescribeResponse = connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)
@@ -755,8 +787,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         .setMemberId(memberId)
         .setMemberEpoch(memberEpoch)
         .setRackId(rackId)
-        .setSubscribedTopicNames(subscribedTopicNames.asJava),
-      true
+        .setSubscribedTopicNames(subscribedTopicNames.asJava)
     ).build()
 
     // Send the request until receiving a successful response. There is a delay
@@ -866,6 +897,24 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     val deleteGroupsResponse = connectAndReceive[DeleteGroupsResponse](deleteGroupsRequest)
     assertEquals(expectedResponseData.results.asScala.toSet, deleteGroupsResponse.data.results.asScala.toSet)
+  }
+
+  protected def connectAny(): Socket = {
+    val socket: Socket = IntegrationTestUtils.connect(
+      cluster.anyBrokerSocketServer(),
+      cluster.clientListener()
+    )
+    openSockets += socket
+    socket
+  }
+
+  protected def connect(destination: Int): Socket = {
+    val socket: Socket = IntegrationTestUtils.connect(
+      brokerSocketServer(destination),
+      cluster.clientListener()
+    )
+    openSockets += socket
+    socket
   }
 
   protected def connectAndReceive[T <: AbstractResponse](

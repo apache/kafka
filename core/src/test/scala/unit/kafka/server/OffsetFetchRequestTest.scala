@@ -17,115 +17,63 @@
 package kafka.server
 
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.OffsetFetchResponseData
+import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.message.{OffsetFetchRequestData, OffsetFetchResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.junit.jupiter.api.Assertions.{assertEquals, fail}
+import org.junit.jupiter.api.Assertions.assertEquals
 
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(types = Array(Type.KRAFT))
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+  )
+)
 class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
-  def testSingleGroupOffsetFetchWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  @ClusterTest
+  def testSingleGroupOffsetFetchWithNewConsumerGroupProtocol(): Unit = {
     testSingleGroupOffsetFetch(useNewProtocol = true, requireStable = true)
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
-  def testSingleGroupOffsetFetchWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  @ClusterTest
+  def testSingleGroupOffsetFetchWithOldConsumerGroupProtocol(): Unit = {
     testSingleGroupOffsetFetch(useNewProtocol = false, requireStable = false)
   }
 
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testSingleGroupOffsetFetchWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
-    testSingleGroupOffsetFetch(useNewProtocol = false, requireStable = true)
-  }
-
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
-  def testSingleGroupAllOffsetFetchWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  @ClusterTest
+  def testSingleGroupAllOffsetFetchWithNewConsumerGroupProtocol(): Unit = {
     testSingleGroupAllOffsetFetch(useNewProtocol = true, requireStable = true)
   }
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testSingleGroupAllOffsetFetchWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  @ClusterTest
+  def testSingleGroupAllOffsetFetchWithOldConsumerGroupProtocol(): Unit = {
     testSingleGroupAllOffsetFetch(useNewProtocol = false, requireStable = false)
   }
 
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testSingleGroupAllOffsetFetchWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
-    testSingleGroupAllOffsetFetch(useNewProtocol = false, requireStable = true)
-  }
-
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
-  def testMultiGroupsOffsetFetchWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  @ClusterTest
+  def testMultiGroupsOffsetFetchWithNewConsumerGroupProtocol(): Unit = {
     testMultipleGroupsOffsetFetch(useNewProtocol = true, requireStable = true)
   }
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testMultiGroupsOffsetFetchWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  @ClusterTest
+  def testMultiGroupsOffsetFetchWithOldConsumerGroupProtocol(): Unit = {
     testMultipleGroupsOffsetFetch(useNewProtocol = false, requireStable = false)
   }
 
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testMultiGroupsOffsetFetchWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
-    testMultipleGroupsOffsetFetch(useNewProtocol = false, requireStable = true)
-  }
-
   private def testSingleGroupOffsetFetch(useNewProtocol: Boolean, requireStable: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
-      fail("Cannot use the new protocol with the old group coordinator.")
-    }
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
+    val unknownTopicId = Uuid.randomUuid()
+
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -141,6 +89,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
         memberId = memberId,
         memberEpoch = memberEpoch,
         topic = "foo",
+        topicId = topicId,
         partition = partitionId,
         offset = 100L + partitionId,
         expectedError = Errors.NONE,
@@ -148,7 +97,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
       )
     }
 
-    // Start from version 1 because version 0 goes to ZK.
     for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
       // Fetch with partitions.
       assertEquals(
@@ -156,7 +104,8 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           .setGroupId("grp")
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("foo")
+              .setName(if (version < 10) "foo" else "")
+              .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(0)
@@ -170,14 +119,16 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
               ).asJava)
           ).asJava),
         fetchOffsets(
-          groupId = "grp",
-          memberId = memberId,
-          memberEpoch = memberEpoch,
-          partitions = List(
-            new TopicPartition("foo", 0),
-            new TopicPartition("foo", 1),
-            new TopicPartition("foo", 5) // This one does not exist.
-          ),
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("grp")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setTopicId(topicId)
+                .setPartitionIndexes(List[Integer](0, 1, 5).asJava) // 5 does not exist.
+            ).asJava),
           requireStable = requireStable,
           version = version.toShort
         )
@@ -189,7 +140,8 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           .setGroupId("unknown")
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("foo")
+              .setName(if (version < 10) "foo" else "")
+              .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(0)
@@ -203,14 +155,16 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
               ).asJava)
           ).asJava),
         fetchOffsets(
-          groupId = "unknown",
-          memberId = memberId,
-          memberEpoch = memberEpoch,
-          partitions = List(
-            new TopicPartition("foo", 0),
-            new TopicPartition("foo", 1),
-            new TopicPartition("foo", 5) // This one does not exist.
-          ),
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("unknown")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setTopicId(topicId)
+                .setPartitionIndexes(List[Integer](0, 1, 5).asJava) // 5 does not exist.
+            ).asJava),
           requireStable = requireStable,
           version = version.toShort
         )
@@ -222,7 +176,8 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           .setGroupId("unknown")
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("foo")
+              .setName(if (version < 10) "foo" else "")
+              .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(0)
@@ -232,22 +187,30 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
                   .setCommittedOffset(-1L)
               ).asJava),
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("foo-unknown")
+              .setName(if (version < 10) "foo-unknown" else "")
+              .setTopicId(if (version >= 10) unknownTopicId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(1)
                   .setCommittedOffset(-1L)
+                  .setErrorCode(if (version >= 10) Errors.UNKNOWN_TOPIC_ID.code else Errors.NONE.code)
               ).asJava),
           ).asJava),
         fetchOffsets(
-          groupId = "unknown",
-          memberId = memberId,
-          memberEpoch = memberEpoch,
-          partitions = List(
-            new TopicPartition("foo", 0),
-            new TopicPartition("foo-unknown", 1),
-            new TopicPartition("foo", 5) // This one does not exist.
-          ),
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("unknown")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setTopicId(topicId)
+                .setPartitionIndexes(List[Integer](0, 5).asJava), // 5 does not exist.
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo-unknown")
+                .setTopicId(unknownTopicId)
+                .setPartitionIndexes(List[Integer](1).asJava) // 5 does not exist.
+            ).asJava),
           requireStable = requireStable,
           version = version.toShort
         )
@@ -260,10 +223,11 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             .setGroupId("grp")
             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code),
           fetchOffsets(
-            groupId = "grp",
-            memberId = "",
-            memberEpoch = memberEpoch,
-            partitions = List.empty,
+            group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp")
+              .setMemberId("")
+              .setMemberEpoch(memberEpoch)
+              .setTopics(List.empty.asJava),
             requireStable = requireStable,
             version = version.toShort
           )
@@ -275,10 +239,11 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             .setGroupId("grp")
             .setErrorCode(Errors.STALE_MEMBER_EPOCH.code),
           fetchOffsets(
-            groupId = "grp",
-            memberId = memberId,
-            memberEpoch = memberEpoch + 1,
-            partitions = List.empty,
+            group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp")
+              .setMemberId(memberId)
+              .setMemberEpoch(memberEpoch + 1)
+              .setTopics(List.empty.asJava),
             requireStable = requireStable,
             version = version.toShort
           )
@@ -288,16 +253,12 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   private def testSingleGroupAllOffsetFetch(useNewProtocol: Boolean, requireStable: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
-      fail("Cannot use the new protocol with the old group coordinator.")
-    }
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -313,6 +274,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
         memberId = memberId,
         memberEpoch = memberEpoch,
         topic = "foo",
+        topicId = topicId,
         partition = partitionId,
         offset = 100L + partitionId,
         expectedError = Errors.NONE,
@@ -329,7 +291,8 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           .setGroupId("grp")
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("foo")
+              .setName(if (version < 10) "foo" else "")
+              .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(0)
@@ -343,10 +306,11 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
               ).asJava)
           ).asJava),
         fetchOffsets(
-          groupId = "grp",
-          memberId = memberId,
-          memberEpoch = memberEpoch,
-          partitions = null,
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("grp")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setTopics(null),
           requireStable = requireStable,
           version = version.toShort
         )
@@ -357,10 +321,11 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
           .setGroupId("unknown"),
         fetchOffsets(
-          groupId = "unknown",
-          memberId = memberId,
-          memberEpoch = memberEpoch,
-          partitions = null,
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("unknown")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setTopics(null),
           requireStable = requireStable,
           version = version.toShort
         )
@@ -373,10 +338,11 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             .setGroupId("grp")
             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code),
           fetchOffsets(
-            groupId = "grp",
-            memberId = "",
-            memberEpoch = memberEpoch,
-            partitions = null,
+            group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp")
+              .setMemberId("")
+              .setMemberEpoch(memberEpoch)
+              .setTopics(null),
             requireStable = requireStable,
             version = version.toShort
           )
@@ -388,10 +354,11 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             .setGroupId("grp")
             .setErrorCode(Errors.STALE_MEMBER_EPOCH.code),
           fetchOffsets(
-            groupId = "grp",
-            memberId = memberId,
-            memberEpoch = memberEpoch + 1,
-            partitions = null,
+            group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp")
+              .setMemberId(memberId)
+              .setMemberEpoch(memberEpoch + 1)
+              .setTopics(null),
             requireStable = requireStable,
             version = version.toShort
           )
@@ -401,16 +368,14 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   private def testMultipleGroupsOffsetFetch(useNewProtocol: Boolean, requireStable: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
-      fail("Cannot use the new protocol with the old group coordinator.")
-    }
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
+    val unknownTopicId = Uuid.randomUuid()
+
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -427,6 +392,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           memberId = memberId,
           memberEpoch = memberEpoch,
           topic = "foo",
+          topicId = topicId,
           partition = partitionId,
           offset = 100L + partitionId,
           expectedError = Errors.NONE,
@@ -445,7 +411,8 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             .setGroupId("grp-0")
             .setTopics(List(
               new OffsetFetchResponseData.OffsetFetchResponseTopics()
-                .setName("foo")
+                .setName(if (version < 10) "foo" else "")
+                .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
                 .setPartitions(List(
                   new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                     .setPartitionIndex(0)
@@ -463,7 +430,8 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             .setGroupId("grp-1")
             .setTopics(List(
               new OffsetFetchResponseData.OffsetFetchResponseTopics()
-                .setName("foo")
+                .setName(if (version < 10) "foo" else "")
+                .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
                 .setPartitions(List(
                   new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                     .setPartitionIndex(0)
@@ -485,7 +453,8 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             .setGroupId("grp-3")
             .setTopics(List(
               new OffsetFetchResponseData.OffsetFetchResponseTopics()
-                .setName("foo")
+                .setName(if (version < 10) "foo" else "")
+                .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
                 .setPartitions(List(
                   new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                     .setPartitionIndex(0)
@@ -497,41 +466,148 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             .setGroupId("grp-4")
             .setTopics(List(
               new OffsetFetchResponseData.OffsetFetchResponseTopics()
-                .setName("foo")
+                .setName(if (version < 10) "foo" else "")
+                .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
                 .setPartitions(List(
                   new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                     .setPartitionIndex(5)
                     .setCommittedOffset(-1L)
                 ).asJava),
               new OffsetFetchResponseData.OffsetFetchResponseTopics()
-                .setName("foo-unknown")
+                .setName(if (version < 10) "foo-unknown" else "")
+                .setTopicId(if (version >= 10) unknownTopicId else Uuid.ZERO_UUID)
                 .setPartitions(List(
                   new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                     .setPartitionIndex(0)
                     .setCommittedOffset(-1L)
+                    .setErrorCode(if (version >= 10) Errors.UNKNOWN_TOPIC_ID.code else Errors.NONE.code)
                 ).asJava)
             ).asJava),
         ).toSet,
         fetchOffsets(
-          groups = Map(
-            "grp-0" -> List(
-              new TopicPartition("foo", 0),
-              new TopicPartition("foo", 1),
-              new TopicPartition("foo", 5) // This one does not exist.
-            ),
-            "grp-1" -> null,
-            "grp-2" -> List.empty,
-            "grp-3" -> List(
-              new TopicPartition("foo", 0)
-            ),
-            "grp-4" -> List(
-              new TopicPartition("foo-unknown", 0), // unknown topic id
-              new TopicPartition("foo", 5)  // The partition doesn't exist.
-            ),
+          groups = List(
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp-0")
+              .setTopics(List(
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setName("foo")
+                  .setTopicId(topicId)
+                  .setPartitionIndexes(List[Integer](0, 1, 5).asJava) // 5 does not exist.
+              ).asJava),
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp-1")
+              .setTopics(null),
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp-2")
+              .setTopics(List.empty.asJava),
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp-3")
+              .setTopics(List(
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setName("foo")
+                  .setTopicId(topicId)
+                  .setPartitionIndexes(List[Integer](0).asJava)
+              ).asJava),
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp-4")
+              .setTopics(List(
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setName("foo-unknown") // Unknown topic
+                  .setTopicId(unknownTopicId)
+                  .setPartitionIndexes(List[Integer](0).asJava),
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setName("foo")
+                  .setTopicId(topicId)
+                  .setPartitionIndexes(List[Integer](5).asJava) // 5 does not exist.
+              ).asJava),
           ),
           requireStable = requireStable,
           version = version.toShort
         ).toSet
+      )
+    }
+  }
+
+  @ClusterTest
+  def testFetchOffsetWithRecreatedTopic(): Unit = {
+    // There are two ways to ensure that committed of recreated topics are not returned.
+    // 1) When a topic is deleted, GroupCoordinatorService#onPartitionsDeleted is called to
+    //    delete all its committed offsets.
+    // 2) Since version 10 of the OffsetCommit API, the topic id is stored alongside the
+    //    committed offset. When it is queried, it is only returned iff the topic id of
+    //    committed offset matches the requested one.
+    // The test tests both conditions but not in a deterministic way as they race
+    // against each others.
+
+    createOffsetsTopic()
+
+    // Create the topic.
+    var topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Join the consumer group. Note that we don't heartbeat here so we must use
+    // a session long enough for the duration of the test.
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", true)
+
+    // Commit offsets.
+    for (partitionId <- 0 to 2) {
+      commitOffset(
+        groupId = "grp",
+        memberId = memberId,
+        memberEpoch = memberEpoch,
+        topic = "foo",
+        topicId = topicId,
+        partition = partitionId,
+        offset = 100L + partitionId,
+        expectedError = Errors.NONE,
+        version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+      )
+    }
+
+    // Delete topic.
+    deleteTopic("foo")
+
+    // Recreate topic.
+    topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Start from version 10 because fetching topic id is not supported before.
+    for (version <- 10 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
+      assertEquals(
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("grp")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setTopicId(topicId)
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(-1L),
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(1)
+                  .setCommittedOffset(-1L),
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(2)
+                  .setCommittedOffset(-1L)
+              ).asJava)
+          ).asJava),
+        fetchOffsets(
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("grp")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setTopicId(topicId)
+                .setPartitionIndexes(List[Integer](0, 1, 2).asJava)
+            ).asJava),
+          requireStable = true,
+          version = version.toShort
+        )
       )
     }
   }

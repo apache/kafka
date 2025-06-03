@@ -101,9 +101,9 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
       kafkaClientSaslMechanism, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCustomQuotaCallback(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCustomQuotaCallback(groupProtocol: String): Unit = {
     // Large quota override, should not throttle
     var brokerId = 0
     var user = createGroupWithOneUser("group0_user1", brokerId)
@@ -406,7 +406,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   }
 
   override def reconfigurableConfigs: util.Set[String] = {
-    Set(DefaultProduceQuotaProp, DefaultFetchQuotaProp).asJava
+    java.util.Set.of(DefaultProduceQuotaProp, DefaultFetchQuotaProp)
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
@@ -438,7 +438,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
         val userGroup = groupPrincipal.userGroup
         val quotaLimit = quotaOrDefault(userGroup, quotaType)
         if (quotaLimit != null)
-          Map(QuotaGroupTag -> userGroup).asJava
+          java.util.Map.of(QuotaGroupTag, userGroup)
         else
           UnlimitedQuotaMetricTags
       case _ =>

@@ -84,7 +84,7 @@ public class RequestContextTest {
         assertEquals(correlationId, responseHeader.correlationId());
 
         ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
-            responseBuffer, (short) 0);
+            new ByteBufferAccessor(responseBuffer), (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
         assertTrue(response.data().apiKeys().isEmpty());
     }
@@ -156,7 +156,7 @@ public class RequestContextTest {
                 .setTimeoutMs(1);
         data.topicData().add(
                 new ProduceRequestData.TopicProduceData()
-                        .setName("foo")
+                        .setName("foo") // versions in this test < 13, topicId can't be used
                         .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                                 .setIndex(42))));
 

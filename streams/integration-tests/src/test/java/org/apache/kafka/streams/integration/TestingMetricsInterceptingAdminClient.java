@@ -57,6 +57,8 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupsResult;
 import org.apache.kafka.clients.admin.DeleteRecordsOptions;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
+import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteShareGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteShareGroupsResult;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsOptions;
@@ -108,6 +110,8 @@ import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.admin.ListClientMetricsResourcesOptions;
 import org.apache.kafka.clients.admin.ListClientMetricsResourcesResult;
+import org.apache.kafka.clients.admin.ListConfigResourcesOptions;
+import org.apache.kafka.clients.admin.ListConfigResourcesResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
@@ -141,6 +145,8 @@ import org.apache.kafka.clients.admin.RemoveRaftVoterOptions;
 import org.apache.kafka.clients.admin.RemoveRaftVoterResult;
 import org.apache.kafka.clients.admin.RenewDelegationTokenOptions;
 import org.apache.kafka.clients.admin.RenewDelegationTokenResult;
+import org.apache.kafka.clients.admin.TerminateTransactionOptions;
+import org.apache.kafka.clients.admin.TerminateTransactionResult;
 import org.apache.kafka.clients.admin.UnregisterBrokerOptions;
 import org.apache.kafka.clients.admin.UnregisterBrokerResult;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
@@ -292,6 +298,7 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public ListConsumerGroupsResult listConsumerGroups(final ListConsumerGroupsOptions options) {
         return adminDelegate.listConsumerGroups(options);
     }
@@ -417,6 +424,11 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
+    public TerminateTransactionResult forceTerminateTransaction(final String transactionalId, final TerminateTransactionOptions options) {
+        return adminDelegate.forceTerminateTransaction(transactionalId, options);
+    }
+
+    @Override
     public ListTransactionsResult listTransactions(final ListTransactionsOptions options) {
         return adminDelegate.listTransactions(options);
     }
@@ -426,6 +438,12 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
         return adminDelegate.fenceProducers(transactionalIds, options);
     }
 
+    @Override
+    public ListConfigResourcesResult listConfigResources(final Set<ConfigResource.Type> configResourceTypes, final ListConfigResourcesOptions options) {
+        return adminDelegate.listConfigResources(configResourceTypes, options);
+    }
+
+    @SuppressWarnings({"deprecation", "removal"})
     @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(final ListClientMetricsResourcesOptions options) {
         return adminDelegate.listClientMetricsResources(options);
@@ -464,6 +482,11 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs, final ListShareGroupOffsetsOptions options) {
         return adminDelegate.listShareGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(final String groupId, final Set<String> topics, final DeleteShareGroupOffsetsOptions options) {
+        return adminDelegate.deleteShareGroupOffsets(groupId, topics, options);
     }
 
     @Override

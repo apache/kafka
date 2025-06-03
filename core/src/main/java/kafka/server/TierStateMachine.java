@@ -18,7 +18,6 @@
 package kafka.server;
 
 import kafka.cluster.Partition;
-import kafka.log.remote.RemoteLogManager;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -27,8 +26,12 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.LeaderEndPoint;
+import org.apache.kafka.server.PartitionFetchState;
+import org.apache.kafka.server.ReplicaState;
 import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
@@ -54,9 +57,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason.LeaderOffsetIncremented;
 
@@ -96,7 +96,7 @@ public class TierStateMachine {
                               PartitionFetchState currentFetchState,
                               PartitionData fetchPartitionData) throws Exception {
         OffsetAndEpoch epochAndLeaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch());
-        int epoch = epochAndLeaderLocalStartOffset.leaderEpoch();
+        int epoch = epochAndLeaderLocalStartOffset.epoch();
         long leaderLocalStartOffset = epochAndLeaderLocalStartOffset.offset();
 
         long offsetToFetch;
@@ -123,8 +123,8 @@ public class TierStateMachine {
 
         long initialLag = leaderEndOffset - offsetToFetch;
 
-        return PartitionFetchState.apply(currentFetchState.topicId(), offsetToFetch, Option.apply(initialLag), currentFetchState.currentLeaderEpoch(),
-                Fetching$.MODULE$, unifiedLog.latestEpoch());
+        return new PartitionFetchState(currentFetchState.topicId(), offsetToFetch, Optional.of(initialLag), currentFetchState.currentLeaderEpoch(),
+                ReplicaState.FETCHING, unifiedLog.latestEpoch());
 
     }
 
@@ -136,12 +136,12 @@ public class TierStateMachine {
         // Find the end-offset for the epoch earlier to the given epoch from the leader
         Map<TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition> partitionsWithEpochs = new HashMap<>();
         partitionsWithEpochs.put(partition, new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition().setPartition(partition.partition()).setCurrentLeaderEpoch(currentLeaderEpoch).setLeaderEpoch(previousEpoch));
-        Option<OffsetForLeaderEpochResponseData.EpochEndOffset> maybeEpochEndOffset = leader.fetchEpochEndOffsets(CollectionConverters.asScala(partitionsWithEpochs)).get(partition);
-        if (maybeEpochEndOffset.isEmpty()) {
+        var epochEndOffset = leader.fetchEpochEndOffsets(partitionsWithEpochs).get(partition);
+
+        if (epochEndOffset == null) {
             throw new KafkaException("No response received for partition: " + partition);
         }
 
-        OffsetForLeaderEpochResponseData.EpochEndOffset epochEndOffset = maybeEpochEndOffset.get();
         if (epochEndOffset.errorCode() != Errors.NONE.code()) {
             throw Errors.forCode(epochEndOffset.errorCode()).exception();
         }
@@ -151,8 +151,8 @@ public class TierStateMachine {
 
     private List<EpochEntry> readLeaderEpochCheckpoint(RemoteLogManager rlm,
                                                        RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException, RemoteStorageException {
-        InputStream inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH);
-        try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+        try (InputStream inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH);
+             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             CheckpointFile.CheckpointReadBuffer<EpochEntry> readBuffer = new CheckpointFile.CheckpointReadBuffer<>("", bufferedReader, 0, LeaderEpochCheckpointFile.FORMATTER);
             return readBuffer.read();
         }
@@ -166,8 +166,9 @@ public class TierStateMachine {
         File snapshotFile = LogFileUtils.producerSnapshotFile(unifiedLog.dir(), nextOffset);
         Path tmpSnapshotFile = Paths.get(snapshotFile.getAbsolutePath() + ".tmp");
         // Copy it to snapshot file in atomic manner.
-        Files.copy(rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
-                tmpSnapshotFile, StandardCopyOption.REPLACE_EXISTING);
+        try (InputStream inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT)) {
+            Files.copy(inputStream, tmpSnapshotFile, StandardCopyOption.REPLACE_EXISTING);
+        }
         Utils.atomicMoveWithFallback(tmpSnapshotFile, snapshotFile.toPath(), false);
 
         // Reload producer snapshots.

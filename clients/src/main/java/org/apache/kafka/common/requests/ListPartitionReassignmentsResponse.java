@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 public class ListPartitionReassignmentsResponse extends AbstractResponse {
@@ -33,9 +32,9 @@ public class ListPartitionReassignmentsResponse extends AbstractResponse {
         this.data = responseData;
     }
 
-    public static ListPartitionReassignmentsResponse parse(ByteBuffer buffer, short version) {
+    public static ListPartitionReassignmentsResponse parse(Readable readable, short version) {
         return new ListPartitionReassignmentsResponse(new ListPartitionReassignmentsResponseData(
-            new ByteBufferAccessor(buffer), version));
+            readable, version));
     }
 
     @Override

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.ShareAcknowledgementMode;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -195,7 +196,10 @@ public class ConsumerConfig extends AbstractConfig {
             "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
             "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
             "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel.";
+            "<code>max.message.bytes</code> (topic config). A fetch request consists of many partitions, and there is another setting that controls how much " +
+            "data is returned for each partition in a fetch request - see <code>max.partition.fetch.bytes</code>. Note that there is a current limitation when " +
+            "performing remote reads from tiered storage (KIP-405) - only one partition out of the fetch request is fetched from the remote store (KAFKA-14915). " +
+            "Note also that the consumer performs multiple fetches in parallel.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
     /**
@@ -220,7 +224,9 @@ public class ConsumerConfig extends AbstractConfig {
             "partition of the fetch is larger than this limit, the " +
             "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
             "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
+            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size. " +
+            "Consider increasing <code>max.partition.fetch.bytes</code> especially in the cases of remote storage reads (KIP-405), because currently only " +
+            "one partition per fetch request is served from the remote store (KAFKA-14915).";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
     /** <code>send.buffer.bytes</code> */
@@ -370,8 +376,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
     private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "Allow automatic topic creation on the broker when" +
             " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
-            " broker allows for it using `auto.create.topics.enable` broker configuration. This configuration must" +
-            " be set to `true` when using brokers older than 0.11.0";
+            " broker allows for it using `auto.create.topics.enable` broker configuration.";
     public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
 
     /**
@@ -381,13 +386,10 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
     /**
-     * <code>share.acknowledgement.mode</code> is being evaluated as a new configuration to control the acknowledgement mode
-     * for share consumers. It will be removed or converted to a proper configuration before release.
-     * An alternative being considered is <code>enable.explicit.share.acknowledgement</code> as a boolean configuration.
+     * <code>share.acknowledgement.mode</code>
      */
-    public static final String INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = "internal.share.acknowledgement.mode";
-    private static final String INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_DOC = "Controls the acknowledgement mode for a share consumer." +
-            " If unset, the acknowledgement mode of the consumer is decided by the method calls it uses to fetch and commit." +
+    public static final String SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = "share.acknowledgement.mode";
+    private static final String SHARE_ACKNOWLEDGEMENT_MODE_DOC = "Controls the acknowledgement mode for a share consumer." +
             " If set to <code>implicit</code>, the acknowledgement mode of the consumer is implicit and it must not" +
             " use <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records. Instead," +
             " delivery is acknowledged implicitly on the next call to poll or commit." +
@@ -401,7 +403,7 @@ public class ConsumerConfig extends AbstractConfig {
      */
     private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
             GROUP_REMOTE_ASSIGNOR_CONFIG,
-            INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
 
     /**
@@ -411,7 +413,7 @@ public class ConsumerConfig extends AbstractConfig {
             PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
             HEARTBEAT_INTERVAL_MS_CONFIG, 
             SESSION_TIMEOUT_MS_CONFIG,
-            INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
     
     static {
@@ -695,12 +697,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+                                .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
                                         Type.STRING,
-                                        null,
-                                        in(null, "implicit", "explicit"),
+                                        ShareAcknowledgementMode.IMPLICIT.name(),
+                                        new ShareAcknowledgementMode.Validator(),
                                         Importance.MEDIUM,
-                                        ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_DOC);
+                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC);
     }
 
     @Override

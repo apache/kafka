@@ -14,8 +14,6 @@
 // limitations under the License.
 
 import org.ajoberstar.grgit.Grgit
-import org.gradle.api.JavaVersion
-
 import java.nio.charset.StandardCharsets
 
 buildscript {
@@ -369,7 +367,6 @@ subprojects {
 
             // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
             // https://github.com/GradleUp/shadow/issues/324
-            afterEvaluate {
               pom.withXml { xml ->
                 def dependenciesNode = xml.asNode().get('dependencies') ?: xml.asNode().appendNode('dependencies')
                 project.configurations.shadowed.allDependencies.each {
@@ -380,7 +377,6 @@ subprojects {
                   dependencyNode.appendNode('scope', 'runtime')
                 }
               }
-            }
           }
 
           afterEvaluate {
@@ -894,6 +890,9 @@ project(':server') {
   }
 
   dependencies {
+    compileOnly libs.bndlib
+    compileOnly libs.spotbugs
+
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':server-common')
@@ -902,15 +901,21 @@ project(':server') {
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation project(':share-coordinator')
+    implementation project(':storage:storage-api')
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.slf4jApi
+    implementation log4j2Libs
 
     testImplementation project(':clients').sourceSets.test.output
 
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
+    testImplementation project(':test-common:test-common-internal-api')
+    testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':storage:storage-api').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1020,6 +1025,7 @@ project(':core') {
     implementation libs.scalaReflect
     implementation libs.scalaLogging
     implementation libs.slf4jApi
+    implementation libs.re2j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator').sourceSets.test.output
@@ -1416,6 +1422,7 @@ project(':group-coordinator') {
     implementation libs.hdrHistogram
     implementation libs.re2j
     implementation libs.slf4jApi
+    implementation libs.hash4j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1758,11 +1765,11 @@ project(':generator') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonJakartarsJsonProvider
 
-    implementation 'org.eclipse.jgit:org.eclipse.jgit:6.4.0.202211300538-r'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:7.2.0.202503040940-r'
     // SSH support for JGit based on Apache MINA sshd
-    implementation 'org.eclipse.jgit:org.eclipse.jgit.ssh.apache:6.4.0.202211300538-r'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit.ssh.apache:7.2.0.202503040940-r'
     // GPG support for JGit based on BouncyCastle (commit signing)
-    implementation 'org.eclipse.jgit:org.eclipse.jgit.gpg.bc:6.4.0.202211300538-r'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit.gpg.bc:7.2.0.202503040940-r'
 
     testImplementation libs.junitJupiter
 
@@ -1969,12 +1976,17 @@ project(':clients:clients-integration-tests') {
   }
 
   dependencies {
+    testImplementation libs.metrics
     testImplementation libs.slf4jApi
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':metadata')
+    testImplementation project(':server')
+    testImplementation project(':storage')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':clients').sourceSets.test.output
     implementation project(':server-common')
     testImplementation project(':metadata')
-    implementation project(':clients').sourceSets.test.output
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
 
@@ -2222,11 +2234,13 @@ project(':storage') {
   }
 
   dependencies {
+    implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
     implementation(libs.caffeine) {
       exclude group: 'org.checkerframework', module: 'checker-qual'
+      exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
@@ -2236,12 +2250,14 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':transaction-coordinator')
     testImplementation libs.hamcrest
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
@@ -2408,6 +2424,7 @@ project(':tools') {
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
     implementation project(':share-coordinator')
+    implementation project(':raft')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
@@ -2732,6 +2749,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-37:test',
             ':streams:upgrade-system-tests-38:test',
             ':streams:upgrade-system-tests-39:test',
+            ':streams:upgrade-system-tests-40:test',
             ':streams:examples:test'
     ]
   )
@@ -3246,6 +3264,21 @@ project(':streams:upgrade-system-tests-39') {
   }
 }
 
+project(':streams:upgrade-system-tests-40') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-40"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_40
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.gradleup.shadow'
@@ -3312,7 +3345,7 @@ project(':jmh-benchmarks') {
       if (System.getProperty("jmhArgs")) {
           args System.getProperty("jmhArgs").split(' ')
       }
-      args = [shadowJar.archivePath, *args]
+      args = [shadowJar.archiveFile.get().asFile, *args]
     }
   }
 
@@ -3714,7 +3747,7 @@ project(':connect:mirror') {
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server')
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':server-common')
 
 
     testRuntimeOnly project(':connect:runtime')

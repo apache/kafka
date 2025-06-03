@@ -23,77 +23,55 @@ import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.ControlRecordUtils;
 
+import java.nio.ByteBuffer;
 import java.util.Objects;
+
 
 public final class ControlRecord {
     private final ControlRecordType recordType;
     private final ApiMessage message;
 
-    private static void throwIllegalArgument(ControlRecordType recordType, ApiMessage message) {
-        throw new IllegalArgumentException(
-            String.format(
-                "Record type %s doesn't match message class %s",
-                recordType,
-                message.getClass()
-            )
-        );
+    public static ControlRecord of(ByteBuffer key, ByteBuffer value) {
+        ControlRecordType recordType = ControlRecordType.parse(key);
+        final ApiMessage message = switch (recordType) {
+            case LEADER_CHANGE -> ControlRecordUtils.deserializeLeaderChangeMessage(value);
+            case SNAPSHOT_HEADER -> ControlRecordUtils.deserializeSnapshotHeaderRecord(value);
+            case SNAPSHOT_FOOTER -> ControlRecordUtils.deserializeSnapshotFooterRecord(value);
+            case KRAFT_VERSION -> ControlRecordUtils.deserializeKRaftVersionRecord(value);
+            case KRAFT_VOTERS -> ControlRecordUtils.deserializeVotersRecord(value);
+            default -> throw new IllegalArgumentException(String.format("Unknown control record type %s", recordType));
+        };
+        return new ControlRecord(recordType, message);
     }
 
-    public ControlRecord(ControlRecordType recordType, ApiMessage message) {
-        switch (recordType) {
-            case LEADER_CHANGE:
-                if (!(message instanceof LeaderChangeMessage)) {
-                    throwIllegalArgument(recordType, message);
-                }
-                break;
-            case SNAPSHOT_HEADER:
-                if (!(message instanceof SnapshotHeaderRecord)) {
-                    throwIllegalArgument(recordType, message);
-                }
-                break;
-            case SNAPSHOT_FOOTER:
-                if (!(message instanceof SnapshotFooterRecord)) {
-                    throwIllegalArgument(recordType, message);
-                }
-                break;
-            case KRAFT_VERSION:
-                if (!(message instanceof KRaftVersionRecord)) {
-                    throwIllegalArgument(recordType, message);
-                }
-                break;
-            case KRAFT_VOTERS:
-                if (!(message instanceof VotersRecord)) {
-                    throwIllegalArgument(recordType, message);
-                }
-                break;
-            default:
-                throw new IllegalArgumentException(String.format("Unknown control record type %s", recordType));
+    //this is for test only
+    public static ControlRecord of(ApiMessage message) {
+        ControlRecordType recordType;
+        if (message instanceof LeaderChangeMessage) {
+            recordType = ControlRecordType.LEADER_CHANGE;
+        } else if (message instanceof SnapshotHeaderRecord) {
+            recordType = ControlRecordType.SNAPSHOT_HEADER;
+        } else if (message instanceof SnapshotFooterRecord) {
+            recordType = ControlRecordType.SNAPSHOT_FOOTER;
+        } else if (message instanceof KRaftVersionRecord) {
+            recordType = ControlRecordType.KRAFT_VERSION;
+        } else if (message instanceof VotersRecord) {
+            recordType = ControlRecordType.KRAFT_VOTERS;
+        } else {
+            throw new IllegalArgumentException(String.format("Unknown control record type %s", message.getClass()));
         }
+        return new ControlRecord(recordType, message);
+    }
 
+    private ControlRecord(ControlRecordType recordType, ApiMessage message) {
         this.recordType = recordType;
         this.message = message;
     }
 
     public ControlRecordType type() {
         return recordType;
-    }
-
-    public short version() {
-        switch (recordType) {
-            case LEADER_CHANGE:
-                return ((LeaderChangeMessage) message).version();
-            case SNAPSHOT_HEADER:
-                return ((SnapshotHeaderRecord) message).version();
-            case SNAPSHOT_FOOTER:
-                return ((SnapshotFooterRecord) message).version();
-            case KRAFT_VERSION:
-                return ((KRaftVersionRecord) message).version();
-            case KRAFT_VOTERS:
-                return ((VotersRecord) message).version();
-            default:
-                throw new IllegalStateException(String.format("Unknown control record type %s", recordType));
-        }
     }
 
     public ApiMessage message() {

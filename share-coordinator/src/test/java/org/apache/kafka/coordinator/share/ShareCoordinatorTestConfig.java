@@ -50,6 +50,7 @@ public class ShareCoordinatorTestConfig {
         configs.put(ShareCoordinatorConfig.APPEND_LINGER_MS_CONFIG, "10");
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_COMPRESSION_CODEC_CONFIG, String.valueOf(CompressionType.NONE.id));
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG, "30000");  // 30 seconds
+        configs.put(ShareCoordinatorConfig.COLD_PARTITION_SNAPSHOT_INTERVAL_MS_CONFIG, "10000");    // 10 seconds
         return configs;
     }
 
