@@ -24,27 +24,22 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.Configurat
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URL;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
-import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
@@ -116,20 +111,12 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        JaasOptionsUtils jou = new JaasOptionsUtils(JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries));
-
-        URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
 
         ConfigOrJaas configOrJaas = new ConfigOrJaas(cu, jou);
         String clientId = configOrJaas.clientId();
         String clientSecret = configOrJaas.clientSecret();
         String scope = configOrJaas.scope();
-
-        SSLSocketFactory sslSocketFactory = null;
-
-        if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
-            sslSocketFactory = jou.createSSLSocketFactory();
-
         boolean urlencodeHeader = validateUrlencodeHeader(cu);
 
         HttpRequestFormatter requestFormatter = new ClientCredentialsRequestFormatter(
@@ -139,15 +126,8 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
             urlencodeHeader
         );
 
-        delegate = new HttpJwtRetriever(
-            requestFormatter,
-            sslSocketFactory,
-            tokenEndpointUrl.toString(),
-            cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
-            cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
-            cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
-            cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false)
-        );
+        delegate = new HttpJwtRetriever(requestFormatter);
+        delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     @Override
@@ -156,6 +136,11 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
             throw new IllegalStateException("JWT retriever delegate is null; please call configure() first");
 
         return delegate.retrieve();
+    }
+
+    @Override
+    public void close() throws IOException {
+        Utils.closeQuietly(delegate, "JWT retriever delegate");
     }
 
     /**

@@ -37,6 +37,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -44,6 +45,13 @@ import java.util.concurrent.ExecutionException;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
+import javax.security.auth.login.AppConfigurationEntry;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 /**
  * <code>HttpJwtRetriever</code> is a {@link JwtRetriever} that will communicate with an OAuth/OIDC
@@ -51,7 +59,7 @@ import javax.net.ssl.SSLSocketFactory;
  * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/{@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
  * to a publicized token endpoint URL ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  */
-public class HttpJwtRetriever {
+public class HttpJwtRetriever implements JwtRetriever {
 
     private static final Logger log = LoggerFactory.getLogger(HttpJwtRetriever.class);
 
@@ -84,32 +92,36 @@ public class HttpJwtRetriever {
 
     private final HttpRequestFormatter requestFormatter;
 
-    private final SSLSocketFactory sslSocketFactory;
+    private SSLSocketFactory sslSocketFactory;
 
-    private final String tokenEndpointUrl;
+    private URL tokenEndpointUrl;
 
-    private final long loginRetryBackoffMs;
+    private long loginRetryBackoffMs;
 
-    private final long loginRetryBackoffMaxMs;
+    private long loginRetryBackoffMaxMs;
 
-    private final Integer loginConnectTimeoutMs;
+    private Integer loginConnectTimeoutMs;
 
-    private final Integer loginReadTimeoutMs;
+    private Integer loginReadTimeoutMs;
 
-    public HttpJwtRetriever(HttpRequestFormatter requestFormatter,
-                            SSLSocketFactory sslSocketFactory,
-                            String tokenEndpointUrl,
-                            long loginRetryBackoffMs,
-                            long loginRetryBackoffMaxMs,
-                            Integer loginConnectTimeoutMs,
-                            Integer loginReadTimeoutMs) {
+    public HttpJwtRetriever(HttpRequestFormatter requestFormatter) {
         this.requestFormatter = Objects.requireNonNull(requestFormatter);
-        this.sslSocketFactory = sslSocketFactory;
-        this.tokenEndpointUrl = Objects.requireNonNull(tokenEndpointUrl);
-        this.loginRetryBackoffMs = loginRetryBackoffMs;
-        this.loginRetryBackoffMaxMs = loginRetryBackoffMaxMs;
-        this.loginConnectTimeoutMs = loginConnectTimeoutMs;
-        this.loginReadTimeoutMs = loginReadTimeoutMs;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
+
+        tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+
+        if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
+            sslSocketFactory = jou.createSSLSocketFactory();
+
+        this.loginRetryBackoffMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
+        this.loginRetryBackoffMaxMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
+        this.loginConnectTimeoutMs = cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false);
+        this.loginReadTimeoutMs = cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false);
     }
 
     /**
@@ -138,7 +150,7 @@ public class HttpJwtRetriever {
                 HttpURLConnection con = null;
 
                 try {
-                    con = (HttpURLConnection) new URL(tokenEndpointUrl).openConnection();
+                    con = (HttpURLConnection) tokenEndpointUrl.openConnection();
 
                     if (sslSocketFactory != null && con instanceof HttpsURLConnection)
                         ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory);

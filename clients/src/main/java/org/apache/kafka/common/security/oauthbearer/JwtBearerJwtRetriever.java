@@ -20,7 +20,6 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionCreator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionJwtTemplate;
@@ -32,24 +31,17 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URL;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.layeredAssertionJwtTemplate;
 
@@ -140,14 +132,8 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        JaasOptionsUtils jou = new JaasOptionsUtils(JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries));
 
-        URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
         String scope = cu.validateString(SCOPE_CONFIG, false);
-        SSLSocketFactory sslSocketFactory = null;
-
-        if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
-            sslSocketFactory = jou.createSSLSocketFactory();
 
         if (cu.validateString(SASL_OAUTHBEARER_ASSERTION_FILE, false) != null) {
             File assertionFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_FILE);
@@ -174,15 +160,8 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
 
         HttpRequestFormatter requestFormatter = new JwtBearerRequestFormatter(scope, assertionSupplier);
 
-        delegate = new HttpJwtRetriever(
-            requestFormatter,
-            sslSocketFactory,
-            tokenEndpointUrl.toString(),
-            cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
-            cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
-            cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
-            cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false)
-        );
+        delegate = new HttpJwtRetriever(requestFormatter);
+        delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     @Override
@@ -197,5 +176,6 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
     public void close() throws IOException {
         Utils.closeQuietly(assertionCreator, "JWT assertion creator");
         Utils.closeQuietly(assertionJwtTemplate, "JWT assertion template");
+        Utils.closeQuietly(delegate, "JWT retriever delegate");
     }
 }

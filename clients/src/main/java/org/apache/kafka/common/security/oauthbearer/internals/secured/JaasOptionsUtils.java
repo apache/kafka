@@ -54,6 +54,10 @@ public class JaasOptionsUtils {
         this.options = options;
     }
 
+    public JaasOptionsUtils(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        this.options = getOptions(saslMechanism, jaasConfigEntries);
+    }
+
     public static Map<String, Object> getOptions(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))
             throw new IllegalArgumentException(String.format("Unexpected SASL mechanism: %s", saslMechanism));

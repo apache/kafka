@@ -81,7 +81,7 @@ public class VerificationKeyResolverFactory {
             resolver = new JwksFileVerificationKeyResolver();
         } else {
             long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
-            JaasOptionsUtils jou = new JaasOptionsUtils(JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries));
+            JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
             SSLSocketFactory sslSocketFactory = null;
 
             if (jou.shouldCreateSSLSocketFactory(jwksEndpointUrl))
