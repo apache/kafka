@@ -38,6 +38,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
     public static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     public static final String GROUP_DOC = "The streams group we wish to act on.";
+    private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
     private static final String TOPIC_DOC = "The topic whose streams group information should be deleted or topic whose should be included in the reset offset process. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
         "Reset-offsets also supports multiple topic inputs.";
@@ -79,6 +80,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     final OptionSpec<Void> allTopicsOpt;
     public final OptionSpec<Void> listOpt;
     public final OptionSpec<Void> describeOpt;
+    final OptionSpec<Void> allGroupsOpt;
     public final OptionSpec<Long> timeoutMsOpt;
     public final OptionSpec<String> commandConfigOpt;
     public final OptionSpec<String> stateOpt;
@@ -99,6 +101,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public final OptionSpec<Void> verboseOpt;
 
     final Set<OptionSpec<?>> allResetOffsetScenarioOpts;
+    final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
 
 
     public static StreamsGroupCommandOptions fromArgs(String[] args) {
@@ -125,6 +128,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         allTopicsOpt = parser.accepts("all-topics", ALL_TOPICS_DOC);
         listOpt = parser.accepts("list", LIST_DOC);
         describeOpt = parser.accepts("describe", DESCRIBE_DOC);
+        allGroupsOpt = parser.accepts("all-groups", ALL_GROUPS_DOC);
         timeoutMsOpt = parser.accepts("timeout", TIMEOUT_MS_DOC)
             .availableIf(describeOpt)
             .withRequiredArg()
@@ -178,6 +182,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
         allResetOffsetScenarioOpts = new HashSet<>(Arrays.asList(resetToOffsetOpt, resetShiftByOpt,
             resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt));
+        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
     }
 
     public void checkArgs() {
@@ -186,6 +191,9 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
         if (options.has(describeOpt)) {
+            if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
             List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
                 CommandLineUtils.printUsageAndExit(parser,
@@ -198,6 +206,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             if (options.has(timeoutMsOpt))
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
+
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + resetOffsetsOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
 
         if (options.has(resetOffsetsOpt)) {
             if (options.has(dryRunOpt) && options.has(executeOpt))

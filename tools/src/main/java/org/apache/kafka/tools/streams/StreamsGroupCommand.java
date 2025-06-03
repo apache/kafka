@@ -18,7 +18,6 @@ package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
@@ -38,10 +37,12 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
+import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand;
 import org.apache.kafka.tools.consumer.group.CsvUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -421,9 +422,30 @@ public class StreamsGroupCommand {
             }
         }
 
+        private List<TopicPartition> filterExistingGroupTopics(String groupId, List<TopicPartition> topicPartitions) {
+            try {
+                var allTopicPartitions = adminClient.listStreamsGroupOffsets(Map.of(groupId, new ListStreamsGroupOffsetsSpec()))
+                    .partitionsToOffsetAndMetadata(groupId).get();
+                boolean allPresent = topicPartitions.stream().allMatch(allTopicPartitions::containsKey);
+                if (!allPresent) {
+                    printError("One or more topics are not part of the group '" + groupId + "'.", Optional.empty());
+                    return Collections.emptyList();
+                }
+                return topicPartitions;
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
+            // Dry-run is the default behavior if --execute is not specified
+            boolean dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt);
+
             Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
-            List<String> groupIds = listStreamsGroups();
+            List<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? listStreamsGroups()
+                : opts.options.valuesOf(opts.groupOpt);
             if (!groupIds.isEmpty()) {
                 Map<String, KafkaFuture<StreamsGroupDescription>> streamsGroups = adminClient.describeStreamsGroups(
                     groupIds
@@ -436,14 +458,23 @@ public class StreamsGroupCommand {
                             case "Empty":
                             case "Dead":
                                 // reset offsets in source topics
-                                result.put(groupId, resetOffsetsForInactiveGroup(groupId));
+                                result.put(groupId, resetOffsetsForInactiveGroup(groupId, dryRun));
                                 // delete internal topics
-                                List<String> internalTopics = retrieveInternalTopics(List.of(groupId)).get(groupId);
-                                if (internalTopics != null && !internalTopics.isEmpty()) {
-                                    try {
-                                        adminClient.deleteTopics(internalTopics).all().get();
-                                    } catch (InterruptedException | ExecutionException e) {
-                                        printError("Deleting internal topics for group '" + groupId + "' failed due to " + e.getMessage(), Optional.of(e));
+                                if (!dryRun) {
+                                    List<String> internalTopics = retrieveInternalTopics(List.of(groupId)).get(groupId);
+                                    if (internalTopics != null && !internalTopics.isEmpty()) {
+                                        try {
+                                            adminClient.deleteTopics(internalTopics).all().get();
+                                        } catch (InterruptedException | ExecutionException e) {
+                                            if (e.getCause() instanceof UnknownTopicOrPartitionException) {
+                                                printError("Deleting internal topics for group '" + groupId + "' failed because the topics do not exist.", Optional.empty());
+                                            } else if (e.getCause() instanceof UnsupportedVersionException) {
+                                                printError("Deleting internal topics is not supported by the broker version. " +
+                                                    "Use 'kafka-topics.sh' to delete the group's internal topics.", Optional.of(e.getCause()));
+                                            } else {
+                                                printError("Deleting internal topics for group '" + groupId + "' failed due to " + e.getMessage(), Optional.of(e));
+                                            }
+                                        }
                                     }
                                 }
                                 break;
@@ -455,7 +486,7 @@ public class StreamsGroupCommand {
                         throw new RuntimeException(ie);
                     } catch (ExecutionException ee) {
                         if (ee.getCause() instanceof GroupIdNotFoundException) {
-                            result.put(groupId, resetOffsetsForInactiveGroup(groupId));
+                            result.put(groupId, resetOffsetsForInactiveGroup(groupId, dryRun));
                         } else {
                             throw new RuntimeException(ee);
                         }
@@ -509,13 +540,10 @@ public class StreamsGroupCommand {
             return groupToInternalTopics;
         }
 
-        private Map<TopicPartition, OffsetAndMetadata> resetOffsetsForInactiveGroup(String groupId) {
+        private Map<TopicPartition, OffsetAndMetadata> resetOffsetsForInactiveGroup(String groupId, boolean dryRun) {
             try {
                 Collection<TopicPartition> partitionsToReset = getPartitionsToReset(groupId);
                 Map<TopicPartition, OffsetAndMetadata> preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset);
-
-                // Dry-run is the default behavior if --execute is not specified
-                boolean dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt);
                 if (!dryRun) {
                     adminClient.alterStreamsGroupOffsets(
                         groupId,
@@ -541,7 +569,11 @@ public class StreamsGroupCommand {
                 return getCommittedOffsets(groupId).keySet();
             } else if (opts.options.has(opts.topicOpt)) {
                 List<String> topics = opts.options.valuesOf(opts.topicOpt);
-                return parseTopicPartitionsToReset(topics);
+
+                List<TopicPartition> partitions = parseTopicPartitionsToReset(topics);
+                // if the user specified topics that do not belong to this group, we filter them out
+                partitions = filterExistingGroupTopics(groupId, partitions);
+                return partitions;
             } else {
                 if (!opts.options.has(opts.resetFromFileOpt))
                     CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
@@ -891,6 +923,22 @@ public class StreamsGroupCommand {
                 || topicName.endsWith("-subscription-response-topic")
                 || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-\\d+-topic")
                 || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-\\d+-topic");
+        }
+
+        List<String> collectAllTopics(String groupId) {
+            try {
+                return adminClient.describeStreamsGroups(List.of(groupId))
+                    .all().get().get(groupId)
+                    .subtopologies().stream()
+                    .flatMap(subtopology -> Stream.of(
+                        subtopology.sourceTopics().stream(),
+                        subtopology.repartitionSinkTopics().stream(),
+                        subtopology.repartitionSourceTopics().keySet().stream(),
+                        subtopology.stateChangelogTopics().keySet().stream()
+                    ).flatMap(s -> s)).distinct().collect(Collectors.toList());
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         interface LogOffsetResult { }
