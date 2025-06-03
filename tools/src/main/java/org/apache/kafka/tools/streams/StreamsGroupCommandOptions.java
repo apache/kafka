@@ -71,7 +71,6 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
     final Set<OptionSpec<?>> allStreamsGroupLevelOpts;
 
-
     public static StreamsGroupCommandOptions fromArgs(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
         opts.checkArgs();
