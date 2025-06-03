@@ -2453,14 +2453,9 @@ class ReplicaManagerTest {
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0, tp1))
 
     try {
-      val leaderDelta0 = topicsCreateDelta(localId, isStartIdLeader = true, partition = 0)
-      val leaderImage0 = imageFromTopics(leaderDelta0.apply())
-      replicaManager.applyDelta(leaderDelta0, leaderImage0)
-
-      val leaderDelta1 = topicsCreateDelta(localId, isStartIdLeader = true, partition = 1)
-      val leaderImage1 = imageFromTopics(leaderDelta1.apply())
-      replicaManager.applyDelta(leaderDelta1, leaderImage1)
-
+      val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
+      val leaderImage = imageFromTopics(leaderDelta.apply())
+      replicaManager.applyDelta(leaderDelta, leaderImage)
 
       // Append some transactional records with different producer IDs
       val transactionalRecords = mutable.Map[TopicPartition, MemoryRecords]()
@@ -5668,22 +5663,30 @@ class ReplicaManagerTest {
   }
 
   private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partition:Int = 0, directoryIds: List[Uuid] = List.empty): TopicsDelta = {
+    topicsCreateDelta(startId, isStartIdLeader, List(partition), directoryIds, "foo", FOO_UUID)
+  }
+
+  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partitions: List[Int],
+                                directoryIds: List[Uuid], topicName: String, topicId: Uuid): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1
     val delta = new TopicsDelta(TopicsImage.EMPTY)
-    delta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
-    val record = partitionRecord(startId, leader, partition)
-    if (directoryIds.nonEmpty) {
-      record.setDirectories(directoryIds.asJava)
+    delta.replay(new TopicRecord().setName(topicName).setTopicId(topicId))
+
+    partitions.foreach { partition =>
+      val record = partitionRecord(startId, leader, partition, topicId)
+      if (directoryIds.nonEmpty) {
+        record.setDirectories(directoryIds.asJava)
+      }
+      delta.replay(record)
     }
-    delta.replay(record)
 
     delta
   }
 
-  private def partitionRecord(startId: Int, leader: Int, partition: Int = 0) = {
+  private def partitionRecord(startId: Int, leader: Int, partition: Int = 0, topicId: Uuid = FOO_UUID) = {
     new PartitionRecord()
       .setPartitionId(partition)
-      .setTopicId(FOO_UUID)
+      .setTopicId(topicId)
       .setReplicas(util.Arrays.asList(startId, startId + 1))
       .setIsr(util.Arrays.asList(startId, startId + 1))
       .setRemovingReplicas(Collections.emptyList())
