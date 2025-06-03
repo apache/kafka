@@ -50,7 +50,8 @@ public class ListStreamsGroupOffsetsResult {
     }
 
     /**
-     * Return a future which yields a map of topic partitions to offsets for the specified group.
+     * Return a future which yields a map of topic partitions to offsets for the specified group. If the group doesn't
+     * have a committed offset for a specific partition, the corresponding value in the returned map will be null.
      */
     public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata(String groupId) {
         return delegate.partitionsToOffsetAndMetadata(groupId);

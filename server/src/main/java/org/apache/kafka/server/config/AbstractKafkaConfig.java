@@ -31,11 +31,13 @@ import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.MetricConfigs;
+import org.apache.kafka.server.util.Csv;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * During moving {@link kafka.server.KafkaConfig} out of core AbstractKafkaConfig will be the future KafkaConfig
@@ -68,6 +70,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
+    }
+
+    public List<String> logDirs() {
+        return Csv.parseCsvList(Optional.ofNullable(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getString(ServerLogConfigs.LOG_DIR_CONFIG)));
     }
 
     public int numIoThreads() {
