@@ -207,9 +207,9 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
-        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-            CommandLineUtils.printUsageAndExit(parser,
-                "Option " + resetOffsetsOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+//        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+//            CommandLineUtils.printUsageAndExit(parser,
+//                "Option " + resetOffsetsOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
 
         if (options.has(resetOffsetsOpt)) {
             if (options.has(dryRunOpt) && options.has(executeOpt))

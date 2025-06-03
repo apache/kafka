@@ -115,9 +115,9 @@ public class ResetStreamsGroupOffsetTest {
 
     @Test
     public void testResetOffset() throws Exception {
-        final String appId = "app2";//generateRandomAppId();
-        final String topic1 = "test2-in";//generateRandomTopic();
-        final String topic2 = "test2-out";//generateRandomTopic();
+        final String appId = generateRandomAppId();
+        final String topic1 = generateRandomTopic();
+        final String topic2 = generateRandomTopic();
         final int  numOfPartitions = 2;
         String[] args;
         produceConsumeShutdown(appId, topic1, topic2, RECORD_TOTAL * numOfPartitions * 2);
@@ -271,9 +271,9 @@ public class ResetStreamsGroupOffsetTest {
 
     @Test
     public void testTopicsWhenResettingOffset() throws Exception {
-        final String appId = "app3";//generateRandomAppId();
-        final String topic1 = "test3-in";//generateRandomTopic();
-        final String topic2 = "test3-out";//generateRandomTopic();
+        final String appId = generateRandomAppId();
+        final String topic1 = generateRandomTopic();
+        final String topic2 = generateRandomTopic();
         final int numOfPartitions = 2;
         String[] args;
         produceConsumeShutdown(appId, topic1, topic2, RECORD_TOTAL * numOfPartitions * 2);

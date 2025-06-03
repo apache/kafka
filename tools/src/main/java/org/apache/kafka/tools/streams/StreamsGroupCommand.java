@@ -42,7 +42,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand;
 import org.apache.kafka.tools.consumer.group.CsvUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
