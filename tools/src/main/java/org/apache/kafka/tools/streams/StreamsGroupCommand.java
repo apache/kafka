@@ -783,8 +783,7 @@ public class StreamsGroupCommand {
                     isOldCsvFormat = true;
                 }
             } catch (IOException e) {
-                e.printStackTrace();
-                // Ignore.
+                throw new RuntimeException("Invalid CSV format in reset plan file: " + e.getMessage());
             }
 
             Map<String, Map<TopicPartition, OffsetAndMetadata>> dataMap = new HashMap<>();
