@@ -2574,7 +2574,7 @@ public class GroupMetadataManager {
             if (bumpGroupEpoch) {
                 groupEpoch += 1;
                 records.add(newShareGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
-                log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+                log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
             }
 
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
