@@ -17,13 +17,10 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 
-import org.jose4j.jwt.consumer.InvalidJwtException;
-import org.jose4j.jwt.consumer.JwtConsumer;
-import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.jose4j.jwt.consumer.JwtContext;
 import org.jose4j.jwx.JsonWebStructure;
 import org.junit.jupiter.api.Test;
@@ -32,17 +29,12 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.util.Base64;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class DefaultAssertionCreatorTest {
+public class DefaultAssertionCreatorTest extends OAuthBearerTest {
 
     @Test
     public void testPrivateKey() throws Exception {
@@ -170,49 +162,6 @@ public class DefaultAssertionCreatorTest {
         assertThrows(
             NoSuchAlgorithmException.class,
             () -> sign(builder.algorithm, privateKey, "dummy content"));
-    }
-
-    private void assertClaims(PublicKey publicKey, String assertion) throws InvalidJwtException {
-        JwtConsumer jwtConsumer = jwtConsumer(publicKey);
-        jwtConsumer.processToClaims(assertion);
-    }
-
-    private JwtContext assertContext(PublicKey publicKey, String assertion) throws InvalidJwtException {
-        JwtConsumer jwtConsumer = jwtConsumer(publicKey);
-        return jwtConsumer.process(assertion);
-    }
-
-    private JwtConsumer jwtConsumer(PublicKey publicKey) {
-        return new JwtConsumerBuilder()
-            .setVerificationKey(publicKey)
-            .setRequireExpirationTime()
-            .setAllowedClockSkewInSeconds(30)               // Sure, let's give it some slack
-            .build();
-    }
-
-    private File generatePrivateKey(PrivateKey privateKey) throws IOException {
-        File file = File.createTempFile("private-", ".key");
-        byte[] bytes = Base64.getEncoder().encode(privateKey.getEncoded());
-
-        try (FileChannel channel = FileChannel.open(file.toPath(), EnumSet.of(StandardOpenOption.WRITE))) {
-            Utils.writeFully(channel, ByteBuffer.wrap(bytes));
-        }
-
-        return file;
-    }
-
-    private File generatePrivateKey() throws IOException {
-        return generatePrivateKey(generateKeyPair().getPrivate());
-    }
-
-    private KeyPair generateKeyPair() {
-        try {
-            KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-            keyGen.initialize(2048);
-            return keyGen.generateKeyPair();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("Received unexpected error during private key generation", e);
-        }
     }
 
     private static class Builder {

@@ -29,6 +29,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jwk.RsaJsonWebKey;
 import org.jose4j.jwk.RsaJwkGenerator;
+import org.jose4j.jwt.consumer.InvalidJwtException;
+import org.jose4j.jwt.consumer.JwtConsumer;
+import org.jose4j.jwt.consumer.JwtConsumerBuilder;
+import org.jose4j.jwt.consumer.JwtContext;
 import org.jose4j.lang.JoseException;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
@@ -36,12 +40,22 @@ import org.junit.jupiter.api.function.Executable;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -200,5 +214,53 @@ public abstract class OAuthBearerTest {
             ),
             "sign"
         );
+    }
+
+
+    protected void assertClaims(PublicKey publicKey, String assertion) throws InvalidJwtException {
+        JwtConsumer jwtConsumer = jwtConsumer(publicKey);
+        jwtConsumer.processToClaims(assertion);
+    }
+
+    protected JwtContext assertContext(PublicKey publicKey, String assertion) throws InvalidJwtException {
+        JwtConsumer jwtConsumer = jwtConsumer(publicKey);
+        return jwtConsumer.process(assertion);
+    }
+
+    protected JwtConsumer jwtConsumer(PublicKey publicKey) {
+        return new JwtConsumerBuilder()
+            .setVerificationKey(publicKey)
+            .setRequireExpirationTime()
+            .setAllowedClockSkewInSeconds(30)               // Sure, let's give it some slack
+            .build();
+    }
+
+    protected File generatePrivateKey(PrivateKey privateKey) throws IOException {
+        File file = File.createTempFile("private-", ".key");
+        byte[] bytes = Base64.getEncoder().encode(privateKey.getEncoded());
+
+        try (FileChannel channel = FileChannel.open(file.toPath(), EnumSet.of(StandardOpenOption.WRITE))) {
+            Utils.writeFully(channel, ByteBuffer.wrap(bytes));
+        }
+
+        return file;
+    }
+
+    protected File generatePrivateKey() throws IOException {
+        return generatePrivateKey(generateKeyPair().getPrivate());
+    }
+
+    protected KeyPair generateKeyPair() {
+        return generateKeyPair("RSA");
+    }
+
+    protected KeyPair generateKeyPair(String algorithm) {
+        try {
+            KeyPairGenerator keyGen = KeyPairGenerator.getInstance(algorithm);
+            keyGen.initialize(2048);
+            return keyGen.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Received unexpected error during private key generation", e);
+        }
     }
 }
