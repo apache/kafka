@@ -177,7 +177,7 @@ public class ClientMetricsManager implements Closeable {
         if (metrics != null && metrics.length > 0) {
             try {
                 receiverPlugin.exportMetrics(requestContext, request);
-            } catch (Exception exception) {
+ dd            } catch (Throwable exception) {
                 clientInstance.lastKnownError(Errors.INVALID_RECORD);
                 return request.errorResponse(0, Errors.INVALID_RECORD);
             }

@@ -709,7 +709,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
 
             CompressionType compressionType = ClientTelemetryUtils.preferredCompressionType(localSubscription.acceptedCompressionTypes());
-            ByteBuffer buffer = ClientTelemetryUtils.compress(payload, compressionType);
+            ByteBuffer compressedPayload;
+            try {
+                compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
+            } catch (Throwable e) {
+                log.debug("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
+                compressedPayload = ByteBuffer.wrap(payload);
+                compressionType = CompressionType.NONE;
+            }
 
             AbstractRequest.Builder<?> requestBuilder = new PushTelemetryRequest.Builder(
                 new PushTelemetryRequestData()
@@ -717,7 +724,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     .setSubscriptionId(localSubscription.subscriptionId())
                     .setTerminating(terminating)
                     .setCompressionType(compressionType.id)
-                    .setMetrics(Utils.readBytes(buffer)), true);
+                    .setMetrics(Utils.readBytes(compressedPayload)), true);
 
             return Optional.of(requestBuilder);
         }
