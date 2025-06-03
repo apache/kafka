@@ -38,6 +38,9 @@ public class RequestMetrics {
     public static final String CONSUMER_FETCH_METRIC_NAME = ApiKeys.FETCH.name + "Consumer";
     public static final String FOLLOW_FETCH_METRIC_NAME = ApiKeys.FETCH.name + "Follower";
     public static final String VERIFY_PARTITIONS_IN_TXN_METRIC_NAME = ApiKeys.ADD_PARTITIONS_TO_TXN.name + "Verification";
+    // The ListClientMetricsResourcesRequest (v0) is renamed to ListConfigResourcesRequest (v1) in 4.1.
+    // To record correct request name, we keep the old name for v0 and use the new name for v1+.
+    public static final String LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME = "ListClientMetricsResources";
     public static final String REQUESTS_PER_SEC = "RequestsPerSec";
     public static final String DEPRECATED_REQUESTS_PER_SEC = "DeprecatedRequestsPerSec";
     public static final String MESSAGE_CONVERSIONS_TIME_MS = "MessageConversionsTimeMs";
