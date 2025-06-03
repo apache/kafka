@@ -20,6 +20,7 @@ import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -317,6 +319,18 @@ public class TestUtils {
             attempts--;
         }
         throw new RuntimeException("Failed to create directory after 1000 attempts");
+    }
+
+    /**
+     * Convert EndPoint to String
+     */
+    public static String endpointToString(Endpoint endPoint) {
+        String host = endPoint.host();
+        int port = endPoint.port();
+        ListenerName listenerName = ListenerName.normalised(endPoint.listener());
+
+        String hostport = (host == null) ? (":" + port) : Utils.formatAddress(host, port);
+        return listenerName.value() + "://" + hostport;
     }
 
     public static Properties producerConfig(final String bootstrapServers,

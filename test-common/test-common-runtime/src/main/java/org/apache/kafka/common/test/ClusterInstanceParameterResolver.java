@@ -15,10 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test.junit;
+package org.apache.kafka.common.test;
 
-
-import org.apache.kafka.common.test.ClusterInstance;
 
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtensionContext;

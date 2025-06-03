@@ -43,7 +43,7 @@ import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
-import org.apache.kafka.common.test.{TestUtils => JTestUtils}
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 
 import scala.jdk.CollectionConverters._
 

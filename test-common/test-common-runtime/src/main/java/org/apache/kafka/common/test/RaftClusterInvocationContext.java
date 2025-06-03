@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.test.junit;
+package org.apache.kafka.common.test;
 
 import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
@@ -22,10 +22,6 @@ import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.KafkaClusterTestKit;
-import org.apache.kafka.common.test.TestKitNodes;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;

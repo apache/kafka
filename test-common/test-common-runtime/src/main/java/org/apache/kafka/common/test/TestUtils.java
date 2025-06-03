@@ -36,7 +36,7 @@ import static java.lang.String.format;
 /**
  * Helper functions for writing unit tests
  */
-public class TestUtils {
+class TestUtils {
     private static final Logger log = LoggerFactory.getLogger(TestUtils.class);
 
     /* A consistent random number generator to make tests repeatable */

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test.junit;
+package org.apache.kafka.common.test;
 
 import kafka.server.ControllerServer;
 
@@ -42,9 +42,6 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.JaasUtils;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.AutoStart;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
