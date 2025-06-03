@@ -634,7 +634,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * <p>
      * If number of ShareUpdate records for key >= max allowed per snapshot per key or stateEpoch is highest
      * seen so far => create a new ShareSnapshot record else create a new ShareUpdate record. This method assumes
-     * that share partition key is present in shareStateMap since it should be called on an initialized partition.
+     * that share partition key is present in shareStateMap since it should be called on initialized share partitions.
      *
      * @param partitionData - Represents the data which should be written into the share state record.
      * @param key           - The {@link SharePartitionKey} object.
