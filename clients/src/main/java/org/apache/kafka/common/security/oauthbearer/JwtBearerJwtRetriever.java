@@ -42,7 +42,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.layeredAssertionJwtTemplate;
 
 /**
@@ -133,7 +133,7 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
 
-        String scope = cu.validateString(SCOPE_CONFIG, false);
+        String scope = cu.validateString(SASL_OAUTHBEARER_SCOPE, false);
 
         if (cu.validateString(SASL_OAUTHBEARER_ASSERTION_FILE, false) != null) {
             File assertionFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_FILE);
