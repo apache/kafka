@@ -446,10 +446,18 @@ public class StreamsGroupCommand {
                     for (String groupId : success.keySet()) {
                         List<String> internalTopicsToDelete = internalTopics.get(groupId);
                         if (internalTopicsToDelete != null && !internalTopicsToDelete.isEmpty()) {
+                            DeleteTopicsResult deleteTopicsResult = null;
                             try {
-                                DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(internalTopicsToDelete);
+                                deleteTopicsResult = adminClient.deleteTopics(internalTopicsToDelete);
                                 deleteTopicsResult.all().get();
                             } catch (InterruptedException | ExecutionException e) {
+                                deleteTopicsResult.topicNameValues().forEach((topic, future) -> {
+                                    try {
+                                        future.get();
+                                    } catch (Exception topicException) {
+                                        System.out.println("Failed to delete internal topic: " + topic);
+                                    }
+                                });
                                 internalTopicsDeletionFailures.put(groupId, e.getCause());
                             }
                         }
