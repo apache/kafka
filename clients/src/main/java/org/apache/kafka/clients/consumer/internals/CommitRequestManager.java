@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -975,38 +976,52 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
-            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = requestedPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic))
-                .entrySet()
-                .stream()
-                .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
+            Map<String, Uuid> topicIds = metadata.topicIds();
+            boolean canUseTopicIds = true;
+            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = new ArrayList<>();
+            Map<String, List<TopicPartition>> tps = requestedPartitions.stream().collect(Collectors.groupingBy(TopicPartition::topic));
+            for (Map.Entry<String, List<TopicPartition>> entry : tps.entrySet()) {
+                String topic = entry.getKey();
+                Uuid topicId = topicIds.getOrDefault(topic, Uuid.ZERO_UUID);
+                if (Uuid.ZERO_UUID.equals(topicId)) {
+                    canUseTopicIds = false;
+                }
+                topics.add(new OffsetFetchRequestData.OffsetFetchRequestTopics()
                     .setName(entry.getKey())
+                    .setTopicId(topicId)
                     .setPartitionIndexes(entry.getValue().stream()
                         .map(TopicPartition::partition)
-                        .collect(Collectors.toList())))
-                .collect(Collectors.toList());
+                        .collect(Collectors.toList())));
+            }
 
+            boolean finalCanUseTopicIds = canUseTopicIds;
             OffsetFetchRequest.Builder builder = memberInfo.memberEpoch
-                .map(epoch -> OffsetFetchRequest.Builder.forTopicNames(
-                    new OffsetFetchRequestData()
+                .map(epoch -> {
+                    OffsetFetchRequestData data = new OffsetFetchRequestData()
                         .setRequireStable(true)
                         .setGroups(List.of(
                             new OffsetFetchRequestData.OffsetFetchRequestGroup()
                                 .setGroupId(groupId)
                                 .setMemberId(memberInfo.memberId)
                                 .setMemberEpoch(epoch)
-                                .setTopics(topics))),
-                            throwOnFetchStableOffsetUnsupported))
+                                .setTopics(topics)));
+                    return finalCanUseTopicIds
+                        ? OffsetFetchRequest.Builder.forTopicIdsOrNames(data, throwOnFetchStableOffsetUnsupported, true)
+                        : OffsetFetchRequest.Builder.forTopicNames(data, throwOnFetchStableOffsetUnsupported);
+                })
                 // Building request without passing member ID/epoch to leave the logic to choose
                 // default values when not present on the request builder.
-                .orElseGet(() -> OffsetFetchRequest.Builder.forTopicNames(
-                    new OffsetFetchRequestData()
+                .orElseGet(() -> {
+                    OffsetFetchRequestData data = new OffsetFetchRequestData()
                         .setRequireStable(true)
                         .setGroups(List.of(
                             new OffsetFetchRequestData.OffsetFetchRequestGroup()
                                 .setGroupId(groupId)
-                                .setTopics(topics))),
-                    throwOnFetchStableOffsetUnsupported));
+                                .setTopics(topics)));
+                    return finalCanUseTopicIds
+                        ? OffsetFetchRequest.Builder.forTopicIdsOrNames(data, throwOnFetchStableOffsetUnsupported, true)
+                        : OffsetFetchRequest.Builder.forTopicNames(data, throwOnFetchStableOffsetUnsupported);
+                });
             return buildRequestWithResponseHandling(builder);
         }
 
@@ -1049,6 +1064,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             } else if (responseError == Errors.NOT_COORDINATOR || responseError == Errors.COORDINATOR_NOT_AVAILABLE) {
                 // Re-discover the coordinator and retry
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
+                future.completeExceptionally(exception);
+            } else if (responseError == Errors.UNKNOWN_TOPIC_ID) {
+                log.error("OffsetFetch failed with {} because the topic ids are unknown.", responseError);
                 future.completeExceptionally(exception);
             } else if (exception instanceof RetriableException) {
                 future.completeExceptionally(exception);
