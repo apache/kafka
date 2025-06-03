@@ -206,7 +206,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
                  use_transactions_v2=False,
-                 use_share_groups=None
+                 use_share_groups=None,
+                 use_streams_groups=False
                  ):
         """
         :param context: test context
@@ -271,6 +272,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
         :param use_share_groups: When true, enables the use of share groups introduced in KIP-932
+        :param use_streams_groups: When true, enables the use of streams groups introduced in KIP-1071
         """
 
         self.zk = zk
@@ -296,6 +298,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # Assign the determined value.
         self.use_transactions_v2 = use_transactions_v2
         self.use_share_groups = use_share_groups
+        self.use_streams_groups = use_streams_groups
 
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
@@ -354,7 +357,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     listener_security_config=listener_security_config,
                     extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
                     isolated_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
-                    server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum
+                    server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum,
+                    use_streams_groups=self.use_streams_groups
                 )
                 self.controller_quorum = self.isolated_controller_quorum
 
@@ -778,8 +782,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         if self.use_share_groups is not None and self.use_share_groups is True:
             override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
-            override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(self.use_share_groups)
-            override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer,share'
+
+        if self.use_streams_groups is True:
+            override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
+            override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)
 
         #update template configs with test override configs
         configs.update(override_configs)
@@ -1722,6 +1728,29 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
+    def set_share_group_offset_reset_strategy(self, group, strategy=None, node=None, command_config=None):
+        """ Set the offset reset strategy config for the given group.
+        """
+        if strategy is None:
+            return
+        if node is None:
+            node = self.nodes[0]
+        config_script = self.path.script("kafka-configs.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"share.auto.offset.reset=%s\" %s" % \
+               (config_script,
+                self.bootstrap_servers(self.security_protocol),
+                group,
+                strategy,
+                command_config)
+        return "Completed" in self.run_cli_tool(node, cmd)
+
     def list_consumer_groups(self, node=None, command_config=None, state=None, type=None):
         """ Get list of consumer groups.
         """
@@ -1745,6 +1774,27 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             cmd += " --type %s" % type
         return self.run_cli_tool(node, cmd)
 
+    def list_share_groups(self, node=None, command_config=None, state=None):
+        """ Get list of share groups.
+        """
+        if node is None:
+            node = self.nodes[0]
+        share_group_script = self.path.script("kafka-share-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --list" % \
+               (share_group_script,
+                self.bootstrap_servers(self.security_protocol),
+                command_config)
+        if state is not None:
+            cmd += " --state %s" % state
+        return self.run_cli_tool(node, cmd)
+
     def describe_consumer_group(self, group, node=None, command_config=None):
         """ Describe a consumer group.
         """
@@ -1766,10 +1816,64 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
-            if not (line.startswith("SLF4J") or line.startswith("TOPIC") or line.startswith("Could not fetch offset")):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
                 output += line
         self.logger.debug(output)
         return output
+    
+    def describe_share_group(self, group, node=None, command_config=None):
+        """ Describe a share group.
+        """
+        if node is None:
+            node = self.nodes[0]
+        share_group_script = self.path.script("kafka-share-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --group %s --describe" % \
+              (share_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config, group)
+
+        output = ""
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
+                output += line
+        self.logger.debug(output)
+        return output
+    
+    def describe_share_group_members(self, group, node=None, command_config=None):
+        """ Describe members of a share group.
+        """
+        if node is None:
+            node = self.nodes[0]
+        share_group_script = self.path.script("kafka-share-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --group %s --describe" % \
+              (share_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config, group)
+        
+        cmd += " --members"
+
+        output_lines = []
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.strip() == ""):
+                output_lines.append(line.strip())
+        self.logger.debug(output_lines)
+        return output_lines
 
     def describe_quorum(self, node=None):
         """Run the describe quorum command.

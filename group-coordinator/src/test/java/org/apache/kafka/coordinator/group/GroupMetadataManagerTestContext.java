@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -84,6 +85,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
@@ -94,8 +97,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -115,6 +116,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -457,7 +459,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public static class Builder {
-        private final MockTime time = new MockTime(0, 0, 0);
+        private MockTime time = new MockTime(0, 0, 0);
         private final MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
         private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
         private final LogContext logContext = new LogContext();
@@ -470,7 +472,7 @@ public class GroupMetadataManagerTestContext {
         private ShareGroupPartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
         private final List<ShareGroupBuilder> shareGroupBuilders = new ArrayList<>();
         private final Map<String, Object> config = new HashMap<>();
-        private Optional<Authorizer> authorizer = Optional.empty();
+        private Optional<Plugin<Authorizer>> authorizerPlugin = Optional.empty();
         private List<TaskAssignor> streamsGroupAssignors = Collections.singletonList(new MockTaskAssignor("mock"));
 
         public Builder withConfig(String key, Object value) {
@@ -503,13 +505,18 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withAuthorizer(Authorizer authorizer) {
-            this.authorizer = Optional.of(authorizer);
+        public Builder withAuthorizerPlugin(Plugin<Authorizer> authorizerPlugin) {
+            this.authorizerPlugin = Optional.of(authorizerPlugin);
             return this;
         }
         
         public Builder withStreamsGroupTaskAssignors(List<TaskAssignor> assignors) {
             this.streamsGroupAssignors = assignors;
+            return this;
+        }
+
+        public Builder withTime(MockTime time) {
+            this.time = time;
             return this;
         }
 
@@ -542,15 +549,26 @@ public class GroupMetadataManagerTestContext {
                     .withGroupCoordinatorMetricsShard(metrics)
                     .withShareGroupAssignor(shareGroupAssignor)
                     .withGroupConfigManager(groupConfigManager)
-                    .withAuthorizer(authorizer)
+                    .withAuthorizerPlugin(authorizerPlugin)
                     .withStreamsGroupAssignors(streamsGroupAssignors)
                     .build(),
                 groupConfigManager
             );
 
-            consumerGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
+            consumerGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
             shareGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
-            streamsGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
+            streamsGroupBuilders.forEach(builder -> {
+                builder.build().forEach(context::replay);
+                StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(builder.groupId());
+                if (group.topology().isPresent()) {
+                    group.setConfiguredTopology(InternalTopicManager.configureTopics(
+                        new LogContext(),
+                        0,
+                        group.topology().get(),
+                        metadataImage.topics())
+                    );
+                }
+            });
 
             context.commit();
 
@@ -1450,7 +1468,7 @@ public class GroupMetadataManagerTestContext {
                 fail("Unexpected exception: " + e.getMessage());
             }
             return null;
-        }).collect(Collectors.toList());
+        }).toList();
 
         // Second join requests
         List<CompletableFuture<JoinGroupResponseData>> secondJoinFutures = IntStream.range(0, numMembers).mapToObj(i -> {
@@ -1460,7 +1478,7 @@ public class GroupMetadataManagerTestContext {
             assertFalse(joinResult.joinFuture.isDone());
 
             return joinResult.joinFuture;
-        }).collect(Collectors.toList());
+        }).toList();
 
         // Advance clock by initial rebalance delay.
         assertNoOrEmptyResult(sleep(classicGroupInitialRebalanceDelayMs));
@@ -1701,6 +1719,13 @@ public class GroupMetadataManagerTestContext {
                 );
                 break;
 
+            case SHARE_GROUP_STATE_PARTITION_METADATA:
+                groupMetadataManager.replay(
+                    (ShareGroupStatePartitionMetadataKey) key,
+                    (ShareGroupStatePartitionMetadataValue) messageOrNull(value)
+                );
+                break;
+
             case CONSUMER_GROUP_REGULAR_EXPRESSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupRegularExpressionKey) key,
@@ -1726,13 +1751,6 @@ public class GroupMetadataManagerTestContext {
                 groupMetadataManager.replay(
                     (StreamsGroupMetadataKey) key,
                     (StreamsGroupMetadataValue) messageOrNull(value)
-                );
-                break;
-
-            case STREAMS_GROUP_PARTITION_METADATA:
-                groupMetadataManager.replay(
-                    (StreamsGroupPartitionMetadataKey) key,
-                    (StreamsGroupPartitionMetadataValue) messageOrNull(value)
                 );
                 break;
 
@@ -1788,8 +1806,6 @@ public class GroupMetadataManagerTestContext {
             .setRackId(null)
             .setInstanceId(null)
             .setRebalanceTimeoutMs(1500)
-            .setAssignedTasks(TasksTuple.EMPTY)
-            .setTasksPendingRevocation(TasksTuple.EMPTY)
             .setTopologyEpoch(0)
             .setClientTags(Map.of())
             .setProcessId(DEFAULT_PROCESS_ID)

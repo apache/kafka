@@ -24,7 +24,6 @@ import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 import java.util.{Map => JMap}
 import java.util.{Collection => JCollection}
-import kafka.log.LogManager
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.Logging
@@ -45,11 +44,10 @@ import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateSt
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
-import org.apache.kafka.storage.internals.log.UnifiedLog
+import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
@@ -63,7 +61,7 @@ object KafkaRaftManager {
   }
 
   private def lockDataDir(dataDir: File): FileLock = {
-    val lock = new FileLock(new File(dataDir, LogManager.LockFileName))
+    val lock = new FileLock(new File(dataDir, LogManager.LOCK_FILE_NAME))
 
     if (!lock.tryLock()) {
       throw new KafkaException(
@@ -81,6 +79,7 @@ object KafkaRaftManager {
   private def hasDifferentLogDir(config: KafkaConfig): Boolean = {
     !config
       .logDirs
+      .asScala
       .map(Paths.get(_).toAbsolutePath)
       .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
   }
@@ -231,15 +230,8 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      config = new MetadataLogConfig(config.metadataLogSegmentBytes,
-        config.metadataLogSegmentMinBytes,
-        config.metadataLogSegmentMillis,
-        config.metadataRetentionBytes,
-        config.metadataRetentionMillis,
-        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-        config.metadataNodeIDConfig)
+      config = new MetadataLogConfig(config),
+      config.nodeId
     )
   }
 

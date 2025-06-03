@@ -17,8 +17,7 @@
 
 package kafka.log
 
-import kafka.log.remote.RemoteLogManager
-import kafka.server.{DelayedRemoteListOffsets, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -34,16 +33,15 @@ import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.purgatory.DelayedOperationPurgatory
+import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, DelayedRemoteListOffsets}
 import org.apache.kafka.server.storage.log.{FetchIsolation, UnexpectedAppendOffsetException}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, Cleaner, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
 import org.junit.jupiter.api.Assertions._
@@ -58,6 +56,7 @@ import org.mockito.Mockito.{doAnswer, doThrow, spy}
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
+import org.apache.kafka.server.config.KRaftConfigs
 
 import java.io._
 import java.nio.ByteBuffer
@@ -1076,14 +1075,14 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig)
     val pid1 = 1L
     val epoch = 0.toShort
-    val cleaner = new Cleaner(id = 0,
-      offsetMap = new FakeOffsetMap(Int.MaxValue),
-      ioBufferSize = 64 * 1024,
-      maxIoBufferSize = 64 * 1024,
-      dupBufferLoadFactor = 0.75,
-      throttler = new Throttler(Double.MaxValue, Long.MaxValue, "throttler", "entries", mockTime),
-      time = mockTime,
-      checkDone = _ => {})
+    val cleaner = new Cleaner(0,
+      new FakeOffsetMap(Int.MaxValue),
+      64 * 1024,
+      64 * 1024,
+      0.75,
+      new Throttler(Double.MaxValue, Long.MaxValue, "throttler", "entries", mockTime),
+      mockTime,
+      tp => {})
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes, "a".getBytes())), producerId = pid1,
       producerEpoch = epoch, sequence = 0), 0)
@@ -2237,7 +2236,8 @@ class UnifiedLogTest {
       _ => Optional.empty[UnifiedLog](),
       (_, _) => {},
       brokerTopicStats,
-      new Metrics()))
+      new Metrics(),
+      Optional.empty))
     remoteLogManager.setDelayedOperationPurgatory(purgatory)
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,
@@ -2334,7 +2334,8 @@ class UnifiedLogTest {
       _ => Optional.empty[UnifiedLog](),
       (_, _) => {},
       brokerTopicStats,
-      new Metrics()))
+      new Metrics(),
+      Optional.empty))
     remoteLogManager.setDelayedOperationPurgatory(purgatory)
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,
@@ -2733,7 +2734,7 @@ class UnifiedLogTest {
   @Test
   def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1000")
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
     val logConfig = new LogConfig(logProps)

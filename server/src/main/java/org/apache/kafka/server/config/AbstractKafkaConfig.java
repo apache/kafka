@@ -27,14 +27,17 @@ import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.MetricConfigs;
+import org.apache.kafka.server.util.Csv;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * During moving {@link kafka.server.KafkaConfig} out of core AbstractKafkaConfig will be the future KafkaConfig
@@ -47,6 +50,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         RemoteLogManagerConfig.configDef(),
         ServerConfigs.CONFIG_DEF,
         KRaftConfigs.CONFIG_DEF,
+        MetadataLogConfig.CONFIG_DEF,
         SocketServerConfigs.CONFIG_DEF,
         ReplicationConfigs.CONFIG_DEF,
         GroupCoordinatorConfig.CONFIG_DEF,
@@ -68,6 +72,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         super(definition, originals, configProviderProps, doLog);
     }
 
+    public List<String> logDirs() {
+        return Csv.parseCsvList(Optional.ofNullable(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getString(ServerLogConfigs.LOG_DIR_CONFIG)));
+    }
+
     public int numIoThreads() {
         return getInt(ServerConfigs.NUM_IO_THREADS_CONFIG);
     }
@@ -83,6 +91,4 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     public int backgroundThreads() {
         return getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG);
     }
-
-    public abstract TransactionLogConfig transactionLogConfig();
 }

@@ -24,16 +24,14 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCol
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.CreateTopicsRequest
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testValidCreateTopicsRequests(quorum: String): Unit = {
+  @Test
+  def testValidCreateTopicsRequests(): Unit = {
     // Generated assignments
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1"))))
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic2", replicationFactor = 3))))
@@ -61,9 +59,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       topicReq("topic14", replicationFactor = -1, numPartitions = 2))))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testErrorCreateTopicsRequests(quorum: String): Unit = {
+  @Test
+  def testErrorCreateTopicsRequests(): Unit = {
     val existingTopic = "existing-topic"
     createTopic(existingTopic)
     // Basic
@@ -77,9 +74,6 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-config",
       config=Map("not.a.property" -> "error")))),
       Map("error-config" -> error(Errors.INVALID_CONFIG)), checkErrorMessage = false)
-    validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-config-value",
-      config=Map("message.format.version" -> "invalid-value")))),
-      Map("error-config-value" -> error(Errors.INVALID_CONFIG)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-assignment",
       assignment=Map(0 -> List(0, 1), 1 -> List(0))))),
       Map("error-assignment" -> error(Errors.INVALID_REPLICA_ASSIGNMENT)), checkErrorMessage = false)
@@ -102,9 +96,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     validateTopicExists("partial-none")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testInvalidCreateTopicsRequests(quorum: String): Unit = {
+  @Test
+  def testInvalidCreateTopicsRequests(): Unit = {
     // Partitions/ReplicationFactor and ReplicaAssignment
     validateErrorCreateTopicsRequests(topicsReq(Seq(
       topicReq("bad-args-topic", numPartitions = 10, replicationFactor = 3,
@@ -117,9 +110,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)), checkErrorMessage = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCreateTopicsRequestVersions(quorum: String): Unit = {
+  @Test
+  def testCreateTopicsRequestVersions(): Unit = {
     for (version <- ApiKeys.CREATE_TOPICS.oldestVersion to ApiKeys.CREATE_TOPICS.latestVersion) {
       val topic = s"topic_$version"
       val data = new CreateTopicsRequestData()
@@ -156,9 +148,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCreateClusterMetadataTopic(quorum: String): Unit = {
+  @Test
+  def testCreateClusterMetadataTopic(): Unit = {
     validateErrorCreateTopicsRequests(
       topicsReq(Seq(topicReq(Topic.CLUSTER_METADATA_TOPIC_NAME))),
       Map(Topic.CLUSTER_METADATA_TOPIC_NAME ->

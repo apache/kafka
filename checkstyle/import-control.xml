@@ -199,6 +199,8 @@
       <allow pkg="io.opentelemetry.proto"/>
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.telemetry" />
+      <!-- for IncrementalAlterConfigsRequest and AlterUserScramCredentialsRequest -->
+      <allow pkg="com.fasterxml.jackson.databind" />
     </subpackage>
 
     <subpackage name="serialization">
@@ -295,6 +297,7 @@
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metadata.properties" />
     <allow pkg="org.apache.kafka.network" />
+    <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="kafka.admin" />
     <allow pkg="kafka.server" />
@@ -427,6 +430,7 @@
     <subpackage name="integration">
       <allow pkg="org.apache.kafka.common.test"/>
       <allow pkg="org.apache.kafka.metadata"/>
+      <allow pkg="org.apache.kafka.storage"/>
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.api" />
       <allow pkg="kafka.cluster" />

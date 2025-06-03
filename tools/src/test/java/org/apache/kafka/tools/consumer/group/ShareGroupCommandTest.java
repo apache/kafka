@@ -19,6 +19,7 @@ package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
+import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteShareGroupsResult;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsResult;
@@ -31,6 +32,7 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
 import org.apache.kafka.clients.admin.ShareMemberAssignment;
 import org.apache.kafka.clients.admin.ShareMemberDescription;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
@@ -38,6 +40,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
@@ -77,6 +80,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -188,7 +192,7 @@ public class ShareGroupCommandTest {
             ListShareGroupOffsetsResult listShareGroupOffsetsResult = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
                     firstGroup,
-                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), 0L))
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), new OffsetAndMetadata(0L, Optional.of(1), "")))
                 )
             );
 
@@ -205,7 +209,7 @@ public class ShareGroupCommandTest {
 
                     List<String> expectedValues;
                     if (describeType.contains("--verbose")) {
-                        expectedValues = List.of(firstGroup, "topic1", "0", "-", "0");
+                        expectedValues = List.of(firstGroup, "topic1", "0", "1", "0");
                     } else {
                         expectedValues = List.of(firstGroup, "topic1", "0", "0");
                     }
@@ -296,13 +300,13 @@ public class ShareGroupCommandTest {
             ListShareGroupOffsetsResult listShareGroupOffsetsResult1 = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
                     firstGroup,
-                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), 0L))
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), new OffsetAndMetadata(0, Optional.of(1), "")))
                 )
             );
             ListShareGroupOffsetsResult listShareGroupOffsetsResult2 = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
                     secondGroup,
-                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), 0L))
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), new OffsetAndMetadata(0, Optional.of(1), "")))
                 )
             );
 
@@ -330,8 +334,8 @@ public class ShareGroupCommandTest {
 
                     List<String> expectedValues1, expectedValues2;
                     if (describeType.contains("--verbose")) {
-                        expectedValues1 = List.of(firstGroup, "topic1", "0", "-", "0");
-                        expectedValues2 = List.of(secondGroup, "topic1", "0", "-", "0");
+                        expectedValues1 = List.of(firstGroup, "topic1", "0", "1", "0");
+                        expectedValues2 = List.of(secondGroup, "topic1", "0", "1", "0");
                     } else {
                         expectedValues1 = List.of(firstGroup, "topic1", "0", "0");
                         expectedValues2 = List.of(secondGroup, "topic1", "0", "0");
@@ -613,6 +617,204 @@ public class ShareGroupCommandTest {
     }
 
     @Test
+    public void testDeleteShareGroupOffsetsArgsWithoutTopic() {
+        String bootstrapServer = "localhost:9092";
+        Admin adminClient = mock(KafkaAdminClient.class);
+
+        // no group spec args
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", "groupId"};
+        AtomicBoolean exited = new AtomicBoolean(false);
+        Exit.setExitProcedure(((statusCode, message) -> {
+            assertNotEquals(0, statusCode);
+            assertTrue(message.contains("Option [delete-offsets] takes the following options: [topic], [group]"));
+            exited.set(true);
+        }));
+        try {
+            getShareGroupService(cgcArgs, adminClient);
+        } finally {
+            assertTrue(exited.get());
+        }
+    }
+
+    @Test
+    public void testDeleteShareGroupOffsetsArgsWithoutGroup() {
+        String bootstrapServer = "localhost:9092";
+        Admin adminClient = mock(KafkaAdminClient.class);
+
+        // no group spec args
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete-offsets", "--topic", "t1"};
+        AtomicBoolean exited = new AtomicBoolean(false);
+        Exit.setExitProcedure(((statusCode, message) -> {
+            assertNotEquals(0, statusCode);
+            assertTrue(message.contains("Option [delete-offsets] takes the following options: [topic], [group]"));
+            exited.set(true);
+        }));
+        try {
+            getShareGroupService(cgcArgs, adminClient);
+        } finally {
+            assertTrue(exited.get());
+        }
+    }
+
+    @Test
+    public void testDeleteShareGroupOffsets() throws Exception {
+        String firstGroup = "first-group";
+        String firstTopic = "t1";
+        String secondTopic = "t2";
+        String bootstrapServer = "localhost:9092";
+
+        List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--topic", firstTopic, "--topic", secondTopic));
+        Admin adminClient = mock(KafkaAdminClient.class);
+        DeleteShareGroupOffsetsResult result = mock(DeleteShareGroupOffsetsResult.class);
+
+        when(result.all()).thenReturn(KafkaFuture.completedFuture(null));
+
+        when(result.topicResult(eq(firstTopic))).thenReturn(KafkaFuture.completedFuture(null));
+        when(result.topicResult(eq(secondTopic))).thenReturn(KafkaFuture.completedFuture(null));
+
+        when(adminClient.deleteShareGroupOffsets(any(), any(), any())).thenReturn(result);
+
+        try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
+            TestUtils.waitForCondition(() -> {
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(deleteOffsets(service));
+                String[] lines = res.getKey().trim().split("\n");
+                if (lines.length != 3 && !res.getValue().isEmpty()) {
+                    return false;
+                }
+
+                List<String> expectedResultHeader = List.of("TOPIC", "STATUS");
+                List<String> expectedResultValues1 = List.of(firstTopic, "Successful");
+                List<String> expectedResultValues2 = List.of(secondTopic, "Successful");
+
+                return Arrays.stream(lines[0].trim().split("\\s+")).toList().equals(expectedResultHeader) &&
+                    Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedResultValues1) &&
+                    Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(expectedResultValues2);
+            }, "Expected a data row and no error in delete offsets result with group: " + firstGroup + " and topic: " + firstTopic);
+        }
+    }
+
+    @Test
+    public void testDeleteShareGroupOffsetsMultipleGroups() {
+        String firstGroup = "first-group";
+        String secondGroup = "second-group";
+        String firstTopic = "t1";
+        String secondTopic = "t2";
+        String bootstrapServer = "localhost:9092";
+
+        List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--group", secondGroup, "--topic", firstTopic, "--topic", secondTopic));
+        Admin adminClient = mock(KafkaAdminClient.class);
+
+        try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
+            service.deleteOffsets();
+            fail("Expected error was not detected while trying delete offsets multiple groups");
+        } catch (Exception e) {
+            String expectedErrorMessage = "Found multiple arguments for option group, but you asked for only one";
+            assertEquals(expectedErrorMessage, e.getMessage());
+        }
+    }
+
+    @Test
+    public void testDeleteShareGroupOffsetsTopLevelError() throws Exception {
+        String firstGroup = "first-group";
+        String firstTopic = "t1";
+        String secondTopic = "t2";
+        String bootstrapServer = "localhost:9092";
+
+        List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--topic", firstTopic, "--topic", secondTopic));
+        Admin adminClient = mock(KafkaAdminClient.class);
+        DeleteShareGroupOffsetsResult result = mock(DeleteShareGroupOffsetsResult.class);
+
+        KafkaFutureImpl<Void> resultFuture = new KafkaFutureImpl<>();
+        String errorMessage = "Group g3 not found.";
+        GroupIdNotFoundException exception = new GroupIdNotFoundException(errorMessage);
+
+        resultFuture.completeExceptionally(exception);
+        when(result.all()).thenReturn(resultFuture);
+
+        when(result.topicResult(eq(firstTopic))).thenReturn(resultFuture);
+        when(result.topicResult(eq(secondTopic))).thenReturn(resultFuture);
+
+        when(adminClient.deleteShareGroupOffsets(any(), any(), any())).thenReturn(result);
+
+        try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
+            TestUtils.waitForCondition(() -> {
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(deleteOffsets(service));
+                String[] lines = res.getKey().trim().split("\n");
+                if (lines.length != 5 && !res.getValue().isEmpty()) {
+                    return false;
+                }
+
+                List<String> error = Stream.concat(
+                    Stream.of("Error:"),
+                    Arrays.stream(errorMessage.trim().split("\\s+"))
+                    ).toList();
+
+                List<String> errorLine = new ArrayList<>(error);
+                List<String> expectedResultHeader = List.of("TOPIC", "STATUS");
+                List<String> expectedResultValue1 =  new ArrayList<>();
+                expectedResultValue1.add(firstTopic);
+                expectedResultValue1.addAll(error);
+                List<String> expectedResultValue2 =  new ArrayList<>();
+                expectedResultValue2.add(secondTopic);
+                expectedResultValue2.addAll(error);
+
+                return Arrays.stream(lines[0].trim().split("\\s+")).toList().equals(errorLine) &&
+                    Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(expectedResultHeader) &&
+                    Arrays.stream(lines[3].trim().split("\\s+")).toList().equals(expectedResultValue1) &&
+                    Arrays.stream(lines[4].trim().split("\\s+")).toList().equals(expectedResultValue2);
+            }, "Expected a data row and no error in delete offsets result with group: " + firstGroup + " and topic: " + firstTopic);
+        }
+    }
+
+    @Test
+    public void testDeleteShareGroupOffsetsTopicLevelError() throws Exception {
+        String firstGroup = "first-group";
+        String firstTopic = "t1";
+        String secondTopic = "t2";
+        String bootstrapServer = "localhost:9092";
+
+        List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--topic", firstTopic, "--topic", secondTopic));
+        Admin adminClient = mock(KafkaAdminClient.class);
+        DeleteShareGroupOffsetsResult result = mock(DeleteShareGroupOffsetsResult.class);
+
+        KafkaFutureImpl<Void> resultFuture = new KafkaFutureImpl<>();
+        String errorMessage = Errors.UNKNOWN_TOPIC_OR_PARTITION.message();
+
+        resultFuture.completeExceptionally(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception());
+        when(result.all()).thenReturn(resultFuture);
+
+        when(result.topicResult(eq(firstTopic))).thenReturn(KafkaFuture.completedFuture(null));
+        when(result.topicResult(eq(secondTopic))).thenReturn(resultFuture);
+
+        when(adminClient.deleteShareGroupOffsets(any(), any(), any())).thenReturn(result);
+
+        try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
+            TestUtils.waitForCondition(() -> {
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(deleteOffsets(service));
+                String[] lines = res.getKey().trim().split("\n");
+                if (lines.length != 5 && !res.getValue().isEmpty()) {
+                    return false;
+                }
+
+                List<String> error = Stream.concat(
+                    Stream.of("Error:"),
+                    Arrays.stream(errorMessage.trim().split("\\s+"))
+                ).toList();
+
+                List<String> expectedResultHeader = List.of("TOPIC", "STATUS");
+                List<String> expectedResultValue1 =  List.of(firstTopic, "Successful");
+                List<String> expectedResultValue2 =  new ArrayList<>();
+                expectedResultValue2.add(secondTopic);
+                expectedResultValue2.addAll(error);
+
+                return Arrays.stream(lines[0].trim().split("\\s+")).toList().equals(expectedResultHeader) &&
+                    Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedResultValue1) &&
+                    Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(expectedResultValue2);
+            }, "Expected a data row and no error in delete offsets result with group: " + firstGroup + " and topic: " + firstTopic);
+        }
+    }
+
+    @Test
     public void testDeleteShareGroupsArgs() {
         String bootstrapServer = "localhost:9092";
         Admin adminClient = mock(KafkaAdminClient.class);
@@ -871,6 +1073,10 @@ public class ShareGroupCommandTest {
 
     private Runnable describeGroups(ShareGroupCommand.ShareGroupService service) {
         return () -> Assertions.assertDoesNotThrow(service::describeGroups);
+    }
+
+    private Runnable deleteOffsets(ShareGroupCommand.ShareGroupService service) {
+        return () -> Assertions.assertDoesNotThrow(service::deleteOffsets);
     }
 
     private boolean checkArgsHeaderOutput(List<String> args, String output) {

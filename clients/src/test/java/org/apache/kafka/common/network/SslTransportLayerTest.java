@@ -1096,14 +1096,14 @@ public class SslTransportLayerTest {
 
         CertStores invalidCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("127.0.0.1").build();
         Map<String, Object>  invalidConfigs = args.getTrustingConfig(invalidCertStores, args.clientCertStores);
-        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "keystore with different SubjectAltName");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs);
 
         Map<String, Object>  missingStoreConfigs = new HashMap<>();
         missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "PKCS12");
         missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "some.keystore.path");
         missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, new Password("some.keystore.password"));
         missingStoreConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, new Password("some.key.password"));
-        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs, "keystore not found");
+        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs);
 
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -1167,7 +1167,7 @@ public class SslTransportLayerTest {
         for (String propName : CertStores.KEYSTORE_PROPS) {
             invalidKeystoreConfigs.put(propName, invalidConfig.get(propName));
         }
-        verifyInvalidReconfigure(reconfigurableBuilder, invalidKeystoreConfigs, "keystore without existing SubjectAltName");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidKeystoreConfigs);
         String node3 = "3";
         selector.connect(node3, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
@@ -1223,13 +1223,13 @@ public class SslTransportLayerTest {
 
         Map<String, Object>  invalidConfigs = new HashMap<>(newTruststoreConfigs);
         invalidConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "INVALID_TYPE");
-        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "invalid truststore type");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs);
 
         Map<String, Object>  missingStoreConfigs = new HashMap<>();
         missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
         missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "some.truststore.path");
         missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, new Password("some.truststore.password"));
-        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs, "truststore not found");
+        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs);
 
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -1280,7 +1280,7 @@ public class SslTransportLayerTest {
     }
 
     private void verifyInvalidReconfigure(ListenerReconfigurable reconfigurable,
-                                          Map<String, Object>  invalidConfigs, String errorMessage) {
+                                          Map<String, Object>  invalidConfigs) {
         assertThrows(KafkaException.class, () -> reconfigurable.validateReconfiguration(invalidConfigs));
         assertThrows(KafkaException.class, () -> reconfigurable.reconfigure(invalidConfigs));
     }

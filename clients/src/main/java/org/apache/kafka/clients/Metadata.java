@@ -381,7 +381,7 @@ public class Metadata implements Closeable {
     public synchronized Set<TopicPartition> updatePartitionLeadership(Map<TopicPartition, LeaderIdAndEpoch> partitionLeaders, List<Node> leaderNodes) {
         Map<Integer, Node> newNodes = leaderNodes.stream().collect(Collectors.toMap(Node::id, node -> node));
         // Insert non-overlapping nodes from existing-nodes into new-nodes.
-        this.metadataSnapshot.cluster().nodes().stream().forEach(node -> newNodes.putIfAbsent(node.id(), node));
+        this.metadataSnapshot.cluster().nodes().forEach(node -> newNodes.putIfAbsent(node.id(), node));
 
         // Create partition-metadata for all updated partitions. Exclude updates for partitions -
         // 1. for which the corresponding partition has newer leader in existing metadata.

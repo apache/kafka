@@ -42,7 +42,6 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -194,14 +193,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         String baseDisplayName,
         ClusterConfig config
     ) {
-        switch (type) {
-            case KRAFT:
-                return new RaftClusterInvocationContext(baseDisplayName, config, false);
-            case CO_KRAFT:
-                return new RaftClusterInvocationContext(baseDisplayName, config, true);
-            default:
-                throw new IllegalArgumentException("Unsupported @Type value " + type);
-        }
+        return switch (type) {
+            case KRAFT -> new RaftClusterInvocationContext(baseDisplayName, config, false);
+            case CO_KRAFT -> new RaftClusterInvocationContext(baseDisplayName, config, true);
+        };
     }
 
     List<TestTemplateInvocationContext> processClusterTemplate(ExtensionContext context, ClusterTemplate annot) {
@@ -272,7 +267,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
 
         ClusterConfig config = ClusterConfig.builder()
-            .setTypes(new HashSet<>(Arrays.asList(types)))
+            .setTypes(Set.of(types))
             .setBrokers(clusterTest.brokers() == 0 ? defaults.brokers() : clusterTest.brokers())
             .setControllers(clusterTest.controllers() == 0 ? defaults.controllers() : clusterTest.controllers())
             .setDisksPerBroker(clusterTest.disksPerBroker() == 0 ? defaults.disksPerBroker() : clusterTest.disksPerBroker())
@@ -284,7 +279,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .setServerProperties(serverProperties)
             .setPerServerProperties(perServerProperties)
             .setMetadataVersion(clusterTest.metadataVersion())
-            .setTags(Arrays.asList(clusterTest.tags()))
+            .setTags(List.of(clusterTest.tags()))
             .setFeatures(features)
             .build();
 

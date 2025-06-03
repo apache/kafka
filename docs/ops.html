@@ -1794,7 +1794,7 @@ The following set of metrics are available for monitoring the group coordinator:
   <tbody>
     <tr>
       <td>The Partition Count, per State</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=partition-count,state={loading|active|failed}</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=num-partitions,state={loading|active|failed}</td>
       <td>The number of <code>__consumer_offsets</code> partitions hosted by the broker, broken down by state</td>
     </tr>
     <tr>
@@ -1819,22 +1819,22 @@ The following set of metrics are available for monitoring the group coordinator:
     </tr>
     <tr>
       <td>Event Queue Time (Ms)</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=event-queue-time-ms-[max|p50|p99|p999]</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-queue-time-ms-[max|p50|p95|p99|p999]</td>
       <td>The time that an event spent waiting in the queue to be processed</td>
     </tr>
     <tr>
       <td>Event Processing Time (Ms)</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=event-processing-time-ms-[max|p50|p99|p999]</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-processing-time-ms-[max|p50|p95|p99|p999]</td>
       <td>The time that an event took to be processed</td>
     </tr>
     <tr>
       <td>Event Purgatory Time (Ms)</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=event-purgatory-time-ms-[max|p50|p99|p999]</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-purgatory-time-ms-[max|p50|p95|p99|p999]</td>
       <td>The time that an event waited in the purgatory before being completed</td>
     </tr>
     <tr>
       <td>Batch Flush Time (Ms)</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-time-ms-[max|p50|p99|p999]</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-time-ms-[max|p50|p95|p99|p999]</td>
       <td>The time that a batch took to be flushed to the local partition</td>
     </tr>
     <tr>
@@ -3012,6 +3012,11 @@ All the following metrics have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>commit-ratio</td>
+        <td>The fraction of time the thread spent on committing all tasks</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>commit-rate</td>
         <td>The average number of commits per sec.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
@@ -3020,6 +3025,11 @@ All the following metrics have a recording level of <code>info</code>:
         <td>commit-total</td>
         <td>The total number of commit calls.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>poll-ratio</td>
+        <td>The fraction of time the thread spent on polling records from consumer</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>poll-rate</td>
@@ -3032,6 +3042,21 @@ All the following metrics have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>poll-records-avg</td>
+        <td>The average number of records polled from consumer within an iteration.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>poll-records-max</td>
+        <td>The maximum number of records polled from consumer within an iteration.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-ratio</td>
+        <td>The fraction of time the thread spent on processing active tasks</td>
+        <td>kafka.streams:type=type=stream-thread-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>process-rate</td>
         <td>The average number of processed records per sec.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
@@ -3039,6 +3064,21 @@ All the following metrics have a recording level of <code>info</code>:
       <tr>
         <td>process-total</td>
         <td>The total number of processed records.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-records-avg</td>
+        <td>The average number of records processed within an iteration (total count of processed records over total number of iterations).</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-records-max</td>
+        <td>The maximum number of records processed within an iteration.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-ratio</td>
+        <td>The fraction of time the thread spends performing punctuating actions on active tasks</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -3115,6 +3155,26 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>punctuate-latency-avg</td>
+        <td>The average amount of time taken to execute periodic tasks per call to punctuate</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-latency-max</td>
+        <td>The maximum amount of time taken for any single call to punctuate to complete.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-total</td>
+        <td>The total number of times the punctuate method was called to trigger periodic actions during task processing.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-rate</td>
+        <td>The average number of calls to punctuate per second.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>record-lateness-avg</td>
         <td>The average observed lateness in ms of records (stream time - record timestamp).</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
@@ -3150,6 +3210,11 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>active-buffer-count</td>
+        <td>The count of buffered records that are polled from consumer and not yet processed for this active task.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>input-buffer-bytes-total</td>
         <td>The total number of bytes accumulated by this task,</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
@@ -3157,6 +3222,26 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>cache-size-bytes-total</td>
         <td>The cache size in bytes accumulated by this task.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-rate</td>
+        <td>The average number of records restored per second.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-total</td>
+        <td>The total number of records restored</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>update-rate</td>
+        <td>The average number of records updated per second.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>update-total</td>
+        <td>The total number of records updated</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
  </tbody>
@@ -3250,6 +3335,16 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>records-produced-total</td>
         <td>The total number of records produced by a sink processor node.</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Idempotent-update-skip-rate</td>
+        <td>The average number of skipped idempotent updates per second.</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Idempotent-update-skip-total</td>
+        <td>The total number of skipped updates.</td>
         <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
       </tr>
       </tbody>
@@ -4009,7 +4104,7 @@ foo
   <p>In order to migrate from ZooKeeper to KRaft you need to use a bridge release. The last bridge release is Kafka 3.9.
     See the <a href="/39/documentation/#kraft_zk_migration">ZooKeeper to KRaft Migration steps</a> in the 3.9 documentation.</p>
 
-<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.9 Tiered Storage</a></h3>
+<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#tiered_storage">6.9 Tiered Storage</a></h3>
 
 <h4 class="anchor-heading"><a id="tiered_storage_overview" class="anchor-link"></a><a href="#tiered_storage_overview">Tiered Storage Overview</a></h4>
 
@@ -4026,12 +4121,12 @@ foo
 
 <h5 class="anchor-heading"><a id="tiered_storage_config_broker" class="anchor-link"></a><a href="#tiered_storage_config_broker">Broker Configurations</a></h5>
 
-<p>By default, Kafka server will not enable tiered storage feature. <code>remote.log.storage.system.enable</code>
+<p>By default, the Kafka server will not enable the tiered storage feature. <code>remote.log.storage.system.enable</code>
   is the property to control whether to enable tiered storage functionality in a broker or not. Setting it to "true" enables this feature.
 </p>
 
 <p><code>RemoteStorageManager</code> is an interface to provide the lifecycle of remote log segments and indexes. Kafka server
-  doesn't provide out-of-the-box implementation of RemoteStorageManager. Configuring <code>remote.log.storage.manager.class.name</code>
+  doesn't provide out-of-the-box implementation of RemoteStorageManager. Users must configure <code>remote.log.storage.manager.class.name</code>
   and <code>remote.log.storage.manager.class.path</code> to specify the implementation of RemoteStorageManager.
 </p>
 
@@ -4166,9 +4261,10 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 <p>While the Tiered Storage works for most use cases, it is still important to be aware of the following limitations:
 <ul>
   <li>No support for compacted topics</li>
-  <li>Deleting tiered storage enabled topics is required before disabling tiered storage at the broker level</li>
+  <li>Disabling tiered storage on all topics where it is enabled is required before disabling tiered storage at the broker level</li>
   <li>Admin actions related to tiered storage feature are only supported on clients from version 3.0 onwards</li>
   <li>No support for log segments missing producer snapshot file. It can happen when topic is created before v2.8.0.</li>
+  <li>Only one partition per fetch request is served from the remote store. This limitation can become a bottleneck for consumer client throughput - consider configuring <code>max.partition.fetch.bytes</code> appropriately.</li>
 </ul>
 
 <p>For more information, please check <a href="https://cwiki.apache.org/confluence/x/9xDOEg">Kafka Tiered Storage GA Release Notes</a>.
