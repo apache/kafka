@@ -116,6 +116,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -556,7 +557,18 @@ public class GroupMetadataManagerTestContext {
 
             consumerGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
             shareGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
-            streamsGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
+            streamsGroupBuilders.forEach(builder -> {
+                builder.build().forEach(context::replay);
+                StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(builder.groupId());
+                if (group.topology().isPresent()) {
+                    group.setConfiguredTopology(InternalTopicManager.configureTopics(
+                        new LogContext(),
+                        0,
+                        group.topology().get(),
+                        metadataImage.topics())
+                    );
+                }
+            });
 
             context.commit();
 

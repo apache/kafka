@@ -109,4 +109,8 @@ public class StreamsGroupBuilder {
 
         return records;
     }
+
+    public String groupId() {
+        return groupId;
+    }
 }

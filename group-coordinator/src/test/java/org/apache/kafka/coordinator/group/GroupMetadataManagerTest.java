@@ -4435,15 +4435,6 @@ public class GroupMetadataManagerTest {
                     .build()))
             .build();
 
-        for (int i = 1; i < 4; i++) {
-            StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(groupIds.get(i));
-            group.setConfiguredTopology(InternalTopicManager.configureTopics(
-                new LogContext(),
-                0,
-                group.topology().get(),
-                MetadataImage.EMPTY.topics()));
-        }
-
         context.groupMetadataManager.updateGroupSizeCounter();
         verify(context.metrics, times(1)).setStreamsGroupGauges(eq(Utils.mkMap(
             Utils.mkEntry(StreamsGroup.StreamsGroupState.EMPTY, 1L),
@@ -16543,14 +16534,6 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        context.groupMetadataManager.getStreamsGroupOrThrow(groupId)
-            .setConfiguredTopology(InternalTopicManager.configureTopics(
-                new LogContext(),
-                groupMetadataHash,
-                StreamsTopology.fromRecord(StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology)),
-                metadataImage.topics()));
-        context.commit();
-
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result1 = context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -16736,14 +16719,6 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        context.groupMetadataManager.getStreamsGroupOrThrow(groupId)
-            .setConfiguredTopology(InternalTopicManager.configureTopics(
-                new LogContext(),
-                groupMetadataHash,
-                StreamsTopology.fromRecord(StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology)),
-                metadataImage.topics()));
-        context.commit();
-
         assignor.prepareGroupAssignment(
             Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5),
@@ -16851,14 +16826,6 @@ public class GroupMetadataManagerTest {
                 .withMetadataHash(oldGroupMetadataHash)
             )
             .build();
-
-        context.groupMetadataManager.getStreamsGroupOrThrow(groupId)
-            .setConfiguredTopology(InternalTopicManager.configureTopics(
-                new LogContext(),
-                oldGroupMetadataHash,
-                StreamsTopology.fromRecord(StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology)),
-                oldMetadataImage.topics()));
-        context.commit();
 
         assignor.prepareGroupAssignment(
             Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -17217,13 +17184,6 @@ public class GroupMetadataManagerTest {
                 .withMetadataHash(groupMetadataHash)
             )
             .build();
-
-        context.groupMetadataManager.getStreamsGroupOrThrow(groupId)
-            .setConfiguredTopology(InternalTopicManager.configureTopics(
-                new LogContext(),
-                groupMetadataHash,
-                StreamsTopology.fromRecord(StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology)),
-                metadataImage.topics()));
 
         // Prepare new assignment for the group.
         assignor.prepareGroupAssignment(Map.of(

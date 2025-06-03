@@ -42,7 +42,8 @@ public class ConfiguredTopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                0, null,
+                0,
+                null,
                 Map.of(),
                 Optional.empty()
             )
@@ -54,7 +55,8 @@ public class ConfiguredTopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                0, Optional.of(new TreeMap<>()),
+                0,
+                Optional.of(new TreeMap<>()),
                 null,
                 Optional.empty()
             )
@@ -66,7 +68,8 @@ public class ConfiguredTopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                0, Optional.empty(),
+                0,
+                Optional.empty(),
                 Map.of(),
                 null
             )
@@ -78,7 +81,8 @@ public class ConfiguredTopologyTest {
         assertThrows(IllegalArgumentException.class,
             () -> new ConfiguredTopology(
                 -1,
-                0, Optional.of(new TreeMap<>()),
+                0,
+                Optional.of(new TreeMap<>()),
                 Map.of(),
                 Optional.empty()
             )
@@ -90,7 +94,8 @@ public class ConfiguredTopologyTest {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> new ConfiguredTopology(
                 1,
-                0, Optional.empty(),
+                0,
+                Optional.empty(),
                 Map.of(),
                 Optional.empty()
             )
