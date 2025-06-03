@@ -423,10 +423,14 @@ public final class RemoteLogManagerConfig {
         return config.getInt(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP);
     }
 
+    // used by the RemoteStorageManager plugin
+    @SuppressWarnings("unused")
     public String remoteStorageManagerPrefix() {
         return config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP);
     }
 
+    // used by the RemoteLogMetadataManager plugin
+    @SuppressWarnings("unused")
     public String remoteLogMetadataManagerPrefix() {
         return config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP);
     }
