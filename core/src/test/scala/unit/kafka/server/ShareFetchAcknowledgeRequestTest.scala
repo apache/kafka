@@ -131,7 +131,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val socket: Socket = connect(nonReplicaId)
 
-    cluster.waitForReadyBrokers()
     createOffsetsTopic()
     shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 1))
 
@@ -361,7 +360,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val socket2: Socket = connect(leader2)
     val socket3: Socket = connect(leader3)
 
-    cluster.waitForReadyBrokers()
     createOffsetsTopic()
     shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
