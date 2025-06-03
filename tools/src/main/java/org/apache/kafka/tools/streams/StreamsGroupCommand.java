@@ -19,7 +19,6 @@ package org.apache.kafka.tools.streams;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
@@ -48,7 +47,6 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,7 +56,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
@@ -353,8 +350,18 @@ public class StreamsGroupCommand {
             }
         }
 
-        GroupState collectGroupsState(String groupId) throws Exception {
-            return getDescribeGroup (groupId).groupState();
+        GroupState collectGroupState(String groupId) throws Exception {
+            return getDescribeGroup(groupId).groupState();
+        }
+
+        Collection<StreamsGroupMemberDescription> collectGroupMembers(String groupId) throws Exception {
+            return getDescribeGroup(groupId).members();
+        }
+
+        boolean isGroupSubscribedToTopic(String groupId, String topic) throws Exception {
+            return getDescribeGroup(groupId).subtopologies().stream()
+                .flatMap(subtopology -> subtopology.sourceTopics().stream())
+                .anyMatch(sourceTopic -> sourceTopic.equals(topic));
         }
 
         private String prepareTaskType(List<StreamsGroupMemberAssignment.TaskIds> tasks, String taskType) {
