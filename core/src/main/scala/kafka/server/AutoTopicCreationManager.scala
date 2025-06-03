@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{CreateTopicsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import scala.collection.{Map, Seq, Set, mutable}
@@ -58,7 +59,7 @@ class DefaultAutoTopicCreationManager(
   channelManager: NodeToControllerChannelManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
-  shareCoordinator: Option[ShareCoordinator]
+  shareCoordinator: ShareCoordinator
 ) extends AutoTopicCreationManager with Logging {
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
@@ -189,22 +190,19 @@ class DefaultAutoTopicCreationManager(
           .setReplicationFactor(config.groupCoordinatorConfig.offsetsTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(groupCoordinator.groupMetadataTopicConfigs))
       case TRANSACTION_STATE_TOPIC_NAME =>
+        val transactionLogConfig = new TransactionLogConfig(config)
         new CreatableTopic()
           .setName(topic)
-          .setNumPartitions(config.transactionLogConfig.transactionTopicPartitions)
-          .setReplicationFactor(config.transactionLogConfig.transactionTopicReplicationFactor)
+          .setNumPartitions(transactionLogConfig.transactionTopicPartitions)
+          .setReplicationFactor(transactionLogConfig.transactionTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(
             txnCoordinator.transactionTopicConfigs))
       case SHARE_GROUP_STATE_TOPIC_NAME =>
-        val props = shareCoordinator match {
-          case Some(coordinator) => coordinator.shareGroupStateTopicConfigs()
-          case None => new Properties()
-        }
         new CreatableTopic()
           .setName(topic)
           .setNumPartitions(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())
           .setReplicationFactor(config.shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
-          .setConfigs(convertToTopicConfigCollections(props))
+          .setConfigs(convertToTopicConfigCollections(shareCoordinator.shareGroupStateTopicConfigs()))
       case topicName =>
         new CreatableTopic()
           .setName(topicName)

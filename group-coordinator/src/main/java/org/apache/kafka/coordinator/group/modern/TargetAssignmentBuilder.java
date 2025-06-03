@@ -27,7 +27,7 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.MetadataImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -251,11 +251,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     private Map<String, T> members = Map.of();
 
     /**
-     * The subscription metadata.
-     */
-    private Map<String, TopicMetadata> subscriptionMetadata = Map.of();
-
-    /**
      * The subscription type of the consumer group.
      */
     private SubscriptionType subscriptionType;
@@ -272,9 +267,9 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Map.of();
 
     /**
-     * The topics image.
+     * The metadata image.
      */
-    private TopicsImage topicsImage = TopicsImage.EMPTY;
+    private MetadataImage metadataImage = MetadataImage.EMPTY;
 
     /**
      * The members which have been updated or deleted. Deleted members
@@ -286,6 +281,11 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
      * The static members in the group.
      */
     private Map<String, String> staticMembers = new HashMap<>();
+
+    /**
+     * Topic partition assignable map.
+     */
+    private Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = Optional.empty();
 
     /**
      * Constructs the object.
@@ -331,19 +331,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     }
 
     /**
-     * Adds the subscription metadata to use.
-     *
-     * @param subscriptionMetadata  The subscription metadata.
-     * @return This object.
-     */
-    public U withSubscriptionMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        this.subscriptionMetadata = subscriptionMetadata;
-        return self();
-    }
-
-    /**
      * Adds the subscription type in use.
      *
      * @param subscriptionType  Subscription type of the group.
@@ -383,15 +370,22 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     }
 
     /**
-     * Adds the topics image.
+     * Adds the metadata image.
      *
-     * @param topicsImage    The topics image.
+     * @param metadataImage    The metadata image.
      * @return This object.
      */
-    public U withTopicsImage(
-        TopicsImage topicsImage
+    public U withMetadataImage(
+        MetadataImage metadataImage
     ) {
-        this.topicsImage = topicsImage;
+        this.metadataImage = metadataImage;
+        return self();
+    }
+
+    public U withTopicAssignablePartitionsMap(
+        Map<Uuid, Set<Integer>> topicAssignablePartitionsMap
+    ) {
+        this.topicAssignablePartitionsMap = Optional.of(topicAssignablePartitionsMap);
         return self();
     }
 
@@ -433,7 +427,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
-        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
+        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) ->
@@ -467,27 +461,18 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
             }
         });
 
-        // Prepare the topic metadata.
-        Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>();
-        subscriptionMetadata.forEach((topicName, topicMetadata) ->
-            topicMetadataMap.put(
-                topicMetadata.id(),
-                topicMetadata
-            )
-        );
-
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
             new GroupSpecImpl(
                 Collections.unmodifiableMap(memberSpecs),
                 subscriptionType,
-                invertedTargetAssignment
+                invertedTargetAssignment,
+                topicAssignablePartitionsMap
             ),
-            new SubscribedTopicDescriberImpl(topicMetadataMap)
+            new SubscribedTopicDescriberImpl(metadataImage)
         );
 
-        // Compute delta from previous to new target assignment and create the
-        // relevant records.
+        // Compute delta from previous to new target assignment and create the relevant records.
         List<CoordinatorRecord> records = new ArrayList<>();
 
         for (String memberId : memberSpecs.keySet()) {

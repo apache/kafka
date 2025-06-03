@@ -478,9 +478,12 @@ public class TimeWindowedKStreamIntegrationTest {
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
-        consumerProperties.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, windowSize);
-        if (keyDeserializer instanceof TimeWindowedDeserializer || keyDeserializer instanceof SessionWindowedDeserializer) {
-            consumerProperties.setProperty(StreamsConfig.WINDOWED_INNER_CLASS_SERDE,
+        consumerProperties.put(TimeWindowedDeserializer.WINDOW_SIZE_MS_CONFIG, windowSize);
+        if (keyDeserializer instanceof TimeWindowedDeserializer) {
+            consumerProperties.setProperty(TimeWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS,
+                Serdes.serdeFrom(innerClass).getClass().getName());
+        } else if (keyDeserializer instanceof SessionWindowedDeserializer) {
+            consumerProperties.setProperty(SessionWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS,
                 Serdes.serdeFrom(innerClass).getClass().getName());
         }
         return IntegrationTestUtils.waitUntilMinKeyValueWithTimestampRecordsReceived(

@@ -17,7 +17,7 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, Properties}
+import java.util.Properties
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
 import kafka.server.{ClientQuotaManager, KafkaBroker}
@@ -92,9 +92,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   }
 
   @Flaky("KAFKA-8073")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testThrottledProducerConsumer(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testThrottledProducerConsumer(groupProtocol: String): Unit = {
     val numRecords = 1000
     val produced = quotaTestClients.produceUntilThrottled(numRecords)
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
@@ -104,9 +104,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProducerConsumerOverrideUnthrottled(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProducerConsumerOverrideUnthrottled(groupProtocol: String): Unit = {
     // Give effectively unlimited quota for producer and consumer
     val props = new Properties()
     props.put(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
@@ -124,9 +124,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProducerConsumerOverrideLowerQuota(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProducerConsumerOverrideLowerQuota(groupProtocol: String): Unit = {
     // consumer quota is set such that consumer quota * default quota window (10 seconds) is less than
     // MAX_PARTITION_FETCH_BYTES_CONFIG, so that we can test consumer ability to fetch in this case
     // In this case, 250 * 10 < 4096
@@ -143,9 +143,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   }
 
   @Flaky("KAFKA-18810")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testQuotaOverrideDelete(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testQuotaOverrideDelete(groupProtocol: String): Unit = {
     // Override producer and consumer quotas to unlimited
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
@@ -165,19 +165,19 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
     // Since producer may have been throttled after producing a couple of records,
     // consume from beginning till throttled
-    quotaTestClients.consumer.seekToBeginning(Collections.singleton(new TopicPartition(topic1, 0)))
+    quotaTestClients.consumer.seekToBeginning(util.Set.of(new TopicPartition(topic1, 0)))
     quotaTestClients.consumeUntilThrottled(numRecords + produced)
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testThrottledRequest(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testThrottledRequest(groupProtocol: String): Unit = {
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, 0.1)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, 0.1)
 
     val consumer = quotaTestClients.consumer
-    consumer.subscribe(Collections.singleton(topic1))
+    consumer.subscribe(util.Set.of(topic1))
     val endTimeMs = System.currentTimeMillis + 10000
     var throttled = false
     while ((!throttled || quotaTestClients.exemptRequestMetric == null || metricValue(quotaTestClients.exemptRequestMetric) <= 0)
@@ -220,13 +220,13 @@ abstract class QuotaTestClients(topic: String,
   def produceUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     var numProduced = 0
     var throttled = false
+    val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
     do {
       val payload = numProduced.toString.getBytes
       val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload),
         new ErrorLoggingCallback(topic, null, null, true))
       numProduced += 1
       do {
-        val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
         throttled = metric != null && metricValue(metric) > 0
       } while (!future.isDone && (!throttled || waitForRequestCompletion))
     } while (numProduced < maxRecords && !throttled)
@@ -236,7 +236,7 @@ abstract class QuotaTestClients(topic: String,
   def consumeUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     val timeoutMs = TimeUnit.MINUTES.toMillis(1)
 
-    consumer.subscribe(Collections.singleton(topic))
+    consumer.subscribe(util.Set.of(topic))
     var numConsumed = 0
     var throttled = false
     val startMs = System.currentTimeMillis

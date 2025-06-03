@@ -21,10 +21,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareAcknowledgeRequestData;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,11 +36,7 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
         private final ShareAcknowledgeRequestData data;
 
         public Builder(ShareAcknowledgeRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(ShareAcknowledgeRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.SHARE_ACKNOWLEDGE, enableUnstableLastVersion);
+            super(ApiKeys.SHARE_ACKNOWLEDGE);
             this.data = data;
         }
 
@@ -80,7 +75,7 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
                 partMap.forEach((index, ackPartition) -> ackTopic.partitions().add(ackPartition));
             });
 
-            return new ShareAcknowledgeRequest.Builder(data, true);
+            return new ShareAcknowledgeRequest.Builder(data);
         }
 
         public ShareAcknowledgeRequestData data() {
@@ -118,9 +113,9 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
                 .setErrorCode(error.code()));
     }
 
-    public static ShareAcknowledgeRequest parse(ByteBuffer buffer, short version) {
+    public static ShareAcknowledgeRequest parse(Readable readable, short version) {
         return new ShareAcknowledgeRequest(
-                new ShareAcknowledgeRequestData(new ByteBufferAccessor(buffer), version),
+                new ShareAcknowledgeRequestData(readable, version),
                 version
         );
     }

@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.COPY_SEGMENT;
@@ -85,7 +84,7 @@ public final class ProduceAction implements TieredStorageTestAction {
                         spec.getTopicPartition(),
                         spec.getBaseOffset(),
                         false))
-                .collect(Collectors.toList());
+                .toList();
 
         // Retrieve the offset of the next record which would be consumed from the topic-partition
         // before records are produced. This allows consuming only the newly produced records afterwards.
@@ -140,7 +139,7 @@ public final class ProduceAction implements TieredStorageTestAction {
 
         List<ProducerRecord<String, String>> producerRecords = offloadedSegmentSpecs.stream()
                 .flatMap(spec -> spec.getRecords().stream())
-                .collect(Collectors.toList());
+                .toList();
         compareRecords(discoveredRecords, producerRecords, topicPartition);
     }
 

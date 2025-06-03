@@ -20,10 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class VoteRequest extends AbstractRequest {
@@ -65,8 +64,8 @@ public class VoteRequest extends AbstractRequest {
             .setErrorCode(Errors.forException(e).code()));
     }
 
-    public static VoteRequest parse(ByteBuffer buffer, short version) {
-        return new VoteRequest(new VoteRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static VoteRequest parse(Readable readable, short version) {
+        return new VoteRequest(new VoteRequestData(readable, version), version);
     }
 
     public static VoteRequestData singletonRequest(TopicPartition topicPartition,

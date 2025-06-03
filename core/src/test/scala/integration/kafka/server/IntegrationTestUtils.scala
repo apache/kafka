@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.network.SocketServer
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.utils.Utils
 
@@ -72,7 +72,7 @@ object IntegrationTestUtils {
     val responseBuffer = ByteBuffer.wrap(responseBytes)
     ResponseHeader.parse(responseBuffer, apiKey.responseHeaderVersion(version))
 
-    AbstractResponse.parseResponse(apiKey, responseBuffer, version) match {
+    AbstractResponse.parseResponse(apiKey, new ByteBufferAccessor(responseBuffer), version) match {
       case response: T => response
       case response =>
         throw new ClassCastException(s"Expected response with type ${classTag.runtimeClass}, but found ${response.getClass}")

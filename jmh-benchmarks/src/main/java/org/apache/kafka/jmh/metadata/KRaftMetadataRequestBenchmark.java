@@ -27,11 +27,9 @@ import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
-import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
-import kafka.server.SimpleApiVersionManager;
 import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.metadata.KRaftMetadataCache;
 import kafka.server.share.SharePartitionManager;
@@ -51,6 +49,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -60,6 +59,7 @@ import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.ClientMetricsManager;
+import org.apache.kafka.server.SimpleApiVersionManager;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -109,7 +109,7 @@ public class KRaftMetadataRequestBenchmark {
     private final Metrics metrics = new Metrics();
     private final int brokerId = 1;
     private final ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
-    private final KRaftMetadataCache metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () -> KRaftVersion.KRAFT_VERSION_1);
+    private final KRaftMetadataCache metadataCache = new KRaftMetadataCache(brokerId, () -> KRaftVersion.KRAFT_VERSION_1);
     private final ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private final ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private final ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
@@ -120,6 +120,7 @@ public class KRaftMetadataRequestBenchmark {
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
     private final SharePartitionManager sharePartitionManager = Mockito.mock(SharePartitionManager.class);
     private final ClientMetricsManager clientMetricsManager = Mockito.mock(ClientMetricsManager.class);
+    private final GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     @Param({"500", "1000",  "5000"})
@@ -194,7 +195,7 @@ public class KRaftMetadataRequestBenchmark {
                 setConfigRepository(new MockConfigRepository()).
                 setMetadataCache(metadataCache).
                 setMetrics(metrics).
-                setAuthorizer(Optional.empty()).
+                setAuthorizerPlugin(Optional.empty()).
                 setQuotas(quotaManagers).
                 setFetchManager(fetchManager).
                 setSharePartitionManager(sharePartitionManager).
@@ -207,6 +208,7 @@ public class KRaftMetadataRequestBenchmark {
                         ApiMessageType.ListenerType.BROKER,
                         false,
                         () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
+                setGroupConfigManager(groupConfigManager).
                 build();
     }
 
@@ -219,7 +221,7 @@ public class KRaftMetadataRequestBenchmark {
     private RequestChannel.Request buildAllTopicMetadataRequest() {
         MetadataRequest metadataRequest = MetadataRequest.Builder.allTopics().build();
         RequestHeader header = new RequestHeader(metadataRequest.apiKey(), metadataRequest.version(), "", 0);
-        ByteBuffer bodyBuffer = metadataRequest.serialize();
+        ByteBuffer bodyBuffer = metadataRequest.serialize().buffer();
 
         RequestContext context = new RequestContext(header, "1", null, principal,
                 ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
@@ -237,10 +239,5 @@ public class KRaftMetadataRequestBenchmark {
         Option<com.fasterxml.jackson.databind.JsonNode> option = allTopicMetadataRequest.requestLog();
         Optional<com.fasterxml.jackson.databind.JsonNode> optional = option.isDefined() ? Optional.of(option.get()) : Optional.empty();
         return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), optional, allTopicMetadataRequest.isForwarded()).toString();
-    }
-
-    @Benchmark
-    public void testTopicIdInfo() {
-        metadataCache.topicIdInfo();
     }
 }
