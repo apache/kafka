@@ -609,18 +609,6 @@ public class ConfigCommandIntegrationTest {
         ConfigCommand.alterConfig(client, addOpts);
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
-    public void testUpdatingDynamicConfigInKRaftThenShouldFail() {
-        List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
-
-        try (Admin client = cluster.admin()) {
-            assertThrows(InvalidConfigurationException.class,
-                    () -> deleteAndVerifyConfigValue(client, defaultBrokerId, singleton("log.roll.jitter.ms"), false, alterOpts));
-            assertThrows(InvalidConfigurationException.class,
-                    () -> deleteAndVerifyConfigValue(client, defaultBrokerId, singleton("no.exist.config"), false, alterOpts));
-        }
-    }
-
     private void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
         Exit.setExitProcedure((status, __) -> {
