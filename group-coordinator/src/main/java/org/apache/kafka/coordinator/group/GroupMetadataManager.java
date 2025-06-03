@@ -129,8 +129,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -260,7 +258,6 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord;
-import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
@@ -1894,43 +1891,42 @@ public class GroupMetadataManager {
         StreamsTopology updatedTopology = maybeUpdateTopology(groupId, memberId, topology, group, records);
         maybeSetTopologyStaleStatus(group, updatedMember, returnedStatus);
 
-        // 3. Determine the partition metadata and any internal topics if needed.
+        // 3. Determine any internal topics if needed.
         ConfiguredTopology updatedConfiguredTopology;
-        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> updatedPartitionMetadata;
         boolean reconfigureTopology = group.topology().isEmpty();
-        if (reconfigureTopology || group.hasMetadataExpired(currentTimeMs)) {
+        long metadataHash = group.metadataHash();
+        if (reconfigureTopology || group.configuredTopology().isEmpty() || group.hasMetadataExpired(currentTimeMs)) {
 
-            updatedPartitionMetadata = group.computePartitionMetadata(
-                metadataImage.topics(),
+            metadataHash = group.computeMetadataHash(
+                metadataImage,
+                topicHashCache,
                 updatedTopology
             );
 
-            if (!updatedPartitionMetadata.equals(group.partitionMetadata())) {
-                log.info("[GroupId {}][MemberId {}] Computed new partition metadata: {}.",
-                    groupId, memberId, updatedPartitionMetadata);
+            if (metadataHash != group.metadataHash()) {
+                log.info("[GroupId {}][MemberId {}] Computed new metadata hash: {}.",
+                    groupId, memberId, metadataHash);
                 bumpGroupEpoch = true;
                 reconfigureTopology = true;
-                records.add(newStreamsGroupPartitionMetadataRecord(groupId, updatedPartitionMetadata));
-                group.setPartitionMetadata(updatedPartitionMetadata);
             }
 
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology);
-                updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, updatedTopology, updatedPartitionMetadata);
+                updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, metadataHash, updatedTopology, metadataImage.topics());
+                group.setConfiguredTopology(updatedConfiguredTopology);
             } else {
                 updatedConfiguredTopology = group.configuredTopology().get();
             }
         } else {
             updatedConfiguredTopology = group.configuredTopology().get();
-            updatedPartitionMetadata = group.partitionMetadata();
         }
 
         // Actually bump the group epoch
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, 0));
-            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {}.", groupId, memberId, groupEpoch);
+            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash));
+            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {}.", groupId, memberId, groupEpoch, metadataHash);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
         }
@@ -1946,7 +1942,7 @@ public class GroupMetadataManager {
                 groupEpoch,
                 updatedMember,
                 updatedConfiguredTopology,
-                updatedPartitionMetadata,
+                metadataImage,
                 records
             );
             targetAssignmentEpoch = groupEpoch;
@@ -2111,7 +2107,7 @@ public class GroupMetadataManager {
                 final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
                 responseEndpoint.setHost(endpoint.host());
                 responseEndpoint.setPort(endpoint.port());
-                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
+                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group, metadataImage);
                 endpointToPartitionsList.add(endpointToPartitions);
             }
         }
@@ -3795,12 +3791,12 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Updates the target assignment according to the updated member and subscription metadata.
+     * Updates the target assignment according to the updated member and metadata image.
      *
      * @param group                The StreamsGroup.
      * @param groupEpoch           The group epoch.
      * @param updatedMember        The updated member.
-     * @param subscriptionMetadata The subscription metadata.
+     * @param metadataImage        The metadata image.
      * @param records              The list to accumulate any new records.
      * @return The new target assignment.
      */
@@ -3809,7 +3805,7 @@ public class GroupMetadataManager {
         int groupEpoch,
         StreamsGroupMember updatedMember,
         ConfiguredTopology configuredTopology,
-        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata,
+        MetadataImage metadataImage,
         List<CoordinatorRecord> records
     ) {
         TaskAssignor assignor = streamsGroupAssignor(group.groupId());
@@ -3825,7 +3821,7 @@ public class GroupMetadataManager {
                 .withMembers(group.members())
                 .withTopology(configuredTopology)
                 .withStaticMembers(group.staticMembers())
-                .withPartitionMetadata(subscriptionMetadata)
+                .withMetadataImage(metadataImage)
                 .withTargetAssignment(group.targetAssignment())
                 .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
@@ -5282,6 +5278,7 @@ public class GroupMetadataManager {
         if (value != null) {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
             streamsGroup.setGroupEpoch(value.epoch());
+            streamsGroup.setMetadataHash(value.metadataHash());
         } else {
             StreamsGroup streamsGroup;
             try {
@@ -5302,38 +5299,6 @@ public class GroupMetadataManager {
             removeGroup(groupId);
         }
 
-    }
-
-    /**
-     * Replays StreamsGroupPartitionMetadataKey/Value to update the hard state of
-     * the streams group. It updates the subscription metadata of the streams
-     * group.
-     *
-     * @param key   A StreamsGroupPartitionMetadataKey key.
-     * @param value A StreamsGroupPartitionMetadataValue record.
-     */
-    public void replay(
-        StreamsGroupPartitionMetadataKey key,
-        StreamsGroupPartitionMetadataValue value
-    ) {
-        String groupId = key.groupId();
-        StreamsGroup streamsGroup;
-        try {
-            streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, value != null);
-        } catch (GroupIdNotFoundException ex) {
-            // If the group does not exist, we can ignore the tombstone.
-            return;
-        }
-
-        if (value != null) {
-            Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> partitionMetadata = new HashMap<>();
-            value.topics().forEach(topicMetadata -> {
-                partitionMetadata.put(topicMetadata.topicName(), org.apache.kafka.coordinator.group.streams.TopicMetadata.fromRecord(topicMetadata));
-            });
-            streamsGroup.setPartitionMetadata(partitionMetadata);
-        } else {
-            streamsGroup.setPartitionMetadata(Map.of());
-        }
     }
 
     /**

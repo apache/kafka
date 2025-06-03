@@ -109,8 +109,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -1296,13 +1294,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.replay(
                     (StreamsGroupMetadataKey) key,
                     (StreamsGroupMetadataValue) Utils.messageOrNull(value)
-                );
-                break;
-
-            case STREAMS_GROUP_PARTITION_METADATA:
-                groupMetadataManager.replay(
-                    (StreamsGroupPartitionMetadataKey) key,
-                    (StreamsGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
