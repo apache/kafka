@@ -83,6 +83,10 @@ public class DefaultAssertionCreator implements AssertionCreator {
         @Override
         public PrivateKey transform(File file, String contents) {
             try {
+                contents = contents.replace("-----BEGIN PRIVATE KEY-----", "")
+                    .replace("-----END PRIVATE KEY-----", "")
+                    .replace("\n", "");
+
                 return privateKey(contents.getBytes(StandardCharsets.UTF_8), passphrase);
             } catch (GeneralSecurityException | IOException e) {
                 throw new KafkaException("An error occurred generating the OAuth assertion private key from " + file.getPath(), e);
