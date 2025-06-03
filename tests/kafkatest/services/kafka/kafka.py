@@ -1788,9 +1788,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s --bootstrap-server %s %s --list" % \
-              (share_group_script,
-               self.bootstrap_servers(self.security_protocol),
-               command_config)
+               (share_group_script,
+                self.bootstrap_servers(self.security_protocol),
+                command_config)
         if state is not None:
             cmd += " --state %s" % state
         return self.run_cli_tool(node, cmd)
