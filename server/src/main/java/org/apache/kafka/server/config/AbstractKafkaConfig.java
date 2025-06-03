@@ -111,11 +111,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public ListenerName interBrokerListenerName() {
-        return getInterBrokerListenerNameAndSecurityProtocol().getKey();
+        return interBrokerListenerNameAndSecurityProtocol().getKey();
     }
 
     public SecurityProtocol interBrokerSecurityProtocol() {
-        return getInterBrokerListenerNameAndSecurityProtocol().getValue();
+        return interBrokerListenerNameAndSecurityProtocol().getValue();
     }
 
     public Map<ListenerName, SecurityProtocol> effectiveListenerSecurityProtocolMap() {
@@ -126,7 +126,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
                         .stream()
                         .collect(Collectors.toMap(
                                 e -> ListenerName.normalised(e.getKey()),
-                                e -> getSecurityProtocol(
+                                e -> securityProtocol(
                                         e.getValue(),
                                         SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)));
 
@@ -161,7 +161,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         }
     }
 
-    private static SecurityProtocol getSecurityProtocol(String protocolName, String configName) {
+    private static SecurityProtocol securityProtocol(String protocolName, String configName) {
         try {
             return SecurityProtocol.forName(protocolName);
         } catch (IllegalArgumentException e) {
@@ -170,7 +170,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         }
     }
 
-    private Map.Entry<ListenerName, SecurityProtocol> getInterBrokerListenerNameAndSecurityProtocol() {
+    private Map.Entry<ListenerName, SecurityProtocol> interBrokerListenerNameAndSecurityProtocol() {
         String interBrokerListenerName = getString(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG);
         if (interBrokerListenerName != null) {
             if (originals().containsKey(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG)) {
@@ -187,7 +187,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             }
             return Map.entry(listenerName, securityProtocol);
         } else {
-            SecurityProtocol securityProtocol = getSecurityProtocol(
+            SecurityProtocol securityProtocol = securityProtocol(
                     getString(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG),
                     ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG);
             return Map.entry(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);

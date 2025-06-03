@@ -135,8 +135,7 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
             // Note: Synchronization is not needed on inflightNodes since it is always accessed from this thread.
             inflightNodes.remove(node);
             if (response.authenticationException() != null) {
-                log.error(String.format("AddPartitionsToTxnRequest failed for node %s with an authentication exception.", response.destination()),
-                        response.authenticationException());
+                log.error("AddPartitionsToTxnRequest failed for node {} with an authentication exception.", response.destination(), response.authenticationException());
                 sendCallbacksToAll(Errors.forException(response.authenticationException()).code());
             } else if (response.versionMismatch() != null) {
                 // We may see unsupported version exception if we try to send a verify only request to a broker that can't handle it.
@@ -322,10 +321,13 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
     public Collection<RequestAndCompletionHandler> generateRequests() {
         // build and add requests to the queue
         List<RequestAndCompletionHandler> list = new ArrayList<>();
-        long currentTimeMs = time.milliseconds();
-        Set<Node> removedNodes = new HashSet<>();
+        var currentTimeMs = time.milliseconds();
         synchronized (nodesToTransactions) {
-            nodesToTransactions.forEach((node, transactionDataAndCallbacks) -> {
+            var iter = nodesToTransactions.entrySet().iterator();
+            while (iter.hasNext()) {
+                var entry = iter.next();
+                var node = entry.getKey();
+                var transactionDataAndCallbacks = entry.getValue();
                 if (!inflightNodes.contains(node)) {
                     list.add(new RequestAndCompletionHandler(
                             currentTimeMs,
@@ -333,14 +335,10 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
                             AddPartitionsToTxnRequest.Builder.forBroker(transactionDataAndCallbacks.transactionData()),
                             new AddPartitionsToTxnHandler(node, transactionDataAndCallbacks)
                     ));
-
-                    removedNodes.add(node);
+                    inflightNodes.add(node);
+                    iter.remove();
                 }
-            });
-            removedNodes.forEach(node -> {
-                inflightNodes.add(node);
-                nodesToTransactions.remove(node);
-            });
+            }
         }
         return list;
     }
