@@ -253,8 +253,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return PushTelemetryResponse.parse(readable, version);
             case ASSIGN_REPLICAS_TO_DIRS:
                 return AssignReplicasToDirsResponse.parse(readable, version);
-            case LIST_CLIENT_METRICS_RESOURCES:
-                return ListClientMetricsResourcesResponse.parse(readable, version);
+            case LIST_CONFIG_RESOURCES:
+                return ListConfigResourcesResponse.parse(readable, version);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsResponse.parse(readable, version);
             case SHARE_GROUP_HEARTBEAT:

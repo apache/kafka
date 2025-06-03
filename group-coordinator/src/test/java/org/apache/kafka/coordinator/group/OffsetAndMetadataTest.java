@@ -16,27 +16,33 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.server.util.MockTime;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class OffsetAndMetadataTest {
     @Test
     public void testAttributes() {
+        Uuid topicId = Uuid.randomUuid();
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(
             100L,
             OptionalInt.of(10),
             "metadata",
             1234L,
-            OptionalLong.of(5678L)
+            OptionalLong.of(5678L),
+            topicId
         );
 
         assertEquals(100L, offsetAndMetadata.committedOffset);
@@ -44,16 +50,26 @@ public class OffsetAndMetadataTest {
         assertEquals("metadata", offsetAndMetadata.metadata);
         assertEquals(1234L, offsetAndMetadata.commitTimestampMs);
         assertEquals(OptionalLong.of(5678L), offsetAndMetadata.expireTimestampMs);
+        assertEquals(topicId, offsetAndMetadata.topicId);
     }
 
-    @Test
-    public void testFromRecord() {
+    private static Stream<Uuid> uuids() {
+        return Stream.of(
+            Uuid.ZERO_UUID,
+            Uuid.randomUuid()
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testFromRecord(Uuid uuid) {
         OffsetCommitValue record = new OffsetCommitValue()
             .setOffset(100L)
             .setLeaderEpoch(-1)
             .setMetadata("metadata")
             .setCommitTimestamp(1234L)
-            .setExpireTimestamp(-1L);
+            .setExpireTimestamp(-1L)
+            .setTopicId(uuid);
 
         assertEquals(new OffsetAndMetadata(
             10L,
@@ -61,7 +77,8 @@ public class OffsetAndMetadataTest {
             OptionalInt.empty(),
             "metadata",
             1234L,
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            uuid
         ), OffsetAndMetadata.fromRecord(10L, record));
 
         record
@@ -74,12 +91,14 @@ public class OffsetAndMetadataTest {
             OptionalInt.of(12),
             "metadata",
             1234L,
-            OptionalLong.of(5678L)
+            OptionalLong.of(5678L),
+            uuid
         ), OffsetAndMetadata.fromRecord(11L, record));
     }
 
-    @Test
-    public void testFromRequest() {
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testFromRequest(Uuid uuid) {
         MockTime time = new MockTime();
 
         OffsetCommitRequestData.OffsetCommitRequestPartition partition =
@@ -95,8 +114,10 @@ public class OffsetAndMetadataTest {
                 OptionalInt.empty(),
                 "",
                 time.milliseconds(),
-                OptionalLong.empty()
+                OptionalLong.empty(),
+                uuid
             ), OffsetAndMetadata.fromRequest(
+                uuid,
                 partition,
                 time.milliseconds(),
                 OptionalLong.empty()
@@ -113,8 +134,10 @@ public class OffsetAndMetadataTest {
                 OptionalInt.of(10),
                 "hello",
                 time.milliseconds(),
-                OptionalLong.empty()
+                OptionalLong.empty(),
+                uuid
             ), OffsetAndMetadata.fromRequest(
+                uuid,
                 partition,
                 time.milliseconds(),
                 OptionalLong.empty()
@@ -127,8 +150,10 @@ public class OffsetAndMetadataTest {
                 OptionalInt.of(10),
                 "hello",
                 time.milliseconds(),
-                OptionalLong.of(5678L)
+                OptionalLong.of(5678L),
+                uuid
             ), OffsetAndMetadata.fromRequest(
+                uuid,
                 partition,
                 time.milliseconds(),
                 OptionalLong.of(5678L)
@@ -153,7 +178,8 @@ public class OffsetAndMetadataTest {
                 OptionalInt.empty(),
                 "",
                 time.milliseconds(),
-                OptionalLong.empty()
+                OptionalLong.empty(),
+                Uuid.ZERO_UUID
             ), OffsetAndMetadata.fromRequest(
                 partition,
                 time.milliseconds()
@@ -170,7 +196,8 @@ public class OffsetAndMetadataTest {
                 OptionalInt.of(10),
                 "hello",
                 time.milliseconds(),
-                OptionalLong.empty()
+                OptionalLong.empty(),
+                Uuid.ZERO_UUID
             ), OffsetAndMetadata.fromRequest(
                 partition,
                 time.milliseconds()

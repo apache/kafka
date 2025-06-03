@@ -215,7 +215,7 @@ public class ClientSideAssignorBenchmark {
         for (int i = 0; i < numberOfPartitions; i++) {
             Node[] replicas = new Node[3];
             for (int j = 0; j < 3; j++) {
-                // Assign nodes based on partition number to mimic mkMapOfPartitionRacks logic.
+                // Assign nodes based on partition number.
                 int nodeIndex = (i + j) % NUMBER_OF_RACKS;
                 replicas[j] = nodes.get(nodeIndex);
             }

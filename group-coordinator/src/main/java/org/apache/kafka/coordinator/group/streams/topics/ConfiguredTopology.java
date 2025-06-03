@@ -31,6 +31,7 @@ import java.util.SortedMap;
  *
  * @param topologyEpoch               The epoch of the topology. Same as the topology epoch in the heartbeat request that last initialized
  *                                    the topology.
+ * @param metadataHash                The metadata hash of the group.
  * @param subtopologies               Contains the subtopologies that have been configured. This can be used by the task assignors, since it
  *                                    specifies the number of tasks available for every subtopology. Undefined if topology configuration
  *                                    failed.
@@ -41,6 +42,7 @@ import java.util.SortedMap;
  *                                    reported back to the client.
  */
 public record ConfiguredTopology(int topologyEpoch,
+                                 long metadataHash,
                                  Optional<SortedMap<String, ConfiguredSubtopology>> subtopologies,
                                  Map<String, CreatableTopic> internalTopicsToBeCreated,
                                  Optional<TopicConfigurationException> topicConfigurationException) {
