@@ -493,15 +493,9 @@ class KRaftClusterTest {
 
   private def sendDescribeClusterRequestToBoundPort(destination: SocketServer,
                                                     listenerName: ListenerName): DescribeClusterResponse = {
-
-      val port = destination.boundPort(listenerName)
-
-      connectAndReceive[DescribeClusterResponse](
-            request = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
-            port
-          )
+    connectAndReceive[DescribeClusterResponse](new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
+      destination.boundPort(listenerName))
   }
-
 
   @Test
   def testCreateClusterAndPerformReassignment(): Unit = {

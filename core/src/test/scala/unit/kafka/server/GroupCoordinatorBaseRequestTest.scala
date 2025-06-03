@@ -901,24 +901,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def connectAny(): Socket = {
-
-    val socketServer = cluster.anyBrokerSocketServer()
-    val listenerName = cluster.clientListener()
-    val port = socketServer.boundPort(listenerName)
-
-    val socket: Socket = IntegrationTestUtils.connect(port)
+    val socket: Socket = IntegrationTestUtils.connect(cluster.boundPorts().asScala.head)
     openSockets += socket
     socket
   }
 
   protected def connect(destination: Int): Socket = {
-
-    val socketServer = brokerSocketServer(destination)
-    val listenerName = cluster.clientListener()
-    val port = socketServer.boundPort(listenerName)
-
-
-    val socket: Socket = IntegrationTestUtils.connect(port)
+    val socket: Socket = IntegrationTestUtils.connect(cluster.boundPorts().asScala.head)
     openSockets += socket
     socket
   }
@@ -928,27 +917,16 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   ): T = {
     val destination = cluster.anyBrokerSocketServer()
     val listenerName = cluster.clientListener()
-    val port = destination.boundPort(listenerName)
-
-    IntegrationTestUtils.connectAndReceive[T](
-      request,
-      port
-    )
+    IntegrationTestUtils.connectAndReceive[T](request, destination.boundPort(listenerName))
   }
 
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest,
     destination: Int
   ): T = {
-
     val socketServer = brokerSocketServer(destination)
     val listenerName = cluster.clientListener()
-    val port = socketServer.boundPort(listenerName)
-
-    IntegrationTestUtils.connectAndReceive[T](
-      request,
-      port
-    )
+    IntegrationTestUtils.connectAndReceive[T](request, socketServer.boundPort(listenerName))
   }
 
   private def brokerSocketServer(brokerId: Int): SocketServer = {

@@ -80,14 +80,9 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
     controllerSocketServer: SocketServer,
     request: AllocateProducerIdsRequest
   ): AllocateProducerIdsResponse = {
-
-    val listenerName = cluster.controllerListenerName
-    val port = controllerSocketServer.boundPort(listenerName)
-
     IntegrationTestUtils.connectAndReceive[AllocateProducerIdsResponse](
       request,
-      port
+      controllerSocketServer.boundPort(cluster.controllerListenerName())
     )
   }
-
 }

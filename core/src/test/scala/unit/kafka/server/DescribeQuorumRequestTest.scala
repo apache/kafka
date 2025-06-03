@@ -92,15 +92,8 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
   )(
     implicit classTag: ClassTag[T]
   ): T = {
-
     val socketServer = cluster.brokerSocketServers().asScala.head
     val listenerName = cluster.clientListener()
-    val port = socketServer.boundPort(listenerName)
-
-    IntegrationTestUtils.connectAndReceive(
-      request,
-      port
-    )
+    IntegrationTestUtils.connectAndReceive(request, socketServer.boundPort(listenerName))
   }
-
 }

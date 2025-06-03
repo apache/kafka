@@ -557,13 +557,11 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
   private def sendDescribeClientQuotasRequest(filter: ClientQuotaFilter): DescribeClientQuotasResponse = {
     val request = new DescribeClientQuotasRequest.Builder(filter).build()
-
     val destination = cluster.anyBrokerSocketServer()
     val listenerName = cluster.clientListener()
-
-    val port = destination.boundPort(listenerName)
-
-    IntegrationTestUtils.connectAndReceive[DescribeClientQuotasResponse](request, port)
+    IntegrationTestUtils.connectAndReceive[DescribeClientQuotasResponse](
+      request,
+      destination.boundPort(listenerName))
   }
 
   private def alterEntityQuotas(entity: ClientQuotaEntity, alter: Map[String, Option[Double]], validateOnly: Boolean) =
@@ -589,14 +587,10 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
   private def sendAlterClientQuotasRequest(entries: Iterable[ClientQuotaAlteration], validateOnly: Boolean): AlterClientQuotasResponse = {
     val request = new AlterClientQuotasRequest.Builder(entries.asJavaCollection, validateOnly).build()
-
-    val socketServer = cluster.anyBrokerSocketServer()
+    val destination = cluster.anyBrokerSocketServer()
     val listenerName = cluster.clientListener()
-    val port = socketServer.boundPort(listenerName)
-
     IntegrationTestUtils.connectAndReceive[AlterClientQuotasResponse](
       request,
-      port)
+      destination.boundPort(listenerName))
   }
-
 }

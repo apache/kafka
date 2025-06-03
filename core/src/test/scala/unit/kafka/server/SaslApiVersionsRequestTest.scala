@@ -36,12 +36,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
   )
   def testApiVersionsRequestBeforeSaslHandshakeRequest(): Unit = {
-
-    val listenerName = cluster.clientListener()
-    val socketServer = cluster.brokerSocketServers().asScala.head
-    val port = socketServer.boundPort(listenerName)
-    val socket = IntegrationTestUtils.connect(port)
-
+    val socket = IntegrationTestUtils.connect(cluster.boundPorts().asScala.head)
     try {
       val apiVersionsResponse = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
@@ -62,12 +57,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
   )
   def testApiVersionsRequestAfterSaslHandshakeRequest(): Unit = {
-
-    val listenerName = cluster.clientListener()
-    val socketServer = cluster.brokerSocketServers().asScala.head
-    val port = socketServer.boundPort(listenerName)
-    val socket = IntegrationTestUtils.connect(port)
-
+    val socket = IntegrationTestUtils.connect(cluster.boundPorts().asScala.head)
     try {
       sendSaslHandshakeRequestValidateResponse(socket)
       val response = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
@@ -83,12 +73,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
   )
   def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
-
-    val listenerName = cluster.clientListener()
-    val socketServer = cluster.brokerSocketServers().asScala.head
-    val port = socketServer.boundPort(listenerName)
-    val socket = IntegrationTestUtils.connect(port)
-
+    val socket = IntegrationTestUtils.connect(cluster.boundPorts().asScala.head)
     try {
       val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0)
       val apiVersionsResponse = sendUnsupportedApiVersionRequest(apiVersionsRequest)

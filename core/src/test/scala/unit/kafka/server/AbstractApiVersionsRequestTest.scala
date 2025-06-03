@@ -42,18 +42,12 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     } else {
       cluster.brokerSocketServers().asScala.head
     }
-
-    val port = socket.boundPort(listenerName)
-
-    IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, port)
+    IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, socket.boundPort(listenerName))
   }
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = IntegrationTestUtils.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
-    val socketServer = cluster.brokerSocketServers().asScala.head
-    val listenerName = cluster.clientListener()
-    val port = socketServer.boundPort(listenerName)
-    val socket = IntegrationTestUtils.connect(port)
+    val socket = IntegrationTestUtils.connect(cluster.boundPorts().asScala.head)
     try {
       val serializedBytes = Utils.toArray(
         RequestUtils.serialize(overrideHeader.data, overrideHeader.headerVersion, request.data, request.version))
