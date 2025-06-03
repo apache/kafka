@@ -3770,8 +3770,13 @@ public class GroupMetadataManager {
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
 
-            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+            if (log.isDebugEnabled()) {
+                log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
+                    group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+            } else {
+                log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms.",
+                    group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs);
+            }
 
             records.addAll(assignmentResult.records());
 
