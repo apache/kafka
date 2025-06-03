@@ -17,7 +17,6 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
-import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
@@ -33,6 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.LogReadResult;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
@@ -68,6 +68,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
@@ -1837,15 +1839,15 @@ public class DelayedShareFetchTest {
         );
         when(remoteFetch.logReadResult()).thenReturn(new LogReadResult(
             REMOTE_FETCH_INFO,
-            Option.empty(),
+            Optional.empty(),
             -1L,
             -1L,
             -1L,
             -1L,
             -1L,
-            Option.empty(),
-            Option.empty(),
-            Option.empty()
+            OptionalLong.empty(),
+            OptionalInt.empty(),
+            Optional.empty()
         ));
         when(pendingRemoteFetches.remoteFetches()).thenReturn(List.of(remoteFetch));
         when(pendingRemoteFetches.isDone()).thenReturn(false);
@@ -1918,15 +1920,15 @@ public class DelayedShareFetchTest {
         );
         when(remoteFetch.logReadResult()).thenReturn(new LogReadResult(
             REMOTE_FETCH_INFO,
-            Option.empty(),
+            Optional.empty(),
             -1L,
             -1L,
             -1L,
             -1L,
             -1L,
-            Option.empty(),
-            Option.empty(),
-            Option.empty()
+            OptionalLong.empty(),
+            OptionalInt.empty(),
+            Optional.empty()
         ));
         when(pendingRemoteFetches.remoteFetches()).thenReturn(List.of(remoteFetch));
         when(pendingRemoteFetches.isDone()).thenReturn(false);
@@ -1993,27 +1995,27 @@ public class DelayedShareFetchTest {
         List<Tuple2<TopicIdPartition, LogReadResult>> logReadResults = new ArrayList<>();
         localLogReadTopicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
             new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), MemoryRecords.EMPTY),
-            Option.empty(),
+            Optional.empty(),
             -1L,
             -1L,
             -1L,
             -1L,
             -1L,
-            Option.empty(),
-            Option.empty(),
-            Option.empty()
+            OptionalLong.empty(),
+            OptionalInt.empty(),
+            Optional.empty()
         ))));
         remoteReadTopicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
             REMOTE_FETCH_INFO,
-            Option.empty(),
+            Optional.empty(),
             -1L,
             -1L,
             -1L,
             -1L,
             -1L,
-            Option.empty(),
-            Option.empty(),
-            Option.empty()
+            OptionalLong.empty(),
+            OptionalInt.empty(),
+            Optional.empty()
         ))));
         return CollectionConverters.asScala(logReadResults).toSeq();
     }

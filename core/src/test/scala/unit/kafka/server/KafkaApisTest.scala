@@ -9658,7 +9658,7 @@ class KafkaApisTest extends Logging {
         topicIds.put(tp.topicPartition.topic, tp.topicId)
         topicNames.put(tp.topicId, tp.topicPartition.topic)
       }
-      FetchResponse.of(Errors.NONE, 100, 100, responseData)
+      FetchResponse.of(Errors.NONE, 100, 100, responseData, List.empty.asJava)
     }
 
     val throttledPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("throttledData", 0))
@@ -11186,47 +11186,58 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testListConfigResourcesV0(): Unit = {
-    val request = buildRequest(new ListConfigResourcesRequest.Builder(
-      new ListConfigResourcesRequestData().setResourceTypes(util.List.of(ConfigResource.Type.CLIENT_METRICS.id))).build(0))
-    metadataCache = mock(classOf[KRaftMetadataCache])
+    val requestMetrics = new RequestChannelMetrics(util.Set.of(ApiKeys.LIST_CONFIG_RESOURCES))
+    try {
+      val request = buildRequest(new ListConfigResourcesRequest.Builder(
+        new ListConfigResourcesRequestData().setResourceTypes(util.List.of(ConfigResource.Type.CLIENT_METRICS.id))).build(0),
+        requestMetrics = requestMetrics)
+      metadataCache = mock(classOf[KRaftMetadataCache])
 
-    val resources = util.Set.of("client-metric1", "client-metric2")
-    when(clientMetricsManager.listClientMetricsResources).thenReturn(resources)
+      val resources = util.Set.of("client-metric1", "client-metric2")
+      when(clientMetricsManager.listClientMetricsResources).thenReturn(resources)
 
-    kafkaApis = createKafkaApis()
-    kafkaApis.handle(request, RequestLocal.noCaching)
-    val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    val expectedResponseData = new ListConfigResourcesResponseData()
+      kafkaApis = createKafkaApis()
+      kafkaApis.handle(request, RequestLocal.noCaching)
+      val response = verifyNoThrottlingAndUpdateMetrics[ListConfigResourcesResponse](request)
+      val expectedResponseData = new ListConfigResourcesResponseData()
         .setConfigResources(
           resources.stream.map(resource =>
             new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource)
           ).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
-    assertEquals(expectedResponseData, response.data)
+      assertEquals(expectedResponseData, response.data)
 
-    verify(metadataCache, never).getAllTopics
-    verify(groupConfigManager, never).groupIds
-    verify(metadataCache, never).getBrokerNodes(any)
+      verify(metadataCache, never).getAllTopics
+      verify(groupConfigManager, never).groupIds
+      verify(metadataCache, never).getBrokerNodes(any)
+      assertTrue(requestMetrics.apply(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
+      assertTrue(requestMetrics.apply(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count > 0)
+    } finally {
+      requestMetrics.close()
+    }
   }
 
   @Test
   def testListConfigResourcesV1WithEmptyResourceTypes(): Unit = {
-    val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()).build(1))
-    metadataCache = mock(classOf[KRaftMetadataCache])
+    val requestMetrics = new RequestChannelMetrics(util.Set.of(ApiKeys.LIST_CONFIG_RESOURCES))
+    try {
+      val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()).build(1),
+        requestMetrics = requestMetrics)
+      metadataCache = mock(classOf[KRaftMetadataCache])
 
-    val clientMetrics = util.Set.of("client-metric1", "client-metric2")
-    val topics = util.Set.of("topic1", "topic2")
-    val groupIds = util.List.of("group1", "group2")
-    val nodeIds = util.List.of(1, 2)
-    when(clientMetricsManager.listClientMetricsResources).thenReturn(clientMetrics)
-    when(metadataCache.getAllTopics).thenReturn(topics)
-    when(groupConfigManager.groupIds).thenReturn(groupIds)
-    when(metadataCache.getBrokerNodes(any())).thenReturn(
-      nodeIds.stream().map(id => new Node(id, "localhost", 1234)).collect(java.util.stream.Collectors.toList()))
+      val clientMetrics = util.Set.of("client-metric1", "client-metric2")
+      val topics = util.Set.of("topic1", "topic2")
+      val groupIds = util.List.of("group1", "group2")
+      val nodeIds = util.List.of(1, 2)
+      when(clientMetricsManager.listClientMetricsResources).thenReturn(clientMetrics)
+      when(metadataCache.getAllTopics).thenReturn(topics)
+      when(groupConfigManager.groupIds).thenReturn(groupIds)
+      when(metadataCache.getBrokerNodes(any())).thenReturn(
+        nodeIds.stream().map(id => new Node(id, "localhost", 1234)).collect(java.util.stream.Collectors.toList()))
 
-    kafkaApis = createKafkaApis()
-    kafkaApis.handle(request, RequestLocal.noCaching)
-    val response = verifyNoThrottling[ListConfigResourcesResponse](request)
-    val expectedResponseData = new ListConfigResourcesResponseData()
+      kafkaApis = createKafkaApis()
+      kafkaApis.handle(request, RequestLocal.noCaching)
+      val response = verifyNoThrottlingAndUpdateMetrics[ListConfigResourcesResponse](request)
+      val expectedResponseData = new ListConfigResourcesResponseData()
         .setConfigResources(
           util.stream.Stream.of(
             groupIds.stream().map(resource =>
@@ -11245,7 +11256,12 @@ class KafkaApisTest extends Logging {
               new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.TOPIC.id)
             ).toList
           ).flatMap(s => s.stream).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
-    assertEquals(expectedResponseData, response.data)
+      assertEquals(expectedResponseData, response.data)
+      assertTrue(requestMetrics.apply(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
+      assertEquals(0, requestMetrics.apply(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count)
+    } finally {
+      requestMetrics.close()
+    }
   }
 
   @Test
