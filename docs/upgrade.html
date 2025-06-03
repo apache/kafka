@@ -26,9 +26,9 @@
         <ul>
             <li>
                 Apache Kafka 4.1 ships with a preview of Queues for Kafka (<a href="https://cwiki.apache.org/confluence/x/4hA0Dw">KIP-932</a>). This feature introduces a new kind of group called
-                share groups, as an alternative to consumer groups. The consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer.
-                Share groups also introduce per-record acknowledgement and counting of delivery attempts. Share groups are well suited to use cases in which the records are being processed
-                one at a time, rather than as part of an ordered stream. To enable share groups, use the <code>kafka-features.sh</code> tool to upgrade to <code>share.version=1</code>.
+                share groups, as an alternative to consumer groups. Consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer.
+                Share groups also introduce per-record acknowledgement and counting of delivery attempts. Use share groups in cases where records are processed one at a time, rather than as part
+                of an ordered stream. To enable share groups, use the <code>kafka-features.sh</code> tool to upgrade to <code>share.version=1</code>.
                 For more information, please read the <a href="https://cwiki.apache.org/confluence/x/CIq3FQ"> release notes</a>.
             </li>
             <li><b>Common</b>

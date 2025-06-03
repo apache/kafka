@@ -348,37 +348,36 @@
     <p>
     Share groups are available as a preview in Apache Kafka 4.1.
     <p>
-    Share groups allow Kafka consumers to work together cooperatively consuming and processing the records from topics. They are an alternative to consumer groups for situations in which finer-grained sharing is required.
+    Share groups are a new type of group, existing alongside traditional consumer groups. Share groups enable Kafka consumers to cooperatively consume and process records from topics.
+    They offer an alternative to traditional consumer groups, particularly when applications require finer-grained sharing of partitions and records.
     <p>
     The fundamental differences between a share group and a consumer group are:
     <ul>
-        <li>The consumers in a share group cooperatively consume records with partitions that may be assigned to multiple consumers</li>
-        <li>The number of consumers in a share group can exceed the number of partitions in a topic</li>
-        <li>Records are acknowledged on an individual basis, although the system is optimized to work in batches for improved efficiency</li>
-        <li>Delivery attempts to consumers in a share group are counted to enable automated handling of unprocessable records</li>
+        <li>The consumers within a share group cooperatively consume records, and partitions may be assigned to multiple consumers.</li>
+        <li>The number of consumers in a share group can exceed the number of partitions in a topic.</li>
+        <li>Records are acknowledged individually, though the system is optimized for batch processing to improve efficiency.</li>
+        <li>Delivery attempts to consumers in a share group are counted, which enables automated handling of unprocessable records.</li>
     </ul>
     <p>
-    Share groups are a new type of group, alongside the existing consumer groups.
+    All consumers in the same share group subscribed to the same topic will cooperatively consume the records of that topic. If a topic is accessed by consumers in multiple share groups, each share group
+    consumes from that topic independently of the others.
     <p>
-    All consumers in the same share group subscribed to the same topic cooperatively consume the records of that topic. If a topic is accessed by consumers in more than one share group, each share group cooperatively
-    consumes from that topic independently of the other share groups.
+    Each consumer can dynamically set its list of subscribed topics. In practice, all consumers within a share group typically subscribe to the same topic or topics.
     <p>
-    Each consumer can dynamically set the list of topics it wants to subscribe to. In practice, all of the consumers in a share group will usually subscribe to the same topic or topics.
-    <p>
-    When a consumer in a share-group fetches records, it receives available records from any of the topic-partitions that match its subscriptions. Records are acquired for delivery to this consumer with a time-limited
-    acquisition lock. While a record is acquired, it is not available for another consumer. By default, the lock duration is 30s, but it can also be controlled using the group <code>share.record.lock.duration.ms</code>
-    configuration parameter. The idea is that the lock is automatically released once the lock duration has elapsed, and then the record is available to be given to another consumer. The consumer which holds the lock
-    can deal with it in the following ways:
+    When a consumer in a share-group fetches records, it receives available records from any of the topic-partitions matching its subscriptions. Records are acquired for delivery to this consumer with a time-limited
+    acquisition lock. While a record is acquired, it is unavailable to other consumers.
+    <p>By default, the lock duration is 30 seconds, but you can control it using the group configuration parameter <code>share.record.lock.duration.ms</code>. The lock is released automatically once its
+    duration elapses, making the record available to another consumer. A consumer holding the lock can handle the record in the following ways:
     <ul>
-        <li>The consumer can acknowledge successful processing of the record</li>
-        <li>The consumer can release the record, which makes the record available for another delivery attempt</li>
-        <li>The consumer can reject the record, which indicates that the record is unprocessable and does not make the record available for another delivery attempt</li>
-        <li>The consumer can do nothing, in which case the lock is automatically released when the lock duration has elapsed</li>
+        <li>Acknowledge successful processing of the record.</li>
+        <li>Release the record, making it available for another delivery attempt.</li>
+        <li>Reject the record, indicating it's unprocessable and preventing further delivery attempts for that record.</li>
+        <li>Do nothing, in which case the lock is automatically released when its duration expires.</li>
     </ul>
     <p>
-    The cluster limits the number of records acquired for consumers for each topic-partition in a share group. Once the limit is reached, fetching records will temporarily yield no further records until the number of
-    acquired records reduces, as naturally happens when the locks time out. This limit is controlled by the broker configuration property <code>group.share.partition.max.record.locks</code>. By limiting the duration
-    of the acquisition lock and automatically releasing the locks, the broker ensures delivery progresses even in the presence of consumer failures.
+    The Kafka cluster limits the number of records acquired for consumers for each topic-partition within a share group. Once this limit is reached, fetching operations will temporarily yield no further records
+    until the number of acquired records decreases (as locks naturally time out). This limit is controlled by the broker configuration property <code>group.share.partition.max.record.locks</code>. By limiting
+    the duration of the acquisition lock and automatically releasing the locks, the broker ensures delivery progresses even in the presence of consumer failures.
 
     <h3 class="anchor-heading"><a id="replication" class="anchor-link"></a><a href="#replication">4.9 Replication</a></h3>
     <p>
@@ -511,7 +510,7 @@
     replicas have received the message. For example, if a topic is configured with only two replicas and one fails (i.e., only one in sync replica remains), then writes that specify acks=all will succeed. However, these
     writes could be lost if the remaining replica also fails.
 
-    Although this ensures maximum availability of the partition, this behavior may be undesirable to some users who prefer durability over availability. Therefore, we provide two topic-level configurations that can be
+    Although this ensures maximum availability of the partition, this behavior may be undesirable to some users who prefer durability over availability. Therefore, we provide two topic configurations that can be
     used to prefer message durability over availability:
     <ol>
         <li> Disable unclean leader election - if all replicas become unavailable, then the partition will remain unavailable until the most recent leader becomes available again. This effectively prefers unavailability
