@@ -589,6 +589,26 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
+    private void alterAndVerifyBothLevelConfig(Admin client,
+                                               Optional<String> brokerId,
+                                               Map<String, String> config,
+                                               List<String> alterOpts) throws Exception {
+        alterBothLevelConfigWithKraft(client, brokerId, config, alterOpts);
+        verifyConfig(client, brokerId, config);
+        verifyConfig(client, Optional.empty(), config);
+    }
+
+    private void alterBothLevelConfigWithKraft(Admin client,
+                                               Optional<String> brokerId,
+                                               Map<String, String> config,
+                                               List<String> alterOpts) {
+        String configStr = transferConfigMapToString(config);
+        ConfigCommand.ConfigCommandOptions addOpts =
+                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
+                        entityOp(Optional.empty()), asList("--add-config", configStr)));
+        ConfigCommand.alterConfig(client, addOpts);
+    }
+
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
     public void testUpdatingDynamicConfigInKRaftThenShouldFail() {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
