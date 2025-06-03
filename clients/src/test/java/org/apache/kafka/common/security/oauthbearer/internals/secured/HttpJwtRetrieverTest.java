@@ -17,11 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -136,39 +131,5 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
         OutputStream out = new ByteArrayOutputStream();
         when(mockedIn.read(any(byte[].class))).thenThrow(new IOException());
         assertThrows(IOException.class, () -> HttpJwtRetriever.copy(mockedIn, out));
-    }
-
-    @Test
-    public void testParseAccessToken() throws IOException {
-        String expected = "abc";
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode node = mapper.createObjectNode();
-        node.put("access_token", expected);
-
-        String actual = HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node));
-        assertEquals(expected, actual);
-    }
-
-    @Test
-    public void testParseAccessTokenEmptyAccessToken() {
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode node = mapper.createObjectNode();
-        node.put("access_token", "");
-
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node)));
-    }
-
-    @Test
-    public void testParseAccessTokenMissingAccessToken() {
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode node = mapper.createObjectNode();
-        node.put("sub", "jdoe");
-
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node)));
-    }
-
-    @Test
-    public void testParseAccessTokenInvalidJson() {
-        assertThrows(JwtRetrieverException.class, () -> HttpJwtRetriever.parseAccessToken("not valid JSON"));
     }
 }

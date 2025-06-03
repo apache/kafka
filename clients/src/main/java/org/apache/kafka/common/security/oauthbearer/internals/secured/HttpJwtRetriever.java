@@ -57,10 +57,6 @@ public class HttpJwtRetriever {
 
     private static final Set<Integer> UNRETRYABLE_HTTP_CODES;
 
-    private static final int MAX_RESPONSE_BODY_LENGTH = 1000;
-
-    public static final String AUTHORIZATION_HEADER = "Authorization";
-
     static {
         // This does not have to be an exhaustive list. There are other HTTP codes that
         // are defined in different RFCs (e.g. https://datatracker.ietf.org/doc/html/rfc6585)
@@ -162,7 +158,8 @@ public class HttpJwtRetriever {
                 throw new KafkaException(e.getCause());
         }
 
-        return parseAccessToken(responseBody);
+        JwtResponseParser responseParser = new JwtResponseParser();
+        return responseParser.parseJwt(responseBody);
     }
 
     public static String post(HttpURLConnection con,
@@ -303,49 +300,5 @@ public class HttpJwtRetriever {
             log.warn("Error parsing error response", e);
         }
         return String.format("{%s}", errorResponseBody);
-    }
-
-    static String parseAccessToken(String responseBody) throws JwtRetrieverException {
-        ObjectMapper mapper = new ObjectMapper();
-        JsonNode rootNode;
-
-        try {
-            rootNode = mapper.readTree(responseBody);
-        } catch (IOException e) {
-            throw new JwtRetrieverException(e);
-        }
-
-        JsonNode accessTokenNode = rootNode.at("/access_token");
-
-        if (accessTokenNode == null) {
-            // Only grab the first N characters so that if the response body is huge, we don't
-            // blow up.
-            String snippet = responseBody;
-
-            if (snippet.length() > MAX_RESPONSE_BODY_LENGTH) {
-                int actualLength = responseBody.length();
-                String s = responseBody.substring(0, MAX_RESPONSE_BODY_LENGTH);
-                snippet = String.format("%s (trimmed to first %d characters out of %d total)", s, MAX_RESPONSE_BODY_LENGTH, actualLength);
-            }
-
-            throw new JwtRetrieverException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", snippet));
-        }
-
-        return sanitizeString("the token endpoint response's access_token JSON attribute", accessTokenNode.textValue());
-    }
-
-    private static String sanitizeString(String name, String value) {
-        if (value == null)
-            throw new IllegalArgumentException(String.format("The value for %s must be non-null", name));
-
-        if (value.isEmpty())
-            throw new IllegalArgumentException(String.format("The value for %s must be non-empty", name));
-
-        value = value.trim();
-
-        if (value.isEmpty())
-            throw new IllegalArgumentException(String.format("The value for %s must not contain only whitespace", name));
-
-        return value;
     }
 }
