@@ -33,7 +33,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
@@ -49,18 +48,18 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -68,8 +67,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.stream.Stream;
 
-import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -79,7 +78,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord;
@@ -153,47 +151,6 @@ public class GroupCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewConsumerGroupSubscriptionMetadataRecord() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-        Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
-
-        subscriptionMetadata.put("foo", new TopicMetadata(
-            fooTopicId,
-            "foo",
-            10
-        ));
-        subscriptionMetadata.put("bar", new TopicMetadata(
-            barTopicId,
-            "bar",
-            20
-        ));
-
-        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
-            new ConsumerGroupPartitionMetadataKey()
-                .setGroupId("group-id"),
-            new ApiMessageAndVersion(
-                new ConsumerGroupPartitionMetadataValue()
-                    .setTopics(Arrays.asList(
-                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                            .setTopicId(fooTopicId)
-                            .setTopicName("foo")
-                            .setNumPartitions(10),
-                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                            .setTopicId(barTopicId)
-                            .setTopicName("bar")
-                            .setNumPartitions(20))),
-                (short) 0
-            )
-        );
-
-        assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
-            "group-id",
-            subscriptionMetadata
-        ));
-    }
-
-    @Test
     public void testNewConsumerGroupSubscriptionMetadataTombstoneRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
             new ConsumerGroupPartitionMetadataKey()
@@ -202,47 +159,6 @@ public class GroupCoordinatorRecordHelpersTest {
 
         assertEquals(expectedRecord, newConsumerGroupSubscriptionMetadataTombstoneRecord(
             "group-id"
-        ));
-    }
-
-    @Test
-    public void testEmptyPartitionMetadataWhenRacksUnavailableGroupSubscriptionMetadataRecord() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-        Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
-
-        subscriptionMetadata.put("foo", new TopicMetadata(
-            fooTopicId,
-            "foo",
-            10
-        ));
-        subscriptionMetadata.put("bar", new TopicMetadata(
-            barTopicId,
-            "bar",
-            20
-        ));
-
-        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
-            new ConsumerGroupPartitionMetadataKey()
-                .setGroupId("group-id"),
-            new ApiMessageAndVersion(
-                new ConsumerGroupPartitionMetadataValue()
-                    .setTopics(Arrays.asList(
-                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                            .setTopicId(fooTopicId)
-                            .setTopicName("foo")
-                            .setNumPartitions(10),
-                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                            .setTopicId(barTopicId)
-                            .setTopicName("bar")
-                            .setNumPartitions(20))),
-                (short) 0
-            )
-        );
-
-        assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
-            "group-id",
-            subscriptionMetadata
         ));
     }
 
@@ -330,7 +246,7 @@ public class GroupCoordinatorRecordHelpersTest {
             Map.of(),
             Map.of(
                 topicId1,
-                Map.entry(topicName1, partitions)
+                new InitMapValue(topicName1, partitions, 1)
             ),
             Map.of(
                 topicId2,
@@ -720,11 +636,19 @@ public class GroupCoordinatorRecordHelpersTest {
     @Test
     public void testOffsetCommitValueVersion() {
         assertEquals((short) 1, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(true));
-        assertEquals((short) 3, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false));
+        assertEquals((short) 4, GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false));
     }
 
-    @Test
-    public void testNewOffsetCommitRecord() {
+    private static Stream<Uuid> uuids() {
+        return Stream.of(
+            Uuid.ZERO_UUID,
+            Uuid.randomUuid()
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testNewOffsetCommitRecord(Uuid topicId) {
         OffsetCommitKey key = new OffsetCommitKey()
             .setGroup("group-id")
             .setTopic("foo")
@@ -734,7 +658,8 @@ public class GroupCoordinatorRecordHelpersTest {
             .setLeaderEpoch(10)
             .setMetadata("metadata")
             .setCommitTimestamp(1234L)
-            .setExpireTimestamp(-1L);
+            .setExpireTimestamp(-1L)
+            .setTopicId(topicId);
 
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             key,
@@ -749,11 +674,14 @@ public class GroupCoordinatorRecordHelpersTest {
             "foo",
             1,
             new OffsetAndMetadata(
+                -1L,
                 100L,
                 OptionalInt.of(10),
                 "metadata",
                 1234L,
-                OptionalLong.empty())
+                OptionalLong.empty(),
+                topicId
+            )
         ));
 
         value.setLeaderEpoch(-1);
@@ -767,7 +695,9 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.empty(),
                 "metadata",
                 1234L,
-                OptionalLong.empty())
+                OptionalLong.empty(),
+                topicId
+            )
         ));
     }
 
@@ -798,7 +728,9 @@ public class GroupCoordinatorRecordHelpersTest {
                 OptionalInt.of(10),
                 "metadata",
                 1234L,
-                OptionalLong.of(5678L))
+                OptionalLong.of(5678L),
+                Uuid.ZERO_UUID
+            )
         ));
     }
 
@@ -877,22 +809,5 @@ public class GroupCoordinatorRecordHelpersTest {
             10,
             10
         ));
-    }
-
-    /**
-     * Creates a map of partitions to racks for testing.
-     *
-     * @param numPartitions The number of partitions for the topic.
-     *
-     * For testing purposes, the following criteria are used:
-     *      - Number of replicas for each partition: 2
-     *      - Number of racks available to the cluster: 4
-     */
-    public static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % 4, "rack" + (i + 1) % 4)));
-        }
-        return partitionRacks;
     }
 }

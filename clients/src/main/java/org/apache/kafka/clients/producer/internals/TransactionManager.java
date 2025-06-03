@@ -23,6 +23,7 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.PreparedTxnState;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -144,12 +145,14 @@ public class TransactionManager {
     private volatile long latestFinalizedFeaturesEpoch = -1;
     private volatile boolean isTransactionV2Enabled = false;
     private final boolean enable2PC;
+    private volatile PreparedTxnState preparedTxnState;
 
     private enum State {
         UNINITIALIZED,
         INITIALIZING,
         READY,
         IN_TRANSACTION,
+        PREPARED_TRANSACTION,
         COMMITTING_TRANSACTION,
         ABORTING_TRANSACTION,
         ABORTABLE_ERROR,
@@ -165,10 +168,12 @@ public class TransactionManager {
                     return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
                     return source == READY;
+                case PREPARED_TRANSACTION:
+                    return source == IN_TRANSACTION || source == INITIALIZING;
                 case COMMITTING_TRANSACTION:
-                    return source == IN_TRANSACTION;
+                    return source == IN_TRANSACTION || source == PREPARED_TRANSACTION;
                 case ABORTING_TRANSACTION:
-                    return source == IN_TRANSACTION || source == ABORTABLE_ERROR;
+                    return source == IN_TRANSACTION || source == PREPARED_TRANSACTION || source == ABORTABLE_ERROR;
                 case ABORTABLE_ERROR:
                     return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTABLE_ERROR
                             || source == INITIALIZING;
@@ -223,6 +228,7 @@ public class TransactionManager {
         this.txnPartitionMap = new TxnPartitionMap(logContext);
         this.apiVersions = apiVersions;
         this.enable2PC = enable2PC;
+        this.preparedTxnState = new PreparedTxnState();
     }
 
     /**
@@ -241,7 +247,7 @@ public class TransactionManager {
      * transaction manager. The {@link Producer} API calls that perform a state transition include:
      *
      * <ul>
-     *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions()}</li>
+     *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions(boolean)}</li>
      *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
      *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
      *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort()}
@@ -328,6 +334,22 @@ public class TransactionManager {
         throwIfPendingState("beginTransaction");
         maybeFailWithError();
         transitionTo(State.IN_TRANSACTION);
+    }
+
+    /**
+     * Prepare a transaction for a two-phase commit.
+     * This transitions the transaction to the PREPARED_TRANSACTION state.
+     * The preparedTxnState is set with the current producer ID and epoch.
+     */
+    public synchronized void prepareTransaction() {
+        ensureTransactional();
+        throwIfPendingState("prepareTransaction");
+        maybeFailWithError();
+        transitionTo(State.PREPARED_TRANSACTION);
+        this.preparedTxnState = new PreparedTxnState(
+            this.producerIdAndEpoch.producerId + ":" +
+            this.producerIdAndEpoch.epoch
+        );
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
@@ -485,6 +507,10 @@ public class TransactionManager {
 
     public boolean isTransactionV2Enabled() {
         return isTransactionV2Enabled;
+    }
+
+    public boolean is2PCEnabled() {
+        return enable2PC;
     }
 
     synchronized boolean hasPartitionsToAdd() {
@@ -887,7 +913,7 @@ public class TransactionManager {
                     log.debug("Not sending EndTxn for completed transaction since no partitions " +
                             "or offsets were successfully added");
                 }
-                completeTransaction();
+                resetTransactionState();
             }
             nextRequestHandler = pendingRequests.poll();
         }
@@ -1056,6 +1082,15 @@ public class TransactionManager {
     // visible for testing
     synchronized boolean isInitializing() {
         return isTransactional() && currentState == State.INITIALIZING;
+    }
+
+    /**
+     * Check if the transaction is in the prepared state.
+     *
+     * @return true if the current state is PREPARED_TRANSACTION
+     */
+    public synchronized boolean isPrepared() {
+        return currentState == State.PREPARED_TRANSACTION;
     }
 
     void handleCoordinatorReady() {
@@ -1285,7 +1320,7 @@ public class TransactionManager {
         return coordinatorSupportsBumpingEpoch || isTransactionV2Enabled;
     }
 
-    private void completeTransaction() {
+    private void resetTransactionState() {
         if (clientSideEpochBumpRequired) {
             transitionTo(State.INITIALIZING);
         } else {
@@ -1297,6 +1332,7 @@ public class TransactionManager {
         newPartitionsInTransaction.clear();
         pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
+        preparedTxnState = new PreparedTxnState();
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
@@ -1453,6 +1489,7 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
+                // TO_DO Add code to handle transition to prepared_txn when keepPrepared = true
                 transitionTo(State.READY);
                 lastError = null;
                 if (this.isEpochBump) {
@@ -1707,7 +1744,7 @@ public class TransactionManager {
                     setProducerIdAndEpoch(producerIdAndEpoch);
                     resetSequenceNumbers();
                 }
-                completeTransaction();
+                resetTransactionState();
                 result.done();
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
@@ -1904,5 +1941,14 @@ public class TransactionManager {
         }
     }
 
-
+    /**
+     * Returns a PreparedTxnState object containing the producer ID and epoch
+     * of the ongoing transaction.
+     * This is used when preparing a transaction for a two-phase commit.
+     *
+     * @return a PreparedTxnState with the current producer ID and epoch
+     */
+    public PreparedTxnState preparedTransactionState() {
+        return this.preparedTxnState;
+    }
 }
