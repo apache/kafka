@@ -23,7 +23,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import joptsimple.OptionSpec;
@@ -33,6 +35,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
     public static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     public static final String GROUP_DOC = "The streams group we wish to act on.";
+    private static final String TOPIC_DOC = "The topic whose streams group information should be deleted or topic whose should be included in the reset offset process. " +
+        "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
+        "Reset-offsets also supports multiple topic inputs.";
+    private static final String ALL_TOPICS_DOC = "Consider all topics assigned to a group in the `reset-offsets` and `delete-offsets` process.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
     public static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
@@ -47,17 +53,23 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         Use with --describe --state  to show group epoch and target assignment epoch.
         Use with --describe --members to show for each member the member epoch, target assignment epoch, current assignment, target assignment, and whether member is still using the classic rebalance protocol.
         Use with --describe --offsets  and --describe  to show leader epochs for each partition.""";
+    private static final String DELETE_OFFSETS_DOC = "Delete offsets of streams group. Supports one streams group at the time, and multiple topics.";
 
     public final OptionSpec<String> bootstrapServerOpt;
     public final OptionSpec<String> groupOpt;
+    final OptionSpec<String> topicOpt;
+    final OptionSpec<Void> allTopicsOpt;
     public final OptionSpec<Void> listOpt;
     public final OptionSpec<Void> describeOpt;
+    final OptionSpec<Void> deleteOffsetsOpt;
     public final OptionSpec<Long> timeoutMsOpt;
     public final OptionSpec<String> commandConfigOpt;
     public final OptionSpec<String> stateOpt;
     public final OptionSpec<Void> membersOpt;
     public final OptionSpec<Void> offsetsOpt;
     public final OptionSpec<Void> verboseOpt;
+
+    final Set<OptionSpec<?>> allDeleteOffsetsOpts;
 
     public static StreamsGroupCommandOptions fromArgs(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
@@ -76,8 +88,14 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("streams group")
             .ofType(String.class);
+        topicOpt = parser.accepts("topic", TOPIC_DOC)
+            .withRequiredArg()
+            .describedAs("topic")
+            .ofType(String.class);
+        allTopicsOpt = parser.accepts("all-topics", ALL_TOPICS_DOC);
         listOpt = parser.accepts("list", LIST_DOC);
         describeOpt = parser.accepts("describe", DESCRIBE_DOC);
+        deleteOffsetsOpt = parser.accepts("delete-offsets", DELETE_OFFSETS_DOC);
         timeoutMsOpt = parser.accepts("timeout", TIMEOUT_MS_DOC)
             .availableIf(describeOpt)
             .withRequiredArg()
@@ -100,6 +118,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .availableIf(describeOpt);
 
         options = parser.parse(args);
+        allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(groupOpt, topicOpt));
     }
 
     public void checkArgs() {
@@ -119,6 +138,12 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         } else {
             if (options.has(timeoutMsOpt))
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
+        }
+
+        if (options.has(deleteOffsetsOpt)) {
+            if (!options.has(groupOpt) || !options.has(topicOpt))
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + deleteOffsetsOpt + " takes the following options: " + allDeleteOffsetsOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
         }
 
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
