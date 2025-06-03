@@ -435,7 +435,7 @@ public interface ClusterInstance {
                     return leader.get();
                 }
 
-            } catch (Exception ignored) {
+            } catch (InterruptedException | ExecutionException ignored) {
                 // Continue retrying on any exception (network issues, topic not ready, etc.)
             }
 
