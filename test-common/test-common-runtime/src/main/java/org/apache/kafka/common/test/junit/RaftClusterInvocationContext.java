@@ -137,9 +137,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     .next()
                     .config()
                     .controllerListenerNames()
-                    .stream()
-                    .findFirst()
-                    .orElseThrow()
+                    .get(0)
             );
         }
 
