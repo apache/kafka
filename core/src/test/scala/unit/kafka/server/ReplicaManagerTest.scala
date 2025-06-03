@@ -4484,8 +4484,7 @@ class ReplicaManagerTest {
 
   private def createLeaderDelta(topicId: Uuid, partition: TopicPartition, leaderId: Int): TopicsDelta = {
     val delta = new TopicsDelta(TopicsImage.EMPTY)
-
-    // First add the topic
+    
     delta.replay(new TopicRecord()
       .setName(partition.topic)
       .setTopicId(topicId)
