@@ -527,4 +527,88 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
       )
     }
   }
+
+  @ClusterTest
+  def testFetchOffsetWithRecreatedTopic(): Unit = {
+    // There are two ways to ensure that committed of recreated topics are not returned.
+    // 1) When a topic is deleted, GroupCoordinatorService#onPartitionsDeleted is called to
+    //    delete all its committed offsets.
+    // 2) Since version 10 of the OffsetCommit API, the topic id is stored alongside the
+    //    committed offset. When it is queried, it is only returned iff the topic id of
+    //    committed offset matches the requested one.
+    // The test tests both conditions but not in a deterministic way as they race
+    // against each others.
+
+    createOffsetsTopic()
+
+    // Create the topic.
+    var topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Join the consumer group. Note that we don't heartbeat here so we must use
+    // a session long enough for the duration of the test.
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", true)
+
+    // Commit offsets.
+    for (partitionId <- 0 to 2) {
+      commitOffset(
+        groupId = "grp",
+        memberId = memberId,
+        memberEpoch = memberEpoch,
+        topic = "foo",
+        topicId = topicId,
+        partition = partitionId,
+        offset = 100L + partitionId,
+        expectedError = Errors.NONE,
+        version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+      )
+    }
+
+    // Delete topic.
+    deleteTopic("foo")
+
+    // Recreate topic.
+    topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Start from version 10 because fetching topic id is not supported before.
+    for (version <- 10 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
+      assertEquals(
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("grp")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setTopicId(topicId)
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(-1L),
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(1)
+                  .setCommittedOffset(-1L),
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(2)
+                  .setCommittedOffset(-1L)
+              ).asJava)
+          ).asJava),
+        fetchOffsets(
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("grp")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setTopicId(topicId)
+                .setPartitionIndexes(List[Integer](0, 1, 2).asJava)
+            ).asJava),
+          requireStable = true,
+          version = version.toShort
+        )
+      )
+    }
+  }
 }

@@ -17,10 +17,15 @@
   "apiKey": 74,
   "type": "request",
   "listeners": ["broker"],
-  "name": "ListClientMetricsResourcesRequest",
-  "validVersions": "0",
+  "name": "ListConfigResourcesRequest",
+  // Version 0 is used as ListClientMetricsResourcesRequest which only lists client metrics resources.
+  // Version 1 adds ResourceTypes field (KIP-1142). If there is no specified ResourceTypes, it should return all configuration resources.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
+    { "name": "ResourceTypes", "type": "[]int8", "versions": "1+",
+      "about": "The list of resource type. If the list is empty, it uses default supported config resource types."
+    }
   ]
 }
   
