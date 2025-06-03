@@ -22,7 +22,6 @@
     <allow pkg="java"/>
     <allow pkg="javax"/>
     <allow pkg="org.junit"/>
-    <allow pkg="scala" />
 
     <!-- These are tests, allow whatever -->
     <allow pkg="org.apache.kafka"/>

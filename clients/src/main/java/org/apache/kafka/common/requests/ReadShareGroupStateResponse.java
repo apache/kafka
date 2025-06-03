@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -47,9 +46,9 @@ public class ReadShareGroupStateResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         data.results().forEach(
-                result -> result.partitions().forEach(
-                        partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
-                )
+            result -> result.partitions().forEach(
+                partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
+            )
         );
         return counts;
     }
@@ -66,52 +65,52 @@ public class ReadShareGroupStateResponse extends AbstractResponse {
 
     public static ReadShareGroupStateResponse parse(Readable readable, short version) {
         return new ReadShareGroupStateResponse(
-                new ReadShareGroupStateResponseData(readable, version)
+            new ReadShareGroupStateResponseData(readable, version)
         );
     }
 
     public static ReadShareGroupStateResponseData toResponseData(
-            Uuid topicId,
-            int partition,
-            long startOffset,
-            int stateEpoch,
-            List<ReadShareGroupStateResponseData.StateBatch> stateBatches
+        Uuid topicId,
+        int partition,
+        long startOffset,
+        int stateEpoch,
+        List<ReadShareGroupStateResponseData.StateBatch> stateBatches
     ) {
         return new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
-                        new ReadShareGroupStateResponseData.ReadStateResult()
-                                .setTopicId(topicId)
-                                .setPartitions(Collections.singletonList(
-                                        new ReadShareGroupStateResponseData.PartitionResult()
-                                                .setPartition(partition)
-                                                .setStartOffset(startOffset)
-                                                .setStateEpoch(stateEpoch)
-                                                .setStateBatches(stateBatches)
-                                ))
-                ));
+            .setResults(List.of(
+                new ReadShareGroupStateResponseData.ReadStateResult()
+                    .setTopicId(topicId)
+                    .setPartitions(List.of(
+                        new ReadShareGroupStateResponseData.PartitionResult()
+                            .setPartition(partition)
+                            .setStartOffset(startOffset)
+                            .setStateEpoch(stateEpoch)
+                            .setStateBatches(stateBatches)
+                    ))
+            ));
     }
 
     public static ReadShareGroupStateResponseData toErrorResponseData(Uuid topicId, int partitionId, Errors error, String errorMessage) {
         return new ReadShareGroupStateResponseData().setResults(
-                Collections.singletonList(new ReadShareGroupStateResponseData.ReadStateResult()
-                        .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
-                                .setPartition(partitionId)
-                                .setErrorCode(error.code())
-                                .setErrorMessage(errorMessage)))));
+            List.of(new ReadShareGroupStateResponseData.ReadStateResult()
+                .setTopicId(topicId)
+                .setPartitions(List.of(new ReadShareGroupStateResponseData.PartitionResult()
+                    .setPartition(partitionId)
+                    .setErrorCode(error.code())
+                    .setErrorMessage(errorMessage)))));
     }
 
     public static ReadShareGroupStateResponseData.PartitionResult toErrorResponsePartitionResult(int partitionId, Errors error, String errorMessage) {
         return new ReadShareGroupStateResponseData.PartitionResult()
-                .setPartition(partitionId)
-                .setErrorCode(error.code())
-                .setErrorMessage(errorMessage);
+            .setPartition(partitionId)
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
     }
 
     public static ReadShareGroupStateResponseData.ReadStateResult toResponseReadStateResult(Uuid topicId, List<ReadShareGroupStateResponseData.PartitionResult> partitionResults) {
         return new ReadShareGroupStateResponseData.ReadStateResult()
-                .setTopicId(topicId)
-                .setPartitions(partitionResults);
+            .setTopicId(topicId)
+            .setPartitions(partitionResults);
     }
 
     public static ReadShareGroupStateResponseData toGlobalErrorResponse(ReadShareGroupStateRequestData request, Errors error) {

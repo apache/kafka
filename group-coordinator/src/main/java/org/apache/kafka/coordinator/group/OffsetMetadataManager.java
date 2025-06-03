@@ -641,6 +641,7 @@ public class OffsetMetadataManager {
                         .setErrorCode(Errors.NONE.code()));
 
                     final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRequest(
+                        topic.topicId(),
                         partition,
                         currentTimeMs,
                         expireTimestampMs
@@ -905,7 +906,7 @@ public class OffsetMetadataManager {
                         .setCommittedOffset(INVALID_OFFSET)
                         .setCommittedLeaderEpoch(-1)
                         .setMetadata(""));
-                } else if (offsetAndMetadata == null) {
+                } else if (isOffsetInvalid(offsetAndMetadata, topic.topicId())) {
                     topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                         .setPartitionIndex(partitionIndex)
                         .setCommittedOffset(INVALID_OFFSET)
@@ -924,6 +925,14 @@ public class OffsetMetadataManager {
         return new OffsetFetchResponseData.OffsetFetchResponseGroup()
             .setGroupId(request.groupId())
             .setTopics(topicResponses);
+    }
+
+    private static boolean isOffsetInvalid(OffsetAndMetadata offsetAndMetadata, Uuid expectedTopicId) {
+        return offsetAndMetadata == null || isMismatchedTopicId(offsetAndMetadata.topicId, expectedTopicId);
+    }
+
+    private static boolean isMismatchedTopicId(Uuid actual, Uuid expected) {
+        return !actual.equals(Uuid.ZERO_UUID) && !expected.equals(Uuid.ZERO_UUID) && !actual.equals(expected);
     }
 
     /**

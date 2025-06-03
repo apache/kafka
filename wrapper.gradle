@@ -24,7 +24,6 @@
 // Read more about the wrapper here: https://docs.gradle.org/current/userguide/gradle_wrapper.html
 wrapper {
     gradleVersion = project.gradleVersion
-    distributionType = Wrapper.DistributionType.ALL
 }
 
 // Custom task to inject support for downloading the gradle wrapper jar if it doesn't exist.
