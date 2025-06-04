@@ -36,29 +36,31 @@
             <ul>
                 <li><a href="#producerapi">2.1 Producer API</a>
                 <li><a href="#consumerapi">2.2 Consumer API</a>
-                <li><a href="#streamsapi">2.3 Streams API</a>
-                <li><a href="#connectapi">2.4 Connect API</a>
-                <li><a href="#adminapi">2.5 Admin API</a>
+                <li><a href="#shareconsumerapi">2.3 Share Consumer API (Preview)</a>
+                <li><a href="#streamsapi">2.4 Streams API</a>
+                <li><a href="#connectapi">2.5 Connect API</a>
+                <li><a href="#adminapi">2.6 Admin API</a>
             </ul>
         
         <li><a href="#configuration">3. Configuration</a>
             <ul>
                 <li><a href="#brokerconfigs">3.1 Broker Configs</a>
                 <li><a href="#topicconfigs">3.2 Topic Configs</a>
-                <li><a href="#producerconfigs">3.3 Producer Configs</a>
-                <li><a href="#consumerconfigs">3.4 Consumer Configs</a>
-                <li><a href="#connectconfigs">3.5 Kafka Connect Configs</a>
+                <li><a href="#groupconfigs">3.3 Group Configs</a></li>
+                <li><a href="#producerconfigs">3.4 Producer Configs</a>
+                <li><a href="#consumerconfigs">3.5 Consumer Configs</a>
+                <li><a href="#connectconfigs">3.6 Kafka Connect Configs</a>
                     <ul>
                         <li><a href="#sourceconnectconfigs">Source Connector Configs</a>
                         <li><a href="#sinkconnectconfigs">Sink Connector Configs</a>
                     </ul>
                 
-                <li><a href="#streamsconfigs">3.6 Kafka Streams Configs</a>
-                <li><a href="#adminclientconfigs">3.7 AdminClient Configs</a>
-                <li><a href="#mirrormakerconfigs">3.8 MirrorMaker Configs</a>
-                <li><a href="#systemproperties">3.9 System Properties</a>
-                <li><a href="#tieredstorageconfigs">3.10 Tiered Storage Configs</a>
-                <li><a href="#config_providers">3.11 Configuration Providers</a>
+                <li><a href="#streamsconfigs">3.7 Kafka Streams Configs</a>
+                <li><a href="#adminclientconfigs">3.8 AdminClient Configs</a>
+                <li><a href="#mirrormakerconfigs">3.9 MirrorMaker Configs</a>
+                <li><a href="#systemproperties">3.10 System Properties</a>
+                <li><a href="#tieredstorageconfigs">3.11 Tiered Storage Configs</a>
+                <li><a href="#config_providers">3.12 Configuration Providers</a>
                     <ul>
                         <li><a href="#using_config_providers">Using Configuration Providers</a>
                         <li><a href="#directory_config_provider">DirectoryConfigProvider</a>
@@ -77,9 +79,10 @@
                 <li><a href="#theconsumer">4.5 The Consumer</a>
                 <li><a href="#semantics">4.6 Message Delivery Semantics</a>
                 <li><a href="#usingtransactions">4.7 Using Transactions</a>
-                <li><a href="#replication">4.8 Replication</a>
-                <li><a href="#compaction">4.9 Log Compaction</a>
-                <li><a href="#design_quotas">4.10 Quotas</a>
+                <li><a href="#sharegroups">4.8 Share Groups</a>
+                <li><a href="#replication">4.9 Replication</a>
+                <li><a href="#compaction">4.10 Log Compaction</a>
+                <li><a href="#design_quotas">4.11 Quotas</a>
             </ul>
         
         <li><a href="#implementation">5. Implementation</a>
@@ -99,14 +102,16 @@
                         <li><a href="#basic_ops_modify_topic">Modifying topics</a>
                         <li><a href="#basic_ops_restarting">Graceful shutdown</a>
                         <li><a href="#basic_ops_leader_balancing">Balancing leadership</a>
-                        <li><a href="#basic_ops_racks">Balancing Replicas Across Racks</a>
+                        <li><a href="#basic_ops_racks">Balancing replicas across racks</a>
                         <li><a href="#basic_ops_mirror_maker">Mirroring data between clusters</a>
                         <li><a href="#basic_ops_consumer_lag">Checking consumer position</a>
-                        <li><a href="#basic_ops_consumer_group">Managing Consumer Groups</a>
+                        <li><a href="#basic_ops_groups">Managing groups</a>
+                        <li><a href="#basic_ops_consumer_group">Managing consumer groups</a>
+                        <li><a href="#basic_ops_share_group">Managing share groups</a>
                         <li><a href="#basic_ops_cluster_expansion">Expanding your cluster</a>
                         <li><a href="#basic_ops_decommissioning_brokers">Decommissioning brokers</a>
                         <li><a href="#basic_ops_increase_replication_factor">Increasing replication factor</a>
-                        <li><a href="#rep-throttle">Limiting Bandwidth Usage during Data Migration</a>
+                        <li><a href="#rep-throttle">Limiting bandwidth usage during data migration</a>
                         <li><a href="#quotas">Setting quotas</a>
                     </ul>
                 
