@@ -600,6 +600,10 @@ public class StreamsGroupCommand {
             return getDescribeGroup(groupId).groupState();
         }
 
+        Map<String, List<String>> collectInternalTopics(List<String> groupIds) throws Exception {
+            return retrieveInternalTopics(groupIds);
+        }
+
         private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
             int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
             return options.timeoutMs(t);

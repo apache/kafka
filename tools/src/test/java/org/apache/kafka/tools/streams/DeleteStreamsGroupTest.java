@@ -157,6 +157,7 @@ public class DeleteStreamsGroupTest {
             assertEquals(1, emptyGrpRes.size());
             assertTrue(emptyGrpRes.containsKey(appId));
             assertNull(emptyGrpRes.get(appId), "The streams group could not be deleted as expected");
+            assertInternalTopicsDeleted(List.of(appId), service);
 
             /* test 3: delete an already deleted streams group (non-existing group) */
             result = service.deleteGroups();
@@ -234,6 +235,7 @@ public class DeleteStreamsGroupTest {
         assertNull(mixGrpsRes.get(appId1));
         assertNotNull(mixGrpsRes.get(appId2));
         assertNotNull(mixGrpsRes.get(appId3));
+        assertInternalTopicsDeleted(List.of(appId1), service);
 
         /* test 3: delete all groups */
         stopKSApp(appId2, streams2, service);
@@ -252,6 +254,7 @@ public class DeleteStreamsGroupTest {
         assertEquals(2, allGrpsRes.size());
         assertNull(allGrpsRes.get(appId2));
         assertNull(allGrpsRes.get(appId3));
+        assertInternalTopicsDeleted(List.of(appId1, appId2, appId3), service);
     }
 
     @Test
@@ -274,10 +277,16 @@ public class DeleteStreamsGroupTest {
             assertEquals(1, result.size());
             assertTrue(result.containsKey(appId));
             assertNull(result.get(appId), "The streams group could not be deleted as expected");
+            assertInternalTopicsDeleted(List.of(appId), service);
+
         } finally {
             // upgrade back the streams.version to 1
             updateStreamsGroupProtocol((short) 1);
         }
+    }
+
+    private void assertInternalTopicsDeleted(List<String> appIds, StreamsGroupCommand.StreamsGroupService service) throws Exception {
+        assertTrue(service.collectInternalTopics(appIds).isEmpty());
     }
 
     private void updateStreamsGroupProtocol(short version) {
