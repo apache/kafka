@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.VoterSet;
@@ -68,7 +69,8 @@ final class RecordsSnapshotWriterTest {
                 STRING_SERDE,
                 BufferSupplier.NO_CACHING,
                 maxBatchSize,
-                true
+                true,
+                new LogContext()
             )
         ) {
             // Consume the control record batch
@@ -140,7 +142,8 @@ final class RecordsSnapshotWriterTest {
                 STRING_SERDE,
                 BufferSupplier.NO_CACHING,
                 maxBatchSize,
-                true
+                true,
+                new LogContext()
             )
         ) {
             // Consume the control record batch
@@ -197,7 +200,8 @@ final class RecordsSnapshotWriterTest {
                 STRING_SERDE,
                 BufferSupplier.NO_CACHING,
                 maxBatchSize,
-                true
+                true,
+                new LogContext()
             )
         ) {
             // Consume the control record batch

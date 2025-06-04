@@ -60,7 +60,7 @@ public class RequestManagers implements Closeable {
     public final FetchRequestManager fetchRequestManager;
     public final Optional<ShareConsumeRequestManager> shareConsumeRequestManager;
     public final Optional<StreamsGroupHeartbeatRequestManager> streamsGroupHeartbeatRequestManager;
-    private final List<Optional<? extends RequestManager>> entries;
+    private final List<RequestManager> entries;
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public RequestManagers(LogContext logContext,
@@ -87,16 +87,16 @@ public class RequestManagers implements Closeable {
         this.streamsMembershipManager = streamsMembershipManager;
         this.shareMembershipManager = Optional.empty();
 
-        List<Optional<? extends RequestManager>> list = new ArrayList<>();
-        list.add(coordinatorRequestManager);
-        list.add(commitRequestManager);
-        list.add(heartbeatRequestManager);
-        list.add(membershipManager);
-        list.add(streamsGroupHeartbeatRequestManager);
-        list.add(streamsMembershipManager);
-        list.add(Optional.of(offsetsRequestManager));
-        list.add(Optional.of(topicMetadataRequestManager));
-        list.add(Optional.of(fetchRequestManager));
+        List<RequestManager> list = new ArrayList<>();
+        coordinatorRequestManager.ifPresent(list::add);
+        commitRequestManager.ifPresent(list::add);
+        heartbeatRequestManager.ifPresent(list::add);
+        membershipManager.ifPresent(list::add);
+        streamsGroupHeartbeatRequestManager.ifPresent(list::add);
+        streamsMembershipManager.ifPresent(list::add);
+        list.add(offsetsRequestManager);
+        list.add(topicMetadataRequestManager);
+        list.add(fetchRequestManager);
         entries = Collections.unmodifiableList(list);
     }
 
@@ -119,15 +119,15 @@ public class RequestManagers implements Closeable {
         this.topicMetadataRequestManager = null;
         this.fetchRequestManager = null;
 
-        List<Optional<? extends RequestManager>> list = new ArrayList<>();
-        list.add(coordinatorRequestManager);
-        list.add(shareHeartbeatRequestManager);
-        list.add(shareMembershipManager);
-        list.add(Optional.of(shareConsumeRequestManager));
+        List<RequestManager> list = new ArrayList<>();
+        coordinatorRequestManager.ifPresent(list::add);
+        shareHeartbeatRequestManager.ifPresent(list::add);
+        shareMembershipManager.ifPresent(list::add);
+        list.add(shareConsumeRequestManager);
         entries = Collections.unmodifiableList(list);
     }
 
-    public List<Optional<? extends RequestManager>> entries() {
+    public List<RequestManager> entries() {
         return entries;
     }
 
@@ -138,8 +138,6 @@ public class RequestManagers implements Closeable {
                     log.debug("Closing RequestManagers");
 
                     entries.stream()
-                            .filter(Optional::isPresent)
-                            .map(Optional::get)
                             .filter(rm -> rm instanceof Closeable)
                             .map(rm -> (Closeable) rm)
                             .forEach(c -> closeQuietly(c, c.getClass().getSimpleName()));

@@ -79,6 +79,7 @@ object KafkaRaftManager {
   private def hasDifferentLogDir(config: KafkaConfig): Boolean = {
     !config
       .logDirs
+      .asScala
       .map(Paths.get(_).toAbsolutePath)
       .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
   }

@@ -315,8 +315,10 @@ public class MetadataQuorumCommand {
         public String toString() {
             StringBuilder sb = new StringBuilder();
             sb.append("{");
-            sb.append("\"id\": ").append(id).append(", ");
-            sb.append("\"directoryId\": ").append(directoryId.equals(Uuid.ZERO_UUID) ? "null" : "\"" + directoryId + "\"");
+            sb.append("\"id\": ").append(id);
+            if (!directoryId.equals(Uuid.ZERO_UUID)) {
+                sb.append(", ").append("\"directoryId\": ").append("\"").append(directoryId).append("\"");
+            }
             if (!endpoints.isEmpty()) {
                 sb.append(", \"endpoints\": [");
                 for (RaftVoterEndpoint endpoint : endpoints) {

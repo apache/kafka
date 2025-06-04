@@ -647,17 +647,6 @@ public class ConsumerHeartbeatRequestManagerTest {
         clearInvocations(backgroundEventHandler);
     }
 
-    private void mockErrorResponse(Errors error, String exceptionCustomMsg) {
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
-
-        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        ClientResponse response = createHeartbeatResponse(
-            result.unsentRequests.get(0), error, exceptionCustomMsg);
-        result.unsentRequests.get(0).handler().onComplete(response);
-    }
-
     private void mockResponseWithException(UnsupportedVersionException exception, boolean isFromBroker) {
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());

@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -69,6 +70,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -239,10 +241,30 @@ public class AdjustStreamThreadCountTest {
             final CountDownLatch latch = new CountDownLatch(2);
             final Thread one = adjustCountHelperThread(kafkaStreams, 4, latch);
             final Thread two = adjustCountHelperThread(kafkaStreams, 6, latch);
-            two.start();
-            one.start();
-            latch.await(30, TimeUnit.SECONDS);
-            assertThat(kafkaStreams.metadataForLocalThreads().size(), equalTo(oldThreadCount));
+            Set<ThreadMetadata> threadMetadata = null;
+
+            AssertionError testError = null;
+            try {
+                two.start();
+                one.start();
+
+                assertTrue(latch.await(30, TimeUnit.SECONDS));
+                one.join();
+                two.join();
+
+                threadMetadata = kafkaStreams.metadataForLocalThreads();
+                assertThat(threadMetadata.size(), equalTo(oldThreadCount));
+            } catch (final AssertionError e) {
+                System.err.println(threadMetadata);
+                testError = e;
+            } finally {
+                one.join();
+                two.join();
+            }
+
+            if (testError != null) {
+                throw testError;
+            }
 
             waitForTransitionFromRebalancingToRunning();
         }
@@ -274,7 +296,7 @@ public class AdjustStreamThreadCountTest {
                     try {
                         // block the pending shutdown thread to test whether other running thread
                         // can make kafka streams running
-                        latchBeforeDead.await(DEFAULT_DURATION.toMillis(), TimeUnit.MILLISECONDS);
+                        assertFalse(latchBeforeDead.await(DEFAULT_DURATION.toMillis(), TimeUnit.MILLISECONDS));
                     } catch (final InterruptedException e) {
                         throw new RuntimeException(e);
                     }

@@ -53,9 +53,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class MockProducerTest {
 
     private final String topic = "topic";
-    private MockProducer<byte[], byte[]> producer;
-    private final ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(topic, "key1".getBytes(), "value1".getBytes());
-    private final ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(topic, "key2".getBytes(), "value2".getBytes());
+    private MockProducer<String, String> producer;
+    private final ProducerRecord<String, String> record1 = new ProducerRecord<>(topic, "key1", "value1");
+    private final ProducerRecord<String, String> record2 = new ProducerRecord<>(topic, "key2", "value2");
     private final String groupId = "group";
 
     private void buildMockProducer(boolean autoComplete) {
@@ -318,7 +318,7 @@ public class MockProducerTest {
 
         producer.commitTransaction();
 
-        List<ProducerRecord<byte[], byte[]>> expectedResult = new ArrayList<>();
+        List<ProducerRecord<String, String>> expectedResult = new ArrayList<>();
         expectedResult.add(record1);
         expectedResult.add(record2);
 
@@ -385,7 +385,7 @@ public class MockProducerTest {
         producer.beginTransaction();
         producer.abortTransaction();
 
-        List<ProducerRecord<byte[], byte[]>> expectedResult = new ArrayList<>();
+        List<ProducerRecord<String, String>> expectedResult = new ArrayList<>();
         expectedResult.add(record1);
         expectedResult.add(record2);
 

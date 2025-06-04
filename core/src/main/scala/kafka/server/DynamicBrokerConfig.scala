@@ -34,6 +34,7 @@ import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{BufferSupplier, ConfigUtils, Utils}
 import org.apache.kafka.config
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
@@ -48,15 +49,16 @@ import org.apache.kafka.server.telemetry.ClientTelemetry
 import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.apache.kafka.storage.internals.log.{LogCleaner, LogConfig}
 
+import scala.util.Using
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
 /**
   * Dynamic broker configurations may be defined at two levels:
   * <ul>
-  *   <li>Per-broker configurations are persisted at the controller and can be described 
+  *   <li>Per-broker configurations are persisted at the controller and can be described
   *         or altered using AdminClient with the resource name brokerId.</li>
-  *   <li>Cluster-wide default configurations are persisted at the cluster level and can be 
+  *   <li>Cluster-wide default configurations are persisted at the cluster level and can be
   *         described or altered using AdminClient with an empty resource name.</li>
   * </ul>
   * The order of precedence for broker configs is:
@@ -195,7 +197,8 @@ object DynamicBrokerConfig {
   private[server] def readDynamicBrokerConfigsFromSnapshot(
     raftManager: KafkaRaftManager[ApiMessageAndVersion],
     config: KafkaConfig,
-    quotaManagers: QuotaFactory.QuotaManagers
+    quotaManagers: QuotaFactory.QuotaManagers,
+    logContext: LogContext
   ): Unit = {
     def putOrRemoveIfNull(props: Properties, key: String, value: String): Unit = {
       if (value == null) {
@@ -204,38 +207,42 @@ object DynamicBrokerConfig {
         props.put(key, value)
       }
     }
-    raftManager.replicatedLog.latestSnapshotId().ifPresent(latestSnapshotId => {
-      raftManager.replicatedLog.readSnapshot(latestSnapshotId).ifPresent(rawSnapshotReader => {
-        val reader = RecordsSnapshotReader.of(
-          rawSnapshotReader,
-          raftManager.recordSerde,
-          BufferSupplier.create(),
-          KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-          true
-        )
-        val dynamicPerBrokerConfigs = new Properties()
-        val dynamicDefaultConfigs = new Properties()
-        while (reader.hasNext) {
-          val batch = reader.next()
-          batch.forEach(record => {
-            if (record.message().apiKey() == MetadataRecordType.CONFIG_RECORD.id) {
-              val configRecord = record.message().asInstanceOf[ConfigRecord]
-              if (DynamicBrokerConfig.AllDynamicConfigs.contains(configRecord.name()) &&
-                configRecord.resourceType() == ConfigResource.Type.BROKER.id()) {
-                if (configRecord.resourceName().isEmpty) {
-                  putOrRemoveIfNull(dynamicDefaultConfigs, configRecord.name(), configRecord.value())
-                } else if (configRecord.resourceName() == config.brokerId.toString) {
-                  putOrRemoveIfNull(dynamicPerBrokerConfigs, configRecord.name(), configRecord.value())
-                }
+    raftManager.replicatedLog.latestSnapshotId().ifPresent { latestSnapshotId =>
+      raftManager.replicatedLog.readSnapshot(latestSnapshotId).ifPresent { rawSnapshotReader =>
+        Using.resource(
+          RecordsSnapshotReader.of(
+            rawSnapshotReader,
+            raftManager.recordSerde,
+            BufferSupplier.create(),
+            KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+            true,
+            logContext
+          )
+        ) { reader =>
+          val dynamicPerBrokerConfigs = new Properties()
+          val dynamicDefaultConfigs = new Properties()
+          while (reader.hasNext) {
+            val batch = reader.next()
+            batch.forEach { record =>
+              if (record.message().apiKey() == MetadataRecordType.CONFIG_RECORD.id) {
+                val configRecord = record.message().asInstanceOf[ConfigRecord]
+                if (DynamicBrokerConfig.AllDynamicConfigs.contains(configRecord.name()) &&
+                  configRecord.resourceType() == ConfigResource.Type.BROKER.id()) {
+                    if (configRecord.resourceName().isEmpty) {
+                      putOrRemoveIfNull(dynamicDefaultConfigs, configRecord.name(), configRecord.value())
+                    } else if (configRecord.resourceName() == config.brokerId.toString) {
+                      putOrRemoveIfNull(dynamicPerBrokerConfigs, configRecord.name(), configRecord.value())
+                    }
+                  }
               }
             }
-          })
+          }
+          val configHandler = new BrokerConfigHandler(config, quotaManagers)
+          configHandler.processConfigChanges("", dynamicPerBrokerConfigs)
+          configHandler.processConfigChanges(config.brokerId.toString, dynamicPerBrokerConfigs)
         }
-        val configHandler = new BrokerConfigHandler(config, quotaManagers)
-        configHandler.processConfigChanges("", dynamicPerBrokerConfigs)
-        configHandler.processConfigChanges(config.brokerId.toString, dynamicPerBrokerConfigs)
-      })
-    })
+      }
+    }
   }
 }
 

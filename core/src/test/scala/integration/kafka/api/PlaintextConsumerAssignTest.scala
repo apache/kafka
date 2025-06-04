@@ -15,13 +15,10 @@ package kafka.api
 import kafka.utils.{TestInfoUtils, TestUtils}
 import java.util.Properties
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
-
-import scala.jdk.CollectionConverters._
 
 /**
  * Integration tests for the consumer that covers logic related to manual assignment.
@@ -39,11 +36,11 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     val cb = new CountConsumerCommitCallback
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumer.commitAsync(cb)
     TestUtils.pollUntilTrue(consumer, () => cb.successCount >= 1 || cb.lastError.isDefined,
       "Failed to observe commit callback before timeout", waitTimeMs = 10000)
-    val committedOffset = consumer.committed(Set(tp).asJava)
+    val committedOffset = consumer.committed(java.util.Set.of(tp))
     assertNotNull(committedOffset)
     // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
     // tp. The committed offset should be null. This is intentional.
@@ -60,9 +57,9 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumer.commitSync()
-    val committedOffset = consumer.committed(Set(tp).asJava)
+    val committedOffset = consumer.committed(java.util.Set.of(tp))
     assertNotNull(committedOffset)
     // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
     // tp. The committed offset should be null. This is intentional.
@@ -81,12 +78,12 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
 
     val props = new Properties()
     val consumer = createConsumer(configOverrides = props)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumer.seek(tp, 0)
     consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
 
     consumer.commitSync()
-    val committedOffset = consumer.committed(Set(tp).asJava)
+    val committedOffset = consumer.committed(java.util.Set.of(tp))
     assertNotNull(committedOffset)
     assertNotNull(committedOffset.get(tp))
     assertEquals(numRecords, committedOffset.get(tp).offset())
@@ -104,7 +101,7 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     val props = new Properties()
     val consumer = createConsumer(configOverrides = props,
       configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
 
     assertEquals(numRecords, consumer.position(tp))
@@ -122,7 +119,7 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     val props = new Properties()
     val consumer = createConsumer(configOverrides = props,
       configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     val offset = 1
     consumer.seek(tp, offset)
     consumeAndVerifyRecords(consumer = consumer, numRecords - offset, startingOffset = offset,
@@ -140,17 +137,17 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
     val props = new Properties()
     val consumer = createConsumer(configOverrides = props)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     // First consumer consumes and commits offsets
     consumer.seek(tp, 0)
     consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0,
       startingTimestamp = startingTimestamp)
     consumer.commitSync()
-    assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(numRecords, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
     // We should see the committed offsets from another consumer
     val anotherConsumer = createConsumer(configOverrides = props)
-    anotherConsumer.assign(List(tp).asJava)
-    assertEquals(numRecords, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
+    anotherConsumer.assign(java.util.List.of(tp))
+    assertEquals(numRecords, anotherConsumer.committed(java.util.Set.of(tp)).get(tp).offset)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -165,17 +162,16 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     val props = new Properties()
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group1")
     val consumer = createConsumer(configOverrides = props)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     val offset = 10
-    consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(offset)))
-      .asJava)
-    assertEquals(offset, consumer.committed(Set(tp).asJava).get(tp).offset)
+    consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(offset)))
+    assertEquals(offset, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
     consumer.close()
 
     // Consume from committed offsets with another consumer in same group
     val anotherConsumer = createConsumer(configOverrides = props)
-    assertEquals(offset, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
-    anotherConsumer.assign(List(tp).asJava)
+    assertEquals(offset, anotherConsumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    anotherConsumer.assign(java.util.List.of(tp))
     consumeAndVerifyRecords(consumer = anotherConsumer, numRecords - offset,
       startingOffset = offset, startingKeyAndValueIndex = offset,
       startingTimestamp = startingTimestamp + offset)
@@ -191,7 +187,7 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
 
     val props = new Properties()
     val consumer = createConsumer(configOverrides = props)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     // Consume and commit offsets
     consumer.seek(tp, 0)
@@ -200,8 +196,8 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     consumer.commitSync()
 
     // Check committed offsets twice with same consumer
-    assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
-    assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(numRecords, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    assertEquals(numRecords, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
   }
 
 }

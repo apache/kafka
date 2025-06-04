@@ -395,6 +395,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
     }
 
+    private final LogContext logContext;
+
     private final Logger log;
 
     /**
@@ -448,6 +450,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                            SharedLogData shared,
                            String threadNamePrefix,
                            KRaftVersion lastKRaftVersion) {
+        this.logContext = logContext;
         this.log = logContext.logger(LocalLogManager.class);
         this.nodeId = nodeId;
         this.shared = shared;
@@ -477,7 +480,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                         new  MetadataRecordSerde(),
                                         BufferSupplier.create(),
                                         Integer.MAX_VALUE,
-                                        true
+                                        true,
+                                        logContext
                                     )
                                 );
                             }

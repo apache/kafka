@@ -30,6 +30,7 @@ import org.apache.kafka.clients.admin.ListShareGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
 import org.apache.kafka.clients.admin.ShareMemberAssignment;
 import org.apache.kafka.clients.admin.ShareMemberDescription;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
@@ -152,9 +153,8 @@ public class ShareGroupCommand {
 
         List<String> listShareGroups() {
             try {
-                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
-                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
-                    .withTypes(Set.of(GroupType.SHARE)));
+                ListGroupsResult result = adminClient.listGroups(ListGroupsOptions.forShareGroups()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException | ExecutionException e) {
@@ -164,9 +164,8 @@ public class ShareGroupCommand {
 
         List<GroupListing> listDetailedShareGroups() {
             try {
-                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
-                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
-                    .withTypes(Set.of(GroupType.SHARE)));
+                ListGroupsResult result = adminClient.listGroups(ListGroupsOptions.forShareGroups()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().toList();
             } catch (InterruptedException | ExecutionException e) {
@@ -175,9 +174,8 @@ public class ShareGroupCommand {
         }
 
         List<GroupListing> listShareGroupsInStates(Set<GroupState> states) throws ExecutionException, InterruptedException {
-            ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+            ListGroupsResult result = adminClient.listGroups(ListGroupsOptions.forShareGroups()
                 .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
-                .withTypes(Set.of(GroupType.SHARE))
                 .inGroupStates(states));
             return new ArrayList<>(result.all().get());
         }
@@ -278,10 +276,10 @@ public class ShareGroupCommand {
                 System.out.println("Deletion of requested share groups (" + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")) + ") was successful.");
             else {
                 printError("Deletion of some share groups failed:", Optional.empty());
-                failed.forEach((group, error) -> System.out.println("* Share group '" + group + "' could not be deleted due to: " + error));
+                failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty())
-                    System.out.println("\nThese share groups were deleted successfully: " + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(",")));
+                    System.out.println("\nThese share groups were deleted successfully: " + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")));
             }
 
             failed.putAll(success);
@@ -403,19 +401,30 @@ public class ShareGroupCommand {
                 groupSpecs.put(groupId, offsetsSpec);
 
                 try {
-                    Map<TopicPartition, Long> earliestResult = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
+                    Map<TopicPartition, OffsetAndMetadata> startOffsets = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
 
                     Set<SharePartitionOffsetInformation> partitionOffsets = new HashSet<>();
 
-                    for (Entry<TopicPartition, Long> tp : earliestResult.entrySet()) {
-                        SharePartitionOffsetInformation partitionOffsetInfo = new SharePartitionOffsetInformation(
-                            groupId,
-                            tp.getKey().topic(),
-                            tp.getKey().partition(),
-                            Optional.ofNullable(earliestResult.get(tp.getKey()))
-                        );
-                        partitionOffsets.add(partitionOffsetInfo);
-                    }
+                    startOffsets.forEach((tp, offsetAndMetadata) -> {
+                        if (offsetAndMetadata != null) {
+                            partitionOffsets.add(new SharePartitionOffsetInformation(
+                                groupId,
+                                tp.topic(),
+                                tp.partition(),
+                                Optional.of(offsetAndMetadata.offset()),
+                                offsetAndMetadata.leaderEpoch()
+                            ));
+                        } else {
+                            partitionOffsets.add(new SharePartitionOffsetInformation(
+                                groupId,
+                                tp.topic(),
+                                tp.partition(),
+                                Optional.empty(),
+                                Optional.empty()
+                            ));
+                        }
+                    });
+
                     groupOffsets.put(groupId, new SimpleImmutableEntry<>(shareGroup, partitionOffsets));
                 } catch (InterruptedException | ExecutionException e) {
                     throw new RuntimeException(e);
@@ -447,7 +456,7 @@ public class ShareGroupCommand {
                             groupId,
                             info.topic,
                             info.partition,
-                            MISSING_COLUMN_VALUE, // Temporary
+                            info.leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
                             info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
                         );
                     } else {
@@ -569,17 +578,20 @@ public class ShareGroupCommand {
         final String topic;
         final int partition;
         final Optional<Long> offset;
+        final Optional<Integer> leaderEpoch;
 
         SharePartitionOffsetInformation(
             String group,
             String topic,
             int partition,
-            Optional<Long> offset
+            Optional<Long> offset,
+            Optional<Integer> leaderEpoch
         ) {
             this.group = group;
             this.topic = topic;
             this.partition = partition;
             this.offset = offset;
+            this.leaderEpoch = leaderEpoch;
         }
     }
 }

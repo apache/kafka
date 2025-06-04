@@ -346,6 +346,7 @@ public class AclControlManagerTest {
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
         ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding));
+        RecordTestUtils.replayAll(manager, createResult.records());
         Uuid id = ((AccessControlEntryRecord) createResult.records().get(0).message()).id();
         assertEquals(1, createResult.records().size());
 

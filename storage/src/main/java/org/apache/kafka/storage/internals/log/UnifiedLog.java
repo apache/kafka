@@ -483,7 +483,7 @@ public class UnifiedLog implements AutoCloseable {
 
         if (partMetadataFile.exists()) {
             Uuid fileTopicId = partMetadataFile.read().topicId();
-            if (topicId.isPresent() && !topicId.get().equals(fileTopicId)) {
+            if (topicId.filter(x -> !x.equals(fileTopicId)).isPresent()) {
                 throw new InconsistentTopicIdException("Tried to assign topic ID " + topicId + " to log for topic partition " + topicPartition() + "," +
                         "but log already contained topic ID " + fileTopicId);
             }
@@ -645,10 +645,12 @@ public class UnifiedLog implements AutoCloseable {
     private LogOffsetMetadata fetchLastStableOffsetMetadata() throws IOException {
         localLog.checkIfMemoryMappedBufferClosed();
 
-        // cache the current high watermark to avoid a concurrent update invalidating the range check
+        // cache the current high watermark and the first unstable offset metadata to avoid a concurrent update
+        // invalidating the range check breaking the isPresent check
         LogOffsetMetadata highWatermarkMetadata = fetchHighWatermarkMetadata();
-        if (firstUnstableOffsetMetadata.isPresent() && firstUnstableOffsetMetadata.get().messageOffset < highWatermarkMetadata.messageOffset) {
-            LogOffsetMetadata lom = firstUnstableOffsetMetadata.get();
+        Optional<LogOffsetMetadata> firstUnstableOffsetMetadataCopy = firstUnstableOffsetMetadata;
+        if (firstUnstableOffsetMetadataCopy.isPresent() && firstUnstableOffsetMetadataCopy.get().messageOffset < highWatermarkMetadata.messageOffset) {
+            LogOffsetMetadata lom = firstUnstableOffsetMetadataCopy.get();
             if (lom.messageOffsetOnly()) {
                 synchronized (lock) {
                     LogOffsetMetadata fullOffset = maybeConvertToOffsetMetadata(lom.messageOffset);
@@ -671,8 +673,10 @@ public class UnifiedLog implements AutoCloseable {
      * beyond the high watermark.
      */
     public long lastStableOffset() {
-        if (firstUnstableOffsetMetadata.isPresent() && firstUnstableOffsetMetadata.get().messageOffset < highWatermark()) {
-            return firstUnstableOffsetMetadata.get().messageOffset;
+        // cache the first unstable offset metadata to avoid a concurrent update breaking the isPresent check
+        Optional<LogOffsetMetadata> firstUnstableOffsetMetadataCopy = firstUnstableOffsetMetadata;
+        if (firstUnstableOffsetMetadataCopy.isPresent() && firstUnstableOffsetMetadataCopy.get().messageOffset < highWatermark()) {
+            return firstUnstableOffsetMetadataCopy.get().messageOffset;
         } else {
             return highWatermark();
         }
@@ -750,15 +754,15 @@ public class UnifiedLog implements AutoCloseable {
             }
         } else {
             this.topicId = Optional.of(topicId);
-            if (partitionMetadataFile.isPresent()) {
-                PartitionMetadataFile file = partitionMetadataFile.get();
-                if (!file.exists()) {
-                    file.record(topicId);
-                    scheduler().scheduleOnce("flush-metadata-file", this::maybeFlushMetadataFile);
-                }
-            } else {
-                logger.warn("The topic id {} will not be persisted to the partition metadata file since the partition is deleted", topicId);
-            }
+            partitionMetadataFile.ifPresentOrElse(
+                file -> {
+                    if (!file.exists()) {
+                        file.record(topicId);
+                        scheduler().scheduleOnce("flush-metadata-file", this::maybeFlushMetadataFile);
+                    }
+                },
+                () -> logger.warn("The topic id {} will not be persisted to the partition metadata file since the partition is deleted", topicId)
+            );
         }
     }
 
@@ -1177,9 +1181,9 @@ public class UnifiedLog implements AutoCloseable {
                             });
 
                             // check messages size does not exceed config.segmentSize
-                            if (validRecords.sizeInBytes() > config().segmentSize) {
+                            if (validRecords.sizeInBytes() > config().segmentSize()) {
                                 throw new RecordBatchTooLargeException("Message batch size is " + validRecords.sizeInBytes() + " bytes in append " +
-                                        "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize + ".");
+                                        "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize() + ".");
                             }
 
                             // maybe roll the log if this segment is full
@@ -2034,12 +2038,12 @@ public class UnifiedLog implements AutoCloseable {
             long maxTimestampInMessages = appendInfo.maxTimestamp();
             long maxOffsetInMessages = appendInfo.lastOffset();
 
-            if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize, appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
+            if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize(), appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
                 logger.debug("Rolling new log segment (log_size = {}/{}}, " +
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",
-                        segment.size(), config().segmentSize,
+                        segment.size(), config().segmentSize(),
                         segment.offsetIndex().entries(), segment.offsetIndex().maxEntries(),
                         segment.timeIndex().entries(), segment.timeIndex().maxEntries(),
                         segment.timeWaitedForRoll(now, maxTimestampInMessages), config().segmentMs - segment.rollJitterMs());

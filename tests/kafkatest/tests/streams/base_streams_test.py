@@ -33,6 +33,7 @@ class BaseStreamsTest(Test):
         self.num_controllers = num_controllers
         self.num_brokers = num_brokers
         self.topics = topics
+        self.use_streams_groups = True
 
         self.kafka = KafkaService(
             test_context, self.num_brokers,
@@ -47,7 +48,8 @@ class BaseStreamsTest(Test):
 
     def setUp(self):
         self.kafka.start()
-        self.kafka.run_features_command("upgrade", "streams.version", 1)
+        if self.use_streams_groups:
+            self.kafka.run_features_command("upgrade", "streams.version", 1)
 
     def get_consumer(self, client_id, topic, num_messages):
         return VerifiableConsumer(self.test_context,
@@ -95,6 +97,17 @@ class BaseStreamsTest(Test):
         wait_until(lambda: consumer.total_consumed() >= num_messages,
                    timeout_sec=timeout_sec,
                    err_msg="At %s streams did not process messages in %s seconds " % (test_state, timeout_sec))
+
+    def configure_standby_replicas(self, group_id, num_standby_replicas):
+        force_use_zk_connection = not self.kafka.all_nodes_configs_command_uses_bootstrap_server()
+        node = self.kafka.nodes[0]
+        cmd = "%s --alter --add-config streams.num.standby.replicas=%d --entity-type groups --entity-name %s" % \
+              (
+                    self.kafka.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection),
+                    num_standby_replicas,
+                    group_id
+              )
+        node.account.ssh(cmd)
 
     @staticmethod
     def get_configs(group_protocol="classic", extra_configs=""):

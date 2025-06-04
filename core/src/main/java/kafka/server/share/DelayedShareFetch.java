@@ -17,11 +17,11 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
-import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.LogReadResult;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperation;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -39,6 +40,7 @@ import org.apache.kafka.server.share.fetch.ShareFetchPartitionData;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
@@ -63,6 +65,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -96,12 +99,18 @@ public class DelayedShareFetch extends DelayedOperation {
      * Metric for the rate of expired delayed fetch requests.
      */
     private final Meter expiredRequestMeter;
+    /**
+     * fetchId serves as a token while acquiring/releasing share partition's fetch lock.
+     */
+    private final Uuid fetchId;
     // Tracks the start time to acquire any share partition for a fetch request.
     private long acquireStartTimeMs;
     private LinkedHashMap<TopicIdPartition, Long> partitionsAcquired;
     private LinkedHashMap<TopicIdPartition, LogReadResult> localPartitionsAlreadyFetched;
     private Optional<PendingRemoteFetches> pendingRemoteFetchesOpt;
     private Optional<Exception> remoteStorageFetchException;
+    private final AtomicBoolean outsidePurgatoryCallbackLock;
+    private final long remoteFetchMaxWaitMs;
 
     /**
      * This function constructs an instance of delayed share fetch operation for completing share fetch
@@ -113,6 +122,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * @param sharePartitions The share partitions referenced in the share fetch request.
      * @param shareGroupMetrics The share group metrics to record the metrics.
      * @param time The system time.
+     * @param remoteFetchMaxWaitMs The max wait time for a share fetch request having remote storage fetch.
      */
     public DelayedShareFetch(
             ShareFetch shareFetch,
@@ -120,7 +130,8 @@ public class DelayedShareFetch extends DelayedOperation {
             BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
             ShareGroupMetrics shareGroupMetrics,
-            Time time
+            Time time,
+            long remoteFetchMaxWaitMs
     ) {
         this(shareFetch,
             replicaManager,
@@ -129,7 +140,9 @@ public class DelayedShareFetch extends DelayedOperation {
             PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM),
             shareGroupMetrics,
             time,
-            Optional.empty()
+            Optional.empty(),
+            Uuid.randomUuid(),
+            remoteFetchMaxWaitMs
         );
     }
 
@@ -145,6 +158,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * @param shareGroupMetrics The share group metrics to record the metrics.
      * @param time The system time.
      * @param pendingRemoteFetchesOpt Optional containing an in-flight remote fetch object or an empty optional.
+     * @param remoteFetchMaxWaitMs The max wait time for a share fetch request having remote storage fetch.
      */
     DelayedShareFetch(
         ShareFetch shareFetch,
@@ -154,9 +168,11 @@ public class DelayedShareFetch extends DelayedOperation {
         PartitionMaxBytesStrategy partitionMaxBytesStrategy,
         ShareGroupMetrics shareGroupMetrics,
         Time time,
-        Optional<PendingRemoteFetches> pendingRemoteFetchesOpt
+        Optional<PendingRemoteFetches> pendingRemoteFetchesOpt,
+        Uuid fetchId,
+        long remoteFetchMaxWaitMs
     ) {
-        super(shareFetch.fetchParams().maxWaitMs, Optional.empty());
+        super(shareFetch.fetchParams().maxWaitMs);
         this.shareFetch = shareFetch;
         this.replicaManager = replicaManager;
         this.partitionsAcquired = new LinkedHashMap<>();
@@ -169,6 +185,9 @@ public class DelayedShareFetch extends DelayedOperation {
         this.acquireStartTimeMs = time.hiResClockMs();
         this.pendingRemoteFetchesOpt = pendingRemoteFetchesOpt;
         this.remoteStorageFetchException = Optional.empty();
+        this.fetchId = fetchId;
+        this.outsidePurgatoryCallbackLock = new AtomicBoolean(false);
+        this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
         // Register metrics for DelayedShareFetch.
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "DelayedShareFetchMetrics");
         this.expiredRequestMeter = metricsGroup.newMeter(EXPIRES_PER_SEC, "requests", TimeUnit.SECONDS);
@@ -183,26 +202,29 @@ public class DelayedShareFetch extends DelayedOperation {
      * Complete the share fetch operation by fetching records for all partitions in the share fetch request irrespective
      * of whether they have any acquired records. This is called when the fetch operation is forced to complete either
      * because records can be acquired for some partitions or due to MaxWaitMs timeout.
+     * <p>
+     * On operation timeout, onComplete is invoked, last try occurs to acquire partitions and read
+     * from log, if acquired. The fetch will only happen from local log and not remote storage, on
+     * operation expiration.
      */
     @Override
     public void onComplete() {
-        // We are utilizing lock so that onComplete doesn't do a dirty read for instance variables -
-        // partitionsAcquired and localPartitionsAlreadyFetched, since these variables can get updated in a different tryComplete thread.
-        lock.lock();
         log.trace("Completing the delayed share fetch request for group {}, member {}, "
             + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
             partitionsAcquired.keySet());
 
-        try {
-            if (remoteStorageFetchException.isPresent()) {
-                completeErroneousRemoteShareFetchRequest();
-            } else if (pendingRemoteFetchesOpt.isPresent()) {
-                completeRemoteStorageShareFetchRequest();
-            } else {
-                completeLocalLogShareFetchRequest();
+        if (remoteStorageFetchException.isPresent()) {
+            completeErroneousRemoteShareFetchRequest();
+        } else if (pendingRemoteFetchesOpt.isPresent()) {
+            if (maybeRegisterCallbackPendingRemoteFetch()) {
+                log.trace("Registered remote storage fetch callback for group {}, member {}, "
+                        + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                    partitionsAcquired.keySet());
+                return;
             }
-        } finally {
-            lock.unlock();
+            completeRemoteStorageShareFetchRequest();
+        } else {
+            completeLocalLogShareFetchRequest();
         }
     }
 
@@ -333,7 +355,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 if (anyPartitionHasLogReadError(replicaManagerReadResponse) || isMinBytesSatisfied(topicPartitionData, partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, topicPartitionData.keySet(), topicPartitionData.size()))) {
                     partitionsAcquired = topicPartitionData;
                     localPartitionsAlreadyFetched = replicaManagerReadResponse;
-                    return forceCompleteRequest();
+                    return forceComplete();
                 } else {
                     log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
                             "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
@@ -341,7 +363,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     releasePartitionLocks(topicPartitionData.keySet());
                 }
             } else {
-                log.trace("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
+                log.trace("Can't acquire any partitions in the share fetch request for group {}, member {}, " +
                         "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     sharePartitions.keySet());
             }
@@ -356,10 +378,8 @@ public class DelayedShareFetch extends DelayedOperation {
                 releasePartitionLocks(topicPartitionData.keySet());
                 partitionsAcquired.clear();
                 localPartitionsAlreadyFetched.clear();
-                return forceCompleteRequest();
-            } else {
-                return forceCompleteRequest();
             }
+            return forceComplete();
         }
     }
 
@@ -376,20 +396,22 @@ public class DelayedShareFetch extends DelayedOperation {
         sharePartitionsForAcquire.forEach((topicIdPartition, sharePartition) -> {
             // Add the share partition to the list of partitions to be fetched only if we can
             // acquire the fetch lock on it.
-            if (sharePartition.maybeAcquireFetchLock()) {
+            if (sharePartition.maybeAcquireFetchLock(fetchId)) {
                 try {
+                    log.trace("Fetch lock for share partition {}-{} has been acquired by {}", shareFetch.groupId(), topicIdPartition, fetchId);
                     // If the share partition is already at capacity, we should not attempt to fetch.
                     if (sharePartition.canAcquireRecords()) {
                         topicPartitionData.put(topicIdPartition, sharePartition.nextFetchOffset());
                     } else {
-                        sharePartition.releaseFetchLock();
-                        log.trace("Record lock partition limit exceeded for SharePartition {}, " +
-                            "cannot acquire more records", sharePartition);
+                        sharePartition.releaseFetchLock(fetchId);
+                        log.trace("Record lock partition limit exceeded for SharePartition {}-{}, " +
+                            "cannot acquire more records. Releasing the fetch lock by {}", shareFetch.groupId(), topicIdPartition, fetchId);
                     }
                 } catch (Exception e) {
-                    log.error("Error checking condition for SharePartition: {}", sharePartition, e);
+                    log.error("Error checking condition for SharePartition: {}-{}", shareFetch.groupId(), topicIdPartition, e);
                     // Release the lock, if error occurred.
-                    sharePartition.releaseFetchLock();
+                    sharePartition.releaseFetchLock(fetchId);
+                    log.trace("Fetch lock for share partition {}-{} is being released by {}", shareFetch.groupId(), topicIdPartition, fetchId);
                 }
             }
         });
@@ -601,7 +623,8 @@ public class DelayedShareFetch extends DelayedOperation {
     void releasePartitionLocks(Set<TopicIdPartition> topicIdPartitions) {
         topicIdPartitions.forEach(tp -> {
             SharePartition sharePartition = sharePartitions.get(tp);
-            sharePartition.releaseFetchLock();
+            sharePartition.releaseFetchLock(fetchId);
+            log.trace("Fetch lock for share partition {}-{} is being released by {}", shareFetch.groupId(), tp, fetchId);
         });
     }
 
@@ -613,6 +636,16 @@ public class DelayedShareFetch extends DelayedOperation {
     // Visible for testing.
     PendingRemoteFetches pendingRemoteFetches() {
         return pendingRemoteFetchesOpt.orElse(null);
+    }
+
+    // Visible for testing.
+    boolean outsidePurgatoryCallbackLock() {
+        return outsidePurgatoryCallbackLock.get();
+    }
+
+    // Only used for testing purpose.
+    void updatePartitionsAcquired(LinkedHashMap<TopicIdPartition, Long> partitionsAcquired) {
+        this.partitionsAcquired = partitionsAcquired;
     }
 
     // Visible for testing.
@@ -653,6 +686,28 @@ public class DelayedShareFetch extends DelayedOperation {
         processRemoteFetchOrException(remoteStorageFetchInfoMap);
         // Check if remote fetch can be completed.
         return maybeCompletePendingRemoteFetch();
+    }
+
+    private boolean maybeRegisterCallbackPendingRemoteFetch() {
+        log.trace("Registering callback pending remote fetch");
+        PendingRemoteFetches pendingFetch = pendingRemoteFetchesOpt.get();
+        if (!pendingFetch.isDone() && shareFetch.fetchParams().maxWaitMs < remoteFetchMaxWaitMs) {
+            TimerTask timerTask = new PendingRemoteFetchTimerTask();
+            pendingFetch.invokeCallbackOnCompletion(((ignored, throwable) -> {
+                timerTask.cancel();
+                log.trace("Invoked remote storage fetch callback for group {}, member {}, "
+                        + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                    partitionsAcquired.keySet());
+                if (throwable != null) {
+                    log.error("Remote storage fetch failed for group {}, member {}, topic partitions {}",
+                        shareFetch.groupId(), shareFetch.memberId(), sharePartitions.keySet(), throwable);
+                }
+                completeRemoteShareFetchRequestOutsidePurgatory();
+            }));
+            replicaManager.addShareFetchTimerRequest(timerTask);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -725,7 +780,7 @@ public class DelayedShareFetch extends DelayedOperation {
         }
 
         if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case d
-            return forceCompleteRequest();
+            return forceComplete();
         } else
             return false;
     }
@@ -794,9 +849,9 @@ public class DelayedShareFetch extends DelayedOperation {
                                     logReadResult.leaderLogStartOffset(),
                                     info.records,
                                     Optional.empty(),
-                                    logReadResult.lastStableOffset().isDefined() ? OptionalLong.of((Long) logReadResult.lastStableOffset().get()) : OptionalLong.empty(),
+                                    logReadResult.lastStableOffset().isPresent() ? OptionalLong.of(logReadResult.lastStableOffset().getAsLong()) : OptionalLong.empty(),
                                     info.abortedTransactions,
-                                    logReadResult.preferredReadReplica().isDefined() ? OptionalInt.of((Integer) logReadResult.preferredReadReplica().get()) : OptionalInt.empty(),
+                                    logReadResult.preferredReadReplica().isPresent() ? OptionalInt.of(logReadResult.preferredReadReplica().getAsInt()) : OptionalInt.empty(),
                                     false
                                 )
                             )
@@ -884,13 +939,25 @@ public class DelayedShareFetch extends DelayedOperation {
         }
     }
 
-    private boolean forceCompleteRequest() {
-        boolean completedByMe = forceComplete();
-        // If the delayed operation is completed by me, the acquired locks are already released in onComplete().
-        // Otherwise, we need to release the acquired locks.
-        if (!completedByMe) {
-            releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet());
+    private void completeRemoteShareFetchRequestOutsidePurgatory() {
+        if (outsidePurgatoryCallbackLock.compareAndSet(false, true)) {
+            completeRemoteStorageShareFetchRequest();
         }
-        return completedByMe;
+    }
+
+    private class PendingRemoteFetchTimerTask extends TimerTask {
+
+        public PendingRemoteFetchTimerTask() {
+            super(remoteFetchMaxWaitMs - shareFetch.fetchParams().maxWaitMs);
+        }
+
+        @Override
+        public void run() {
+            log.trace("Expired remote storage fetch callback for group {}, member {}, "
+                    + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                partitionsAcquired.keySet());
+            expiredRequestMeter.mark();
+            completeRemoteShareFetchRequestOutsidePurgatory();
+        }
     }
 }

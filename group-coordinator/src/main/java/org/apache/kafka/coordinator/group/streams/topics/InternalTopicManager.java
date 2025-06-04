@@ -22,7 +22,8 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCon
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
-import org.apache.kafka.coordinator.group.streams.TopicMetadata;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 
 import org.slf4j.Logger;
 
@@ -46,17 +47,19 @@ import java.util.stream.Stream;
 public class InternalTopicManager {
 
     /**
-     * Configures the internal topics for the given topology. Given a topology and the topic metadata, this method determines the number of
+     * Configures the internal topics for the given topology. Given a topology and the topics image, this method determines the number of
      * partitions for all internal topics and returns a {@link ConfiguredTopology} object.
      *
-     * @param logContext    The log context.
-     * @param topology      The topology.
-     * @param topicMetadata The topic metadata.
+     * @param logContext   The log context.
+     * @param metadataHash The metadata hash of the group.
+     * @param topology     The topology.
+     * @param topicsImage  The topics image.
      * @return The configured topology.
      */
     public static ConfiguredTopology configureTopics(LogContext logContext,
+                                                     long metadataHash,
                                                      StreamsTopology topology,
-                                                     Map<String, TopicMetadata> topicMetadata) {
+                                                     TopicsImage topicsImage) {
         final Logger log = logContext.logger(InternalTopicManager.class);
         final Collection<StreamsGroupTopologyValue.Subtopology> subtopologies = topology.subtopologies().values();
 
@@ -70,10 +73,10 @@ public class InternalTopicManager {
         try {
             Optional<TopicConfigurationException> topicConfigurationException = Optional.empty();
 
-            throwOnMissingSourceTopics(topology, topicMetadata);
+            throwOnMissingSourceTopics(topology, topicsImage);
 
             Map<String, Integer> decidedPartitionCountsForInternalTopics =
-                decidePartitionCounts(logContext, topology, topicMetadata, copartitionGroupsBySubtopology, log);
+                decidePartitionCounts(logContext, topology, topicsImage, copartitionGroupsBySubtopology, log);
 
             final SortedMap<String, ConfiguredSubtopology> configuredSubtopologies =
                 subtopologies.stream()
@@ -86,7 +89,7 @@ public class InternalTopicManager {
                         TreeMap::new
                     ));
 
-            Map<String, CreatableTopic> internalTopicsToCreate = missingInternalTopics(configuredSubtopologies, topicMetadata);
+            Map<String, CreatableTopic> internalTopicsToCreate = missingInternalTopics(configuredSubtopologies, topology, topicsImage);
             if (!internalTopicsToCreate.isEmpty()) {
                 topicConfigurationException = Optional.of(TopicConfigurationException.missingInternalTopics(
                     "Internal topics are missing: " + internalTopicsToCreate.keySet()
@@ -99,6 +102,7 @@ public class InternalTopicManager {
 
             return new ConfiguredTopology(
                 topology.topologyEpoch(),
+                metadataHash,
                 Optional.of(configuredSubtopologies),
                 internalTopicsToCreate,
                 topicConfigurationException
@@ -109,6 +113,7 @@ public class InternalTopicManager {
                 topology.topologyEpoch(), e.toString());
             return new ConfiguredTopology(
                 topology.topologyEpoch(),
+                metadataHash,
                 Optional.empty(),
                 Map.of(),
                 Optional.of(e)
@@ -117,11 +122,11 @@ public class InternalTopicManager {
     }
 
     private static void throwOnMissingSourceTopics(final StreamsTopology topology,
-                                                   final Map<String, TopicMetadata> topicMetadata) {
+                                                   final TopicsImage topicsImage) {
         TreeSet<String> sortedMissingTopics = new TreeSet<>();
         for (StreamsGroupTopologyValue.Subtopology subtopology : topology.subtopologies().values()) {
             for (String sourceTopic : subtopology.sourceTopics()) {
-                if (!topicMetadata.containsKey(sourceTopic)) {
+                if (topicsImage.getTopic(sourceTopic) == null) {
                     sortedMissingTopics.add(sourceTopic);
                 }
             }
@@ -134,12 +139,12 @@ public class InternalTopicManager {
 
     private static Map<String, Integer> decidePartitionCounts(final LogContext logContext,
                                                               final StreamsTopology topology,
-                                                              final Map<String, TopicMetadata> topicMetadata,
+                                                              final TopicsImage topicsImage,
                                                               final Map<String, Collection<Set<String>>> copartitionGroupsBySubtopology,
                                                               final Logger log) {
         final Map<String, Integer> decidedPartitionCountsForInternalTopics = new HashMap<>();
         final Function<String, OptionalInt> topicPartitionCountProvider =
-            topic -> getPartitionCount(topicMetadata, topic, decidedPartitionCountsForInternalTopics);
+            topic -> getPartitionCount(topicsImage, topic, decidedPartitionCountsForInternalTopics);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             logContext,
             topology.subtopologies().values(),
@@ -190,7 +195,8 @@ public class InternalTopicManager {
     }
 
     private static Map<String, CreatableTopic> missingInternalTopics(Map<String, ConfiguredSubtopology> subtopologyMap,
-                                                                     Map<String, TopicMetadata> topicMetadata) {
+                                                                     StreamsTopology topology,
+                                                                     TopicsImage topicsImage) {
 
         final Map<String, CreatableTopic> topicsToCreate = new HashMap<>();
         for (ConfiguredSubtopology subtopology : subtopologyMap.values()) {
@@ -199,31 +205,34 @@ public class InternalTopicManager {
             subtopology.stateChangelogTopics().values()
                 .forEach(x -> topicsToCreate.put(x.name(), toCreatableTopic(x)));
         }
-        for (Map.Entry<String, TopicMetadata> topic : topicMetadata.entrySet()) {
-            final TopicMetadata existingTopic = topic.getValue();
-            final CreatableTopic expectedTopic = topicsToCreate.remove(topic.getKey());
+        for (String topic : topology.requiredTopics()) {
+            TopicImage topicImage = topicsImage.getTopic(topic);
+            if (topicImage == null) {
+                continue;
+            }
+            final CreatableTopic expectedTopic = topicsToCreate.remove(topic);
             if (expectedTopic != null) {
-                if (existingTopic.numPartitions() != expectedTopic.numPartitions()) {
-                    throw TopicConfigurationException.incorrectlyPartitionedTopics("Existing topic " + topic.getKey() + " has different"
-                        + " number of partitions: expected " + expectedTopic.numPartitions() + ", found " + existingTopic.numPartitions());
+                if (topicImage.partitions().size() != expectedTopic.numPartitions()) {
+                    throw TopicConfigurationException.incorrectlyPartitionedTopics("Existing topic " + topic + " has different"
+                        + " number of partitions: expected " + expectedTopic.numPartitions() + ", found " + topicImage.partitions().size());
                 }
             }
         }
         return topicsToCreate;
     }
 
-    private static OptionalInt getPartitionCount(Map<String, TopicMetadata> topicMetadata,
+    private static OptionalInt getPartitionCount(TopicsImage topicsImage,
                                                  String topic,
                                                  Map<String, Integer> decidedPartitionCountsForInternalTopics) {
-        final TopicMetadata metadata = topicMetadata.get(topic);
-        if (metadata == null) {
+        final TopicImage topicImage = topicsImage.getTopic(topic);
+        if (topicImage == null) {
             if (decidedPartitionCountsForInternalTopics.containsKey(topic)) {
                 return OptionalInt.of(decidedPartitionCountsForInternalTopics.get(topic));
             } else {
                 return OptionalInt.empty();
             }
         } else {
-            return OptionalInt.of(metadata.numPartitions());
+            return OptionalInt.of(topicImage.partitions().size());
         }
     }
 

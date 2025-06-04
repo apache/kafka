@@ -55,18 +55,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(40)
 public class PartitionRegistrationTest {
     @Test
-    public void testElectionWasClean() {
-        assertTrue(PartitionRegistration.electionWasClean(1, new int[]{1, 2}, new int[]{}));
-        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{0, 2}, new int[]{}));
-        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{}, new int[]{3, 4}));
-        assertTrue(PartitionRegistration.electionWasClean(3, new int[]{1, 2, 3, 4, 5, 6}, new int[]{}));
-        assertTrue(PartitionRegistration.electionWasClean(3, new int[]{}, new int[]{1, 2, 3}));
-    }
-
-    @Test
-    public void testEligibleLeaderReplicasElection() {
-        assertTrue(PartitionRegistration.electionFromElr(1, new int[]{1, 2}));
-        assertFalse(PartitionRegistration.electionFromElr(1, new int[]{0, 2}));
+    public void testElectionWasUnclean() {
+        assertFalse(PartitionRegistration.electionWasUnclean(LeaderRecoveryState.RECOVERED.value()));
+        assertTrue(PartitionRegistration.electionWasUnclean(LeaderRecoveryState.RECOVERING.value()));
     }
 
     @Test
