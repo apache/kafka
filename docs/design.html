@@ -344,7 +344,42 @@
     group will rebalance and fetch the last committed offset, which has the effect of rewinding back to the state before the transaction aborted. Alternatively, a more sophisticated application (such as the
     transactional message copier) can choose not to use <code>KafkaConsumer.committed</code> to retrieve the committed offset from Kafka, and then <code>KafkaConsumer.seek</code> to rewind the current position.
 
-    <h3 class="anchor-heading"><a id="replication" class="anchor-link"></a><a href="#replication">4.8 Replication</a></h3>
+    <h3 class="anchor-heading"><a id="sharegroups" class="anchor-link"></a><a href="#sharegroups">4.8 Share groups</a></h3>
+    <p>
+    Share groups are available as a preview in Apache Kafka 4.1.
+    <p>
+    Share groups are a new type of group, existing alongside traditional consumer groups. Share groups enable Kafka consumers to cooperatively consume and process records from topics.
+    They offer an alternative to traditional consumer groups, particularly when applications require finer-grained sharing of partitions and records.
+    <p>
+    The fundamental differences between a share group and a consumer group are:
+    <ul>
+        <li>The consumers within a share group cooperatively consume records, and partitions may be assigned to multiple consumers.</li>
+        <li>The number of consumers in a share group can exceed the number of partitions in a topic.</li>
+        <li>Records are acknowledged individually, though the system is optimized for batch processing to improve efficiency.</li>
+        <li>Delivery attempts to consumers in a share group are counted, which enables automated handling of unprocessable records.</li>
+    </ul>
+    <p>
+    All consumers in the same share group subscribed to the same topic will cooperatively consume the records of that topic. If a topic is accessed by consumers in multiple share groups, each share group
+    consumes from that topic independently of the others.
+    <p>
+    Each consumer can dynamically set its list of subscribed topics. In practice, all consumers within a share group typically subscribe to the same topic or topics.
+    <p>
+    When a consumer in a share-group fetches records, it receives available records from any of the topic-partitions matching its subscriptions. Records are acquired for delivery to this consumer with a time-limited
+    acquisition lock. While a record is acquired, it is unavailable to other consumers.
+    <p>By default, the lock duration is 30 seconds, but you can control it using the group configuration parameter <code>share.record.lock.duration.ms</code>. The lock is released automatically once its
+    duration elapses, making the record available to another consumer. A consumer holding the lock can handle the record in the following ways:
+    <ul>
+        <li>Acknowledge successful processing of the record.</li>
+        <li>Release the record, making it available for another delivery attempt.</li>
+        <li>Reject the record, indicating it's unprocessable and preventing further delivery attempts for that record.</li>
+        <li>Do nothing, in which case the lock is automatically released when its duration expires.</li>
+    </ul>
+    <p>
+    The Kafka cluster limits the number of records acquired for consumers for each topic-partition within a share group. Once this limit is reached, fetching operations will temporarily yield no further records
+    until the number of acquired records decreases (as locks naturally time out). This limit is controlled by the broker configuration property <code>group.share.partition.max.record.locks</code>. By limiting
+    the duration of the acquisition lock and automatically releasing the locks, the broker ensures delivery progresses even in the presence of consumer failures.
+
+    <h3 class="anchor-heading"><a id="replication" class="anchor-link"></a><a href="#replication">4.9 Replication</a></h3>
     <p>
     Kafka replicates the log for each topic's partitions across a configurable number of servers (you can set this replication factor on a topic-by-topic basis). This allows automatic failover to these replicas when a
     server in the cluster fails so messages remain available in the presence of failures.
@@ -475,7 +510,7 @@
     replicas have received the message. For example, if a topic is configured with only two replicas and one fails (i.e., only one in sync replica remains), then writes that specify acks=all will succeed. However, these
     writes could be lost if the remaining replica also fails.
 
-    Although this ensures maximum availability of the partition, this behavior may be undesirable to some users who prefer durability over availability. Therefore, we provide two topic-level configurations that can be
+    Although this ensures maximum availability of the partition, this behavior may be undesirable to some users who prefer durability over availability. Therefore, we provide two topic configurations that can be
     used to prefer message durability over availability:
     <ol>
         <li> Disable unclean leader election - if all replicas become unavailable, then the partition will remain unavailable until the most recent leader becomes available again. This effectively prefers unavailability
@@ -499,7 +534,7 @@
     The result is that we are able to batch together many of the required leadership change notifications which makes the election process far cheaper and faster for a large number
     of partitions. If the controller itself fails, then another controller will be elected.
 
-    <h3 class="anchor-heading"><a id="compaction" class="anchor-link"></a><a href="#compaction">4.9 Log Compaction</a></h3>
+    <h3 class="anchor-heading"><a id="compaction" class="anchor-link"></a><a href="#compaction">4.10 Log Compaction</a></h3>
 
     Log compaction ensures that Kafka will always retain at least the last known value for each message key within the log of data for a single topic partition.  It addresses use cases and scenarios such as restoring
     state after application crashes or system failure, or reloading caches after application restarts during operational maintenance. Let's dive into these use cases in more detail and then describe how compaction works.
@@ -627,7 +662,7 @@
     <p>
     Further cleaner configurations are described <a href="/documentation.html#brokerconfigs">here</a>.
 
-    <h3 class="anchor-heading"><a id="design_quotas" class="anchor-link"></a><a href="#design_quotas">4.10 Quotas</a></h3>
+    <h3 class="anchor-heading"><a id="design_quotas" class="anchor-link"></a><a href="#design_quotas">4.11 Quotas</a></h3>
     <p>
     Kafka cluster has the ability to enforce quotas on requests to control the broker resources used by clients. Two types
     of client quotas can be enforced by Kafka brokers for each group of clients sharing a quota:
