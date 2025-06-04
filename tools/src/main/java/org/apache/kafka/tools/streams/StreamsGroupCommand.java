@@ -421,7 +421,7 @@ public class StreamsGroupCommand {
                 if (topicsToDelete.isEmpty()) {
                     printError("No internal topics specified for deletion.", Optional.empty());
                 } else if (!opts.options.has(opts.executeOpt)) {
-                    System.out.println("Dry run: The following internal topics would be deleted: (" + String.join("', '", topicsToDelete)+ "')");
+                    System.out.println("Dry run: The following internal topics would be deleted: (" + String.join("', '", topicsToDelete) + "')");
                 } else {
                     DeleteTopicsResult deleteTopicsResult = null;
                     try {
