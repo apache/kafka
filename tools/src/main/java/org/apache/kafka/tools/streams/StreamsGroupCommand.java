@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -401,34 +402,51 @@ public class StreamsGroupCommand {
         }
 
         public void deleteInternalTopics() {
-            if (opts.options.has(opts.internalTopicsOpt)) {
-                String internalTopics = opts.options.valueOf(opts.internalTopicsOpt);
-                if (internalTopics == null || internalTopics.isEmpty()) {
+            List<String> groupIds = new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
+            groupIds.removeIf(groupId -> {
+                try {
+                    GroupState groupState = collectGroupState(groupId);
+                    if (groupState != GroupState.DEAD && groupState != GroupState.EMPTY) {
+                        printError("The specified group '" + groupId + "' is not EMPTY or DEAD.", Optional.empty());
+                        return true;
+                    }
+                    return false;
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            Set<String> topicsToDelete = new HashSet<>();
+            List<String> allInternalTopics = new ArrayList<>();
+            retrieveInternalTopics(groupIds).values().forEach(allInternalTopics::addAll);
+
+            if (opts.options.has(opts.internalTopicOpt)) {
+                List<String> internalTopics = new ArrayList<>(opts.options.valuesOf(opts.internalTopicOpt));
+                if (internalTopics.isEmpty()) {
                     printError("No internal topics specified for deletion.", Optional.empty());
                     return;
                 }
-                Set<String> topicsToDelete = new HashSet<>(Arrays.asList(internalTopics.trim().split(",")));
-                topicsToDelete = topicsToDelete.stream()
-                    .map(String::trim)
-                    .collect(Collectors.toSet());
+                topicsToDelete = new HashSet<>(internalTopics);
                 topicsToDelete.removeIf(topic -> {
-                    if (!matchesInternalTopicFormat(topic)) {
-                        printError("Invalid internal topic format: " + topic, Optional.empty());
+                    if (!allInternalTopics.contains(topic)) {
+                        printError("The specified internal topic '" + topic + "' is not associated to the any of the groups ('" +
+                            String.join("', '", groupIds) + "') as an internal topic and thus will not be deleted.", Optional.empty());
                         return true;
                     }
                     return false;
                 });
-                if (topicsToDelete.isEmpty()) {
-                    printError("No internal topics specified for deletion.", Optional.empty());
-                } else if (!opts.options.has(opts.executeOpt)) {
-                    System.out.println("Dry run: The following internal topics would be deleted: (" + String.join("', '", topicsToDelete) + "')");
-                } else {
-                    DeleteTopicsResult deleteTopicsResult = null;
-                    try {
-                        deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
-                        deleteTopicsResult.all().get();
-                        System.out.println("Deletion of requested internal topics ('" + String.join("', '", topicsToDelete) + "') was successful.");
-                    } catch (ExecutionException | InterruptedException e) {
+            } else if (opts.options.has(opts.allInternalTopicsOpt)) {
+                topicsToDelete = new HashSet<>(allInternalTopics);
+            }
+            if (topicsToDelete.isEmpty()) {
+                printError("No internal topics specified for deletion.", Optional.empty());
+            } else {
+                DeleteTopicsResult deleteTopicsResult = null;
+                try {
+                    deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
+                    deleteTopicsResult.all().get();
+                    System.out.println("Deletion of requested internal topics ('" + String.join("', '", topicsToDelete) + "') was successful.");
+                } catch (ExecutionException | InterruptedException e) {
+                    if (deleteTopicsResult != null) {
                         deleteTopicsResult.topicNameValues().forEach((topic, future) -> {
                             try {
                                 future.get();
@@ -436,10 +454,53 @@ public class StreamsGroupCommand {
                                 System.out.println("Failed to delete internal topic: " + topic);
                             }
                         });
-                        printError("Failed to delete internal topics: " + e.getMessage(), Optional.of(e));
                     }
+                    printError("Failed to delete internal topics: " + e.getMessage(), Optional.of(e));
                 }
             }
+        }
+
+        // Visibility for testing
+        Map<String, List<String>> retrieveInternalTopics(List<String> groupIds) {
+            Map<String, List<String>> groupToInternalTopics = new HashMap<>();
+            try {
+                Map<String, StreamsGroupDescription> descriptionMap = adminClient.describeStreamsGroups(groupIds).all().get();
+                for (StreamsGroupDescription description : descriptionMap.values()) {
+
+                    List<String> sourceTopics = description.subtopologies().stream()
+                        .flatMap(subtopology -> subtopology.sourceTopics().stream()).toList();
+
+                    List<String> internalTopics = description.subtopologies().stream()
+                        .flatMap(subtopology -> Stream.concat(
+                            subtopology.repartitionSourceTopics().keySet().stream(),
+                            subtopology.stateChangelogTopics().keySet().stream()))
+                        .filter(topic -> !sourceTopics.contains(topic))
+                        .collect(Collectors.toList());
+                    internalTopics.removeIf(topic -> {
+                        if (!isInferredInternalTopic(topic, description.groupId())) {
+                            printError("The internal topic '" + topic + "' is not inferred as internal " +
+                                "and thus will not be deleted with the group '" + description.groupId() + "'.", Optional.empty());
+                            return true;
+                        }
+                        return false;
+                    });
+                    if (!internalTopics.isEmpty()) {
+                        groupToInternalTopics.put(description.groupId(), internalTopics);
+                    }
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                if (e.getCause() instanceof UnsupportedVersionException) {
+                    printError("Retrieving internal topics is not supported by the broker version. " +
+                        "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
+                } else {
+                    printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
+                }
+            }
+            return groupToInternalTopics;
+        }
+
+        private boolean isInferredInternalTopic(final String topicName, final String applicationId) {
+            return topicName.startsWith(applicationId + "-") && matchesInternalTopicFormat(topicName);
         }
 
         public static boolean matchesInternalTopicFormat(final String topicName) {
@@ -452,6 +513,26 @@ public class StreamsGroupCommand {
 
         GroupState collectGroupState(String groupId) throws Exception {
             return getDescribeGroup(groupId).groupState();
+        }
+
+        Collection<StreamsGroupMemberDescription> collectGroupMembers(String groupId) throws Exception {
+            return getDescribeGroup(groupId).members();
+        }
+
+        List<String> collectAllTopics(String groupId) {
+            try {
+                return adminClient.describeStreamsGroups(List.of(groupId))
+                    .all().get().get(groupId)
+                    .subtopologies().stream()
+                    .flatMap(subtopology -> Stream.of(
+                        subtopology.sourceTopics().stream(),
+                        subtopology.repartitionSinkTopics().stream(),
+                        subtopology.repartitionSourceTopics().keySet().stream(),
+                        subtopology.stateChangelogTopics().keySet().stream()
+                    ).flatMap(s -> s)).distinct().collect(Collectors.toList());
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
