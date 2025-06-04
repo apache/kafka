@@ -559,10 +559,10 @@ public class StreamsGroupCommand {
         }
 
         private Collection<TopicPartition> getPartitionsToReset(String groupId) throws ExecutionException, InterruptedException {
-            if (opts.options.has(opts.allTopicsOpt)) {
+            if (opts.options.has(opts.allInputTopicsOpt)) {
                 return getCommittedOffsets(groupId).keySet();
-            } else if (opts.options.has(opts.topicOpt)) {
-                List<String> topics = opts.options.valuesOf(opts.topicOpt);
+            } else if (opts.options.has(opts.inputTopicOpt)) {
+                List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
 
                 List<TopicPartition> partitions = parseTopicPartitionsToReset(topics);
                 // if the user specified topics that do not belong to this group, we filter them out

@@ -39,10 +39,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     public static final String GROUP_DOC = "The streams group we wish to act on.";
     private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
-    private static final String TOPIC_DOC = "The topic whose streams group information should be deleted or topic whose should be included in the reset offset process. " +
+    private static final String INPUT_TOPIC_DOC = "The input topic whose streams group information should be deleted or topic whose should be included in the reset offset process. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
         "Reset-offsets also supports multiple topic inputs.";
-    private static final String ALL_TOPICS_DOC = "Consider all topics assigned to a group in the `reset-offsets` process.";
+    private static final String ALL_INPUT_TOPICS_DOC = "Consider all input topics assigned to a group in the `reset-offsets` process.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
     public static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
@@ -76,8 +76,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
     public final OptionSpec<String> bootstrapServerOpt;
     public final OptionSpec<String> groupOpt;
-    final OptionSpec<String> topicOpt;
-    final OptionSpec<Void> allTopicsOpt;
+    final OptionSpec<String> inputTopicOpt;
+    final OptionSpec<Void> allInputTopicsOpt;
     public final OptionSpec<Void> listOpt;
     public final OptionSpec<Void> describeOpt;
     final OptionSpec<Void> allGroupsOpt;
@@ -121,11 +121,11 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("streams group")
             .ofType(String.class);
-        topicOpt = parser.accepts("topic", TOPIC_DOC)
+        inputTopicOpt = parser.accepts("topic", INPUT_TOPIC_DOC)
             .withRequiredArg()
-            .describedAs("topic")
+            .describedAs("input-topic")
             .ofType(String.class);
-        allTopicsOpt = parser.accepts("all-topics", ALL_TOPICS_DOC);
+        allInputTopicsOpt = parser.accepts("all-input-topics", ALL_INPUT_TOPICS_DOC);
         listOpt = parser.accepts("list", LIST_DOC);
         describeOpt = parser.accepts("describe", DESCRIBE_DOC);
         allGroupsOpt = parser.accepts("all-groups", ALL_GROUPS_DOC);
