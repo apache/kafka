@@ -15,20 +15,26 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler;
-
-import org.jose4j.keys.resolvers.VerificationKeyResolver;
+import org.apache.kafka.common.KafkaException;
 
 /**
- * The {@link OAuthBearerValidatorCallbackHandler} uses a {@link VerificationKeyResolver} as
- * part of its validation of the incoming JWT. Some of the <code>VerificationKeyResolver</code>
- * implementations use resources like threads, connections, etc. that should be properly closed
- * when no longer needed. Since the <code>VerificationKeyResolver</code> interface itself doesn't
- * define a <code>close</code> method, we provide a means to do that here.
+ * A {@code JwtRetrieverException} is thrown in cases where the JWT cannot be retrieved.
+ *
+ * @see JwtRetriever#retrieve()
  */
+public class JwtRetrieverException extends KafkaException {
 
-public interface CloseableVerificationKeyResolver extends OAuthBearerConfigurable, VerificationKeyResolver {
+    public JwtRetrieverException(String message) {
+        super(message);
+    }
 
+    public JwtRetrieverException(Throwable cause) {
+        super(cause);
+    }
+
+    public JwtRetrieverException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

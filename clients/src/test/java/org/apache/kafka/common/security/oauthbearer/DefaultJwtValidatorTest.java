@@ -15,15 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
@@ -35,23 +38,16 @@ public class DefaultJwtValidatorTest extends OAuthBearerTest {
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
         Map<String, ?> configs = getSaslConfigs();
-        DefaultJwtValidator jwtValidator = new DefaultJwtValidator(
-            configs,
-            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-            verificationKeyResolver
-        );
-        assertDoesNotThrow(jwtValidator::init);
+        DefaultJwtValidator jwtValidator = new DefaultJwtValidator(verificationKeyResolver);
+        assertDoesNotThrow(() -> jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
         assertInstanceOf(BrokerJwtValidator.class, jwtValidator.delegate());
     }
 
     @Test
     public void testConfigureWithoutVerificationKeyResolver() {
         Map<String, ?> configs = getSaslConfigs();
-        DefaultJwtValidator jwtValidator = new DefaultJwtValidator(
-            configs,
-            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM
-        );
-        assertDoesNotThrow(jwtValidator::init);
+        DefaultJwtValidator jwtValidator = new DefaultJwtValidator();
+        assertDoesNotThrow(() -> jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
         assertInstanceOf(ClientJwtValidator.class, jwtValidator.delegate());
     }
 

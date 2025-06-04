@@ -15,9 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 
@@ -26,11 +29,16 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.security.auth.login.AppConfigurationEntry;
+
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 
 /**
  * {@code ClientJwtValidator} is an implementation of {@link JwtValidator} that is used
@@ -58,21 +66,21 @@ public class ClientJwtValidator implements JwtValidator {
 
     public static final String ISSUED_AT_CLAIM_NAME = "iat";
 
-    private final String scopeClaimName;
+    private String scopeClaimName;
 
-    private final String subClaimName;
+    private String subClaimName;
 
-    /**
-     * Creates a new {@code ClientJwtValidator} that will be used by the client for lightweight
-     * validation of the JWT.
-     *
-     * @param scopeClaimName Name of the scope claim to use; must be non-<code>null</code>
-     * @param subClaimName   Name of the subject claim to use; must be non-<code>null</code>
-     */
-
-    public ClientJwtValidator(String scopeClaimName, String subClaimName) {
-        this.scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, scopeClaimName);
-        this.subClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, subClaimName);
+    @Override
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        this.scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(
+            DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME,
+            cu.get(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME)
+        );
+        this.subClaimName = ClaimValidationUtils.validateClaimNameOverride(
+            DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME,
+            cu.get(SASL_OAUTHBEARER_SUB_CLAIM_NAME)
+        );
     }
 
     /**
@@ -81,18 +89,18 @@ public class ClientJwtValidator implements JwtValidator {
      *
      * @param accessToken Non-<code>null</code> JWT access token
      * @return {@link OAuthBearerToken}
-     * @throws ValidateException Thrown on errors performing validation of given token
+     * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
 
     @SuppressWarnings("unchecked")
-    public OAuthBearerToken validate(String accessToken) throws ValidateException {
+    public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
         Map<String, Object> payload;
 
         try {
             payload = OAuthBearerUnsecuredJws.toMap(serializedJwt.getPayload());
         } catch (OAuthBearerIllegalTokenException e) {
-            throw new ValidateException(String.format("Could not validate the access token: %s", e.getMessage()), e);
+            throw new JwtValidatorException(String.format("Could not validate the access token: %s", e.getMessage()), e);
         }
 
         Object scopeRaw = getClaim(payload, scopeClaimName);

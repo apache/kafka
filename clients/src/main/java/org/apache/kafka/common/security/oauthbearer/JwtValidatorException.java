@@ -15,33 +15,32 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 
 import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
 
 /**
- * ValidateException is thrown in cases where a JWT access token cannot be determined to be
- * valid for one reason or another. It is intended to be used when errors arise within the
- * processing of a {@link javax.security.auth.callback.CallbackHandler#handle(Callback[])}.
- * This error, however, is not thrown from that method directly.
+ * A {@code JwtValidatorException} is thrown in cases where the validity of a JWT cannot be
+ * determined. It is intended to be used when errors arise within the processing of a
+ * {@link CallbackHandler#handle(Callback[])}. This error, however, is not thrown from that
+ * method directly.
  *
  * @see JwtValidator#validate(String)
  */
+public class JwtValidatorException extends KafkaException {
 
-public class ValidateException extends KafkaException {
-
-    public ValidateException(String message) {
+    public JwtValidatorException(String message) {
         super(message);
     }
 
-    public ValidateException(Throwable cause) {
+    public JwtValidatorException(Throwable cause) {
         super(cause);
     }
 
-    public ValidateException(String message, Throwable cause) {
+    public JwtValidatorException(String message, Throwable cause) {
         super(message, cause);
     }
-
 }
