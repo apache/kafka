@@ -1675,20 +1675,20 @@ public class GroupMetadataManager {
      * Validates that the requested tasks exist in the configured topology and partitions are valid.
      * If tasks is null, does nothing. If an invalid task is found, throws InvalidRequestException.
      *
-     * @param topology The configured topology.
-     * @param tasks    The list of requested tasks.
+     * @param subtopologySortedMap The configured topology.
+     * @param tasks                The list of requested tasks.
      */
     private static void throwIfRequestContainsInvalidTasks(
         SortedMap<String, ConfiguredSubtopology> subtopologySortedMap,
         List<StreamsGroupHeartbeatRequestData.TaskIds> tasks
     ) {
-        if (tasks == null) return;
+        if (tasks == null || tasks.isEmpty()) return;
         for (StreamsGroupHeartbeatRequestData.TaskIds task : tasks) {
             String subtopologyId = task.subtopologyId();
-            if (!subtopologySortedMap.containsKey(subtopologyId)) {
+            ConfiguredSubtopology subtopology = subtopologySortedMap.get(subtopologyId);
+            if (subtopology == null) {
                 throw new InvalidRequestException("Subtopology " + subtopologyId + " does not exist in the topology.");
             }
-            ConfiguredSubtopology subtopology = subtopologySortedMap.get(subtopologyId);
             int numTasks = subtopology.numberOfTasks();
             for (Integer partition : task.partitions()) {
                 if (partition < 0 || partition >= numTasks) {

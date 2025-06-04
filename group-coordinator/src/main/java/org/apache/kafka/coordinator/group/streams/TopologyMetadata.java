@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
 
 import java.util.Collections;
 import java.util.List;
@@ -39,14 +38,6 @@ public record TopologyMetadata(MetadataImage metadataImage, SortedMap<String, Co
     public TopologyMetadata {
         metadataImage = Objects.requireNonNull(metadataImage);
         subtopologyMap = Objects.requireNonNull(Collections.unmodifiableSortedMap(subtopologyMap));
-    }
-
-    /**
-     * @return The metadata image in topology metadata.
-     */
-    @Override
-    public MetadataImage metadataImage() {
-        return this.metadataImage;
     }
 
     /**

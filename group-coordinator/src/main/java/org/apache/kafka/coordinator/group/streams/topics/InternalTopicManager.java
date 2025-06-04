@@ -82,7 +82,7 @@ public class InternalTopicManager {
                 subtopologies.stream()
                     .collect(Collectors.toMap(
                         StreamsGroupTopologyValue.Subtopology::subtopologyId,
-                        x -> fromPersistedSubtopology(x, topicMetadata, decidedPartitionCountsForInternalTopics),
+                        x -> fromPersistedSubtopology(x, topicsImage, decidedPartitionCountsForInternalTopics),
                         (v1, v2) -> {
                             throw new RuntimeException(String.format("Duplicate key for values %s and %s", v1, v2));
                         },
@@ -264,11 +264,11 @@ public class InternalTopicManager {
     }
 
     private static ConfiguredSubtopology fromPersistedSubtopology(final StreamsGroupTopologyValue.Subtopology subtopology,
-                                                                  final Map<String, TopicMetadata> topicMetadata,
+                                                                  final TopicsImage topicsImage,
                                                                   final Map<String, Integer> decidedPartitionCountsForInternalTopics
     ) {
         return new ConfiguredSubtopology(
-            computeNumberOfTasks(subtopology, topicMetadata, decidedPartitionCountsForInternalTopics),
+            computeNumberOfTasks(subtopology, topicsImage, decidedPartitionCountsForInternalTopics),
             new HashSet<>(subtopology.sourceTopics()),
             subtopology.repartitionSourceTopics().stream()
                 .map(x -> fromPersistedTopicInfo(x, decidedPartitionCountsForInternalTopics))
@@ -281,13 +281,13 @@ public class InternalTopicManager {
     }
 
     private static int computeNumberOfTasks(final StreamsGroupTopologyValue.Subtopology subtopology,
-                                            final Map<String, TopicMetadata> topicMetadata,
+                                            final TopicsImage topicsImage,
                                             final Map<String, Integer> decidedPartitionCountsForInternalTopics) {
         return Stream.concat(
             subtopology.sourceTopics().stream(),
-            subtopology.repartitionSourceTopics().stream().map(x -> x.name())
+            subtopology.repartitionSourceTopics().stream().map(StreamsGroupTopologyValue.TopicInfo::name)
         ).map(
-            topic -> getPartitionCount(topicMetadata, topic, decidedPartitionCountsForInternalTopics).orElseThrow(
+            topic -> getPartitionCount(topicsImage, topic, decidedPartitionCountsForInternalTopics).orElseThrow(
                 () -> new IllegalStateException("Number of partitions must be set for topic " + topic)
             )
         ).max(Integer::compareTo).orElseThrow(
