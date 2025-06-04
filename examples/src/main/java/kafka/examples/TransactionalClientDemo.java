@@ -8,6 +8,10 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApplicationRecoverableException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.TransactionAbortableException;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
@@ -25,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-
 import static java.time.Duration.ofSeconds;
 import static java.util.Collections.singleton;
 
@@ -38,17 +41,21 @@ import static java.util.Collections.singleton;
  * The application continuously polls for records from the input topic, processes them, and commits the offsets
  * in a transactional manner. In case of exceptions or errors, it handles them appropriately, either aborting the
  * transaction and resetting to the last committed positions, or restarting the application.
- *
+ * 
+ * Follows KIP-1050 guidelines for consistent error handling in transactions. 
+ * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1050">KIP-1050</a>
  */
 public class TransactionalClientDemo {
 
     private static final String CONSUMER_GROUP_ID = "my-group-id";
     private static final String OUTPUT_TOPIC = "output";
     private static final String INPUT_TOPIC = "input";
+    private static final ConsumerGroupMetadata GROUP_METADATA = new ConsumerGroupMetadata(CONSUMER_GROUP_ID);
     private static KafkaConsumer<String, String> consumer;
     private static KafkaProducer<String, String> producer;
 
     public static void main(String[] args) {
+        Utils.printOut("Starting TransactionalClientDemo");
         initializeApplication();
 
         boolean isRunning = true;
@@ -56,12 +63,16 @@ public class TransactionalClientDemo {
         while (isRunning) {
             try {
                 try {
-                    // Poll records from Kafka for a timeout of 60 seconds
+                    Utils.printOut("Polling records from Kafka");
                     ConsumerRecords<String, String> records = consumer.poll(ofSeconds(60));
+
+                    Utils.printOut("Polled %d records from input topic '%s'", records.count(), INPUT_TOPIC);
+                    for (ConsumerRecord<String, String> record : records) {
+                        Utils.printOut("Record: key='%s', value='%s', partition=%d, offset=%d", record.key(), record.value(), record.partition(), record.offset());
+                    }
 
                     // Process records to generate word count map
                     Map<String, Integer> wordCountMap = new HashMap<>();
-
                     for (ConsumerRecord<String, String> record : records) {
                         String[] words = record.value().split(" ");
                         for (String word : words) {
@@ -69,14 +80,15 @@ public class TransactionalClientDemo {
                         }
                     }
 
-                    // Begin transaction
+                    Utils.printOut("Word count map to be produced: %s", wordCountMap);
+
+                    Utils.printOut("Beginning transaction");
                     producer.beginTransaction();
 
-                    // Produce word count results to output topic
                     wordCountMap.forEach((key, value) ->
-                            producer.send(new ProducerRecord<>(OUTPUT_TOPIC, key, value.toString())));
+                        producer.send(new ProducerRecord<>(OUTPUT_TOPIC, key, value.toString())));
+                    Utils.printOut("Produced %d word count records to output topic '%s'", wordCountMap.size(), OUTPUT_TOPIC);
 
-                    // Determine offsets to commit
                     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
                     for (TopicPartition partition : records.partitions()) {
                         List<ConsumerRecord<String, String>> partitionedRecords = records.records(partition);
@@ -84,37 +96,50 @@ public class TransactionalClientDemo {
                         offsetsToCommit.put(partition, new OffsetAndMetadata(offset + 1));
                     }
 
-                    // Send offsets to transaction for atomic commit
-                    producer.sendOffsetsToTransaction(offsetsToCommit, CONSUMER_GROUP_ID);
+                    producer.sendOffsetsToTransaction(offsetsToCommit, GROUP_METADATA);
+                    Utils.printOut("Sent offsets to transaction for commit");
 
-                    // Commit transaction
                     producer.commitTransaction();
-                } catch (AbortableTransactionException e) {
+                    Utils.printOut("Transaction committed successfully");
+                } catch (TransactionAbortableException e) {
                     // Abortable Exception: Handle Kafka exception by aborting transaction. producer.abortTransaction() should not throw abortable exception.
+                    Utils.printErr("TransactionAbortableException: %s. Aborting transaction.", e.getMessage());
                     producer.abortTransaction();
+                    Utils.printOut("Transaction aborted. Resetting consumer to last committed positions.");
                     resetToLastCommittedPositions(consumer);
                 }
-            } catch (InvalidConfiguationTransactionException e) {
-                //  Fatal Error: The error is bubbled up to the application layer. The application can decide what to do
+            } catch (InvalidConfigurationException e) {
+                // Fatal Error: The error is bubbled up to the application layer. The application can decide what to do 
+                Utils.printErr("InvalidConfigurationException: %s. Shutting down.", e.getMessage());
                 closeAll();
                 throw e;
-            } catch (KafkaException | ApplicationRecoverableTransactionException e) {
+            } catch (ApplicationRecoverableException e) {
                 // Application Recoverable: The application must restart
+                Utils.printErr("ApplicationRecoverableException: %s. Restarting application.", e.getMessage());
                 closeAll();
                 initializeApplication();
+            } catch (KafkaException e) {
+                // KafkaException should be treated as Application Recoverable. Applications can make custom changes to handle generic exceptions
+                Utils.printErr("KafkaException: %s. Restarting application.", e.getMessage());
+                closeAll();
+                initializeApplication();
+            } catch (Exception e) {
+                Utils.printErr("Unhandled exception: %s", e.getMessage());
+                closeAll();
+                throw e;
             }
         }
-
     }
 
     public static void initializeApplication() {
-        // Create Kafka consumer and producer
+        Utils.printOut("Initializing Kafka consumer and producer");
         consumer = createKafkaConsumer();
         producer = createKafkaProducer();
-
-        // Initialize producer with transactions
+        
         producer.initTransactions();
+        Utils.printOut("Producer initialized with transactions");
     }
+
     private static KafkaConsumer<String, String> createKafkaConsumer() {
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -130,7 +155,6 @@ public class TransactionalClientDemo {
     }
 
     private static KafkaProducer<String, String> createKafkaProducer() {
-
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(ENABLE_IDEMPOTENCE_CONFIG, "true");
@@ -138,11 +162,11 @@ public class TransactionalClientDemo {
         props.put(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
 
-        return new KafkaProducer(props);
-
+        return new KafkaProducer<>(props);
     }
 
     private static void resetToLastCommittedPositions(KafkaConsumer<String, String> consumer) {
+        Utils.printOut("Resetting consumer to last committed positions");
         final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
         consumer.assignment().forEach(tp -> {
             OffsetAndMetadata offsetAndMetadata = committed.get(tp);
@@ -155,8 +179,13 @@ public class TransactionalClientDemo {
 
     private static void closeAll() {
         // Close Kafka consumer and producer
-        consumer.close();
-        producer.close();
+        if (consumer != null) {
+            consumer.close();
+        }
+        if (producer != null) {
+            producer.close();
+        }
+        Utils.printOut("All resources closed");
     }
 
 }
