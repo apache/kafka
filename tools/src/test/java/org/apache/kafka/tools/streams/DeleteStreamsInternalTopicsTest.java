@@ -126,20 +126,11 @@ public class DeleteStreamsInternalTopicsTest {
     }
 
     @Test
-    public void testDeleteWithoutSpecifiedInternalTopics() {
-        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--internal-topic", "--group", "bar"};
-        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
-        String output = ToolsTestUtils.grabConsoleOutput(service::deleteInternalTopics);
-        assertTrue(output.contains("No internal topics specified for deletion."));
-    }
-
-    @Test
-    public void testDeleteInternalTopicNotAssociatedWithTheGroup() {
+    public void testDeleteInternalTopicNotExistingGroup() {
         String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--internal-topic", "foo", "--group", "bar"};
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
         String output = ToolsTestUtils.grabConsoleOutput(service::deleteInternalTopics);
-        assertTrue(output.contains("The specified internal topic 'foo' is not associated to the any of the groups ('bar') " +
-            "as an internal topic and thus will not be deleted."));
+        assertTrue(output.contains("Group 'bar' does not exist or is not a streams group."));
     }
 
     @Test

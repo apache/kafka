@@ -403,6 +403,16 @@ public class StreamsGroupCommand {
 
         public void deleteInternalTopics() {
             List<String> groupIds = new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
+
+            List<GroupListing> streamsGroupIds = listDetailedStreamsGroups();
+            groupIds.removeIf(groupId -> {
+                boolean notFound = streamsGroupIds.stream().noneMatch(item -> item.groupId().equals(groupId));
+                if (notFound) {
+                    printError("Group '" + groupId + "' does not exist or is not a streams group.", Optional.empty());
+                }
+                return notFound;
+            });
+
             groupIds.removeIf(groupId -> {
                 try {
                     GroupState groupState = collectGroupState(groupId);
@@ -415,48 +425,69 @@ public class StreamsGroupCommand {
                     throw new RuntimeException(e);
                 }
             });
-            Set<String> topicsToDelete = new HashSet<>();
-            List<String> allInternalTopics = new ArrayList<>();
-            retrieveInternalTopics(groupIds).values().forEach(allInternalTopics::addAll);
 
-            if (opts.options.has(opts.internalTopicOpt)) {
-                List<String> internalTopics = new ArrayList<>(opts.options.valuesOf(opts.internalTopicOpt));
-                if (internalTopics.isEmpty()) {
-                    printError("No internal topics specified for deletion.", Optional.empty());
-                    return;
-                }
-                topicsToDelete = new HashSet<>(internalTopics);
-                topicsToDelete.removeIf(topic -> {
-                    if (!allInternalTopics.contains(topic)) {
-                        printError("The specified internal topic '" + topic + "' is not associated to the any of the groups ('" +
-                            String.join("', '", groupIds) + "') as an internal topic and thus will not be deleted.", Optional.empty());
-                        return true;
-                    }
-                    return false;
-                });
-            } else if (opts.options.has(opts.allInternalTopicsOpt)) {
-                topicsToDelete = new HashSet<>(allInternalTopics);
-            }
-            if (topicsToDelete.isEmpty()) {
-                printError("No internal topics specified for deletion.", Optional.empty());
+            if (groupIds.isEmpty()) {
+                printError("No valid streams groups specified for deletion.", Optional.empty());
             } else {
-                DeleteTopicsResult deleteTopicsResult = null;
-                try {
-                    deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
-                    deleteTopicsResult.all().get();
-                    System.out.println("Deletion of requested internal topics ('" + String.join("', '", topicsToDelete) + "') was successful.");
-                } catch (ExecutionException | InterruptedException e) {
-                    if (deleteTopicsResult != null) {
-                        deleteTopicsResult.topicNameValues().forEach((topic, future) -> {
-                            try {
-                                future.get();
-                            } catch (Exception topicException) {
-                                System.out.println("Failed to delete internal topic: " + topic);
-                            }
-                        });
+                Set<String> topicsToDelete = new HashSet<>();
+                List<String> allInternalTopics = new ArrayList<>();
+                retrieveInternalTopics(groupIds).values().forEach(allInternalTopics::addAll);
+
+                if (opts.options.has(opts.internalTopicOpt)) {
+                    List<String> internalTopics = new ArrayList<>(opts.options.valuesOf(opts.internalTopicOpt));
+                    if (internalTopics.isEmpty()) {
+                        printError("No internal topics specified for deletion.", Optional.empty());
+                        return;
                     }
-                    printError("Failed to delete internal topics: " + e.getMessage(), Optional.of(e));
+                    topicsToDelete = new HashSet<>(internalTopics);
+                    topicsToDelete.removeIf(topic -> {
+                        if (!allInternalTopics.contains(topic)) {
+                            printError("The specified internal topic '" + topic + "' is not associated to the any of the groups ('" +
+                                String.join("', '", groupIds) + "') as an internal topic and thus will not be deleted.", Optional.empty());
+                            return true;
+                        }
+                        return false;
+                    });
+                } else if (opts.options.has(opts.allInternalTopicsOpt)) {
+                    topicsToDelete = new HashSet<>(allInternalTopics);
                 }
+                if (topicsToDelete.isEmpty()) {
+                    printError("No internal topics specified for deletion.", Optional.empty());
+                } else {
+                    deleteTopics(topicsToDelete);
+                }
+            }
+        }
+
+        private void deleteTopics(Set<String> topicsToDelete) {
+            DeleteTopicsResult deleteTopicsResult = null;
+            try {
+                deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
+                deleteTopicsResult.all().get();
+                System.out.println("Deletion of requested internal topics ('" + String.join("', '", topicsToDelete) + "') was successful.");
+            } catch (ExecutionException | InterruptedException e) {
+                if (deleteTopicsResult != null) {
+                    deleteTopicsResult.topicNameValues().forEach((topic, future) -> {
+                        try {
+                            future.get();
+                        } catch (Exception topicException) {
+                            System.out.println("Failed to delete internal topic: " + topic);
+                        }
+                    });
+                }
+                printError("Failed to delete internal topics: " + e.getMessage(), Optional.of(e));
+            }
+        }
+
+        List<GroupListing> listDetailedStreamsGroups() {
+            try {
+                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                    .withTypes(Set.of(GroupType.STREAMS)));
+                Collection<GroupListing> listings = result.all().get();
+                return listings.stream().toList();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
             }
         }
 

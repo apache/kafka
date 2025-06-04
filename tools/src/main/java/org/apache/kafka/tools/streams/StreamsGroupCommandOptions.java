@@ -97,7 +97,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         deleteOpt = parser.accepts("delete", DELETE_DOC);
         internalTopicOpt = parser.accepts("internal-topic", INTERNAL_TOPIC_DOC)
             .availableIf(deleteOpt)
-            .withOptionalArg()
+            .withRequiredArg()
             .describedAs("name of internal topic to delete")
             .ofType(String.class);
         allInternalTopicsOpt = parser.accepts("all-internal-topics", ALL_INTERNAL_TOPICS_DOC);
