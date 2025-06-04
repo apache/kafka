@@ -18,6 +18,7 @@ package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
@@ -61,9 +62,9 @@ public class StreamsGroupCommand {
             opts.checkArgs();
 
             // should have exactly one action
-            long numberOfActions = Stream.of(opts.listOpt, opts.describeOpt).filter(opts.options::has).count();
+            long numberOfActions = Stream.of(opts.listOpt, opts.describeOpt, opts.deleteOpt).filter(opts.options::has).count();
             if (numberOfActions != 1)
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, or --describe.");
+                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, or --delete.");
 
             run(opts);
         } catch (OptionException e) {
@@ -77,6 +78,8 @@ public class StreamsGroupCommand {
                 streamsGroupService.listGroups();
             } else if (opts.options.has(opts.describeOpt)) {
                 streamsGroupService.describeGroups();
+            } else if (opts.options.has(opts.deleteOpt)) {
+                streamsGroupService.deleteInternalTopics();
             } else {
                 throw new IllegalArgumentException("Unknown action!");
             }
@@ -395,6 +398,60 @@ public class StreamsGroupCommand {
             props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
             props.putAll(configOverrides);
             return Admin.create(props);
+        }
+
+        public void deleteInternalTopics() {
+            if (opts.options.has(opts.internalTopicsOpt)) {
+                String internalTopics = opts.options.valueOf(opts.internalTopicsOpt);
+                if (internalTopics == null || internalTopics.isEmpty()) {
+                    printError("No internal topics specified for deletion.", Optional.empty());
+                    return;
+                }
+                Set<String> topicsToDelete = new HashSet<>(Arrays.asList(internalTopics.trim().split(",")));
+                topicsToDelete = topicsToDelete.stream()
+                    .map(String::trim)
+                    .collect(Collectors.toSet());
+                topicsToDelete.removeIf(topic -> {
+                    if (!matchesInternalTopicFormat(topic)) {
+                        printError("Invalid internal topic format: " + topic, Optional.empty());
+                        return true;
+                    }
+                    return false;
+                });
+                if (topicsToDelete.isEmpty()) {
+                    printError("No internal topics specified for deletion.", Optional.empty());
+                } else if (!opts.options.has(opts.executeOpt)) {
+                    System.out.println("Dry run: The following internal topics would be deleted: (" + String.join("', '", topicsToDelete)+ "')");
+                } else {
+                    DeleteTopicsResult deleteTopicsResult = null;
+                    try {
+                        deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
+                        deleteTopicsResult.all().get();
+                        System.out.println("Deletion of requested internal topics ('" + String.join("', '", topicsToDelete) + "') was successful.");
+                    } catch (ExecutionException | InterruptedException e) {
+                        deleteTopicsResult.topicNameValues().forEach((topic, future) -> {
+                            try {
+                                future.get();
+                            } catch (Exception topicException) {
+                                System.out.println("Failed to delete internal topic: " + topic);
+                            }
+                        });
+                        printError("Failed to delete internal topics: " + e.getMessage(), Optional.of(e));
+                    }
+                }
+            }
+        }
+
+        public static boolean matchesInternalTopicFormat(final String topicName) {
+            return topicName.endsWith("-changelog") || topicName.endsWith("-repartition")
+                || topicName.endsWith("-subscription-registration-topic")
+                || topicName.endsWith("-subscription-response-topic")
+                || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-\\d+-topic")
+                || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-\\d+-topic");
+        }
+
+        GroupState collectGroupState(String groupId) throws Exception {
+            return getDescribeGroup(groupId).groupState();
         }
     }
 
