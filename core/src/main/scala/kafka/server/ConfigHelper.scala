@@ -100,11 +100,12 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
       def createResponseConfig(configs: java.util.Map[String, _ <: Object],
                                createConfigEntry: (String, Object) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
         val configEntries: java.util.List[DescribeConfigsResponseData.DescribeConfigsResourceResult] = {
-          val baseStream = configs.entrySet().stream()
-          val filtered = if (resource.configurationKeys == null || resource.configurationKeys.isEmpty) baseStream
-          else baseStream.filter(entry => resource.configurationKeys.contains(entry.getKey))
-
-          filtered
+          configs.entrySet().stream()
+            .filter(entry =>
+              resource.configurationKeys == null ||
+                resource.configurationKeys.isEmpty ||
+                resource.configurationKeys.contains(entry.getKey)
+            )
             .map[DescribeConfigsResponseData.DescribeConfigsResourceResult](entry =>
               createConfigEntry(entry.getKey, entry.getValue)
             )
