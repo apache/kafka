@@ -60,6 +60,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -971,13 +972,16 @@ public class KafkaStreams implements AutoCloseable {
         this.log = logContext.logger(getClass());
         topologyMetadata.setLog(logContext);
 
-        // use client id instead of thread client id since this admin client may be shared among threads
         this.clientSupplier = clientSupplier;
-        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
 
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
 
+        throwIfUnsupportedFeatureIsUsedWithStreamsRebalanceProtocol();
+
+        // use client id instead of thread client id since this admin client may be shared among threads
+        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
+        
         metrics = createMetrics(applicationConfigs, time, clientId);
         final StreamsClientMetricsDelegatingReporter reporter = new StreamsClientMetricsDelegatingReporter(adminClient, clientId);
         metrics.addReporter(reporter);
@@ -1045,6 +1049,21 @@ public class KafkaStreams implements AutoCloseable {
 
         stateDirCleaner = setupStateDirCleaner();
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, applicationConfigs);
+    }
+
+    private void throwIfUnsupportedFeatureIsUsedWithStreamsRebalanceProtocol() {
+        if (applicationConfigs.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
+            log.info("Streams rebalance protocol enabled");
+            if (topologyMetadata.hasNamedTopologies()) {
+                throw new UnsupportedOperationException("Named topologies are not supported with the STREAMS protocol.");
+            }
+            if (topologyMetadata.usesPatternSubscription()) {
+                throw new UnsupportedOperationException("Pattern subscriptions are not supported with the STREAMS protocol.");
+            }
+            if (!(clientSupplier instanceof DefaultKafkaClientSupplier)) {
+                throw new UnsupportedOperationException("A non-default kafka client supplier is not supported with the STREAMS protocol.");
+            }
+        }
     }
 
     private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {

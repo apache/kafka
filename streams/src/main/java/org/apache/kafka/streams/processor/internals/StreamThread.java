@@ -539,8 +539,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
-            log.info("Streams rebalance protocol enabled");
-
             final Optional<StreamsRebalanceData> streamsRebalanceData = Optional.of(
                 initStreamsRebalanceData(
                     processId,

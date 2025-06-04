@@ -1840,6 +1840,39 @@ public class KafkaStreamsTest {
         assertThat(didAssertGlobalThread.get(), equalTo(true));
     }
 
+    @Test
+    public void shouldThrowIfPatternSubscriptionUsedWithStreamsProtocol() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        // Simulate pattern subscription
+        final Topology topology = new Topology();
+        topology.addSource("source", java.util.regex.Pattern.compile("topic-.*"));
+
+        final UnsupportedOperationException ex = assertThrows(
+            UnsupportedOperationException.class,
+            () -> new KafkaStreams(topology, props)
+        );
+        assert ex.getMessage().contains("Pattern subscriptions are not supported with the STREAMS protocol");
+    }
+
+    @Test
+    public void shouldThrowIfNonDefaultClientSupplierUsedWithStreamsProtocol() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        final Topology topology = new Topology();
+        topology.addSource("source", "topic");
+
+        @SuppressWarnings("resource") final UnsupportedOperationException ex = assertThrows(
+            UnsupportedOperationException.class,
+            () -> new KafkaStreams(topology, new StreamsConfig(props), new MockClientSupplier())
+        );
+        assert ex.getMessage().contains("A non-default kafka client supplier is not supported with the STREAMS protocol");
+    }
+
     private Topology getStatefulTopology(final String inputTopic,
                                          final String outputTopic,
                                          final String globalTopicName,
