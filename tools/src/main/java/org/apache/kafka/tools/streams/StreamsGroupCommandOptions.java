@@ -39,13 +39,12 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     public static final String GROUP_DOC = "The streams group we wish to act on.";
     private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
-    private static final String INPUT_TOPIC_DOC = "The input topic whose streams group information should be deleted or topic whose should be included in the reset offset process. " +
+    private static final String INPUT_TOPIC_DOC = "The input topic whose streams group information should be deleted or topic that should be included in the reset offset process. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
         "Reset-offsets also supports multiple topic inputs.";
-    private static final String ALL_INPUT_TOPICS_DOC = "Consider all input topics assigned to a group in the `reset-offsets` process.";
+    private static final String ALL_INPUT_TOPICS_DOC = "Consider all topics assigned to a group in the `reset-offsets` process.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
-    private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
     private static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
         "over the entire streams group. For instance --group g1 --group g2";
     public static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
@@ -79,12 +78,12 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
     public final OptionSpec<String> bootstrapServerOpt;
     public final OptionSpec<String> groupOpt;
-    final OptionSpec<String> inputTopicOpt;
-    final OptionSpec<Void> allInputTopicsOpt;
+    public final OptionSpec<String> inputTopicOpt;
+    public final OptionSpec<Void> allInputTopicsOpt;
     public final OptionSpec<Void> listOpt;
     public final OptionSpec<Void> describeOpt;
+    public final OptionSpec<Void> deleteOpt;
     final OptionSpec<Void> allGroupsOpt;
-    final OptionSpec<Void> deleteOpt;
     public final OptionSpec<Long> timeoutMsOpt;
     public final OptionSpec<String> commandConfigOpt;
     public final OptionSpec<String> stateOpt;
@@ -104,6 +103,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public final OptionSpec<Void> exportOpt;
     public final OptionSpec<Void> verboseOpt;
 
+    final Set<OptionSpec<?>> allResetOffsetScenarioOpts;
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
     final Set<OptionSpec<?>> allStreamsGroupLevelOpts;
 
@@ -124,9 +124,9 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("streams group")
             .ofType(String.class);
-        inputTopicOpt = parser.accepts("topic", INPUT_TOPIC_DOC)
+        inputTopicOpt = parser.accepts("input-topic", INPUT_TOPIC_DOC)
             .withRequiredArg()
-            .describedAs("input-topic")
+            .describedAs("topic")
             .ofType(String.class);
         allInputTopicsOpt = parser.accepts("all-input-topics", ALL_INPUT_TOPICS_DOC);
         listOpt = parser.accepts("list", LIST_DOC);
@@ -143,6 +143,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("command config property file")
             .ofType(String.class);
+
         stateOpt = parser.accepts("state", STATE_DOC)
             .availableIf(listOpt, describeOpt)
             .withOptionalArg()
@@ -178,14 +179,15 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
         verboseOpt = parser.accepts("verbose", VERBOSE_DOC)
             .availableIf(describeOpt);
-
-        allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
-        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
+        dryRunOpt = parser.accepts("dry-run", DRY_RUN_DOC);
+        executeOpt = parser.accepts("execute", EXECUTE_DOC);
+        exportOpt = parser.accepts("export", EXPORT_DOC);
         options = parser.parse(args);
 
         allResetOffsetScenarioOpts = new HashSet<>(Arrays.asList(resetToOffsetOpt, resetShiftByOpt,
             resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt));
         allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
+        allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
     }
 
     public void checkArgs() {
@@ -210,13 +212,22 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
+        if (options.has(resetOffsetsOpt)) {
+            if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + resetOffsetsOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+        }
+
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
         }
 
+        checkOffsetResetArgs();
+
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
+        CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allStreamsGroupLevelOpts, describeOpt, deleteOpt));
     }
 
     private void checkOffsetResetArgs() {

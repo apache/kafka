@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
@@ -58,6 +59,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -67,7 +69,9 @@ import static java.time.LocalDateTime.now;
 import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -109,8 +113,24 @@ public class ResetStreamsGroupOffsetTest {
 
     @Test
     public void testResetWithUnrecognizedOption() {
-        String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", bootstrapServers, "--reset-offsets", "--all-group", "--all-topics", "--to-offset", "5"};
+        String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", bootstrapServers, "--reset-offsets", "--all-groups", "--all-input-topics", "--to-offset", "5"};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
+    }
+
+    @Test
+    public void testResetOffsetsWithoutGroupOption() {
+        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--to-offset", "5"};
+        AtomicBoolean exited = new AtomicBoolean(false);
+        Exit.setExitProcedure(((statusCode, message) -> {
+            assertNotEquals(0, statusCode);
+            assertTrue(message.contains("Option [reset-offsets] takes one of these options: [all-groups], [group]"));
+            exited.set(true);
+        }));
+        try {
+            getStreamsGroupService(args);
+        } finally {
+            assertTrue(exited.get());
+        }
     }
 
     @Test
@@ -125,17 +145,17 @@ public class ResetStreamsGroupOffsetTest {
         produceMessagesOnTwoPartitions(RECORD_TOTAL, topic2);
         /////////////////////////////////////////////// Specific topic (--topic topic1) ////////////////////////////////////////////////
         // reset to specific offset, offset already on 10
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--to-offset", "5"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--to-offset", "5"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 5L, 10L, 0, 1);
 
         resetForNextTest(appId, 10L, topic1);
 
         // reset to specific offset when after end offset, offset already on 10
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--to-offset", "30"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--to-offset", "30"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 20L, 10L, 0, 1);
 
         // reset to specific offset when before begin offset, offset already on 20
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--to-offset", "-30"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--to-offset", "-30"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 0L, 20L, 0, 1);
 
         resetForNextTest(appId, 10L, topic1);
@@ -143,51 +163,51 @@ public class ResetStreamsGroupOffsetTest {
         // reset to specific date time
         DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
         LocalDateTime dateTime = now().minusDays(1);
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--to-datetime", format.format(dateTime)};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--to-datetime", format.format(dateTime)};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 0L, 10L, 0, 1);
 
         resetForNextTest(appId, 10L, topic1);
 
         // reset by duration to earliest
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--by-duration", "PT5M"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--by-duration", "PT5M"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 0L, 10L, 0, 1);
 
         resetForNextTest(appId, 10L, topic1);
 
         // reset to earliest
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--to-earliest"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--to-earliest"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 0L, 10L, 0, 1);
 
         resetForNextTest(appId, 10L, topic1);
 
         // reset to latest
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--to-latest"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--to-latest"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 20L, 10L, 0, 1);
 
         resetForNextTest(appId, 5L, topic1);
 
         // reset to current
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--to-current"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--to-current"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 5L, 5L, 0, 1);
 
         // reset offset shift+. The current offset is 5, as of the prev test is executed (by --execute)
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--shift-by", "3"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--shift-by", "3"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 8L, 5L, 0, 1);
 
         // reset offset shift-. The current offset is 8, as of the prev test is executed (by --execute)
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--shift-by", "-3"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--shift-by", "-3"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 5L, 8L, 0, 1);
 
         // reset offset shift by lower than earliest. The current offset is 5, as of the prev test is executed (by --execute)
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--shift-by", "-150"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--shift-by", "-150"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 0L, 5L, 0, 1);
 
         // reset offset shift by higher than latest. The current offset is 0, as of the prev test is executed (by --execute)
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--shift-by", "150"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--shift-by", "150"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 20L, 0L, 0, 1);
 
         // export to file
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--to-offset", "5", "--export"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--to-offset", "5", "--export"};
         File file = TestUtils.tempFile("reset", ".csv");
         Map<TopicPartition, Long> exp = Map.of(new TopicPartition(topic1, 0), 5L, new TopicPartition(topic1, 1), 5L);
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
@@ -196,7 +216,7 @@ public class ResetStreamsGroupOffsetTest {
 
             assertEquals(exp, toOffsetMap(exportedOffsets.get(appId)));
         }
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--from-file", file.getCanonicalPath()};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--from-file", file.getCanonicalPath()};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
             Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = service.resetOffsets();
             assertEquals(exp, toOffsetMap(importedOffsets.get(appId)));
@@ -206,14 +226,14 @@ public class ResetStreamsGroupOffsetTest {
         resetForNextTest(appId, 10L, topic1);
 
         // reset to specific offset
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1 + ":1", "--to-offset", "5"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1 + ":1", "--to-offset", "5"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, 5L, 10L, 1);
 
         resetForNextTest(appId, 10L, topic1);
 
         // reset both partitions of topic1 and topic2:1 to specific offset
         args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId,
-            "--topic", topic1,  "--topic", topic2 + ":1", "--to-offset", "5"};
+            "--input-topic", topic1,  "--input-topic", topic2 + ":1", "--to-offset", "5"};
         final Map<TopicPartition, Long> expectedOffsets = Map.of(
             new TopicPartition(topic1, 0), 5L,
             new TopicPartition(topic1, 1), 5L,
@@ -231,23 +251,23 @@ public class ResetStreamsGroupOffsetTest {
                 new TopicPartition(topic2, 0), 10L,
                 new TopicPartition(topic2, 1), 5L));
 
-        ///////////////////////////////////////// All topics (--all-topics) /////////////////////////////////////////
+        ///////////////////////////////////////// All topics (--all-input-topics) /////////////////////////////////////////
         resetForNextTest(appId, 10L, topic1, topic2);
 
         // reset to specific offset
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-topics", "--to-offset", "5"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-input-topics", "--to-offset", "5"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, topic2, 5L, 10L);
 
         resetForNextTest(appId, 10L, topic1, topic2);
 
         // reset to specific offset with two --topic options
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--topic", topic2, "--to-offset", "5"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--input-topic", topic2, "--to-offset", "5"};
         resetOffsetsAndAssertForDryRunAndExecute(args, appId, topic1, topic2, 5L, 10L);
 
         resetForNextTest(appId, 10L, topic1, topic2);
 
         // export to file
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-topics", "--to-offset", "5", "--export"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-input-topics", "--to-offset", "5", "--export"};
         file = TestUtils.tempFile("reset-all", ".csv");
         exp = Map.of(new TopicPartition(topic1, 0), 5L,
             new TopicPartition(topic1, 1), 5L,
@@ -259,7 +279,7 @@ public class ResetStreamsGroupOffsetTest {
 
             assertEquals(exp, toOffsetMap(exportedOffsets.get(appId)));
         }
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--topic", topic1, "--from-file", file.getCanonicalPath()};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--from-file", file.getCanonicalPath()};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
             Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = service.resetOffsets();
 
@@ -280,7 +300,7 @@ public class ResetStreamsGroupOffsetTest {
         produceMessagesOnTwoPartitions(RECORD_TOTAL, topic1);
         produceMessagesOnTwoPartitions(RECORD_TOTAL, topic2);
 
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-topics", "--to-offset", "5"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-input-topics", "--to-offset", "5"};
         resetOffsetsAndAssertInternalTopicDeletionForDryRunAndExecute(args, appId);
 
         adminClient.deleteTopics(List.of(topic1, topic2)).all().get();

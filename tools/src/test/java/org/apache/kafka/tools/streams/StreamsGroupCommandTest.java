@@ -17,6 +17,7 @@
 package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
@@ -151,6 +152,7 @@ public class StreamsGroupCommandTest {
             foundListing[0] = new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.STABLE)));
             return Objects.equals(expectedListingStable, foundListing[0]);
         }, "Expected to show groups " + expectedListingStable + ", but found " + foundListing[0]);
+
         service.close();
     }
 
@@ -175,6 +177,7 @@ public class StreamsGroupCommandTest {
         when(ADMIN_CLIENT.describeStreamsGroups(ArgumentMatchers.anyCollection())).thenReturn(result);
         StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(null, ADMIN_CLIENT);
         assertEquals(exp, service.getDescribeGroup(firstGroup));
+
         service.close();
     }
 
@@ -230,6 +233,7 @@ public class StreamsGroupCommandTest {
         Map<TopicPartition, StreamsGroupCommand.OffsetsInfo> lags = service.getOffsets(x);
         assertEquals(1, lags.size());
         assertEquals(new StreamsGroupCommand.OffsetsInfo(Optional.of(12L), Optional.of(0), 30L, 18L), lags.get(new TopicPartition("topic1", 0)));
+
         service.close();
     }
 
@@ -283,34 +287,138 @@ public class StreamsGroupCommandTest {
 
     @Test
     public void testAdminRequestsForResetOffsets() {
+        Admin adminClient = mock(KafkaAdminClient.class);
         String groupId = "foo-group";
-        List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", groupId, "--reset-offsets", "--topic", "topic1", "--to-latest"));
+        List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", groupId, "--reset-offsets", "--input-topic", "topic1", "--to-latest"));
         List<String> topics = List.of("topic1");
 
-        when(ADMIN_CLIENT.describeStreamsGroups(List.of(groupId)))
+        when(adminClient.describeStreamsGroups(List.of(groupId)))
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
-        when(ADMIN_CLIENT.describeTopics(topics))
+        when(adminClient.describeTopics(topics))
             .thenReturn(describeTopicsResult(topics, 1));
-        when(ADMIN_CLIENT.listOffsets(any()))
+        when(adminClient.listOffsets(any()))
             .thenReturn(listOffsetsResult());
-        when(ADMIN_CLIENT.listGroups(any())).thenReturn(listGroupResult(groupId));
+        when(adminClient.listGroups(any())).thenReturn(listGroupResult(groupId));
         ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
         Map<TopicPartition, OffsetAndMetadata> committedOffsetsMap = new HashMap<>();
         committedOffsetsMap.put(new TopicPartition("topic1", 0), mock(OffsetAndMetadata.class));
-        when(ADMIN_CLIENT.listStreamsGroupOffsets(ArgumentMatchers.anyMap())).thenReturn(result);
+        when(adminClient.listStreamsGroupOffsets(ArgumentMatchers.anyMap())).thenReturn(result);
         when(result.partitionsToOffsetAndMetadata(ArgumentMatchers.anyString())).thenReturn(KafkaFuture.completedFuture(committedOffsetsMap));
 
-        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]));
+        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]), adminClient);
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetResult = service.resetOffsets();
 
         assertEquals(Collections.singleton(groupId), resetResult.keySet());
         assertEquals(new HashSet<>(List.of(new TopicPartition(topics.get(0), 0))),
             resetResult.get(groupId).keySet());
 
-        verify(ADMIN_CLIENT, times(1)).describeStreamsGroups(List.of(groupId));
-        verify(ADMIN_CLIENT, times(1)).describeTopics(topics);
-        verify(ADMIN_CLIENT, times(1)).listOffsets(any());
-        verify(ADMIN_CLIENT, times(1)).listStreamsGroupOffsets(any());
+        verify(adminClient, times(1)).describeStreamsGroups(List.of(groupId));
+        verify(adminClient, times(1)).describeTopics(topics);
+        verify(adminClient, times(1)).listOffsets(any());
+        verify(adminClient, times(1)).listStreamsGroupOffsets(any());
+
+        service.close();
+    }
+
+    @Test
+    public void testRetrieveInternalTopics() {
+        String groupId = "foo-group";
+        List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", groupId, "--delete"));
+        List<String> sourceTopics = List.of("source-topic1", "source-topic2");
+        List<String> repartitionSinkTopics = List.of("rep-sink-topic1", "rep-sink-topic2");
+        Map<String, StreamsGroupSubtopologyDescription.TopicInfo> stateChangelogTopics = Map.of(
+            groupId + "-1-changelog", mock(StreamsGroupSubtopologyDescription.TopicInfo.class),
+            "some-pre-fix" + "-changelog", mock(StreamsGroupSubtopologyDescription.TopicInfo.class),
+            groupId + "-2-changelog", mock(StreamsGroupSubtopologyDescription.TopicInfo.class));
+        Map<String, StreamsGroupSubtopologyDescription.TopicInfo> repartitionSourceTopics = Map.of(
+            groupId + "-1-repartition", mock(StreamsGroupSubtopologyDescription.TopicInfo.class),
+            groupId + "-some-thing", mock(StreamsGroupSubtopologyDescription.TopicInfo.class),
+            groupId + "-2-repartition", mock(StreamsGroupSubtopologyDescription.TopicInfo.class));
+
+
+        Map<String, StreamsGroupDescription> resultMap = new HashMap<>();
+        resultMap.put(groupId, new StreamsGroupDescription(
+            groupId,
+            0,
+            0,
+            0,
+            List.of(new StreamsGroupSubtopologyDescription("subtopology1", sourceTopics, repartitionSinkTopics, stateChangelogTopics, repartitionSourceTopics)),
+            List.of(),
+            GroupState.DEAD,
+            new Node(0, "localhost", 9092),
+            null));
+        DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);
+        when(result.all()).thenReturn(KafkaFuture.completedFuture(resultMap));
+        when(ADMIN_CLIENT.describeStreamsGroups(ArgumentMatchers.anyCollection())).thenReturn(result);
+
+        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]));
+        Map<String, List<String>> internalTopics = service.retrieveInternalTopics(List.of(groupId));
+
+        assertNotNull(internalTopics.get(groupId));
+        assertEquals(4, internalTopics.get(groupId).size());
+        assertEquals(new HashSet<>(List.of(groupId + "-1-changelog", groupId + "-2-changelog", groupId + "-1-repartition", groupId + "-2-repartition")),
+            new HashSet<>(internalTopics.get(groupId)));
+        assertFalse(internalTopics.get(groupId).stream().anyMatch(List.of("some-pre-fix-changelog", groupId + "-some-thing")::contains));
+        assertFalse(internalTopics.get(groupId).stream().anyMatch(sourceTopics::contains));
+        assertFalse(internalTopics.get(groupId).stream().anyMatch(repartitionSinkTopics::contains));
+
+        service.close();
+    }
+
+    @Test
+    public void testDeleteStreamsGroup() {
+        Admin adminClient = mock(KafkaAdminClient.class);
+        String groupId = "foo-group";
+        List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", groupId, "--delete"));
+
+        DeleteStreamsGroupsResult deleteStreamsGroupsResult = mock(DeleteStreamsGroupsResult.class);
+        when(adminClient.deleteStreamsGroups(eq(List.of(groupId)), any(DeleteStreamsGroupsOptions.class))).thenReturn(deleteStreamsGroupsResult);
+        when(deleteStreamsGroupsResult.deletedGroups()).thenReturn(Map.of(groupId, KafkaFuture.completedFuture(null)));
+        DeleteTopicsResult deleteTopicsResult = mock(DeleteTopicsResult.class);
+        when(deleteTopicsResult.all()).thenReturn(KafkaFuture.completedFuture(null));
+        when(adminClient.deleteTopics(ArgumentMatchers.anyCollection())).thenReturn(deleteTopicsResult);
+        DescribeStreamsGroupsResult describeStreamsGroupsResult = mock(DescribeStreamsGroupsResult.class);
+        when(describeStreamsGroupsResult.all()).thenReturn(KafkaFuture.completedFuture(Map.of(groupId, mock(StreamsGroupDescription.class))));
+        when(adminClient.describeStreamsGroups(any())).thenReturn(describeStreamsGroupsResult);
+        ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
+        when(adminClient.listGroups(any())).thenReturn(listGroupsResult);
+        when(listGroupsResult.all()).thenReturn(KafkaFuture.completedFuture(List.of(new GroupListing(groupId, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.EMPTY)))));
+
+        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]), adminClient);
+        service.deleteGroups();
+
+        verify(adminClient, times(1)).listGroups(any(ListGroupsOptions.class));
+        verify(adminClient, times(1)).deleteStreamsGroups(eq(List.of(groupId)), any(DeleteStreamsGroupsOptions.class));
+        verify(adminClient, times(1)).describeStreamsGroups(any());
+        // because of having 0 internal topics, we do not expect deleteTopics to be called
+        verify(adminClient, times(0)).deleteTopics(ArgumentMatchers.anyCollection());
+
+        service.close();
+    }
+
+    @Test
+    public void testDeleteNonStreamsGroup() {
+        Admin adminClient = mock(KafkaAdminClient.class);
+        String groupId = "foo-group";
+        List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", groupId, "--delete"));
+
+        ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
+        when(adminClient.listGroups(any())).thenReturn(listGroupsResult);
+        when(listGroupsResult.all()).thenReturn(KafkaFuture.completedFuture(List.of()));
+
+        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]), adminClient);
+        Map<String, Throwable> result = service.deleteGroups();
+
+        assertNotNull(result.get(groupId));
+        assertEquals(result.get(groupId).getMessage(),
+            "Group '" + groupId + "' does not exist or is not a streams group.");
+        assertInstanceOf(IllegalArgumentException.class, result.get(groupId));
+        verify(adminClient, times(1)).listGroups(any(ListGroupsOptions.class));
+        // we do not expect any further API to be called
+        verify(adminClient, times(0)).deleteStreamsGroups(eq(List.of(groupId)), any(DeleteStreamsGroupsOptions.class));
+        verify(adminClient, times(0)).describeStreamsGroups(any());
+        verify(adminClient, times(0)).deleteTopics(ArgumentMatchers.anyCollection());
+
         service.close();
     }
 
@@ -324,6 +432,11 @@ public class StreamsGroupCommandTest {
     StreamsGroupCommand.StreamsGroupService getStreamsGroupService(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
         return new StreamsGroupCommand.StreamsGroupService(opts, ADMIN_CLIENT);
+    }
+
+    StreamsGroupCommand.StreamsGroupService getStreamsGroupService(String[] args, Admin adminClient) {
+        StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
+        return new StreamsGroupCommand.StreamsGroupService(opts, adminClient);
     }
 
     private static void assertThrow(final String wrongState) {
