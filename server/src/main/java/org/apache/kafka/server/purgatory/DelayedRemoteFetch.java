@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -151,38 +152,49 @@ public class DelayedRemoteFetch extends DelayedOperation {
     public void onComplete() {
         Map<TopicIdPartition, List<FetchPartitionData>> fetchPartitionData = new HashMap<>();
 
-        for (Map.Entry<TopicIdPartition, List<LogReadResult>> entry : localReadResults.entrySet()) {
-            TopicIdPartition topicIdPartition = entry.getKey();
-            List<LogReadResult> results = entry.getValue();
-            List<FetchPartitionData> partitionDataList = fetchPartitionData.computeIfAbsent(topicIdPartition, k -> new ArrayList<>());
+        try {
+            for (Map.Entry<TopicIdPartition, List<LogReadResult>> entry : localReadResults.entrySet()) {
+                TopicIdPartition topicIdPartition = entry.getKey();
+                List<LogReadResult> results = entry.getValue();
+                List<FetchPartitionData> partitionDataList = fetchPartitionData.computeIfAbsent(topicIdPartition,
+                    k -> new ArrayList<>());
 
-            for (LogReadResult result : results) {
-                if (topicIdPartition.topicPartition().equals(remoteFetchInfo.topicPartition)
-                    && remoteFetchResult.isDone() && result.error() == Errors.NONE
-                    && result.info().delayedRemoteStorageFetch.isPresent()) {
+                for (LogReadResult result : results) {
+                    if (topicIdPartition.topicPartition().equals(remoteFetchInfo.topicPartition)
+                        && remoteFetchResult.isDone() && result.error() == Errors.NONE
+                        && result.info().delayedRemoteStorageFetch.isPresent()) {
 
-                    if (remoteFetchResult.get().error.isPresent()) {
-                        partitionDataList.add(new LogReadResult(remoteFetchResult.get().error.get()).toFetchPartitionData(false));
+                        if (remoteFetchResult.get().error.isPresent()) {
+                            partitionDataList.add(
+                                new LogReadResult(remoteFetchResult.get().error.get()).toFetchPartitionData(false));
+                        } else {
+                            FetchDataInfo info = remoteFetchResult.get().fetchDataInfo.get();
+                            partitionDataList.add(
+                                new FetchPartitionData(
+                                    result.error(),
+                                    result.highWatermark(),
+                                    result.leaderLogStartOffset(),
+                                    info.records,
+                                    Optional.empty(),
+                                    result.lastStableOffset(),
+                                    info.abortedTransactions,
+                                    result.preferredReadReplica(),
+                                    false));
+                        }
                     } else {
-                        FetchDataInfo info = remoteFetchResult.get().fetchDataInfo.get();
-                        partitionDataList.add(
-                            new FetchPartitionData(
-                                result.error(),
-                                result.highWatermark(),
-                                result.leaderLogStartOffset(),
-                                info.records,
-                                Optional.empty(),
-                                result.lastStableOffset(),
-                                info.abortedTransactions,
-                                result.preferredReadReplica(),
-                                false));
+                        partitionDataList.add(result.toFetchPartitionData(false));
                     }
-                } else {
-                    partitionDataList.add(result.toFetchPartitionData(false));
                 }
             }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
         }
 
         responseCallback.accept(fetchPartitionData);
+    }
+
+    // Visible for testing
+    public static Meter expiredRequestMeter() {
+        return EXPIRED_REQUEST_METER;
     }
 }

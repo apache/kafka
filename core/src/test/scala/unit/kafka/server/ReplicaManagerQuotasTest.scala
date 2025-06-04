@@ -30,6 +30,7 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.FetchPartitionStatus
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
@@ -171,7 +172,7 @@ class ReplicaManagerQuotasTest {
       when(partition.getReplica(1)).thenReturn(None)
 
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(
+      val fetchPartitionStatus = new FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
@@ -222,7 +223,7 @@ class ReplicaManagerQuotasTest {
         .thenReturn(partition)
 
       val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(
+      val fetchPartitionStatus = new FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
