@@ -1355,7 +1355,8 @@ public class GroupMetadataManager {
                 snapshotRegistry,
                 metrics,
                 classicGroup,
-                metadataImage.topics()
+                metadataImage.topics(),
+                metadataImage.cluster()
             );
         } catch (SchemaException e) {
             log.warn("Cannot upgrade classic group " + classicGroup.groupId() +

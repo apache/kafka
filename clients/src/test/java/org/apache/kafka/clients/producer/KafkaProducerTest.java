@@ -603,12 +603,11 @@ public class KafkaProducerTest {
         final int oldInitCount = MockSerializer.INIT_COUNT.get();
         final int oldCloseCount = MockSerializer.CLOSE_COUNT.get();
 
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
-                configs, new MockSerializer(), new MockSerializer());
-        assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
-        assertEquals(oldCloseCount, MockSerializer.CLOSE_COUNT.get());
+        try (var ignored = new KafkaProducer<>(configs, new MockSerializer(), new MockSerializer())) {
+            assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
+            assertEquals(oldCloseCount, MockSerializer.CLOSE_COUNT.get());
+        }
 
-        producer.close();
         assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
         assertEquals(oldCloseCount + 2, MockSerializer.CLOSE_COUNT.get());
     }

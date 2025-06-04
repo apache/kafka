@@ -10239,6 +10239,10 @@ public class GroupMetadataManagerTest {
 
             // Create the new consumer group with member 1.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(
+                fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1),
+                barTopicName, new TopicMetadata(barTopicId, barTopicName, 1)
+            )),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0, 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 0),
@@ -10246,12 +10250,6 @@ public class GroupMetadataManagerTest {
 
             // Member 2 joins the new consumer group.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
-
-            // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(
-                fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1),
-                barTopicName, new TopicMetadata(barTopicId, barTopicName, 1)
-            )),
 
             // Newly joining member 2 bumps the group epoch. A new target assignment is computed.
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, 0),
@@ -10454,6 +10452,11 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
 
+            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(
+                fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2),
+                barTopicName, new TopicMetadata(barTopicId, barTopicName, 1)
+            )),
+
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0, 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, expectedMember2.assignedPartitions()),
@@ -10465,12 +10468,6 @@ public class GroupMetadataManagerTest {
 
             // Member 3 joins the new consumer group.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
-
-            // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(
-                fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2),
-                barTopicName, new TopicMetadata(barTopicId, barTopicName, 1)
-            )),
 
             // Newly joining member 3 bumps the group epoch. A new target assignment is computed.
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, 0),
@@ -10659,7 +10656,7 @@ public class GroupMetadataManagerTest {
         );
 
         group.transitionTo(PREPARING_REBALANCE);
-        group.transitionTo(COMPLETING_REBALANCE);
+        group.initNextGeneration();
         group.transitionTo(STABLE);
 
         context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignments));
@@ -10681,8 +10678,8 @@ public class GroupMetadataManagerTest {
 
         ConsumerGroupMember expectedClassicMember = new ConsumerGroupMember.Builder(memberId)
             .setInstanceId(instanceId)
-            .setMemberEpoch(0)
-            .setPreviousMemberEpoch(0)
+            .setMemberEpoch(group.generationId())
+            .setPreviousMemberEpoch(group.generationId())
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setSubscribedTopicNames(List.of(fooTopicName))
@@ -10718,7 +10715,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember expectedFinalConsumerMember = new ConsumerGroupMember.Builder(expectedReplacingConsumerMember)
-            .setMemberEpoch(1)
+            .setMemberEpoch(group.generationId())
             .setServerAssignorName(NoOpPartitionAssignor.NAME)
             .setRebalanceTimeoutMs(5000)
             .setClassicMemberMetadata(null)
@@ -10730,9 +10727,10 @@ public class GroupMetadataManagerTest {
 
             // Create the new consumer group with the static member.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedClassicMember),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1))),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, group.generationId(), 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, expectedClassicMember.assignedPartitions()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, group.generationId()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedClassicMember),
 
             // Remove the static member because the rejoining member replaces it.
@@ -10745,16 +10743,9 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0))),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedReplacingConsumerMember),
 
-            // The static member rejoins the new consumer group.
+            // The static member rejoins the new consumer group with the same instance id and
+            // takes the assignment of the previous member. No new target assignment is computed.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedFinalConsumerMember),
-
-            // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1))),
-
-            // Newly joining static member bumps the group epoch. A new target assignment is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, 0),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
 
             // The newly created static member takes the assignment from the existing member.
             // Bump its member epoch and transition to STABLE.
@@ -10856,6 +10847,10 @@ public class GroupMetadataManagerTest {
 
             // Create the new consumer group with member 1.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(
+                fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1),
+                barTopicName, new TopicMetadata(barTopicId, barTopicName, 1)
+            )),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
@@ -10863,12 +10858,6 @@ public class GroupMetadataManagerTest {
 
             // Member 2 joins the new consumer group.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
-
-            // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(
-                fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1),
-                barTopicName, new TopicMetadata(barTopicId, barTopicName, 1)
-            )),
 
             // Newly joining member 2 bumps the group epoch. A new target assignment is computed.
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, 0),
@@ -11241,6 +11230,11 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
 
+            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(
+                fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2),
+                barTopicName, new TopicMetadata(barTopicId, barTopicName, 1)
+            )),
+
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, expectedMember2.assignedPartitions()),
@@ -11252,12 +11246,6 @@ public class GroupMetadataManagerTest {
 
             // Member 3 joins the new consumer group.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
-
-            // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Map.of(
-                fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2),
-                barTopicName, new TopicMetadata(barTopicId, barTopicName, 1)
-            )),
 
             // Newly joining member 3 bumps the group epoch. A new target assignment is computed.
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, 0),

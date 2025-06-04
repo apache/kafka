@@ -430,6 +430,7 @@
     <subpackage name="integration">
       <allow pkg="org.apache.kafka.common.test"/>
       <allow pkg="org.apache.kafka.metadata"/>
+      <allow pkg="org.apache.kafka.storage"/>
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.api" />
       <allow pkg="kafka.cluster" />

@@ -2830,7 +2830,6 @@ class KafkaApisTest extends Logging {
       any(),
       responseCallback.capture(),
       any(),
-      any(),
       ArgumentMatchers.eq(requestLocal),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(new TopicIdPartition(topicId,tp2) -> new PartitionResponse(Errors.NONE))))
@@ -2883,7 +2882,6 @@ class KafkaApisTest extends Logging {
       anyShort,
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
-      any(),
       any(),
       any(),
       any(),
@@ -2964,7 +2962,6 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       entriesPerPartition.capture(),
       responseCallback.capture(),
-      any(),
       any(),
       ArgumentMatchers.eq(RequestLocal.noCaching),
       any()

@@ -95,17 +95,17 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @Test
   def testDynamicTopicConfigChange(): Unit = {
     val tp = new TopicPartition("test", 0)
-    val oldSegmentSize = 1000
+    val oldSegmentSize = 2 * 1024 * 1024
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
       assertTrue(logOpt.isDefined)
-      assertEquals(oldSegmentSize, logOpt.get.config.segmentSize)
+      assertEquals(oldSegmentSize, logOpt.get.config.segmentSize())
     }
 
-    val newSegmentSize = 2000
+    val newSegmentSize = 2 * 1024 * 1024
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
@@ -117,7 +117,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
     val log = brokers.head.logManager.getLog(tp).get
     TestUtils.retry(10000) {
-      assertEquals(newSegmentSize, log.config.segmentSize)
+      assertEquals(newSegmentSize, log.config.segmentSize())
     }
 
     (1 to 50).foreach(i => TestUtils.produceMessage(brokers, tp.topic, i.toString))

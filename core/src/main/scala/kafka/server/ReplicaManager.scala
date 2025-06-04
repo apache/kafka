@@ -71,7 +71,6 @@ import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.Lock
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, Future, RejectedExecutionException, TimeUnit}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import java.util.function.Consumer
@@ -723,7 +722,6 @@ class ReplicaManager(val config: KafkaConfig,
    *                                      If topic partition contains Uuid.ZERO_UUID as topicId the method
    *                                      will fall back to the old behaviour and rely on topic name.
    * @param responseCallback              callback for sending the response
-   * @param delayedProduceLock            lock for the delayed actions
    * @param recordValidationStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
@@ -735,7 +733,6 @@ class ReplicaManager(val config: KafkaConfig,
                     origin: AppendOrigin,
                     entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
                     responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
-                    delayedProduceLock: Option[Lock] = None,
                     recordValidationStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.noCaching,
                     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
@@ -762,7 +759,6 @@ class ReplicaManager(val config: KafkaConfig,
 
     maybeAddDelayedProduce(
       requiredAcks,
-      delayedProduceLock,
       timeout,
       entriesPerPartition,
       localProduceResults,
@@ -967,7 +963,6 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def maybeAddDelayedProduce(
     requiredAcks: Short,
-    delayedProduceLock: Option[Lock],
     timeoutMs: Long,
     entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
     initialAppendResults: Map[TopicIdPartition, LogAppendResult],
@@ -977,7 +972,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, initialAppendResults)) {
       // create delayed produce operation
       val produceMetadata = ProduceMetadata(requiredAcks, initialProduceStatus)
-      val delayedProduce = new DelayedProduce(timeoutMs, produceMetadata, this, responseCallback, delayedProduceLock)
+      val delayedProduce = new DelayedProduce(timeoutMs, produceMetadata, this, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
       val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toList

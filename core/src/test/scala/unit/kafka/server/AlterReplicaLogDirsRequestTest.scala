@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse}
 import org.apache.kafka.server.config.ServerLogConfigs
-import org.apache.kafka.storage.internals.log.LogFileUtils
+import org.apache.kafka.storage.internals.log.{LogConfig, LogFileUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -144,7 +144,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     // We don't want files with `.deleted` suffix are removed too fast,
     // so we can validate there will be orphan files and orphan files will be removed eventually.
     topicProperties.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "10000")
-    topicProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1024")
+    topicProperties.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1024")
 
     createTopic(topic, partitionNum, 1, topicProperties)
     assertEquals(logDir1, brokers.head.logManager.getLog(tp).get.dir.getParent)

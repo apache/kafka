@@ -186,9 +186,9 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     MockProducerInterceptor.resetCounters()
   }
 
-  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition): Unit = {
+  private def sendRecords(producer: KafkaProducer[String, String], numRecords: Int, tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
-      val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
+      val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i", s"$i")
       debug(s"Sending this record: $record")
       producer.send(record)
     }
@@ -199,7 +199,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     }
   }
 
-  private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
+  private def consumeRecords(consumer: Consumer[String, String],
                              numRecords: Int,
                              startingOffset: Int = 0,
                              topic: String = topic,
