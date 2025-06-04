@@ -24,8 +24,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -95,58 +93,6 @@ public class StreamsCoordinatorRecordHelpers {
             new StreamsGroupMemberMetadataKey()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-        );
-    }
-
-    /**
-     * Creates a StreamsGroupPartitionMetadata record.
-     *
-     * @param groupId              The streams group id.
-     * @param newPartitionMetadata The partition metadata.
-     * @return The record.
-     */
-    public static CoordinatorRecord newStreamsGroupPartitionMetadataRecord(
-        String groupId,
-        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> newPartitionMetadata
-    ) {
-        Objects.requireNonNull(groupId, "groupId should not be null here");
-        Objects.requireNonNull(newPartitionMetadata, "newPartitionMetadata should not be null here");
-
-        StreamsGroupPartitionMetadataValue value = new StreamsGroupPartitionMetadataValue();
-        newPartitionMetadata.forEach((topicName, topicMetadata) -> {
-            value.topics().add(new StreamsGroupPartitionMetadataValue.TopicMetadata()
-                .setTopicId(topicMetadata.id())
-                .setTopicName(topicMetadata.name())
-                .setNumPartitions(topicMetadata.numPartitions())
-            );
-        });
-
-        value.topics().sort(Comparator.comparing(StreamsGroupPartitionMetadataValue.TopicMetadata::topicName));
-
-        return CoordinatorRecord.record(
-            new StreamsGroupPartitionMetadataKey()
-                .setGroupId(groupId),
-            new ApiMessageAndVersion(
-                value,
-                (short) 0
-            )
-        );
-    }
-
-    /**
-     * Creates a StreamsGroupPartitionMetadata tombstone.
-     *
-     * @param groupId The streams group id.
-     * @return The record.
-     */
-    public static CoordinatorRecord newStreamsGroupPartitionMetadataTombstoneRecord(
-        String groupId
-    ) {
-        Objects.requireNonNull(groupId, "groupId should not be null here");
-
-        return CoordinatorRecord.tombstone(
-            new StreamsGroupPartitionMetadataKey()
-                .setGroupId(groupId)
         );
     }
 

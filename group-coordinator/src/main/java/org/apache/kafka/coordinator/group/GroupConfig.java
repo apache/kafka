@@ -392,4 +392,8 @@ public final class GroupConfig extends AbstractConfig {
             throw new IllegalArgumentException("Unknown Share isolation level: " + shareIsolationLevel);
         }
     }
+
+    public static void main(String[] args) {
+        System.out.println(CONFIG.toHtml(4, config -> "groupconfigs_" + config));
+    }
 }
