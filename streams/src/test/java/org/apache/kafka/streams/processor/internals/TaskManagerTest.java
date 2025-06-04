@@ -34,10 +34,12 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -82,6 +84,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -97,6 +100,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
@@ -4835,6 +4839,44 @@ public class TaskManagerTest {
         // verify the startup Standby is now being used as an assigned Standby
         assertEquals(Collections.emptyMap(), taskManager.activeTaskMap());
         assertEquals(Collections.singletonMap(taskId00, startupTask), taskManager.standbyTaskMap());
+    }
+
+    @Test
+    public void shouldStartAndCleanlyShutdownStateUpdaterThread() {
+
+        final String stateUpdaterName = "test-state-updater";
+        final Metrics metrics = new Metrics(time);
+        final StreamsConfig config = new StreamsConfig(configProps());
+        final DefaultStateUpdater defaultStateUpdater =
+            new DefaultStateUpdater(stateUpdaterName, metrics, config, null, changeLogReader, topologyMetadata, time);
+
+        final TaskManager taskManager = new TaskManager(
+            time,
+            changeLogReader,
+            ProcessId.randomProcessId(),
+            "logPrefix",
+            activeTaskCreator,
+            standbyTaskCreator,
+            null,
+            topologyMetadata,
+            adminClient,
+            stateDirectory,
+            defaultStateUpdater,
+            null
+        );
+
+        taskManager.init();
+        assertTrue(defaultStateUpdater.isRunning());
+
+        defaultStateUpdater.shutdown(Duration.ofMinutes(1));
+        assertFalse(defaultStateUpdater.isRunning());
+    }
+
+    private Properties configProps() {
+        return mkObjectProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171")
+        ));
     }
 
     private static KafkaFutureImpl<DeletedRecords> completedFuture() {
