@@ -89,7 +89,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     }
 
     @ClusterTest
-    public void testTopicDoesNotExist() {
+    public void testTopicDoesNotExist() throws ExecutionException, InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
             String topic = "dummy-test-topic";
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
