@@ -212,44 +212,41 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
-        if (options.has(resetOffsetsOpt)) {
-            if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-                CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + resetOffsetsOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
-        }
-
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
         }
-
-        checkOffsetResetArgs();
+        if (options.has(resetOffsetsOpt)) {
+            checkOffsetResetArgs();
+        }
 
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allStreamsGroupLevelOpts, describeOpt, deleteOpt));
     }
 
     private void checkOffsetResetArgs() {
-        if (options.has(resetOffsetsOpt)) {
-            if (options.has(dryRunOpt) && options.has(executeOpt))
-                CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
+        if (options.has(dryRunOpt) && options.has(executeOpt))
+            CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
 
-            if (!options.has(dryRunOpt) && !options.has(executeOpt)) {
-                System.err.println("WARN: No action will be performed as the --execute option is missing. " +
-                    "In a future major release, the default behavior of this command will be to prompt the user before " +
-                    "executing the reset rather than doing a dry run. You should add the --dry-run option explicitly " +
-                    "if you are scripting this command and want to keep the current default behavior without prompting.");
-            }
-
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, minus(allResetOffsetScenarioOpts, resetToOffsetOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetScenarioOpts, resetToDatetimeOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetByDurationOpt, minus(allResetOffsetScenarioOpts, resetByDurationOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, minus(allResetOffsetScenarioOpts, resetToEarliestOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, minus(allResetOffsetScenarioOpts, resetToLatestOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, minus(allResetOffsetScenarioOpts, resetToCurrentOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, minus(allResetOffsetScenarioOpts, resetShiftByOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetScenarioOpts, resetFromFileOpt));
+        if (!options.has(dryRunOpt) && !options.has(executeOpt)) {
+            System.err.println("WARN: No action will be performed as the --execute option is missing. " +
+                "In a future major release, the default behavior of this command will be to prompt the user before " +
+                "executing the reset rather than doing a dry run. You should add the --dry-run option explicitly " +
+                "if you are scripting this command and want to keep the current default behavior without prompting.");
         }
+
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + resetOffsetsOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, minus(allResetOffsetScenarioOpts, resetToOffsetOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetScenarioOpts, resetToDatetimeOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, resetByDurationOpt, minus(allResetOffsetScenarioOpts, resetByDurationOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, minus(allResetOffsetScenarioOpts, resetToEarliestOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, minus(allResetOffsetScenarioOpts, resetToLatestOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, minus(allResetOffsetScenarioOpts, resetToCurrentOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, minus(allResetOffsetScenarioOpts, resetShiftByOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetScenarioOpts, resetFromFileOpt));
     }
 }
