@@ -82,7 +82,7 @@
     You can also set this to false, but you will then need to manually restore leadership to the restored replicas by running the command:
   <pre><code class="language-bash">$ bin/kafka-leader-election.sh --bootstrap-server localhost:9092 --election-type preferred --all-topic-partitions</code></pre>
 
-  <h4 class="anchor-heading"><a id="basic_ops_racks" class="anchor-link"></a><a href="#basic_ops_racks">Balancing Replicas Across Racks</a></h4>
+  <h4 class="anchor-heading"><a id="basic_ops_racks" class="anchor-link"></a><a href="#basic_ops_racks">Balancing replicas across racks</a></h4>
   The rack awareness feature spreads replicas of the same partition across different racks. This extends the guarantees Kafka provides for broker-failure to cover rack-failure, limiting the risk of data loss should all the brokers on a rack fail at once. The feature can also be applied to other broker groupings such as availability zones in EC2.
   <p></p>
   You can specify that a broker belongs to a particular rack by adding a property to the broker config:
@@ -107,7 +107,18 @@ my-topic                       0          2               4               2     
 my-topic                       1          2               3               1          consumer-1-029af89c-873c-4751-a720-cefd41a669d6   /127.0.0.1                     consumer-1
 my-topic                       2          2               3               1          consumer-2-42c1abd4-e3b2-425d-a8bb-e1ea49b29bb2   /127.0.0.1                     consumer-2</code></pre>
 
-  <h4 class="anchor-heading"><a id="basic_ops_consumer_group" class="anchor-link"></a><a href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
+  <h4 class="anchor-heading"><a id="basic_ops_groups" class="anchor-link"></a><a href="#basic_ops_groups">Managing groups</a></h4>
+
+  With the GroupCommand tool, we can list groups of all types, including consumer groups, share groups and streams groups. Each type of group has its own tool for administering groups of that type.
+
+  For example, to list all groups in the cluster:
+
+  <pre><code class="language-bash">$ bin/kafka-groups.sh --bootstrap-server localhost:9092 --list
+GROUP                    TYPE                     PROTOCOL
+my-consumer-group        Consumer                 consumer
+my-share-group           Share                    share</code></pre>
+
+  <h4 class="anchor-heading"><a id="basic_ops_consumer_group" class="anchor-link"></a><a href="#basic_ops_consumer_group">Managing consumer groups</a></h4>
 
   With the ConsumerGroupCommand tool, we can list, describe, or delete the consumer groups. The consumer group can be deleted manually, or automatically when the last committed offset for that group expires. Manual deletion works only if the group does not have any active members.
 
@@ -213,11 +224,58 @@ Deletion of requested consumer groups ('my-group', 'my-other-group') was success
   <p>
   For example, to reset offsets of a consumer group to the latest offset:
 
-  <pre><code class="language-bash">$ bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group consumergroup1 --topic topic1 --to-latest
+  <pre><code class="language-bash">$ bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group my-group --topic topic1 --to-latest
 TOPIC                          PARTITION  NEW-OFFSET
 topic1                         0          0</code></pre>
 
+  <h4 class="anchor-heading"><a id="basic_ops_share_group" class="anchor-link"></a><a href="#basic_ops_share_group">Managing share groups</a></h4>
+
+  NOTE: Apache Kafka 4.1 ships with a preview of share groups which is not enabled by default. To enable share groups, use the <code>kafka-features.sh</code> tool to upgrade to <code>share.version=1</code>.
+  For more information, please read the <a href="https://cwiki.apache.org/confluence/x/CIq3FQ"> release notes</a>.
+
   <p>
+  Use the ShareGroupCommand tool to list, describe, or delete the share groups. Only share groups without any active members can be deleted.
+
+  For example, to list all share groups in a cluster:
+
+  <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --list
+my-share-group</code></pre>
+
+  To view the current start offset, use the "--describe" option:
+
+  <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group
+GROUP           TOPIC           PARTITION  START-OFFSET
+my-share-group  topic1          0          4</code></pre>
+
+  NOTE: The admin client needs DESCRIBE access to all the topics used in the group.
+
+  There are many --describe options that provide more detailed information about a share group:
+  <ul>
+    <li>--members: Describes active members in the share group.
+      <pre><code class="language-bash">bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group --members
+GROUP           CONSUMER-ID            HOST            CLIENT-ID              #PARTITIONS  ASSIGNMENT
+my-share-group  94wrSQNmRda9Q6sk6jMO6Q /127.0.0.1      console-share-consumer 1            topic1:0
+my-share-group  EfI0sha8QSKSrL_-I_zaTA /127.0.0.1      console-share-consumer 1            topic1:0</code></pre>
+      You can see that both members have been assigned the same partition which they are sharing.
+    </li>
+    <li>--offsets: The default describe option. This provides the same output as the "--describe" option.</li>
+    <li>--state: Describes a summary of the state of the share group.
+      <pre><code class="language-bash">bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group --state
+GROUP           COORDINATOR (ID)          STATE           #MEMBERS
+my-share-group  localhost:9092  (1)       Stable          2</code></pre>
+    </li>
+  </ul>
+
+  <p>To delete the offsets of individual topics in the share group, use the "--delete-offsets" option:
+
+  <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --delete-offsets --group my-share-group --topic topic1
+TOPIC           STATUS
+topic1          Successful</code></pre>
+
+  <p>To delete one or more share groups, use "--delete" option:
+
+  <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --delete --group my-share-group
+Deletion of requested share groups ('my-share-group') was successful.</code></pre>
 
   <h4 class="anchor-heading"><a id="basic_ops_cluster_expansion" class="anchor-link"></a><a href="#basic_ops_cluster_expansion">Expanding your cluster</a></h4>
 
@@ -352,7 +410,7 @@ Reassignment of partition [foo,0] is completed</code></pre>
 Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
   Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7</code></pre>
 
-  <h4 class="anchor-heading"><a id="rep-throttle" class="anchor-link"></a><a href="#rep-throttle">Limiting Bandwidth Usage during Data Migration</a></h4>
+  <h4 class="anchor-heading"><a id="rep-throttle" class="anchor-link"></a><a href="#rep-throttle">Limiting bandwidth usage during data migration</a></h4>
   Kafka lets you apply a throttle to replication traffic, setting an upper bound on the bandwidth used to move replicas from machine to machine and from disk to disk. This is useful when rebalancing a cluster, adding or removing brokers or adding or removing disks, as it limits the impact these data-intensive operations will have on users.
   <p></p>
   There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
