@@ -1020,13 +1020,19 @@ public class ConsumerHeartbeatRequestManagerTest {
         ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
         assertEquals("rack1", data.rackId());
 
-        // RackId not included in HB if not updated
+        // RackId not included in HB if member state is not JOINING
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
         data = heartbeatState.buildRequestData();
         assertNull(data.rackId());
 
+        // RackId included in HB if member state changes to JOINING again
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        data = heartbeatState.buildRequestData();
+        assertEquals("rack1", data.rackId());
+
         // Empty rackId not included in HB
         when(membershipManager.rackId()).thenReturn(Optional.empty());
+        heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
         data = heartbeatState.buildRequestData();
         assertNull(data.rackId());
     }
