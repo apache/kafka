@@ -48,7 +48,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -184,18 +183,6 @@ public class ServerSideAssignorBenchmark {
 
     private Optional<String> rackId(int memberIndex) {
         return isRackAware ? Optional.of("rack" + memberIndex % NUMBER_OF_RACKS) : Optional.empty();
-    }
-
-    private static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(Arrays.asList(
-                "rack" + i % NUMBER_OF_RACKS,
-                "rack" + (i + 1) % NUMBER_OF_RACKS,
-                "rack" + (i + 2) % NUMBER_OF_RACKS
-            )));
-        }
-        return partitionRacks;
     }
 
     private void simulateIncrementalRebalance() {

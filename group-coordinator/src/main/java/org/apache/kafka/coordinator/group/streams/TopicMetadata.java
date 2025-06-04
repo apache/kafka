@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 
 import java.util.Objects;
 
@@ -45,12 +44,5 @@ public record TopicMetadata(Uuid id, String name, int numPartitions) {
         if (numPartitions <= 0) {
             throw new IllegalArgumentException("Number of partitions must be positive.");
         }
-    }
-
-    public static TopicMetadata fromRecord(StreamsGroupPartitionMetadataValue.TopicMetadata record) {
-        return new TopicMetadata(
-            record.topicId(),
-            record.topicName(),
-            record.numPartitions());
     }
 }

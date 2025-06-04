@@ -357,6 +357,26 @@ public class AsyncKafkaConsumerTest {
         assertSame(exception.getClass(), callback.exception.getClass());
     }
 
+    @Test
+    public void testCommitAsyncShouldCopyOffsets() {
+        consumer = newConsumer();
+
+        TopicPartition tp = new TopicPartition("t0", 2);
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp, new OffsetAndMetadata(10L));
+
+        markOffsetsReadyForCommitEvent();
+        consumer.commitAsync(offsets, null);
+
+        final ArgumentCaptor<AsyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
+        verify(applicationEventHandler).add(commitEventCaptor.capture());
+        final AsyncCommitEvent commitEvent = commitEventCaptor.getValue();
+        assertTrue(commitEvent.offsets().isPresent());
+        assertTrue(commitEvent.offsets().get().containsKey(tp));
+        offsets.remove(tp);
+        assertTrue(commitEvent.offsets().get().containsKey(tp));
+    }
+
     private static Stream<Exception> commitExceptionSupplier() {
         return Stream.of(
                 new KafkaException("Test exception"),
@@ -588,6 +608,26 @@ public class AsyncKafkaConsumerTest {
 
         // Commit async is completed exceptionally, but this will be handled by commit callback - commit sync should not fail.
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+    }
+
+    @Test
+    public void testCommitSyncShouldCopyOffsets() {
+        consumer = newConsumer();
+
+        TopicPartition tp = new TopicPartition("t0", 2);
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp, new OffsetAndMetadata(10L));
+
+        completeCommitSyncApplicationEventSuccessfully();
+        consumer.commitSync(offsets);
+
+        final ArgumentCaptor<SyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(SyncCommitEvent.class);
+        verify(applicationEventHandler).add(commitEventCaptor.capture());
+        final SyncCommitEvent commitEvent = commitEventCaptor.getValue();
+        assertTrue(commitEvent.offsets().isPresent());
+        assertTrue(commitEvent.offsets().get().containsKey(tp));
+        offsets.remove(tp);
+        assertTrue(commitEvent.offsets().get().containsKey(tp));
     }
 
     private CompletableFuture<Void> setUpConsumerWithIncompleteAsyncCommit(TopicPartition tp) {

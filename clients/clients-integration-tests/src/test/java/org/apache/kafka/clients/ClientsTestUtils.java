@@ -17,20 +17,43 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.ClusterResource;
+import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.clients.ClientsTestUtils.TestClusterResourceListenerDeserializer.UPDATE_CONSUMER_COUNT;
+import static org.apache.kafka.clients.ClientsTestUtils.TestClusterResourceListenerSerializer.UPDATE_PRODUCER_COUNT;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientsTestUtils {
@@ -225,5 +248,221 @@ public class ClientsTestUtils {
         );
         producer.send(record);
         return record;
+    }
+
+    public static void sendAndAwaitAsyncCommit(
+        Consumer<byte[], byte[]> consumer,
+        Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
+    ) throws InterruptedException {
+
+        var commitCallback = new RetryCommitCallback(consumer, offsetsOpt);
+        sendAsyncCommit(consumer, commitCallback, offsetsOpt);
+
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(100));
+            return commitCallback.isComplete;
+        }, "Failed to observe commit callback before timeout");
+
+        assertEquals(Optional.empty(), commitCallback.error);
+    }
+
+    public static void awaitRebalance(
+        Consumer<byte[], byte[]> consumer,
+        TestConsumerReassignmentListener rebalanceListener
+    ) throws InterruptedException {
+        var numReassignments = rebalanceListener.callsToAssigned;
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(100));
+            return rebalanceListener.callsToAssigned > numReassignments;
+        }, "Timed out before expected rebalance completed");
+    }
+
+    public static void ensureNoRebalance(
+        Consumer<byte[], byte[]> consumer,
+        TestConsumerReassignmentListener rebalanceListener
+    ) throws InterruptedException {
+        // The best way to verify that the current membership is still active is to commit offsets.
+        // This would fail if the group had rebalanced.
+        var initialRevokeCalls = rebalanceListener.callsToRevoked;
+        sendAndAwaitAsyncCommit(consumer, Optional.empty());
+        assertEquals(initialRevokeCalls, rebalanceListener.callsToRevoked);
+    }
+
+    /**
+     * This class is intended to replace the test cases in BaseConsumerTest.scala.
+     * When converting tests that extend from BaseConsumerTest.scala to Java,
+     * we should use the test cases provided in this class.
+     */
+    public static final class BaseConsumerTestcase {
+
+        public static final int BROKER_COUNT = 3;
+        public static final String TOPIC = "topic";
+        public static final TopicPartition TP = new TopicPartition(TOPIC, 0);
+
+        private BaseConsumerTestcase() {
+        }
+
+        public static void testSimpleConsumption(
+            ClusterInstance cluster,
+            Map<String, Object> config
+        ) throws InterruptedException {
+            var numRecords = 10000;
+            var startingTimestamp = System.currentTimeMillis();
+            sendRecords(cluster, TP, numRecords, startingTimestamp);
+            try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
+                assertEquals(0, consumer.assignment().size());
+                consumer.assign(List.of(TP));
+                assertEquals(1, consumer.assignment().size());
+                consumer.seek(TP, 0);
+                consumeAndVerifyRecords(consumer, TP, numRecords, 0, 0, startingTimestamp);
+                // check async commit callbacks
+                sendAndAwaitAsyncCommit(consumer, Optional.empty());
+            }
+        }
+
+        public static void testClusterResourceListener(
+            ClusterInstance cluster,
+            Map<String, Object> consumerConfig
+        ) throws InterruptedException {
+            var numRecords = 100;
+            Map<String, Object> producerConfig = Map.of(
+                KEY_SERIALIZER_CLASS_CONFIG, TestClusterResourceListenerSerializer.class,
+                VALUE_SERIALIZER_CLASS_CONFIG, TestClusterResourceListenerSerializer.class
+            );
+            Map<String, Object> consumerConfigOverrides = new HashMap<>(consumerConfig);
+            consumerConfigOverrides.put(KEY_DESERIALIZER_CLASS_CONFIG, TestClusterResourceListenerDeserializer.class);
+            consumerConfigOverrides.put(VALUE_DESERIALIZER_CLASS_CONFIG, TestClusterResourceListenerDeserializer.class);
+            try (Producer<byte[], byte[]> producer = cluster.producer(producerConfig);
+                 Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfigOverrides)
+            ) {
+                var startingTimestamp = System.currentTimeMillis();
+                sendRecords(producer, TP, numRecords, startingTimestamp, -1);
+
+                consumer.subscribe(List.of(TP.topic()));
+                consumeAndVerifyRecords(consumer, TP, numRecords, 0, 0, startingTimestamp);
+                assertNotEquals(0, UPDATE_PRODUCER_COUNT.get());
+                assertNotEquals(0, UPDATE_CONSUMER_COUNT.get());
+
+                TestClusterResourceListenerSerializer.resetCount();
+                TestClusterResourceListenerDeserializer.resetCount();
+            }
+        }
+
+        public static void testCoordinatorFailover(
+            ClusterInstance cluster,
+            Map<String, Object> consumerConfig
+        ) throws InterruptedException {
+            var listener = new TestConsumerReassignmentListener();
+            try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
+                consumer.subscribe(List.of(TOPIC), listener);
+                // the initial subscription should cause a callback execution
+                awaitRebalance(consumer, listener);
+                assertEquals(1, listener.callsToAssigned);
+
+                // get metadata for the topic
+                List<PartitionInfo> parts = null;
+                while (parts == null) {
+                    parts = consumer.partitionsFor(Topic.GROUP_METADATA_TOPIC_NAME);
+                }
+                assertEquals(1, parts.size());
+                assertNotNull(parts.get(0).leader());
+
+                // shutdown the coordinator
+                int coordinator = parts.get(0).leader().id();
+                cluster.shutdownBroker(coordinator);
+
+                // the failover should not cause a rebalance
+                ensureNoRebalance(consumer, listener);
+            }
+        }
+    }
+
+    public static void sendAsyncCommit(
+        Consumer<byte[], byte[]> consumer,
+        OffsetCommitCallback callback,
+        Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
+    ) {
+        offsetsOpt.ifPresentOrElse(
+            offsets -> consumer.commitAsync(offsets, callback),
+            () -> consumer.commitAsync(callback)
+        );
+    }
+
+    public static class TestClusterResourceListenerSerializer implements Serializer<byte[]>, ClusterResourceListener {
+
+        public static final AtomicInteger UPDATE_PRODUCER_COUNT = new AtomicInteger();
+
+        @Override
+        public void onUpdate(ClusterResource clusterResource) {
+            UPDATE_PRODUCER_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public byte[] serialize(String topic, byte[] data) {
+            return data;
+        }
+        
+        public static void resetCount() {
+            UPDATE_PRODUCER_COUNT.set(0);
+        }
+    }
+
+    public static class TestClusterResourceListenerDeserializer implements Deserializer<byte[]>, ClusterResourceListener {
+
+        public static final AtomicInteger UPDATE_CONSUMER_COUNT = new AtomicInteger();
+
+        @Override
+        public void onUpdate(ClusterResource clusterResource) {
+            UPDATE_CONSUMER_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public byte[] deserialize(String topic, byte[] data) {
+            return data;
+        }
+
+        public static void resetCount() {
+            UPDATE_CONSUMER_COUNT.set(0);
+        }
+    }
+
+    private static class RetryCommitCallback implements OffsetCommitCallback {
+        boolean isComplete = false;
+        Optional<Exception> error = Optional.empty();
+        Consumer<byte[], byte[]> consumer;
+        Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt;
+
+        public RetryCommitCallback(
+            Consumer<byte[], byte[]> consumer,
+            Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
+        ) {
+            this.consumer = consumer;
+            this.offsetsOpt = offsetsOpt;
+        }
+
+        @Override
+        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+            if (exception instanceof RetriableCommitFailedException) {
+                sendAsyncCommit(consumer, this, offsetsOpt);
+            } else {
+                isComplete = true;
+                error = Optional.ofNullable(exception);
+            }
+        }
+    }
+
+    public static class TestConsumerReassignmentListener implements ConsumerRebalanceListener {
+        public int callsToAssigned = 0;
+        public int callsToRevoked = 0;
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            callsToAssigned += 1;
+        }
+
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            callsToRevoked += 1;
+        }
     }
 }

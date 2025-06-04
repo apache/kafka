@@ -466,9 +466,10 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
             new GroupSpecImpl(
                 Collections.unmodifiableMap(memberSpecs),
                 subscriptionType,
-                invertedTargetAssignment
+                invertedTargetAssignment,
+                topicAssignablePartitionsMap
             ),
-            new SubscribedTopicDescriberImpl(metadataImage, topicAssignablePartitionsMap)
+            new SubscribedTopicDescriberImpl(metadataImage)
         );
 
         // Compute delta from previous to new target assignment and create the relevant records.

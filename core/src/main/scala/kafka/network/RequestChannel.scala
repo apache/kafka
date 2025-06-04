@@ -227,6 +227,8 @@ object RequestChannel extends Logging {
           Seq(specifiedMetricName, header.apiKey.name)
         } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN && body[AddPartitionsToTxnRequest].allVerifyOnlyRequest) {
             Seq(RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME)
+        } else if (header.apiKey == ApiKeys.LIST_CONFIG_RESOURCES && header.apiVersion == 0) {
+          Seq(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME, header.apiKey.name)
         } else {
           Seq(header.apiKey.name)
         }
