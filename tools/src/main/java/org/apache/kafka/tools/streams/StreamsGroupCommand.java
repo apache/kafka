@@ -451,13 +451,15 @@ public class StreamsGroupCommand {
                                 deleteTopicsResult = adminClient.deleteTopics(internalTopicsToDelete);
                                 deleteTopicsResult.all().get();
                             } catch (InterruptedException | ExecutionException e) {
-                                deleteTopicsResult.topicNameValues().forEach((topic, future) -> {
-                                    try {
-                                        future.get();
-                                    } catch (Exception topicException) {
-                                        System.out.println("Failed to delete internal topic: " + topic);
-                                    }
-                                });
+                                if (deleteTopicsResult != null) {
+                                    deleteTopicsResult.topicNameValues().forEach((topic, future) -> {
+                                        try {
+                                            future.get();
+                                        } catch (Exception topicException) {
+                                            System.out.println("Failed to delete internal topic: " + topic);
+                                        }
+                                    });
+                                }
                                 internalTopicsDeletionFailures.put(groupId, e.getCause());
                             }
                         }
