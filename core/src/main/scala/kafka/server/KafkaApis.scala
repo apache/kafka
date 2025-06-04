@@ -276,22 +276,22 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val isClusterAction = authorizeClusterOperation(request, CLUSTER_ACTION)
+    val isAuthorizedClusterAction = authorizeClusterOperation(request, CLUSTER_ACTION)
     def isAuthorized(topicName: String): Boolean =
-      isClusterAction || authHelper.authorize(request.context, DESCRIBE, TOPIC, topicName)
+      isAuthorizedClusterAction || authHelper.authorize(request.context, DESCRIBE, TOPIC, topicName)
 
     val getReplicaLogInfoRequest = request.body[GetReplicaLogInfoRequest]
     val data = getReplicaLogInfoRequest.data()
 
     val topicIter = data.topicPartitions().iterator()
-    var maybePartitionIter: Option[util.Iterator[Integer]] = None
+    var previousPartitionIter: Option[util.Iterator[Integer]] = None
     val responseData = new GetReplicaLogInfoResponseData()
       .setBrokerEpoch(brokerEpochSupplier.get())
 
     while (topicIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
       val topic = topicIter.next()
       val partitionIter = topic.partitions().iterator()
-      maybePartitionIter = Some(partitionIter)
+      previousPartitionIter = Some(partitionIter)
 
       val topicPartitionLogInfo = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
         .setTopicId(topic.topicId())
@@ -334,7 +334,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       responseData.topicPartitionLogInfoList().add(topicPartitionLogInfo)
     }
-    responseData.setHasMoreData(topicIter.hasNext || maybePartitionIter.map(_.hasNext).getOrElse(false))
+    responseData.setHasMoreData(topicIter.hasNext || previousPartitionIter.map(_.hasNext).getOrElse(false))
     requestHelper.sendMaybeThrottle(request, new GetReplicaLogInfoResponse(responseData))
   }
 
