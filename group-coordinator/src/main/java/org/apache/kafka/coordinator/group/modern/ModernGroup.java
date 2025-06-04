@@ -22,10 +22,8 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
@@ -87,11 +85,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineHashMap<String, SubscriptionCount> subscribedTopicNames;
 
     /**
-     * The metadata associated with each subscribed topic name.
-     */
-    protected final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
-
-    /**
      * The metadata hash which is computed based on the all subscribed topics.
      */
     protected final TimelineLong metadataHash;
@@ -141,7 +134,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataHash = new TimelineLong(snapshotRegistry);
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
@@ -357,30 +349,10 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * @return An immutable Map of subscription metadata for
-     *         each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> subscriptionMetadata() {
-        return Collections.unmodifiableMap(subscribedTopicMetadata);
-    }
-
-    /**
      * @return The metadata hash.
      */
     public long metadataHash() {
         return metadataHash.get();
-    }
-
-    /**
-     * Updates the subscription metadata. This replaces the previous one.
-     *
-     * @param subscriptionMetadata The new subscription metadata.
-     */
-    public void setSubscriptionMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        this.subscribedTopicMetadata.clear();
-        this.subscribedTopicMetadata.putAll(subscriptionMetadata);
     }
 
     /**
@@ -390,37 +362,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      */
     public void setMetadataHash(long metadataHash) {
         this.metadataHash.set(metadataHash);
-    }
-
-    /**
-     * Computes the subscription metadata based on the current subscription info.
-     *
-     * @param subscribedTopicNames      Map of topic names to the number of subscribers.
-     * @param topicsImage               The current metadata for all available topics.
-     * @param clusterImage              The current metadata for the Kafka cluster.
-     *
-     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> computeSubscriptionMetadata(
-        Map<String, SubscriptionCount> subscribedTopicNames,
-        TopicsImage topicsImage,
-        ClusterImage clusterImage
-    ) {
-        // Create the topic metadata for each subscribed topic.
-        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
-
-        subscribedTopicNames.forEach((topicName, count) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicName);
-            if (topicImage != null) {
-                newSubscriptionMetadata.put(topicName, new TopicMetadata(
-                    topicImage.id(),
-                    topicImage.name(),
-                    topicImage.partitions().size()
-                ));
-            }
-        });
-
-        return Collections.unmodifiableMap(newSubscriptionMetadata);
     }
 
     public static long computeMetadataHash(

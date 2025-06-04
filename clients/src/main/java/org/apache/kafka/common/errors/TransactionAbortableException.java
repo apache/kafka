@@ -17,6 +17,13 @@
 package org.apache.kafka.common.errors;
 
 public class TransactionAbortableException extends ApiException {
+
+    private static final long serialVersionUID = 1L;
+
+    public TransactionAbortableException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
     public TransactionAbortableException(String message) {
         super(message);
     }

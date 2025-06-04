@@ -28,7 +28,7 @@
       <li><code>controller.quorum.bootstrap.servers</code>
   </ul>
 
-  Topic-level configurations and defaults are discussed in more detail <a href="#topicconfigs">below</a>.
+  Topic configurations and defaults are discussed in more detail <a href="#topicconfigs">below</a>.
 
   <!--#include virtual="generated/kafka_config.html" -->
 
@@ -185,7 +185,7 @@
   Inter-broker listener must be configured using the static broker configuration <code>inter.broker.listener.name</code>
   or <code>security.inter.broker.protocol</code>.
 
-  <h3 class="anchor-heading"><a id="topicconfigs" class="anchor-link"></a><a href="#topicconfigs">3.2 Topic-Level Configs</a></h3>
+  <h3 class="anchor-heading"><a id="topicconfigs" class="anchor-link"></a><a href="#topicconfigs">3.2 Topic Configs</a></h3>
 
   Configurations pertinent to topics have both a server default as well an optional per-topic override. If no per-topic configuration is given the server default is used. The override can be set at topic creation time by giving one or more <code>--config</code> options. This example creates a topic named <i>my-topic</i> with a custom max message size and flush rate:
   <pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic my-topic --partitions 1 \
@@ -201,60 +201,65 @@
   <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092  --entity-type topics --entity-name my-topic
   --alter --delete-config max.message.bytes</code></pre>
 
-  The following are the topic-level configurations. The server's default configuration for this property is given under the Server Default Property heading. A given server default config value only applies to a topic if it does not have an explicit topic config override.
+  Below is the topic configuration. The server's default configuration for this property is given under the Server Default Property heading. A given server default config value only applies to a topic if it does not have an explicit topic config override.
 
   <!--#include virtual="generated/topic_config.html" -->
 
-  <h3 class="anchor-heading"><a id="producerconfigs" class="anchor-link"></a><a href="#producerconfigs">3.3 Producer Configs</a></h3>
+  <h3 class="anchor-heading"><a id="groupconfigs" class="anchor-link"></a><a href="#groupconfigs">3.3 Group Configs</a></h3>
 
-  Below is the configuration of the producer:
+  Below is the group configuration:
+  <!--#include virtual="generated/group_config.html" -->
+
+  <h3 class="anchor-heading"><a id="producerconfigs" class="anchor-link"></a><a href="#producerconfigs">3.4 Producer Configs</a></h3>
+
+  Below is the producer configuration:
   <!--#include virtual="generated/producer_config.html" -->
 
-  <h3 class="anchor-heading"><a id="consumerconfigs" class="anchor-link"></a><a href="#consumerconfigs">3.4 Consumer Configs</a></h3>
+  <h3 class="anchor-heading"><a id="consumerconfigs" class="anchor-link"></a><a href="#consumerconfigs">3.5 Consumer Configs</a></h3>
 
-  Below is the configuration for the consumer:
+  Below is the consumer and share consumer configuration:
   <!--#include virtual="generated/consumer_config.html" -->
 
-  <h3 class="anchor-heading"><a id="connectconfigs" class="anchor-link"></a><a href="#connectconfigs">3.5 Kafka Connect Configs</a></h3>
-  Below is the configuration of the Kafka Connect framework.
+  <h3 class="anchor-heading"><a id="connectconfigs" class="anchor-link"></a><a href="#connectconfigs">3.6 Kafka Connect Configs</a></h3>
+  Below is the Kafka Connect framework configuration.
   <!--#include virtual="generated/connect_config.html" -->
 
-  <h4 class="anchor-heading"><a id="sourceconnectconfigs" class="anchor-link"></a><a href="#sourceconnectconfigs">3.5.1 Source Connector Configs</a></h4>
-  Below is the configuration of a source connector.
+  <h4 class="anchor-heading"><a id="sourceconnectconfigs" class="anchor-link"></a><a href="#sourceconnectconfigs">3.6.1 Source Connector Configs</a></h4>
+  Below is the source connector configuration.
   <!--#include virtual="generated/source_connector_config.html" -->
 
-  <h4 class="anchor-heading"><a id="sinkconnectconfigs" class="anchor-link"></a><a href="#sinkconnectconfigs">3.5.2 Sink Connector Configs</a></h4>
-  Below is the configuration of a sink connector.
+  <h4 class="anchor-heading"><a id="sinkconnectconfigs" class="anchor-link"></a><a href="#sinkconnectconfigs">3.6.2 Sink Connector Configs</a></h4>
+  Below is the sink connector configuration.
   <!--#include virtual="generated/sink_connector_config.html" -->
 
-  <h3 class="anchor-heading"><a id="streamsconfigs" class="anchor-link"></a><a href="#streamsconfigs">3.6 Kafka Streams Configs</a></h3>
-  Below is the configuration of the Kafka Streams client library.
+  <h3 class="anchor-heading"><a id="streamsconfigs" class="anchor-link"></a><a href="#streamsconfigs">3.7 Kafka Streams Configs</a></h3>
+  Below is the Kafka Streams client library configuration.
   <!--#include virtual="generated/streams_config.html" -->
 
-  <h3 class="anchor-heading"><a id="adminclientconfigs" class="anchor-link"></a><a href="#adminclientconfigs">3.7 Admin Configs</a></h3>
-  Below is the configuration of the Kafka Admin client library.
+  <h3 class="anchor-heading"><a id="adminclientconfigs" class="anchor-link"></a><a href="#adminclientconfigs">3.8 Admin Configs</a></h3>
+  Below is the Kafka Admin client library configuration.
   <!--#include virtual="generated/admin_client_config.html" -->
 
-  <h3 class="anchor-heading"><a id="mirrormakerconfigs" class="anchor-link"></a><a href="#mirrormakerconfigs">3.8 MirrorMaker Configs</a></h3>
+  <h3 class="anchor-heading"><a id="mirrormakerconfigs" class="anchor-link"></a><a href="#mirrormakerconfigs">3.9 MirrorMaker Configs</a></h3>
   Below is the configuration of the connectors that make up MirrorMaker 2.
 
-  <h4 class="anchor-heading"><a id="mirrormakercommonconfigs" class="anchor-link"></a><a href="#mirrormakercommonconfigs">3.8.1 MirrorMaker Common Configs</a></h4>
-  Below are the common configuration properties that apply to all three connectors.
+  <h4 class="anchor-heading"><a id="mirrormakercommonconfigs" class="anchor-link"></a><a href="#mirrormakercommonconfigs">3.9.1 MirrorMaker Common Configs</a></h4>
+  Below is the common configuration that applies to all three connectors.
   <!--#include virtual="generated/mirror_connector_config.html" -->
 
-  <h4 class="anchor-heading"><a id="mirrormakersourceconfigs" class="anchor-link"></a><a href="#mirrormakersourceconfigs">3.8.2 MirrorMaker Source Configs</a></h4>
+  <h4 class="anchor-heading"><a id="mirrormakersourceconfigs" class="anchor-link"></a><a href="#mirrormakersourceconfigs">3.9.2 MirrorMaker Source Configs</a></h4>
   Below is the configuration of MirrorMaker 2 source connector for replicating topics.
   <!--#include virtual="generated/mirror_source_config.html" -->
 
-  <h4 class="anchor-heading"><a id="mirrormakercheckpointconfigs" class="anchor-link"></a><a href="#mirrormakercheckpointconfigs">3.8.3 MirrorMaker Checkpoint Configs</a></h4>
+  <h4 class="anchor-heading"><a id="mirrormakercheckpointconfigs" class="anchor-link"></a><a href="#mirrormakercheckpointconfigs">3.9.3 MirrorMaker Checkpoint Configs</a></h4>
   Below is the configuration of MirrorMaker 2 checkpoint connector for emitting consumer offset checkpoints.
   <!--#include virtual="generated/mirror_checkpoint_config.html" -->
 
-  <h4 class="anchor-heading"><a id="mirrormakerheartbeatconfigs" class="anchor-link"></a><a href="#mirrormakerheartbeatconfigs">3.8.4 MirrorMaker HeartBeat Configs</a></h4>
+  <h4 class="anchor-heading"><a id="mirrormakerheartbeatconfigs" class="anchor-link"></a><a href="#mirrormakerheartbeatconfigs">3.9.4 MirrorMaker HeartBeat Configs</a></h4>
   Below is the configuration of MirrorMaker 2 heartbeat connector for checking connectivity between connectors and clusters.
   <!--#include virtual="generated/mirror_heartbeat_config.html" -->
 
-  <h3 class="anchor-heading"><a id="systemproperties" class="anchor-link"></a><a href="#systemproperties">3.9 System Properties</a></h3>
+  <h3 class="anchor-heading"><a id="systemproperties" class="anchor-link"></a><a href="#systemproperties">3.10 System Properties</a></h3>
   Kafka supports some configuration that can be enabled through Java system properties. System properties are usually set by passing the -D flag to the Java virtual machine in which Kafka components are running.
   Below are the supported system properties.
   <ul class="config-list">
@@ -298,14 +303,14 @@
     </li>
   </ul>
 
-  <h3 class="anchor-heading"><a id="tieredstorageconfigs" class="anchor-link"></a><a href="#tieredstorageconfigs">3.10 Tiered Storage Configs</a></h3>
-  Below are the configuration properties for Tiered Storage.
+  <h3 class="anchor-heading"><a id="tieredstorageconfigs" class="anchor-link"></a><a href="#tieredstorageconfigs">3.11 Tiered Storage Configs</a></h3>
+  Below is the Tiered Storage configuration.
   <!--#include virtual="generated/remote_log_manager_config.html" -->
   <!--#include virtual="generated/remote_log_metadata_manager_config.html" -->
 
   <h3 class="anchor-heading">
     <a id="config_providers" class="anchor-link"></a>
-    <a href="#config_providers">3.11 Configuration Providers</a>
+    <a href="#config_providers">3.12 Configuration Providers</a>
   </h3>
   
   <p>
