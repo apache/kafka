@@ -269,6 +269,8 @@ public class RecordDeserializerTest {
 
             assertEquals(1, collector.collected().size());
             assertEquals("dlq", collector.collected().get(0).topic());
+            assertEquals("hello", new String((byte[]) collector.collected().get(0).key()));
+            assertEquals("world", new String((byte[]) collector.collected().get(0).value()));
         }
     }
 
@@ -307,6 +309,8 @@ public class RecordDeserializerTest {
 
             assertEquals(1, collector.collected().size());
             assertEquals("dlq", collector.collected().get(0).topic());
+            assertEquals("hello", new String((byte[]) collector.collected().get(0).key()));
+            assertEquals("world", new String((byte[]) collector.collected().get(0).value()));
         }
     }
 

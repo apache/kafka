@@ -47,7 +47,7 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
             exception
         );
 
-        return Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, context.sourceRawKey(), context.sourceRawValue(), context, exception));
     }
 
     @Override

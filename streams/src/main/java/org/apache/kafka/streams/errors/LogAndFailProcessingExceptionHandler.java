@@ -48,7 +48,7 @@ public class LogAndFailProcessingExceptionHandler implements ProcessingException
             exception
         );
 
-        return Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, context.sourceRawKey(), context.sourceRawValue(), context, exception));
     }
 
     @Override

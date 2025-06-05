@@ -50,6 +50,8 @@ public class ExceptionHandlerUtilsTest {
         final StringSerializer stringSerializer = new StringSerializer();
         final StringDeserializer stringDeserializer = new StringDeserializer();
         final MockRecordCollector collector = new MockRecordCollector();
+        final String key = "key";
+        final String value = "value";
         final InternalProcessorContext<Object, Object> internalProcessorContext = new InternalMockProcessorContext<>(
                 new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
                 collector
@@ -60,12 +62,14 @@ public class ExceptionHandlerUtilsTest {
                 3,
                 "source",
                 new RecordHeaders(Collections.singletonList(
-                        new RecordHeader("sourceHeader", stringSerializer.serialize(null, "hello world"))))
+                        new RecordHeader("sourceHeader", stringSerializer.serialize(null, "hello world")))),
+                key.getBytes(),
+                value.getBytes()
         ));
         final ErrorHandlerContext errorHandlerContext = getErrorHandlerContext(internalProcessorContext);
 
         final NullPointerException exception = new NullPointerException("Oopsie!");
-        final Iterable<ProducerRecord<byte[], byte[]>> dlqRecords = ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords("dlq", null, null, errorHandlerContext, exception);
+        final Iterable<ProducerRecord<byte[], byte[]>> dlqRecords = ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords("dlq", errorHandlerContext.sourceRawKey(), errorHandlerContext.sourceRawValue(), errorHandlerContext, exception);
         final Iterator<ProducerRecord<byte[], byte[]>> iterator = dlqRecords.iterator();
 
         assertTrue(iterator.hasNext());
@@ -76,6 +80,8 @@ public class ExceptionHandlerUtilsTest {
         assertEquals("dlq", dlqRecord.topic());
         assertEquals(errorHandlerContext.timestamp(), dlqRecord.timestamp());
         assertEquals(1, dlqRecord.timestamp());
+        assertEquals(key, new String(dlqRecord.key()));
+        assertEquals(value, new String(dlqRecord.value()));
         assertEquals(exception.toString(), stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_NAME).value()));
         assertEquals(exception.getMessage(), stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_MESSAGE_NAME).value()));
         assertEquals("source", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_TOPIC_NAME).value()));

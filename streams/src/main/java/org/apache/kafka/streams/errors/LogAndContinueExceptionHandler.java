@@ -47,7 +47,7 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
             exception
         );
 
-        return Response.resume(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return Response.resume(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, context.sourceRawKey(), context.sourceRawValue(), context, exception));
     }
 
     @Override
