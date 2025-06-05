@@ -3586,7 +3586,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val request = alterShareGroupOffsetsRequest
     val response = connectAndReceive[AlterShareGroupOffsetsResponse](request, listenerName = listenerName)
     assertEquals(1, response.data.responses.size)
-    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.responses.get(0).partitions.get(0).errorCode, s"Unexpected response $response")
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.responses.stream().findFirst().get().partitions.get(0).errorCode, s"Unexpected response $response")
   }
 
   private def sendAndReceiveFirstRegexHeartbeat(memberId: String,

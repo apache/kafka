@@ -13262,7 +13262,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val alterShareGroupOffsetsResponse = new AlterShareGroupOffsetsResponseData()
-      .setResponses(List(
+      .setResponses(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(util.List.of(
         new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
           .setTopicName(topicName2)
           .setTopicId(topicId2)
@@ -13272,7 +13272,7 @@ class KafkaApisTest extends Logging {
               .setErrorCode(Errors.NONE.code())
               .setErrorMessage(Errors.NONE.message())
           ).asJava)
-      ).asJava)
+      ).iterator))
     resultFuture.complete(alterShareGroupOffsetsResponse)
     val response = verifyNoThrottling[AlterShareGroupOffsetsResponse](requestChannelRequest)
 
@@ -13281,9 +13281,9 @@ class KafkaApisTest extends Logging {
     assertEquals(2, response.errorCounts().get(Errors.TOPIC_AUTHORIZATION_FAILED))
     assertEquals(3, response.data().responses().size())
 
-    val bar = response.data().responses().get(0)
-    val foo = response.data().responses().get(1)
-    val zoo = response.data().responses().get(2)
+    val bar = response.data().responses().find("bar")
+    val foo = response.data().responses().find("foo")
+    val zoo = response.data().responses().find("zoo")
     assertEquals(topicName1, foo.topicName())
     assertEquals(topicId1, foo.topicId())
     assertEquals(topicName2, bar.topicName())
