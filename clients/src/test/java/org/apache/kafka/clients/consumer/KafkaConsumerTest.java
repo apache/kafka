@@ -923,7 +923,7 @@ public class KafkaConsumerTest {
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());
-        assertEquals(new OffsetAndMetadata(55L, Optional.empty(), ""), records.nextOffsets().get(tp0));
+        assertEquals(new OffsetAndMetadata(55L), records.nextOffsets().get(tp0));
     }
 
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
