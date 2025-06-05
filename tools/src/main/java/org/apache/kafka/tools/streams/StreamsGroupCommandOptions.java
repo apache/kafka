@@ -196,17 +196,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
         if (options.has(describeOpt)) {
-            if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-                CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
-            List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
-            if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
-                CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
-            }
-            if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
-                CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " does not take a value for " + stateOpt);
+            checkDescribeArgs();
         } else {
             if (options.has(timeoutMsOpt))
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
@@ -217,14 +207,31 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
         }
+
         if (options.has(resetOffsetsOpt)) {
             checkOffsetResetArgs();
         }
+
+        if ((options.has(dryRunOpt) || options.has(executeOpt)) && !options.has(resetOffsetsOpt))
+            CommandLineUtils.printUsageAndExit(parser, "Only Option " + resetOffsetsOpt + "accepts " + executeOpt + " or " + dryRunOpt);
 
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allStreamsGroupLevelOpts, describeOpt, deleteOpt));
     }
 
+    private void checkDescribeArgs() {
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+        List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
+        if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+        }
+        if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + describeOpt + " does not take a value for " + stateOpt);
+    }
     private void checkOffsetResetArgs() {
         if (options.has(dryRunOpt) && options.has(executeOpt))
             CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
