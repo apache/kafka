@@ -153,7 +153,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 666);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 111);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_CONFIG, 15 * 60 * 1000);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_BATCH_REFRESH_MAX_INTERVAL_MS_CONFIG, 15 * 60 * 1000);
 
         GroupCoordinatorConfig config = createConfig(configs);
 
