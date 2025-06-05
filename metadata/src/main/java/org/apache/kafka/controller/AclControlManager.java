@@ -93,6 +93,7 @@ public class AclControlManager {
     }
 
     ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls) {
+        Set<StandardAcl> aclsToCreate = new HashSet<>(acls.size());
         List<AclCreateResult> results = new ArrayList<>(acls.size());
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -107,11 +108,17 @@ public class AclControlManager {
             }
             StandardAcl standardAcl = StandardAcl.fromAclBinding(acl);
             if (!existingAcls.contains(standardAcl)) {
-                StandardAclWithId standardAclWithId = new StandardAclWithId(newAclId(), standardAcl);
-                records.add(new ApiMessageAndVersion(standardAclWithId.toRecord(), (short) 0));
+                if (aclsToCreate.add(standardAcl)) {
+                    StandardAclWithId standardAclWithId = new StandardAclWithId(newAclId(), standardAcl);
+                    records.add(new ApiMessageAndVersion(standardAclWithId.toRecord(), (short) 0));
+                } else {
+                    log.debug("Ignoring duplicate ACL from request: {}", standardAcl);
+                }
             } else {
                 log.debug("Not creating ACL since it already exists: {}", standardAcl);
             }
+
+
             results.add(AclCreateResult.SUCCESS);
         }
         return new ControllerResult<>(records, results, true);
