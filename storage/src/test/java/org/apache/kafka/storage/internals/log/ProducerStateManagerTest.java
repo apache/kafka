@@ -1139,6 +1139,47 @@ public class ProducerStateManagerTest {
     }
 
     @Test
+    public void testRejectNonZeroSequenceForDirectEpochBump() {
+        // Setup: Establish producer with epoch 0 and some sequence history
+        appendClientEntry(stateManager, producerId, epoch, 0, 0L, false);
+        appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
+        appendClientEntry(stateManager, producerId, epoch, 2, 2L, false);
+        
+        // Verify initial state
+        ProducerStateEntry initialEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
+        assertEquals(0, initialEntry.producerEpoch());
+        assertEquals(2, initialEntry.lastSeq());
+        assertFalse(initialEntry.isEmpty()); // Has batch metadata
+
+        ProducerAppendInfo appendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
+        
+        // Test Case 1: Epoch bump (0 -> 1) with non-zero sequence should be rejected
+        OutOfOrderSequenceException exception = assertThrows(OutOfOrderSequenceException.class,
+                () -> appendInfo.appendDataBatch(
+                    (short) 1,
+                    5,
+                    5,
+                    time.milliseconds(),
+                    new LogOffsetMetadata(3L), 3L, false)
+        );
+        
+        assertTrue(exception.getMessage().contains("Invalid sequence number for new epoch"));
+        assertTrue(exception.getMessage().contains("1 (request epoch)"));
+        assertTrue(exception.getMessage().contains("5 (seq. number)"));
+        assertTrue(exception.getMessage().contains("0 (current producer epoch)"));
+        
+        // Test Case 2: Epoch bump (0 -> 1) with sequence 0 should succeed
+        ProducerAppendInfo appendInfo2 = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
+        assertDoesNotThrow(() -> appendInfo2.appendDataBatch(
+                (short) 1,
+                0,
+                0,
+                time.milliseconds(),
+                new LogOffsetMetadata(3L), 3L, false)
+        );
+    }
+
+    @Test
     public void testLastStableOffsetCompletedTxn() {
         long segmentBaseOffset = 990000L;
 
