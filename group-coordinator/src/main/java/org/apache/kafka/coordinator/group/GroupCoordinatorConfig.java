@@ -770,9 +770,9 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * The consumer group regex refresh interval in milliseconds.
+     * The consumer group regex batch refresh max interval in milliseconds.
      */
-    public int consumerGroupRegexRefreshIntervalMs() {
+    public int consumerGroupRegexBatchRefreshMaxIntervalMs() {
         return consumerGroupRegexBatchRefreshMaxIntervalMs;
     }
 
