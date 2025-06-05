@@ -44,21 +44,6 @@ import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
-
-  def allConfigs(config: AbstractConfig): java.util.Map[String, Object] = {
-    val result = new java.util.HashMap[String, Object]()
-
-    config.originals.forEach { (k, v) =>
-      if (v != null) {
-        result.put(k, v)
-      }
-    }
-    config.nonInternalValues.forEach { (k, v) =>
-        result.put(k, v.asInstanceOf[Object])
-    }
-    result
-  }
-
   def handleDescribeConfigsRequest(
     request: RequestChannel.Request,
     authHelper: AuthHelper
@@ -96,11 +81,21 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                       includeSynonyms: Boolean,
                       includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
     resourceToConfigNames.map { resource =>
-
-      def createResponseConfig(configs: java.util.Map[String, _ <: Object],
+      def createResponseConfig(configs: Any,
                                createConfigEntry: (String, Object) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
+        val stream = configs match {
+          case c: AbstractConfig =>
+            java.util.stream.Stream.concat(
+              c.originals.entrySet.stream.filter(_.getValue != null),
+              c.nonInternalValues.entrySet.stream.map(_.asInstanceOf[java.util.Map.Entry[String, Object]])
+            )
+          case m: java.util.Map[_, _] =>
+            m.asInstanceOf[java.util.Map[String, String]].entrySet().stream()
+          case _ => throw new IllegalArgumentException("Unsupported configs type")
+        }
+
         val configEntries: java.util.List[DescribeConfigsResponseData.DescribeConfigsResourceResult] = {
-          configs.entrySet().stream()
+          stream
             .filter(entry =>
               resource.configurationKeys == null ||
                 resource.configurationKeys.isEmpty ||
@@ -125,7 +120,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             if (metadataCache.contains(topic)) {
               val topicProps = configRepository.topicConfig(topic)
               val logConfig = LogConfig.fromProps(config.extractLogConfigMap, topicProps)
-              createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
+              createResponseConfig(logConfig, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
                 .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
@@ -136,7 +131,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs.asJava,
                 createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation))
             else if (resourceNameToBrokerId(resource.resourceName) == config.brokerId)
-              createResponseConfig(allConfigs(config),
+              createResponseConfig(config,
                 createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation))
             else
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received ${resource.resourceName}")
@@ -158,7 +153,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             } else {
               val clientMetricsProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resource.resourceName))
               val clientMetricsConfig = ClientMetricsConfigs.fromProps(ClientMetricsConfigs.defaultConfigsMap(), clientMetricsProps)
-              createResponseConfig(allConfigs(clientMetricsConfig), createClientMetricsConfigEntry(clientMetricsConfig, clientMetricsProps, includeSynonyms, includeDocumentation))
+              createResponseConfig(clientMetricsConfig, createClientMetricsConfigEntry(clientMetricsConfig, clientMetricsProps, includeSynonyms, includeDocumentation))
             }
 
           case ConfigResource.Type.GROUP =>
@@ -168,7 +163,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             } else {
               val groupProps = configRepository.groupConfig(group)
               val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
-              createResponseConfig(allConfigs(groupConfig), createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
+              createResponseConfig(groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
             }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
