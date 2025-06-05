@@ -360,7 +360,7 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testUnsubscribeTopic(groupProtocol: String): Unit = {
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     }

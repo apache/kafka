@@ -2406,6 +2406,82 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testTransactionVerificationRejectsLowerProducerEpoch(): Unit = {
+    val tp0               = new TopicPartition(topic, 0)
+    val producerId        = 24L
+    val producerEpoch     = 5.toShort
+    val lowerProducerEpoch= 4.toShort
+    val sequence          = 6
+    val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
+
+    val replicaManager =
+      setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
+
+    try {
+      replicaManager.becomeLeaderOrFollower(
+        1,
+        makeLeaderAndIsrRequest(
+          topicIds(tp0.topic),
+          tp0,
+          Seq(0, 1),
+          new LeaderAndIsr(1, List(0, 1).map(Int.box).asJava)
+        ),
+        (_, _) => ()
+      )
+
+      // first append with epoch 5
+      val transactionalRecords = MemoryRecords.withTransactionalRecords(
+        Compression.NONE,
+        producerId,
+        producerEpoch,
+        sequence,
+        new SimpleRecord("message".getBytes)
+      )
+
+      handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+
+      val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
+      verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
+        ArgumentMatchers.eq(transactionalId),
+        ArgumentMatchers.eq(producerId),
+        ArgumentMatchers.eq(producerEpoch),
+        ArgumentMatchers.eq(Seq(tp0)),
+        appendCallback.capture(),
+        any()
+      )
+
+      val verificationGuard = getVerificationGuard(replicaManager, tp0, producerId)
+      assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
+
+      // simulate successful verification
+      val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
+      callback(Map.empty[TopicPartition, Errors].toMap)
+
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
+      assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
+
+      // append lower epoch 4
+      val transactionalRecords2 = MemoryRecords.withTransactionalRecords(
+        Compression.NONE,
+        producerId,
+        lowerProducerEpoch,
+        sequence + 1,
+        new SimpleRecord("message".getBytes)
+      )
+
+      val result2 = handleProduceAppend(replicaManager, tp0, transactionalRecords2, transactionalId = transactionalId)
+
+      // no extra call to the txn‑manager should have been made
+      verifyNoMoreInteractions(addPartitionsToTxnManager)
+
+      // broker returns the fencing error
+      assertEquals(Errors.INVALID_PRODUCER_EPOCH, result2.assertFired.error)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
   def testTransactionVerificationGuardOnMultiplePartitions(): Unit = {
     val mockTimer = new MockTimer(time)
     val tp0 = new TopicPartition(topic, 0)
