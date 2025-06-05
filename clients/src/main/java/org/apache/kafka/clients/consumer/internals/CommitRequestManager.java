@@ -1113,9 +1113,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             var failedRequestRegistered = false;
 
             for (var topic : response.topics()) {
+                // If the topic id is used, the topic name is empty in the response.
+                String topicName = topic.name().isEmpty() ? metadata.topicNames().get(topic.topicId()) : topic.name();
                 for (var partition : topic.partitions()) {
                     var tp = new TopicPartition(
-                        topic.name(),
+                        topicName,
                         partition.partitionIndex()
                     );
                     var error = Errors.forCode(partition.errorCode());
