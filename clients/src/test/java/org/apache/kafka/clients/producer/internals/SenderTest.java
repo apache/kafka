@@ -3236,6 +3236,61 @@ public class SenderTest {
 
         txnManager.beginTransaction();
     }
+
+    @Test
+    public void testAbortableErrorIsConvertedToFatalErrorDuringAbort() throws Exception {
+
+        // Initialize and begin transaction
+        TransactionManager transactionManager = new TransactionManager(logContext, "testAbortableErrorIsConvertedToFatalErrorDuringAbort", 60000, 100, apiVersions, false);
+        setupWithTransactionState(transactionManager);
+        doInitTransactions(transactionManager, new ProducerIdAndEpoch(1L, (short) 0));
+        transactionManager.beginTransaction();
+
+        // Add partition and send record
+        TopicPartition tp = new TopicPartition("test", 0);
+        addPartitionToTxn(sender, transactionManager, tp);
+        appendToAccumulator(tp);
+
+        // Send record and get response
+        sender.runOnce();
+        sendIdempotentProducerResponse(0, tp, Errors.NONE, 0);
+        sender.runOnce();
+
+        // Commit API with TRANSACTION_ABORTABLE error should set TM to Abortable state
+        client.prepareResponse(new EndTxnResponse(new EndTxnResponseData()
+                .setErrorCode(Errors.TRANSACTION_ABORTABLE.code())));
+
+        // Attempt to commit transaction
+        TransactionalRequestResult commitResult = transactionManager.beginCommit();
+        sender.runOnce();
+        try {
+            commitResult.await(1000, TimeUnit.MILLISECONDS);
+            fail("Expected abortable error to be thrown for commit");
+        } catch (KafkaException e) {
+            assertTrue(transactionManager.hasAbortableError());
+            assertEquals(commitResult.error().getClass(), TransactionAbortableException.class);
+        }
+
+        // Abort API with TRANSACTION_ABORTABLE error should convert to Fatal error i.e. KafkaException
+        client.prepareResponse(new EndTxnResponse(new EndTxnResponseData()
+                .setErrorCode(Errors.TRANSACTION_ABORTABLE.code())));
+
+        // Attempt to abort transaction
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        sender.runOnce();
+
+        // Verify the error is converted to KafkaException (not TransactionAbortableException)
+        try {
+            abortResult.await(1000, TimeUnit.MILLISECONDS);
+            fail("Expected KafkaException to be thrown");
+        } catch (KafkaException e) {
+            // Verify TM is in FATAL_ERROR state
+            assertTrue(transactionManager.hasFatalError());
+            assertFalse(e instanceof TransactionAbortableException);
+            assertEquals(abortResult.error().getClass(), KafkaException.class);
+        }
+    }
+
     @Test
     public void testProducerBatchRetriesWhenPartitionLeaderChanges() throws Exception {
         Metrics m = new Metrics();

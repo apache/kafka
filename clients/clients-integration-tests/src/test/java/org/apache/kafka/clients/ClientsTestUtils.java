@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.ClientsTestUtils.TestClusterResourceListenerDeserializer.UPDATE_CONSUMER_COUNT;
 import static org.apache.kafka.clients.ClientsTestUtils.TestClusterResourceListenerSerializer.UPDATE_PRODUCER_COUNT;
@@ -105,6 +106,17 @@ public class ClientsTestUtils {
             startingTimestamp,
             timestampIncrement
         );
+    }
+
+    public static void pollUntilTrue(
+            Consumer<byte[], byte[]> consumer,
+            Supplier<Boolean> testCondition,
+            long waitTimeMs, String msg
+    ) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(100));
+            return testCondition.get();
+        }, waitTimeMs, msg);
     }
 
     public static void consumeAndVerifyRecords(
