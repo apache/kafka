@@ -1262,6 +1262,65 @@ class TransactionCoordinatorTest {
         time.milliseconds(),
         time.milliseconds(),
         TV_0)),
+          any(),
+          any(),
+          any())
+  }
+
+  @Test
+  def shouldNotCauseEpochOverflowWhenInitPidDuringOngoingTxnV2(): Unit = {
+    // When InitProducerId is called with an ongoing transaction at epoch 32766 (Short.MaxValue - 1),
+    // it should not cause an epoch overflow by incrementing twice.
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_2)
+
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.transactionVersionLevel()).thenReturn(TV_2)
+
+    // Capture the transition metadata to verify epoch increments
+    val capturedTxnTransitMetadata: ArgumentCaptor[TxnTransitMetadata] = ArgumentCaptor.forClass(classOf[TxnTransitMetadata])
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      capturedTxnTransitMetadata.capture(),
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => {
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
+      val transitMetadata = capturedTxnTransitMetadata.getValue
+      txnMetadata.completeTransitionTo(transitMetadata)
+      txnMetadata.prepareComplete(time.milliseconds())
+    })
+
+    // Handle InitProducerId with ongoing transaction at epoch 32766
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
+
+    // Verify that the epoch did not overflow (should be Short.MaxValue = 32767, not negative)
+    assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
+    assertEquals(TransactionState.PREPARE_ABORT, txnMetadata.state)
+    assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
+    
+    // Verify that the captured transition metadata has the correct epoch
+    assertEquals(Short.MaxValue, capturedTxnTransitMetadata.getValue.producerEpoch)
+    assertEquals(TransactionState.PREPARE_ABORT, capturedTxnTransitMetadata.getValue.txnState)
+    
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
+    verify(transactionManager, times(3)).getTransactionState(ArgumentMatchers.eq(transactionalId))
+    verify(transactionManager).appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any[TxnTransitMetadata],
       any(),
       any(),
       any())

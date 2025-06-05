@@ -828,7 +828,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
               nextProducerIdOrErrors.flatMap {
                 nextProducerId =>
-                  Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, clientTransactionVersion, nextProducerId.asInstanceOf[Long], time.milliseconds(), noPartitionAdded))
+                  // For epoch fence case, we don't want to bump the epoch again in prepareAbortOrCommit
+                  // since it was already bumped during the fencing phase to avoid double increment
+                  val transactionVersionForCall = if (isEpochFence) {
+                    // Use TV_0 to prevent epoch bump since it was already bumped during fencing
+                    TransactionVersion.TV_0
+                  } else {
+                    clientTransactionVersion
+                  }
+                  
+                  Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, transactionVersionForCall, nextProducerId.asInstanceOf[Long], time.milliseconds(), noPartitionAdded))
               }
             }
 
