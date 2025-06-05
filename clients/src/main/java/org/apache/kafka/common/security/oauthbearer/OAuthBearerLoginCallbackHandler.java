@@ -17,19 +17,14 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -46,13 +41,14 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils.getConfiguredInstance;
 
 /**
  * <p>
  * <code>OAuthBearerLoginCallbackHandler</code> is an {@link AuthenticateCallbackHandler} that
  * accepts {@link OAuthBearerTokenCallback} and {@link SaslExtensionsCallback} callbacks to
  * perform the steps to request a JWT from an OAuth/OIDC provider using the
- * <code>clientcredentials</code>. This grant type is commonly used for non-interactive
+ * <code>client_credentials</code>. This grant type is commonly used for non-interactive
  * "service accounts" where there is no user available to interactively supply credentials.
  * </p>
  *
@@ -186,31 +182,39 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        JwtRetriever jwtRetriever = new DefaultJwtRetriever(configs, saslMechanism, moduleOptions);
-        JwtValidator jwtValidator = new DefaultJwtValidator(configs, saslMechanism);
-        init(moduleOptions, jwtRetriever, jwtValidator);
+        moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+        jwtRetriever = getConfiguredInstance(
+            configs,
+            saslMechanism,
+            jaasConfigEntries,
+            SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
+            JwtRetriever.class
+        );
+
+        jwtValidator = getConfiguredInstance(
+            configs,
+            saslMechanism,
+            jaasConfigEntries,
+            SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+            JwtValidator.class
+        );
     }
 
     /*
      * Package-visible for testing.
      */
-    void init(Map<String, Object> moduleOptions, JwtRetriever jwtRetriever, JwtValidator jwtValidator) {
-        this.moduleOptions = moduleOptions;
+    void configure(Map<String, ?> configs,
+                   String saslMechanism,
+                   List<AppConfigurationEntry> jaasConfigEntries,
+                   JwtRetriever jwtRetriever,
+                   JwtValidator jwtValidator) {
+        this.moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+
         this.jwtRetriever = jwtRetriever;
+        this.jwtRetriever.configure(configs, saslMechanism, jaasConfigEntries);
+
         this.jwtValidator = jwtValidator;
-
-        try {
-            this.jwtRetriever.init();
-        } catch (IOException e) {
-            throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtRetriever", e);
-        }
-
-        try {
-            this.jwtValidator.init();
-        } catch (IOException e) {
-            throw new KafkaException("The OAuth login callback encountered an error when initializing the JwtValidator", e);
-        }
+        this.jwtValidator.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     @Override
@@ -241,7 +245,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         try {
             OAuthBearerToken token = jwtValidator.validate(accessToken);
             callback.token(token);
-        } catch (ValidateException e) {
+        } catch (JwtValidatorException e) {
             log.warn(e.getMessage(), e);
             callback.error("invalid_token", e.getMessage(), null);
         }
