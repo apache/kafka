@@ -431,7 +431,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // Verify that records are consumed if all topics are authorized
     consumer.subscribe(java.util.List.of(topic))
-    if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       consumeRecordsIgnoreOneAuthorizationException(consumer)
     } else {
       TestUtils.waitUntilTrue(() => {
