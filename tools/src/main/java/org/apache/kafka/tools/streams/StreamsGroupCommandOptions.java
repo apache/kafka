@@ -37,10 +37,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
     public static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     public static final String GROUP_DOC = "The streams group we wish to act on.";
-    private static final String TOPIC_DOC = "The topic whose streams group information should be deleted or topic whose should be included in the reset offset process. " +
+    private static final String INPUT_TOPIC_DOC = "The topic whose streams group information should be deleted or topic whose should be included in the reset offset process. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
         "Reset-offsets also supports multiple topic inputs.";
-    private static final String ALL_TOPICS_DOC = "Consider all topics assigned to a group in the `reset-offsets` and `delete-offsets` process.";
+    private static final String ALL_INPUT_TOPICS_DOC = "Consider all topics assigned to a group in the `reset-offsets` and `delete-offsets` process.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
     private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
@@ -62,19 +62,20 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
     public final OptionSpec<String> bootstrapServerOpt;
     public final OptionSpec<String> groupOpt;
-    final OptionSpec<String> topicOpt;
-    final OptionSpec<Void> allTopicsOpt;
+    public final OptionSpec<String> inputTopicOpt;
+    public final OptionSpec<Void> allInputTopicsOpt;
     public final OptionSpec<Void> listOpt;
     public final OptionSpec<Void> describeOpt;
     public final OptionSpec<Void> allGroupsOpt;
     public final OptionSpec<Void> deleteOpt;
-    final OptionSpec<Void> deleteOffsetsOpt;
+    public final OptionSpec<Void> deleteOffsetsOpt;
     public final OptionSpec<Long> timeoutMsOpt;
     public final OptionSpec<String> commandConfigOpt;
     public final OptionSpec<String> stateOpt;
     public final OptionSpec<Void> membersOpt;
     public final OptionSpec<Void> offsetsOpt;
     public final OptionSpec<Void> verboseOpt;
+
 
     final Set<OptionSpec<?>> allDeleteOffsetsOpts;
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
@@ -97,11 +98,11 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("streams group")
             .ofType(String.class);
-        topicOpt = parser.accepts("topic", TOPIC_DOC)
+        inputTopicOpt = parser.accepts("input-topic", INPUT_TOPIC_DOC)
             .withRequiredArg()
             .describedAs("topic")
             .ofType(String.class);
-        allTopicsOpt = parser.accepts("all-topics", ALL_TOPICS_DOC);
+        allInputTopicsOpt = parser.accepts("all-input-topics", ALL_INPUT_TOPICS_DOC);
         listOpt = parser.accepts("list", LIST_DOC);
         describeOpt = parser.accepts("describe", DESCRIBE_DOC);
         allGroupsOpt = parser.accepts("all-groups", ALL_GROUPS_DOC);
@@ -129,7 +130,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .availableIf(describeOpt);
 
         options = parser.parse(args);
-        allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(groupOpt, topicOpt));
+        allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(inputTopicOpt, allInputTopicsOpt));
         allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
         allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
     }
@@ -140,23 +141,14 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
         if (options.has(describeOpt)) {
-            List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
-            if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
-                CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
-            }
-            if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
-                CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " does not take a value for " + stateOpt);
+            checkDescribeArgs();
         } else {
             if (options.has(timeoutMsOpt))
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
         if (options.has(deleteOffsetsOpt)) {
-            if (!options.has(groupOpt) || !options.has(topicOpt))
-                CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOffsetsOpt + " takes the following options: " + allDeleteOffsetsOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+            checkDeleteOffsetsArgs();
         }
 
         if (options.has(deleteOpt)) {
@@ -167,5 +159,25 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allStreamsGroupLevelOpts, describeOpt, deleteOpt));
+    }
+
+    private void checkDescribeArgs() {
+        List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
+        if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+        }
+        if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + describeOpt + " does not take a value for " + stateOpt);
+    }
+
+    private void checkDeleteOffsetsArgs() {
+        if ((!options.has(inputTopicOpt) && !options.has(allInputTopicsOpt)) || !options.has(groupOpt))
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + deleteOffsetsOpt + " takes the " + groupOpt + " and one of these options: " + allDeleteOffsetsOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+        if (options.valuesOf(groupOpt).size() > 1)
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + deleteOffsetsOpt + " supports only one " + groupOpt + " at a time, but found: " + options.valuesOf(groupOpt));
     }
 }

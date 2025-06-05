@@ -16,13 +16,17 @@
  */
 package org.apache.kafka.tools.streams;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -38,6 +42,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -46,18 +51,22 @@ import org.junit.jupiter.api.Timeout;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.GroupState.EMPTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -65,29 +74,37 @@ public class DeleteStreamsGroupOffsetTest {
     private static final String TOPIC_PREFIX = "foo-";
     private static final String APP_ID_PREFIX = "streams-group-command-test";
 
-    private static final int RECORD_TOTAL = 2;
+    private static final int RECORD_TOTAL = 5;
     public static EmbeddedKafkaCluster cluster;
     private static String bootstrapServers;
     private static final String OUTPUT_TOPIC_PREFIX = "output-topic-";
+
     @BeforeAll
     public static void startCluster() {
         final Properties props = new Properties();
-        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
-        props.setProperty(GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "50");
-        props.setProperty(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "50");
-        props.setProperty(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "50");
-        props.setProperty(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "50");
-        props.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "100");
-        props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
-        props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
-        props.setProperty(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "60");
-        props.setProperty(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "60");
-        props.setProperty(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, "60");
-
-        cluster = new EmbeddedKafkaCluster(1, props);
+        cluster = new EmbeddedKafkaCluster(2, props);
         cluster.start();
 
         bootstrapServers = cluster.bootstrapServers();
+    }
+
+    @AfterEach
+    public void deleteTopics() {
+        try (final Admin adminClient = cluster.createAdminClient()) {
+            // delete all topics
+            final Set<String> topics = adminClient.listTopics().names().get();
+            adminClient.deleteTopics(topics).all().get();
+            // delete all groups
+            List<String> groupIds =
+                adminClient.listGroups(ListGroupsOptions.forStreamsGroups().timeoutMs(1000)).all().get()
+                    .stream().map(GroupListing::groupId).toList();
+            adminClient.deleteStreamsGroups(groupIds).all().get();
+        } catch (final UnknownTopicOrPartitionException ignored) {
+        } catch (final ExecutionException | InterruptedException e) {
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     private Properties createStreamsConfig(String bootstrapServers, String appId) {
@@ -111,122 +128,187 @@ public class DeleteStreamsGroupOffsetTest {
     public void testDeleteOffsetsNonExistingGroup() {
         String group = "not-existing";
         String topic = "foo:1";
-        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--topic", topic};
+        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topic};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
-            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topic));
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertEquals(Errors.GROUP_ID_NOT_FOUND, res.getKey());
         }
     }
 
     @Test
-    public void testDeleteOffsetsOfStableConsumerGroupWithTopicPartition() {
+    public void testDeleteStreamsGroupOffsetsMultipleGroups() {
+        final String group1 = generateRandomAppId();
+        final String group2 = generateRandomAppId();
+        final String topic1 = generateRandomTopic();
+        final String topic2 = generateRandomTopic();
+
+        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group1, "--group", group2, "--input-topic", topic1, "--input-topic", topic2};
+        AtomicBoolean exited = new AtomicBoolean(false);
+        Exit.setExitProcedure(((statusCode, message) -> {
+            assertNotEquals(0, statusCode);
+            assertTrue(message.contains("Option [delete-offsets] supports only one [group] at a time, but found:") &&
+                message.contains(group1) && message.contains(group2));
+            exited.set(true);
+        }));
+        try {
+            getStreamsGroupService(args);
+        } finally {
+            assertTrue(exited.get());
+        }
+    }
+
+    @Test
+    public void testDeleteOffsetsOfStableStreamsGroupWithTopicPartition() {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         String topicPartition = topic + ":0";
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--topic", topicPartition};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topicPartition};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
-            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topicPartition));
-            assertError(res, topic, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
-            cluster.deleteTopics(topic);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, topic, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     @Test
-    public void testDeleteOffsetsOfStableConsumerGroupWithTopicOnly() {
+    public void testDeleteOffsetsOfStableStreamsGroupWithTopicOnly() {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--topic", topic};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topic};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
-            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topic));
-            assertError(res, topic, -1, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
-            cluster.deleteTopics(topic);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, topic, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     @Test
-    public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition() {
+    public void testDeleteOffsetsOfStableStreamsGroupWithUnknownTopicPartition() {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
-        final String unknownTopicPartition = "unknown-topic:0";
+        final String unknownTopic = "unknown-topic";
+        final String unknownTopicPartition = unknownTopic + ":0";
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--topic", unknownTopicPartition};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", unknownTopicPartition};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
-            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(unknownTopicPartition));
-            assertError(res, topic, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-            cluster.deleteTopics(topic);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, unknownTopic, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     @Test
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition() {
-        final String group = generateRandomAppId();
-        final String topic = generateRandomTopic();
-        final String topicPartition = topic + ":0";
-        String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--topic", topicPartition};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
-            stopKSApp(group, topic, streams, service);
-            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topicPartition));
-            assertError(res, topic, 0, Errors.NONE);
-            cluster.deleteTopics(topic);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Test
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly() {
-        final String group = generateRandomAppId();
-        final String topic = generateRandomTopic();
-        String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--topic", topic};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
-            stopKSApp(group, topic, streams, service);
-            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topic));
-            assertError(res, topic, -1, Errors.NONE);
-            cluster.deleteTopics(topic);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Test
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition() {
-        final String group = generateRandomAppId();
-        final String topic = generateRandomTopic();
-        final String unknownTopicPartition = "unknown-topic:0";
-        String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--topic", unknownTopicPartition};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
-            stopKSApp(group, topic, streams, service);
-            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(unknownTopicPartition));
-            assertError(res, topic, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-            cluster.deleteTopics(topic);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Test
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly() {
+    public void testDeleteOffsetsOfStableStreamsGroupWithUnknownTopicOnly() {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         final String unknownTopic = "unknown-topic";
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--topic", unknownTopic};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", unknownTopic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, unknownTopic, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithTopicPartition() {
+        final String group = generateRandomAppId();
+        final String topic = generateRandomTopic();
+        final String topicPartition = topic + ":0";
+        String[] args;
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topicPartition};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
             stopKSApp(group, topic, streams, service);
-            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(unknownTopic));
-            assertError(res, topic, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-            cluster.deleteTopics(topic);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, topic, 0, 0, Errors.NONE);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithTopicOnly() {
+        final String group = generateRandomAppId();
+        final String topic = generateRandomTopic();
+        String[] args;
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+            stopKSApp(group, topic, streams, service);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, topic, -1, 0, Errors.NONE);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithMultipleTopics() {
+        final String group = generateRandomAppId();
+        final String topic1 = generateRandomTopic();
+        final String unknownTopic = "unknown-topic";
+
+        String[] args;
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topic1, "--input-topic", unknownTopic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic1, service)) {
+            stopKSApp(group, topic1, streams, service);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, topic1, -1, 0, Errors.NONE);
+            assertError(res, unknownTopic, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithUnknownTopicPartition() {
+        final String group = generateRandomAppId();
+        final String topic = generateRandomTopic();
+        final String unknownTopic = "unknown-topic";
+        final String unknownTopicPartition = unknownTopic + ":0";
+        String[] args;
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", unknownTopicPartition};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+            stopKSApp(group, topic, streams, service);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, unknownTopic, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithUnknownTopicOnly() {
+        final String group = generateRandomAppId();
+        final String topic = generateRandomTopic();
+        final String unknownTopic = "unknown-topic";
+        String[] args;
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", unknownTopic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+            stopKSApp(group, topic, streams, service);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, unknownTopic, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithAllTopics() {
+        final String group = generateRandomAppId();
+        final String topic = generateRandomTopic();
+        String[] args;
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--all-input-topics", topic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+            stopKSApp(group, topic, streams, service);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
+            assertError(res, topic, -1, 0, Errors.NONE);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -235,10 +317,11 @@ public class DeleteStreamsGroupOffsetTest {
     private void assertError(Map.Entry<Errors, Map<TopicPartition, Throwable>> res,
                           String inputTopic,
                           int inputPartition,
+                          int expectedPartition,
                           Errors expectedError) {
         Errors topLevelError = res.getKey();
         Map<TopicPartition, Throwable> partitions = res.getValue();
-        TopicPartition tp = new TopicPartition(inputTopic, 0);
+        TopicPartition tp = new TopicPartition(inputTopic, expectedPartition);
         // Partition level error should propagate to top level, unless this is due to a missed partition attempt.
         if (inputPartition >= 0) {
             assertEquals(expectedError, topLevelError);
@@ -273,11 +356,6 @@ public class DeleteStreamsGroupOffsetTest {
                 () -> service.collectGroupMembers(appId).isEmpty(),
                 "The group size is not zero as expected."
             );
-
-//            TestUtils.waitForCondition(
-//                () -> !service.isGroupSubscribedToTopic(appId, topic),
-//                "Group did not unsubscribe from topic " + topic + " in time."
-//            );
         }
     }
 
@@ -312,8 +390,6 @@ public class DeleteStreamsGroupOffsetTest {
             () -> checkGroupState(service, appId, GroupState.STABLE),
             "The group did not become stable as expected."
         );
-//        TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
-//            "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
 
         return streams;
     }

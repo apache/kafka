@@ -389,7 +389,7 @@ public class StreamsGroupCommand {
             }
         }
 
-                Map.Entry<Errors, Map<TopicPartition, Throwable>> deleteOffsets(String groupId, List<String> topics) {
+        private Map.Entry<Errors, Map<TopicPartition, Throwable>> deleteOffsets(String groupId, List<String> topics) {
             Map<TopicPartition, Throwable> partitionLevelResult = new HashMap<>();
             Set<String> topicWithPartitions = new HashSet<>();
             Set<String> topicWithoutPartitions = new HashSet<>();
@@ -401,7 +401,7 @@ public class StreamsGroupCommand {
                     topicWithoutPartitions.add(topic);
             }
 
-            List<TopicPartition> knownPartitions = topicWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).collect(Collectors.toList());
+            List<TopicPartition> knownPartitions = topicWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).toList();
 
             // Get the partitions of topics that the user did not explicitly specify the partitions
             DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(
@@ -422,6 +422,11 @@ public class StreamsGroupCommand {
             Set<TopicPartition> partitions = new HashSet<>(knownPartitions);
 
             unknownPartitions.forEachRemaining(partitions::add);
+
+            return deleteOffsets(groupId, partitions, partitionLevelResult);
+        }
+
+        private Map.Entry<Errors, Map<TopicPartition, Throwable>> deleteOffsets(String groupId, Set<TopicPartition> partitions, Map<TopicPartition, Throwable> partitionLevelResult) {
 
             DeleteStreamsGroupOffsetsResult deleteResult = adminClient.deleteStreamsGroupOffsets(
                 groupId,
@@ -449,11 +454,20 @@ public class StreamsGroupCommand {
             return new AbstractMap.SimpleImmutableEntry<>(topLevelException, partitionLevelResult);
         }
 
-        void deleteOffsets() {
+        Map.Entry<Errors, Map<TopicPartition, Throwable>> deleteOffsets() {
             String groupId = opts.options.valueOf(opts.groupOpt);
-            List<String> topics = opts.options.valuesOf(opts.topicOpt);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res;
+            if (opts.options.has(opts.allInputTopicsOpt)) {
+                Set<TopicPartition> partitions = getCommittedOffsets(groupId).keySet();
+                res = deleteOffsets(groupId, partitions, new HashMap<>());
+            } else if (opts.options.has(opts.inputTopicOpt)) {
+                List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
+                res = deleteOffsets(groupId, topics);
+            } else {
+                CommandLineUtils.printUsageAndExit(opts.parser, "Option --delete-offsets requires either --all-topics or --topic to be specified.");
+                return null;
+            }
 
-            Map.Entry<Errors, Map<TopicPartition, Throwable>> res = deleteOffsets(groupId, topics);
 
             Errors topLevelResult = res.getKey();
             Map<TopicPartition, Throwable> partitionLevelResult = res.getValue();
@@ -497,6 +511,8 @@ public class StreamsGroupCommand {
                     );
                 });
             System.out.println();
+            // testing purpose: return the result of the delete operation
+            return res;
         }
 
         StreamsGroupDescription getDescribeGroup(String group) throws ExecutionException, InterruptedException {
@@ -548,12 +564,6 @@ public class StreamsGroupCommand {
 
         Collection<StreamsGroupMemberDescription> collectGroupMembers(String groupId) throws Exception {
             return getDescribeGroup(groupId).members();
-        }
-
-        boolean isGroupSubscribedToTopic(String groupId, String topic) throws Exception {
-            return getDescribeGroup(groupId).subtopologies().stream()
-                .flatMap(subtopology -> subtopology.sourceTopics().stream())
-                .anyMatch(sourceTopic -> sourceTopic.equals(topic));
         }
 
         private String prepareTaskType(List<StreamsGroupMemberAssignment.TaskIds> tasks, String taskType) {
