@@ -14,7 +14,7 @@
 package kafka.api
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
@@ -59,7 +59,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   def createConfig: util.Map[String, Object] =
-    Map[String, Object](AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()).asJava
+    util.Map.of[String, Object](AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
   override def generateConfigs: collection.Seq[KafkaConfig] = {
     val configs = TestUtils.createBrokerConfigs(brokerCount)
@@ -122,34 +122,34 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     // Set a mutable broker config
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
-    var alterResult = client.incrementalAlterConfigs(Collections.singletonMap(brokerResource,
-      util.Arrays.asList(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))))
+    var alterResult = client.incrementalAlterConfigs(util.Map.of(brokerResource,
+      util.List.of(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))))
     alterResult.all.get
     assertEquals(Set(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG), validationsForResource(brokerResource).head.configs().keySet().asScala)
     validations.clear()
 
     val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
-    alterConfigs.put(topicResource1, util.Arrays.asList(
+    alterConfigs.put(topicResource1, util.List.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), OpType.SET),
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"), OpType.SET)
     ))
 
-    alterConfigs.put(topicResource2, util.Arrays.asList(
+    alterConfigs.put(topicResource2, util.List.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.8"), OpType.SET),
     ))
 
-    alterConfigs.put(topicResource3, util.Arrays.asList(
+    alterConfigs.put(topicResource3, util.List.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1"), OpType.SET),
     ))
 
-    alterConfigs.put(brokerResource, util.Arrays.asList(
+    alterConfigs.put(brokerResource, util.List.of(
       new AlterConfigOp(new ConfigEntry(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "12313"), OpType.SET),
     ))
 
     // Alter configs: second is valid, the others are invalid
     alterResult = client.incrementalAlterConfigs(alterConfigs)
 
-    assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
+    assertEquals(util.Set.of(topicResource1, topicResource2, topicResource3, brokerResource), alterResult.values.keySet)
     assertFutureThrows(classOf[PolicyViolationException], alterResult.values.get(topicResource1))
     alterResult.values.get(topicResource2).get
     assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values.get(topicResource3))
@@ -160,7 +160,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     // Verify that the second resource was updated and the others were not
     ensureConsistentKRaftMetadata()
-    var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, topicResource3, brokerResource).asJava)
+    var describeResult = client.describeConfigs(util.List.of(topicResource1, topicResource2, topicResource3, brokerResource))
     var configs = describeResult.all.get
     assertEquals(4, configs.size)
 
@@ -172,13 +172,13 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
 
     // Alter configs with validateOnly = true: only second is valid
-    alterConfigs.put(topicResource2, util.Arrays.asList(
+    alterConfigs.put(topicResource2, util.List.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.7"), OpType.SET),
     ))
 
     alterResult = client.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true))
 
-    assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
+    assertEquals(util.Set.of(topicResource1, topicResource2, topicResource3, brokerResource), alterResult.values.keySet)
     assertFutureThrows(classOf[PolicyViolationException], alterResult.values.get(topicResource1))
     alterResult.values.get(topicResource2).get
     assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values.get(topicResource3))
@@ -189,7 +189,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     // Verify that no resources are updated since validate_only = true
     ensureConsistentKRaftMetadata()
-    describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, topicResource3, brokerResource).asJava)
+    describeResult = client.describeConfigs(util.List.of(topicResource1, topicResource2, topicResource3, brokerResource))
     configs = describeResult.all.get
     assertEquals(4, configs.size)
 
@@ -201,12 +201,12 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
 
     // Do an incremental alter config on the broker, ensure we don't see the broker config we set earlier in the policy
-    alterResult = client.incrementalAlterConfigs(Map(
-      brokerResource ->
-        Seq(new AlterConfigOp(
+    alterResult = client.incrementalAlterConfigs(util.Map.of(
+      brokerResource ,
+        util.List.of(new AlterConfigOp(
           new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999"), OpType.SET)
-        ).asJavaCollection
-    ).asJava)
+        )
+    ))
     alterResult.all.get
     assertEquals(Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG), validationsForResource(brokerResource).head.configs().keySet().asScala)
   }

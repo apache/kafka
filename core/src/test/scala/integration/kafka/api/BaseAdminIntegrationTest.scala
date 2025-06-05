@@ -17,7 +17,7 @@
 package kafka.api
 
 import java.util
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.ExecutionException
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
@@ -37,7 +37,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
-import scala.jdk.OptionConverters.RichOption
 
 /**
  * Base integration test cases for [[Admin]]. Each test case added here will be executed
@@ -73,12 +72,12 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   def testCreateDeleteTopics(): Unit = {
     client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
-    val newTopics = Seq(
-      new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
+    val newTopics = util.List.of(
+      new NewTopic("mytopic", util.Map.of(0: Integer, util.List.of[Integer](1, 2), 1: Integer, util.List.of[Integer](2, 0))),
       new NewTopic("mytopic2", 3, 3.toShort),
-      new NewTopic("mytopic3", Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava)
+      new NewTopic("mytopic3", Optional.empty[Integer], Optional.empty[java.lang.Short])
     )
-    val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
+    val validateResult = client.createTopics(newTopics, new CreateTopicsOptions().validateOnly(true))
     validateResult.all.get()
     waitForTopics(client, List(), topics)
 
@@ -93,7 +92,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     }
     validateMetadataAndConfigs(validateResult)
 
-    val createResult = client.createTopics(newTopics.asJava)
+    val createResult = client.createTopics(newTopics)
     createResult.all.get()
     waitForTopics(client, topics, List())
     validateMetadataAndConfigs(createResult)
@@ -103,7 +102,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       assertEquals(topicIds(topic), createResult.topicId(topic).get())
     }
 
-    val failedCreateResult = client.createTopics(newTopics.asJava)
+    val failedCreateResult = client.createTopics(newTopics)
     val results = failedCreateResult.values()
     assertTrue(results.containsKey("mytopic"))
     assertFutureThrows(classOf[TopicExistsException], results.get("mytopic"))
@@ -175,8 +174,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     assertEquals(expectedOperations, result.authorizedOperations().get())
 
     val topic = "mytopic"
-    val newTopics = Seq(new NewTopic(topic, 3, 3.toShort))
-    client.createTopics(newTopics.asJava).all.get()
+    val newTopics = util.List.of(new NewTopic(topic, 3, 3.toShort))
+    client.createTopics(newTopics).all.get()
     waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
 
     // without includeAuthorizedOperations flag
@@ -251,7 +250,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
                        expectedNumPartitionsOpt: Option[Int] = None): TopicDescription = {
     var result: TopicDescription = null
     waitUntilTrue(() => {
-      val topicResult = client.describeTopics(Set(topic).asJava, describeOptions).topicNameValues().get(topic)
+      val topicResult = client.describeTopics(util.Set.of(topic), describeOptions).topicNameValues().get(topic)
       try {
         result = topicResult.get
         expectedNumPartitionsOpt.map(_ == result.partitions.size).getOrElse(true)

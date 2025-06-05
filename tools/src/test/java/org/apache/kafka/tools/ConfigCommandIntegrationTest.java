@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -37,6 +38,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.mockito.Mockito;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +60,8 @@ import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.MESSAGE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
@@ -128,6 +132,58 @@ public class ConfigCommandIntegrationTest {
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
         message = captureStandardOut(run(command));
         assertEquals("Completed updating config for group group.", message);
+
+        // A non-existent group with dynamic configs can be described
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("Dynamic configs for group group are:"));
+        assertTrue(message.contains("consumer.session.timeout.ms=50000 sensitive=false synonyms={DYNAMIC_GROUP_CONFIG:consumer.session.timeout.ms=50000}"));
+
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("Dynamic configs for group group are:"));
+        assertTrue(message.contains("consumer.session.timeout.ms=50000 sensitive=false synonyms={DYNAMIC_GROUP_CONFIG:consumer.session.timeout.ms=50000}"));
+    }
+
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testDescribeGroupWithoutDynamicConfigs(ClusterInstance cluster) throws InterruptedException, ExecutionException {
+        cluster.createTopic("topic", 1, (short) 1);
+
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             org.apache.kafka.clients.consumer.Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(
+                 "group.protocol", "consumer",
+                 "group.id", "group"
+             ))) {
+            producer.send(new org.apache.kafka.clients.producer.ProducerRecord<>("topic", "key".getBytes(), "value".getBytes())).get();
+            producer.flush();
+            consumer.subscribe(List.of("topic"));
+            consumer.poll(Duration.ofMillis(100));
+
+            TestUtils.waitForCondition(() -> {
+                Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+                    "--entity-type", "groups",
+                    "--describe"));
+                String message = captureStandardOut(run(command));
+                return message.contains("Dynamic configs for group group are:");
+            }, () -> "cannot describe group without dynamic groups");
+
+            TestUtils.waitForCondition(() -> {
+                Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+                    "--entity-type", "groups",
+                    "--entity-name", "group",
+                    "--describe"));
+                String message = captureStandardOut(run(command));
+                return message.contains("Dynamic configs for group group are:");
+            }, () -> "cannot describe group without dynamic groups");
+        }
     }
 
     @ClusterTest
@@ -145,6 +201,21 @@ public class ConfigCommandIntegrationTest {
                 "--alter", "--add-config", "metrics=org.apache"));
         message = captureStandardOut(run(command));
         assertEquals("Completed updating config for client-metric cm.", message);
+
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "client-metrics",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("Dynamic configs for client-metric cm are:"));
+        assertTrue(message.contains("metrics=org.apache sensitive=false synonyms={DYNAMIC_CLIENT_METRICS_CONFIG:metrics=org.apache}"));
+
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "client-metrics",
+            "--entity-name", "cm",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("Dynamic configs for client-metric cm are:"));
+        assertTrue(message.contains("metrics=org.apache sensitive=false synonyms={DYNAMIC_CLIENT_METRICS_CONFIG:metrics=org.apache}"));
     }
 
     @ClusterTest
@@ -469,6 +540,27 @@ public class ConfigCommandIntegrationTest {
             );
             Mockito.verify(spyAdmin).incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
         }
+    }
+
+    @ClusterTest
+    public void testDescribeNonExistentConfigResource() {
+        Map<String, String> configResourceTypeAndNames = Map.of(
+            "brokers", "3",
+            "broker-loggers", "3",
+            "topics", "non-existent",
+            "groups", "non-existent",
+            "client-metrics", "non-existent");
+        configResourceTypeAndNames.forEach((type, name) -> {
+            Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+                "--entity-type", type,
+                "--entity-name", name,
+                "--describe"));
+            String message = captureStandardOut(run(command));
+            assertTrue(
+                message.contains("The " + type.substring(0, type.length() - 1) + " '" + name + "' doesn't exist and doesn't have dynamic config."),
+                "The config resource type " + type + " got unexpected result: " + message
+            );
+        });
     }
 
     private void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {

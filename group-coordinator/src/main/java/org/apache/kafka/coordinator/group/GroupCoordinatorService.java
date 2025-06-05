@@ -26,6 +26,8 @@ import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -62,6 +64,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
@@ -668,6 +671,56 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     // Visibility for testing
+    CompletableFuture<AlterShareGroupOffsetsResponseData> persisterInitialize(
+        InitializeShareGroupStateParameters request,
+        AlterShareGroupOffsetsResponseData response
+    ) {
+        return persister.initializeState(request)
+            .handle((result, exp) -> {
+                if (exp == null) {
+                    if (result.errorCounts().isEmpty()) {
+                        handlePersisterInitializeResponse(request.groupTopicPartitionData().groupId(), result, new ShareGroupHeartbeatResponseData());
+                        return response;
+                    } else {
+                        //TODO build new AlterShareGroupOffsetsResponseData for error response
+                        return response;
+                    }
+                } else {
+                    return buildErrorResponse(request, response, exp);
+                }
+
+            });
+    }
+
+    private AlterShareGroupOffsetsResponseData buildErrorResponse(InitializeShareGroupStateParameters request, AlterShareGroupOffsetsResponseData response, Throwable exp) {
+        // build new AlterShareGroupOffsetsResponseData for error response
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+        GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
+        log.error("Unable to initialize share group state for {}, {} while altering share group offsets", gtp.groupId(), gtp.topicsData(), exp);
+        Errors error = Errors.forException(exp);
+        data.setErrorCode(error.code())
+            .setErrorMessage(error.message())
+            .setResponses(response.responses());
+        data.setResponses(
+            response.responses().stream()
+                .map(topic -> {
+                    AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName());
+                    topic.partitions().forEach(partition -> {
+                        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                            .setPartitionIndex(partition.partitionIndex())
+                            .setErrorCode(error.code())
+                            .setErrorMessage(error.message());
+                        topicData.partitions().add(partitionData);
+                    });
+                    return topicData;
+                })
+                .collect(Collectors.toList()));
+        // don't uninitialized share group state here, as we regard this alter share group offsets request failed.
+        return data;
+    }
+
+    // Visibility for testing
     CompletableFuture<ShareGroupHeartbeatResponseData> persisterInitialize(
         InitializeShareGroupStateParameters request,
         ShareGroupHeartbeatResponseData defaultResponse
@@ -1154,6 +1207,39 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#alterShareGroupOffsets(AuthorizableRequestContext, String, AlterShareGroupOffsetsRequestData)}.
+     */
+    @Override
+    public CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(AuthorizableRequestContext context, String groupId, AlterShareGroupOffsetsRequestData request) {
+        if (!isActive.get() || metadataImage == null) {
+            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponse(Errors.COORDINATOR_NOT_AVAILABLE));
+        }
+        
+        if (groupId == null || groupId.isEmpty()) {
+            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponse(Errors.INVALID_GROUP_ID));
+        }
+
+        if (request.topics() == null || request.topics().isEmpty()) {
+            return CompletableFuture.completedFuture(new AlterShareGroupOffsetsResponseData());
+        }
+
+        return runtime.scheduleWriteOperation(
+            "share-group-offsets-alter",
+            topicPartitionFor(groupId),
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.alterShareGroupOffsets(groupId, request)
+        ).thenCompose(result ->
+            persisterInitialize(result.getValue(), result.getKey())
+        ).exceptionally(exception -> handleOperationException(
+            "share-group-offsets-alter",
+            request,
+            exception,
+            (error, message) -> AlterShareGroupOffsetsRequest.getErrorResponse(error),
+            log
+        ));
+    }
+
+    /**
      * See {@link GroupCoordinator#describeGroups(AuthorizableRequestContext, List)}.
      */
     @Override
@@ -1243,6 +1329,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            // Since the specific group types are not known, group deletion operations are chained.
+            // The sequence of these deletions is important: the initial share group deletion should
+            // not error if the group ID isn't found, whereas the subsequent consumer group deletion
+            // (the final operation) must return an error if its corresponding group ID is not found.
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList).thenCompose(groupErrMap -> {
                 DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults = new DeleteGroupsResponseData.DeletableGroupResultCollection();
                 List<String> retainedGroupIds = updateResponseAndGetNonErrorGroupList(groupErrMap, groupList, deletableGroupResults);
@@ -1304,7 +1394,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         Set<String> groupSet = new HashSet<>(groupList);
         // Remove all share group ids which have errored out
         // when deleting with persister.
-        groupSet.removeAll(errGroupIds);
+        errGroupIds.forEach(groupSet::remove);
 
         // Let us invoke the standard procedure of any non-share
         // groups or successfully deleted share groups remaining.

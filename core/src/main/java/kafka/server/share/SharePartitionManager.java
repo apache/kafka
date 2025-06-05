@@ -130,6 +130,10 @@ public class SharePartitionManager implements AutoCloseable {
      * The max delivery count is the maximum number of times a message can be delivered before it is considered to be archived.
      */
     private final int maxDeliveryCount;
+    /**
+     * The max wait time for a share fetch request having remote storage fetch.
+     */
+    private final long remoteFetchMaxWaitMs;
 
     /**
      * The persister is used to persist the share partition state.
@@ -153,6 +157,7 @@ public class SharePartitionManager implements AutoCloseable {
         int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
+        long remoteFetchMaxWaitMs,
         Persister persister,
         GroupConfigManager groupConfigManager,
         BrokerTopicStats brokerTopicStats
@@ -164,6 +169,7 @@ public class SharePartitionManager implements AutoCloseable {
             defaultRecordLockDurationMs,
             maxDeliveryCount,
             maxInFlightMessages,
+            remoteFetchMaxWaitMs,
             persister,
             groupConfigManager,
             new ShareGroupMetrics(time),
@@ -179,6 +185,7 @@ public class SharePartitionManager implements AutoCloseable {
         int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
+        long remoteFetchMaxWaitMs,
         Persister persister,
         GroupConfigManager groupConfigManager,
         ShareGroupMetrics shareGroupMetrics,
@@ -193,6 +200,7 @@ public class SharePartitionManager implements AutoCloseable {
                 new SystemTimer("share-group-lock-timeout")),
             maxDeliveryCount,
             maxInFlightMessages,
+            remoteFetchMaxWaitMs,
             persister,
             groupConfigManager,
             shareGroupMetrics,
@@ -210,6 +218,7 @@ public class SharePartitionManager implements AutoCloseable {
             Timer timer,
             int maxDeliveryCount,
             int maxInFlightMessages,
+            long remoteFetchMaxWaitMs,
             Persister persister,
             GroupConfigManager groupConfigManager,
             ShareGroupMetrics shareGroupMetrics,
@@ -223,6 +232,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.timer = timer;
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
+        this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
         this.persister = persister;
         this.groupConfigManager = groupConfigManager;
         this.shareGroupMetrics = shareGroupMetrics;
@@ -683,7 +693,7 @@ public class SharePartitionManager implements AutoCloseable {
         // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
         // The request will be added irrespective of whether the share partition is initialized or not.
         // Once the share partition is initialized, the delayed share fetch will be completed.
-        addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, fencedSharePartitionHandler(), sharePartitions, shareGroupMetrics, time), delayedShareFetchWatchKeys);
+        addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, fencedSharePartitionHandler(), sharePartitions, shareGroupMetrics, time, remoteFetchMaxWaitMs), delayedShareFetchWatchKeys);
     }
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {

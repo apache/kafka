@@ -45,11 +45,9 @@ import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-
 
 /**
  * The Kafka metadata shell entry point.
@@ -161,7 +159,7 @@ public final class MetadataShell {
 
     public void run(List<String> args) throws Exception {
         initializeWithSnapshotFileReader();
-        loader.installPublishers(Collections.singletonList(publisher)).get(15, TimeUnit.MINUTES);
+        loader.installPublishers(List.of(publisher)).get(15, TimeUnit.MINUTES);
         if (args == null || args.isEmpty()) {
             // Interactive mode.
             System.out.println("Loading...");

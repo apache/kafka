@@ -27,6 +27,7 @@ import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter
 import org.apache.kafka.common.message.ConsumerProtocolSubscription
 import org.apache.kafka.common.message.ConsumerProtocolSubscriptionJsonConverter
 import org.apache.kafka.common.message.KRaftVersionRecordJsonConverter
+import org.apache.kafka.common.message.LeaderChangeMessageJsonConverter
 import org.apache.kafka.common.message.SnapshotFooterRecordJsonConverter
 import org.apache.kafka.common.message.SnapshotHeaderRecordJsonConverter
 import org.apache.kafka.common.message.VotersRecordJsonConverter
@@ -310,26 +311,7 @@ object DumpLogSegments {
               }
 
               if (batch.isControlBatch) {
-                val controlTypeId = ControlRecordType.parseTypeId(record.key)
-                ControlRecordType.fromTypeId(controlTypeId) match {
-                  case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
-                    val endTxnMarker = EndTransactionMarker.deserialize(record)
-                    print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
-                  case ControlRecordType.SNAPSHOT_HEADER =>
-                    val header = ControlRecordUtils.deserializeSnapshotHeaderRecord(record)
-                    print(s" SnapshotHeader ${SnapshotHeaderRecordJsonConverter.write(header, header.version())}")
-                  case ControlRecordType.SNAPSHOT_FOOTER =>
-                    val footer = ControlRecordUtils.deserializeSnapshotFooterRecord(record)
-                    print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, footer.version())}")
-                  case ControlRecordType.KRAFT_VERSION =>
-                    val kraftVersion = ControlRecordUtils.deserializeKRaftVersionRecord(record)
-                    print(s" KRaftVersion ${KRaftVersionRecordJsonConverter.write(kraftVersion, kraftVersion.version())}")
-                  case ControlRecordType.KRAFT_VOTERS=>
-                    val voters = ControlRecordUtils.deserializeVotersRecord(record)
-                    print(s" KRaftVoters ${VotersRecordJsonConverter.write(voters, voters.version())}")
-                  case controlType =>
-                    print(s" controlType: $controlType($controlTypeId)")
-                }
+                printControlRecord(record)
               }
             }
             if (printContents && !batch.isControlBatch) {
@@ -349,6 +331,32 @@ object DumpLogSegments {
       if ( (trailingBytes > 0) && (maxBytes == Integer.MAX_VALUE) )
         println(s"Found $trailingBytes invalid bytes at the end of ${file.getName}")
     } finally fileRecords.closeHandlers()
+  }
+
+  private def printControlRecord(record: Record): Unit = {
+    val controlTypeId = ControlRecordType.parseTypeId(record.key)
+    ControlRecordType.fromTypeId(controlTypeId) match {
+      case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
+        val endTxnMarker = EndTransactionMarker.deserialize(record)
+        print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+      case ControlRecordType.LEADER_CHANGE =>
+        val leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(record)
+        print(s" LeaderChange: ${LeaderChangeMessageJsonConverter.write(leaderChangeMessage, leaderChangeMessage.version())}")
+      case ControlRecordType.SNAPSHOT_HEADER =>
+        val header = ControlRecordUtils.deserializeSnapshotHeaderRecord(record)
+        print(s" SnapshotHeader ${SnapshotHeaderRecordJsonConverter.write(header, header.version())}")
+      case ControlRecordType.SNAPSHOT_FOOTER =>
+        val footer = ControlRecordUtils.deserializeSnapshotFooterRecord(record)
+        print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, footer.version())}")
+      case ControlRecordType.KRAFT_VERSION =>
+        val kraftVersion = ControlRecordUtils.deserializeKRaftVersionRecord(record)
+        print(s" KRaftVersion ${KRaftVersionRecordJsonConverter.write(kraftVersion, kraftVersion.version())}")
+      case ControlRecordType.KRAFT_VOTERS=>
+        val voters = ControlRecordUtils.deserializeVotersRecord(record)
+        print(s" KRaftVoters ${VotersRecordJsonConverter.write(voters, voters.version())}")
+      case controlType =>
+        print(s" controlType: $controlType($controlTypeId)")
+    }
   }
 
   private def printBatchLevel(batch: FileLogInputStream.FileChannelRecordBatch, accumulativeBytes: Long): Unit = {
