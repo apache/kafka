@@ -4602,7 +4602,7 @@ class ReplicaManagerTest {
     try {
       val directoryIds = replicaManager.logManager.directoryIdsSet.toList
       assertEquals(directoryIds.size, 2)
-      val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
+      val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
       partition.makeLeader(leaderAndIsrPartitionState(topicPartition0.topicPartition(), 1, localId, Seq(1, 2)),
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava),
@@ -4649,7 +4649,7 @@ class ReplicaManagerTest {
       // Test applying delta as leader
       val directoryIds = replicaManager.logManager.directoryIdsSet.toList
       // Make the local replica the leader
-      val leaderTopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
+      val leaderTopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
@@ -4659,7 +4659,7 @@ class ReplicaManagerTest {
       assertEquals(directoryIds.head, logDirIdHostingPartition0)
 
       // Test applying delta as follower
-      val followerTopicsDelta = topicsCreateDelta(localId, false, partition = 1, directoryIds = directoryIds)
+      val followerTopicsDelta = topicsCreateDelta(localId, false, partitions = List(1), directoryIds = directoryIds)
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
 
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
@@ -4687,7 +4687,7 @@ class ReplicaManagerTest {
 
     try {
       // Make the local replica the leader
-      val leaderTopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
+      val leaderTopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
       val topicId = leaderMetadataImage.topics().topicsByName.get("foo").id
       val topicIdPartition0 = new TopicIdPartition(topicId, topicPartition0)
@@ -4695,7 +4695,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Make the local replica the as follower
-      val followerTopicsDelta = topicsCreateDelta(localId, false, partition = 1, directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
+      val followerTopicsDelta = topicsCreateDelta(localId, false, partitions = List(1), directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
@@ -4741,7 +4741,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Make the local replica the as follower
-      val followerTopicsDelta = topicsCreateDelta(localId, false, partition = 1, directoryIds = List(DirectoryId.LOST, DirectoryId.LOST))
+      val followerTopicsDelta = topicsCreateDelta(localId, false, partitions = List(1), directoryIds = List(DirectoryId.LOST, DirectoryId.LOST))
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
@@ -5738,12 +5738,7 @@ class ReplicaManagerTest {
     }
   }
 
-  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partition:Int = 0, directoryIds: List[Uuid] = List.empty): TopicsDelta = {
-    topicsCreateDelta(startId, isStartIdLeader, List(partition), directoryIds, "foo", FOO_UUID)
-  }
-
-  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partitions: List[Int],
-                                directoryIds: List[Uuid], topicName: String, topicId: Uuid): TopicsDelta = {
+  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partitions:List[Int] = List(0), directoryIds: List[Uuid] = List.empty, topicName: String = "foo", topicId: Uuid = FOO_UUID): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1
     val delta = new TopicsDelta(TopicsImage.EMPTY)
     delta.replay(new TopicRecord().setName(topicName).setTopicId(topicId))
