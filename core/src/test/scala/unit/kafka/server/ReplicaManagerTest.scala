@@ -2447,7 +2447,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2457,7 +2457,7 @@ class ReplicaManagerTest {
 
       // simulate successful verification
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map.empty[TopicPartition, Errors].toMap)
+      callback.complete(util.Map.of())
 
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
