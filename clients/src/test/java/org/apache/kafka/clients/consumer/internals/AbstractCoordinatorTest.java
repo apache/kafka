@@ -161,6 +161,7 @@ public class AbstractCoordinatorTest {
                                                                         HEARTBEAT_INTERVAL_MS,
                                                                         GROUP_ID,
                                                                         groupInstanceId,
+                                                                        null,
                                                                         retryBackoffMs,
                                                                         retryBackoffMaxMs);
         this.coordinator = new DummyCoordinator(rebalanceConfig,
