@@ -39,6 +39,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String GROUP_DOC = "The streams group we wish to act on.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
+    private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
     private static final String NL = System.lineSeparator();
     private static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
         "over the entire streams group. For instance --group g1 --group g2. " + NL +
@@ -61,6 +62,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
     public final OptionSpec<String> bootstrapServerOpt;
     public final OptionSpec<String> groupOpt;
+    public final OptionSpec<Void> allGroupsOpt;
     public final OptionSpec<Void> listOpt;
     public final OptionSpec<Void> describeOpt;
     public final OptionSpec<Void> deleteOpt;
@@ -74,6 +76,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public final OptionSpec<Void> verboseOpt;
 
     final Set<OptionSpec<?>> allStreamsGroupLevelOpts;
+    final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
 
     public static StreamsGroupCommandOptions fromArgs(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
@@ -92,6 +95,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("streams group")
             .ofType(String.class);
+        allGroupsOpt = parser.accepts("all-groups", ALL_GROUPS_DOC);
         listOpt = parser.accepts("list", LIST_DOC);
         describeOpt = parser.accepts("describe", DESCRIBE_DOC);
         deleteOpt = parser.accepts("delete", DELETE_DOC);
@@ -124,6 +128,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
         options = parser.parse(args);
         allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
+        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
     }
 
     public void checkArgs() {
@@ -145,16 +150,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
-        if (options.has(deleteOpt)) {
-            if (!options.has(internalTopicOpt) && !options.has(allInternalTopicsOpt)) {
+        if (options.has(deleteOpt)) {// todo make list
+            if (!options.has(internalTopicOpt) && !options.has(allInternalTopicsOpt) && !options.has(groupOpt) && !options.has(allGroupsOpt)) {
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOpt + " takes one of these options: " + internalTopicOpt + ", " + allInternalTopicsOpt);
-            }
-            if (options.has(deleteOpt)) {
-                if (!options.has(groupOpt)) {
-                    CommandLineUtils.printUsageAndExit(parser,
-                        "Option " + deleteOpt + " takes the option " + groupOpt);
-                }
+                    "Option " + deleteOpt + " takes one of these options: " + internalTopicOpt + ", " + allInternalTopicsOpt + ", " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
             }
         }
 

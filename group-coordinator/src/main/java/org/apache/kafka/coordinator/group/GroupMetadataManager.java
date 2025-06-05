@@ -156,6 +156,7 @@ import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
@@ -195,6 +196,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -1666,6 +1668,34 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Validates that the requested tasks exist in the configured topology and partitions are valid.
+     * If tasks is null, does nothing. If an invalid task is found, throws InvalidRequestException.
+     *
+     * @param subtopologySortedMap The configured topology.
+     * @param tasks                The list of requested tasks.
+     */
+    private static void throwIfRequestContainsInvalidTasks(
+        SortedMap<String, ConfiguredSubtopology> subtopologySortedMap,
+        List<StreamsGroupHeartbeatRequestData.TaskIds> tasks
+    ) {
+        if (tasks == null || tasks.isEmpty()) return;
+        for (StreamsGroupHeartbeatRequestData.TaskIds task : tasks) {
+            String subtopologyId = task.subtopologyId();
+            ConfiguredSubtopology subtopology = subtopologySortedMap.get(subtopologyId);
+            if (subtopology == null) {
+                throw new InvalidRequestException("Subtopology " + subtopologyId + " does not exist in the topology.");
+            }
+            int numTasks = subtopology.numberOfTasks();
+            for (Integer partition : task.partitions()) {
+                if (partition < 0 || partition >= numTasks) {
+                    throw new InvalidRequestException("Task " + partition + " for subtopology " + subtopologyId +
+                        " is invalid. Number of tasks for this subtopology: " + numTasks);
+                }
+            }
+        }
+    }
+
+    /**
      * Validates if the received classic member protocols are supported by the group.
      *
      * @param group         The ConsumerGroup.
@@ -1915,6 +1945,13 @@ public class GroupMetadataManager {
             }
         } else {
             updatedConfiguredTopology = group.configuredTopology().get();
+        }
+
+        if (updatedConfiguredTopology.isReady()) {
+            SortedMap<String, ConfiguredSubtopology> subtopologySortedMap = updatedConfiguredTopology.subtopologies().get();
+            throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedActiveTasks);
+            throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedStandbyTasks);
+            throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedWarmupTasks);
         }
 
         // Actually bump the group epoch
