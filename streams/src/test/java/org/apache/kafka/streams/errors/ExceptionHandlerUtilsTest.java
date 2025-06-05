@@ -101,6 +101,8 @@ public class ExceptionHandlerUtilsTest {
                 internalProcessorContext.headers(),
                 internalProcessorContext.currentNode().name(),
                 internalProcessorContext.taskId(),
-                internalProcessorContext.timestamp());
+                internalProcessorContext.timestamp(),
+                internalProcessorContext.recordContext().sourceRawKey(),
+                internalProcessorContext.recordContext().sourceRawValue());
     }
 }
