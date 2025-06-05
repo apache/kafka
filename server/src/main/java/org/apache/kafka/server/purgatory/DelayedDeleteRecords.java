@@ -96,8 +96,9 @@ public class DelayedDeleteRecords extends DelayedOperation {
                 .noneMatch(DeleteRecordsPartitionStatus::acksPending);
         if (noPendingPartition) {
             forceComplete();
+            return true;
         }
-        return noPendingPartition && isCompleted();
+        return false;
     }
 
     @Override

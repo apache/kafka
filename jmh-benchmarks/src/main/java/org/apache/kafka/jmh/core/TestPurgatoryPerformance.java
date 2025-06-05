@@ -479,8 +479,11 @@ public class TestPurgatoryPerformance {
 
         @Override
         public boolean tryComplete() {
-            forceComplete();
-            return System.currentTimeMillis() >= completesAt && isCompleted();
+            if (System.currentTimeMillis() >= completesAt) {
+                forceComplete();
+                return true;
+            }
+            return false;
         }
     }
 }
