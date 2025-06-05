@@ -68,13 +68,15 @@ public class TransactionalClientDemo {
     private static final ConsumerGroupMetadata GROUP_METADATA = new ConsumerGroupMetadata(CONSUMER_GROUP_ID);
     private static KafkaConsumer<String, String> consumer;
     private static KafkaProducer<String, String> producer;
+    private static volatile boolean isRunning = true;
 
     public static void main(String[] args) {
         Utils.printOut("Starting TransactionalClientDemo");
+
+        registerShutdownHook();
+
         initializeApplication();
 
-        boolean isRunning = true;
-        // Continuously poll for records
         while (isRunning) {
             try {
                 try {
@@ -201,6 +203,14 @@ public class TransactionalClientDemo {
             producer.close();
         }
         Utils.printOut("All resources closed");
+    }
+
+    private static void registerShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            Utils.printOut("Shutdown signal received. Exiting...");
+            isRunning = false;
+            closeAll();
+        }));
     }
 
 }
