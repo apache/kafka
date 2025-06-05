@@ -32,7 +32,8 @@ import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.metadata.{LeaderAndIsr, MetadataCache}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.{AppendCallback, TransactionSupportedOperation, ADD_PARTITION, DEFAULT_ERROR, GENERIC_ERROR_SUPPORTED}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.{AppendCallback, TransactionSupportedOperation}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation.{ADD_PARTITION, DEFAULT_ERROR, GENERIC_ERROR_SUPPORTED}
 import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}

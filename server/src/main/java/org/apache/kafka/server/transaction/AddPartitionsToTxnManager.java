@@ -55,40 +55,45 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation.ADD_PARTITION;
+import static org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation.DEFAULT_ERROR;
+import static org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED;
+
 public class AddPartitionsToTxnManager extends InterBrokerSendThread {
 
     public static final String VERIFICATION_FAILURE_RATE_METRIC_NAME = "VerificationFailureRate";
     public static final String VERIFICATION_TIME_MS_METRIC_NAME = "VerificationTimeMs";
 
+    /**
+     * handles the Partition Response based on the Request Version and the exact operation.
+     */
+    public enum TransactionSupportedOperation {
+        /**
+         * This is the default workflow which maps to cases when the Produce Request Version or the
+         * Txn_offset_commit request was lower than the first version supporting the new Error Class.
+         */
+        DEFAULT_ERROR(false),
+        /**
+         * This maps to the case when the clients are updated to handle the TransactionAbortableException.
+         */
+        GENERIC_ERROR_SUPPORTED(false),
+        /**
+         * This allows the partition to be added to the transactions inflight with the Produce and TxnOffsetCommit requests.
+         * Plus the behaviors in genericErrorSupported.
+         */
+        ADD_PARTITION(true);
+
+        public final boolean supportsEpochBump;
+
+        TransactionSupportedOperation(boolean supportsEpochBump) {
+            this.supportsEpochBump = supportsEpochBump;
+        }
+    }
+
     @FunctionalInterface
     public interface AppendCallback {
         void complete(Map<TopicPartition, Errors> partitionErrors);
     }
-
-    /**
-     * An interface which handles the Partition Response based on the Request Version and the exact operation.
-     */
-    @FunctionalInterface
-    public interface TransactionSupportedOperation {
-        boolean supportsEpochBump();
-    }
-
-    /**
-     * This is the default workflow which maps to cases when the Produce Request Version or the
-     * Txn_offset_commit request was lower than the first version supporting the new Error Class.
-     */
-    public static final TransactionSupportedOperation DEFAULT_ERROR = () -> false;
-
-    /**
-     * This maps to the case when the clients are updated to handle the TransactionAbortableException.
-     */
-    public static final TransactionSupportedOperation GENERIC_ERROR_SUPPORTED = () -> false;
-
-    /**
-     * This allows the partition to be added to the transactions inflight with the Produce and TxnOffsetCommit requests.
-     * Plus the behaviors in genericErrorSupported.
-     */
-    public static final TransactionSupportedOperation ADD_PARTITION = () -> true;
 
     public static TransactionSupportedOperation produceRequestVersionToTransactionSupportedOperation(short version) {
         if (version > 11) {
@@ -248,7 +253,7 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
                     .setTransactionalId(transactionalId)
                     .setProducerId(producerId)
                     .setProducerEpoch(producerEpoch)
-                    .setVerifyOnly(!transactionSupportedOperation.supportsEpochBump())
+                    .setVerifyOnly(!transactionSupportedOperation.supportsEpochBump)
                     .setTopics(topicCollection);
 
             addTxnData(coordinator.get(), transactionData, callback, transactionSupportedOperation);

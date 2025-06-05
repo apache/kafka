@@ -70,7 +70,8 @@ import org.apache.kafka.server.share.fetch.{DelayedShareFetchGroupKey, DelayedSh
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.{TransactionSupportedOperation, ADD_PARTITION, GENERIC_ERROR_SUPPORTED}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation.{ADD_PARTITION, GENERIC_ERROR_SUPPORTED}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
