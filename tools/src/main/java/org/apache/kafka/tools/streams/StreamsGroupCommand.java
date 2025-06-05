@@ -396,7 +396,7 @@ public class StreamsGroupCommand {
                                         try {
                                             future.get();
                                         } catch (Exception topicException) {
-                                            System.out.println("Failed to delete internal topic: " + topic);
+                                            printError("Deletion of internal topic '" + topic + "' failed due to: " + topicException.getMessage(), Optional.of(topicException));
                                         }
                                     });
                                 }
@@ -532,7 +532,9 @@ public class StreamsGroupCommand {
         }
 
         public void deleteInternalTopics() {
-            List<String> groupIds = new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
+            List<String> groupIds = opts.options.has(opts.groupOpt) ?
+                new ArrayList<>(opts.options.valuesOf(opts.groupOpt)) :
+                new ArrayList<>(listStreamsGroups());
 
             List<GroupListing> streamsGroupIds = listDetailedStreamsGroups();
             groupIds.removeIf(groupId -> {
@@ -547,7 +549,7 @@ public class StreamsGroupCommand {
                 try {
                     GroupState groupState = collectGroupState(groupId);
                     if (groupState != GroupState.DEAD && groupState != GroupState.EMPTY) {
-                        printError("The specified group '" + groupId + "' is not EMPTY or DEAD.", Optional.empty());
+                        printError("The specified group '" + groupId + "' still has active members. Please terminate the members before retrying the operation.", Optional.empty());
                         return true;
                     }
                     return false;

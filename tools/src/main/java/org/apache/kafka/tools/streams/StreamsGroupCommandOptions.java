@@ -104,7 +104,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("name of internal topic to delete")
             .ofType(String.class);
-        allInternalTopicsOpt = parser.accepts("all-internal-topics", ALL_INTERNAL_TOPICS_DOC);
+        allInternalTopicsOpt = parser.accepts("all-internal-topics", ALL_INTERNAL_TOPICS_DOC)
+            .availableIf(deleteOpt);
         timeoutMsOpt = parser.accepts("timeout", TIMEOUT_MS_DOC)
             .availableIf(describeOpt)
             .withRequiredArg()
@@ -150,10 +151,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
-        if (options.has(deleteOpt)) {// todo make list
-            if (!options.has(internalTopicOpt) && !options.has(allInternalTopicsOpt) && !options.has(groupOpt) && !options.has(allGroupsOpt)) {
+        if (options.has(deleteOpt)) {
+            if (!options.has(groupOpt) && !options.has(allGroupsOpt)) {
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOpt + " takes one of these options: " + internalTopicOpt + ", " + allInternalTopicsOpt + ", " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+                    "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
             }
         }
 

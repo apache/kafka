@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.tools.streams;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -38,6 +41,7 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -52,6 +56,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -74,11 +80,28 @@ public class DeleteStreamsInternalTopicsTest {
     @BeforeAll
     public static void startCluster() {
         final Properties props = new Properties();
-        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
         cluster = new EmbeddedKafkaCluster(2, props);
         cluster.start();
-
         bootstrapServers = cluster.bootstrapServers();
+    }
+
+    @AfterEach
+    public void deleteTopics() {
+        try (final Admin adminClient = cluster.createAdminClient()) {
+            // delete all topics
+            final Set<String> topics = adminClient.listTopics().names().get();
+            adminClient.deleteTopics(topics).all().get();
+            // delete all groups
+            List<String> groupIds =
+                adminClient.listGroups(ListGroupsOptions.forStreamsGroups().timeoutMs(1000)).all().get()
+                    .stream().map(GroupListing::groupId).toList();
+            adminClient.deleteStreamsGroups(groupIds).all().get();
+        } catch (final UnknownTopicOrPartitionException ignored) {
+        } catch (final ExecutionException | InterruptedException e) {
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     @AfterAll
@@ -94,28 +117,18 @@ public class DeleteStreamsInternalTopicsTest {
     }
 
     @Test
+    public void testDeleteWithoutDeleteOption() {
+        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--internal-topic", "bar", "--group", "foo"};
+        assertThrows(OptionException.class, () -> getStreamsGroupService(args));
+    }
+
+    @Test
     public void testDeleteWithoutGroupOption() {
         final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--internal-topic", "foo"};
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete] takes the option [group]"));
-            exited.set(true);
-        }));
-        try {
-            getStreamsGroupService(args);
-        } finally {
-            assertTrue(exited.get());
-        }
-    }
-
-    @Test
-    public void testDeleteWithoutInternalTopicOption() {
-        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--group", "foo"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete] takes one of these options: [internal-topic], [all-internal-topics]"));
+            assertTrue(message.contains("Option [delete] takes one of these options: [all-groups], [group]"));
             exited.set(true);
         }));
         try {
@@ -164,8 +177,6 @@ public class DeleteStreamsInternalTopicsTest {
         allTopics.removeAll(internalTopics);
         cluster.waitForRemainingTopics(30000, allTopics.toArray(new String[0]));
 
-        allTopics.removeAll(List.of("__consumer_offsets", "__transaction_state"));
-        cluster.deleteTopics(allTopics.toArray(new String[0]));
     }
 
     @Test
@@ -176,15 +187,12 @@ public class DeleteStreamsInternalTopicsTest {
             "--all-internal-topics", "--group", appId};
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
         KafkaStreams streams = startKSApp(appId, service);
-        List<String> allTopics = service.collectAllTopics(appId);
 
         String output = ToolsTestUtils.grabConsoleOutput(service::deleteInternalTopics);
 
-        assertTrue(output.contains("The specified group '" + appId + "' is not EMPTY or DEAD"));
+        assertTrue(output.contains("The specified group '" + appId + "' still has active members. Please terminate the members before retrying the operation."));
 
         streams.close();
-        allTopics.removeAll(List.of("__consumer_offsets", "__transaction_state"));
-        cluster.deleteTopics(allTopics.toArray(new String[0]));
     }
 
     @Test
@@ -212,9 +220,33 @@ public class DeleteStreamsInternalTopicsTest {
         allTopics.addAll(List.of("__consumer_offsets", "__transaction_state"));
         allTopics.removeAll(internalTopics);
         cluster.waitForRemainingTopics(30000, allTopics.toArray(new String[0]));
+    }
 
-        allTopics.removeAll(List.of("__consumer_offsets", "__transaction_state"));
-        cluster.deleteTopics(allTopics.toArray(new String[0]));
+    @Test
+    public void testDeleteSpecifiedInternalTopicsWithAllGroupsOption() throws Exception {
+        final String appId = generateGroupAppId();
+        final List<String> internalTopics = Arrays.asList(
+            appId + "-aggregated_value-changelog",
+            appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition",
+            appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000003-changelog"
+        );
+        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete",
+            "--internal-topic", internalTopics.get(0), "--internal-topic", internalTopics.get(1), "--internal-topic", internalTopics.get(2), "--all-groups"};
+        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+        KafkaStreams streams = startKSApp(appId, service);
+        stopKSApp(appId, streams, service);
+        List<String> allTopics = service.collectAllTopics(appId);
+
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteInternalTopics);
+
+        assertTrue(
+            output.contains("Deletion of requested internal topics (") &&
+                output.contains("was successful.") &&
+                internalTopics.stream().allMatch(output::contains));
+        // Verify that the internal topics are deleted
+        allTopics.addAll(List.of("__consumer_offsets", "__transaction_state"));
+        allTopics.removeAll(internalTopics);
+        cluster.waitForRemainingTopics(30000, allTopics.toArray(new String[0]));
     }
 
     @Test
@@ -239,9 +271,6 @@ public class DeleteStreamsInternalTopicsTest {
         allTopics.addAll(List.of("__consumer_offsets", "__transaction_state"));
         allTopics.removeAll(internalTopics);
         cluster.waitForRemainingTopics(30000, allTopics.toArray(new String[0]));
-
-        allTopics.removeAll(List.of("__consumer_offsets", "__transaction_state"));
-        cluster.deleteTopics(allTopics.toArray(new String[0]));
     }
 
     @Test
@@ -271,11 +300,36 @@ public class DeleteStreamsInternalTopicsTest {
         allTopics.addAll(List.of("__consumer_offsets", "__transaction_state"));
         allTopics.removeAll(internalTopics);
         cluster.waitForRemainingTopics(30000, allTopics.toArray(new String[0]));
-
-        allTopics.removeAll(List.of("__consumer_offsets", "__transaction_state"));
-        cluster.deleteTopics(allTopics.toArray(new String[0]));
     }
 
+    @Test
+    public void testDeleteAllInternalTopicsFromAllGroups() throws Exception {
+        final String appId1 = generateGroupAppId();
+        final String appId2 = generateGroupAppId();
+
+        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete",
+            "--all-internal-topics", "--all-groups"};
+        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+        KafkaStreams streams1 = startKSApp(appId1, service);
+        KafkaStreams streams2 = startKSApp(appId2, service);
+        List<String> allTopics = service.collectAllTopics(appId1);
+        allTopics.addAll(service.collectAllTopics(appId2));
+        final List<String> internalTopics = service.retrieveInternalTopics(List.of(appId1, appId2)).values().stream().flatMap(List::stream).toList();
+        stopKSApp(appId1, streams1, service);
+        stopKSApp(appId2, streams2, service);
+
+
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteInternalTopics);
+
+        assertTrue(
+            output.contains("Deletion of requested internal topics (") &&
+                output.contains("was successful.") &&
+                internalTopics.stream().allMatch(output::contains));
+        // Verify that the internal topics are deleted
+        allTopics.addAll(List.of("__consumer_offsets", "__transaction_state"));
+        allTopics.removeAll(internalTopics);
+        cluster.waitForRemainingTopics(30000, allTopics.toArray(new String[0]));
+    }
 
     private StreamsGroupCommand.StreamsGroupService getStreamsGroupService(String[] args) {
         StreamsGroupCommandOptions opts = StreamsGroupCommandOptions.fromArgs(args);
