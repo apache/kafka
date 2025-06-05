@@ -17,23 +17,24 @@
 
 package org.apache.kafka.server.purgatory;
 
-import com.yammer.metrics.core.Meter;
-
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.server.FetchPartitionStatus;
 import org.apache.kafka.server.LogReadResult;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.storage.log.FetchParams;
-import org.apache.kafka.server.FetchPartitionStatus;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
+
+import com.yammer.metrics.core.Meter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
