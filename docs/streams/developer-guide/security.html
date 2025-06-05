@@ -38,7 +38,7 @@
             <ul class="simple">
                 <li><a class="reference internal" href="#required-acl-setting-for-secure-kafka-clusters" id="id1">Required ACL setting for secure Kafka clusters</a></li>
                 <li><a class="reference internal" href="#security-example" id="id2">Security example</a></li>
-                <li><a class="reference internal" href="#streams-rpc-acls" id="id3">Required ACLs for Streams RPCs</a></li>
+                <li><a class="reference internal" href="#streams-rpc-acls" id="id3">Security Considerations for Streams Rebalance Protocol</a></li>
             </ul>
         </div>
         <p>Kafka Streams natively integrates with the <a class="reference internal" href="../../../documentation.html#security"><span class="std std-ref">Kafka&#8217;s security features</span></a> and supports all of the
@@ -140,46 +140,22 @@ Caused by: java.security.UnrecoverableKeyException: Password verification failed
             <p>Monitor your Kafka Streams application log files for such error messages to spot any misconfigured applications quickly.</p>
         </div>
         <div class="section" id="streams-rpc-acls">
-            <span id="streams-developer-guide-security-rpc-acls"></span><h2>Required ACLs for Streams RPCs<a class="headerlink" href="#streams-rpc-acls" title="Permalink to this headline"></a></h2>
-            <p>Kafka Streams uses several RPCs (Remote Procedure Calls) for its internal coordination and state management. The following ACLs are required for these RPCs to function properly:</p>
+            <span id="streams-developer-guide-security-rpc-acls"></span><h2>Security Considerations for Streams Rebalance Protocol<a class="headerlink" href="#streams-rpc-acls" title="Permalink to this headline"></a></h2>
+            <p>The Kafka Streams Rebalance Protocol (introduced in <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">KIP-1071</a>) uses dedicated RPCs for group coordination. When running Streams applications in a secured Kafka environment, you will need to ensure proper authorization.</p>
 
-            <h3>Streams Group Protocol RPCs</h3>
-            <p>For the Streams group protocol (introduced in <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">KIP-1071</a>), the following ACLs are required:</p>
-            <pre><code class="language-bash"># Allow Streams clients to send heartbeats to the group coordinator
-kafka-acls --bootstrap-server &lt;bootstrap_servers&gt; \
-    --add --allow-principal User:&lt;streams_app_principal&gt; \
-    --operation WRITE \
-    --topic &lt;kafka_internal_streams_group_coordinator_topic&gt; \
-    --resource-pattern-type PREFIXED
+            <p>For detailed information about the required ACLs for the Streams Rebalance Protocol, refer to the <a class="reference internal" href="../../security.html#security_authz"><span class="std std-ref">Authorization and ACLs</span></a> section in the main Kafka Security documentation. This documentation lists all the operation permissions needed for various Kafka RPCs, including the Streams Group Heartbeat and Streams Group Describe operations.</p>
 
-# Allow Streams clients to read from the group metadata topic
-kafka-acls --bootstrap-server &lt;bootstrap_servers&gt; \
-    --add --allow-principal User:&lt;streams_app_principal&gt; \
-    --operation READ \
-    --topic &lt;kafka_internal_streams_group_metadata_topic&gt; \
-    --resource-pattern-type PREFIXED
+            <h3>Interactive Queries Security</h3>
+            <p>If you are using <a class="reference internal" href="interactive-queries.html"><span class="doc">Interactive Queries</span></a> with a custom RPC layer (such as a REST API), you need to ensure that your application has the necessary permissions to access state stores and their changelog topics.</p>
 
-# Allow Streams clients to describe groups
-kafka-acls --bootstrap-server &lt;bootstrap_servers&gt; \
-    --add --allow-principal User:&lt;streams_app_principal&gt; \
-    --operation DESCRIBE \
-    --group &lt;application.id&gt; \
-    --resource-pattern-type PREFIXED</code></pre>
+            <p>When implementing a custom query service that accesses state stores remotely, ensure that:</p>
+            <ul class="simple">
+                <li>The Kafka Streams application has permission to read from and write to the changelog topics that back the state stores</li>
+                <li>If your RPC service uses a different security principal (user/identity) than your Streams application, you must explicitly grant that principal the necessary permissions to read from the changelog topics</li>
+                <li>For services accessing multiple Streams applications, configure permissions for each application's resources</li>
+            </ul>
 
-            <p>Replace <code>&lt;bootstrap_servers&gt;</code> with your Kafka brokers, <code>&lt;streams_app_principal&gt;</code> with the principal of your Streams application, and <code>&lt;application.id&gt;</code> with your Streams application ID.</p>
-
-            <h3>Interactive Queries RPCs</h3>
-            <p>If you are using <a class="reference internal" href="interactive-queries.html"><span class="doc">Interactive Queries</span></a>, you need to ensure that the RPC layer you implement (e.g., REST API) has the necessary permissions to access the required state stores and topics.</p>
-
-            <p>For example, if using a REST API for interactive queries:</p>
-            <pre><code class="language-bash"># Allow the REST API to read from the state store changelog topics
-kafka-acls --bootstrap-server &lt;bootstrap_servers&gt; \
-    --add --allow-principal User:&lt;rest_api_principal&gt; \
-    --operation READ \
-    --topic &lt;application.id&gt;-&lt;store_name&gt;-changelog \
-    --resource-pattern-type PREFIXED</code></pre>
-
-            <p>These ACLs ensure that your Streams application can properly coordinate with the Kafka cluster and that any interactive query endpoints have the necessary permissions to access the required data.</p>
+            <p>For more information about Kafka's security model and how to configure ACLs, see the <a class="reference internal" href="../../security.html#security_authz"><span class="std std-ref">Kafka Security</span></a> documentation.</p>
         </div>
 </div>
 
