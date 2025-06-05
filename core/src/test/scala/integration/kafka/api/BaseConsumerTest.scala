@@ -83,7 +83,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testCoordinatorFailover(groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     }
