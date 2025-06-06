@@ -240,9 +240,9 @@ public class GroupCoordinatorConfig {
 
     private static final ShareGroupPartitionAssignor SHARE_GROUP_BUILTIN_ASSIGNOR = new SimpleAssignor();
     public static final String SHARE_GROUP_ASSIGNORS_CONFIG = "group.share.assignors";
-    public static final String SHARE_GROUP_ASSIGNORS_DOC = "The server-side assignors as a list of full class names. " +
-        "The list must contain only a single entry which is used by all groups. " +
-        "In the future, it is envisaged that a group configuration will be provided to allow each group to choose one of the list of assignors.";
+    public static final String SHARE_GROUP_ASSIGNORS_DOC = "The server-side assignors as a list of either names for built-in assignors or full class names for custom assignors. " +
+        "The list must contain only a single entry which is used by all groups. The supported built-in assignors are: " +
+        SHARE_GROUP_BUILTIN_ASSIGNOR.name() + ".";
     public static final String SHARE_GROUP_ASSIGNORS_DEFAULT = SHARE_GROUP_BUILTIN_ASSIGNOR.name();
 
     ///
