@@ -40,6 +40,20 @@ public class GroupRebalanceConfigTest {
         );
         assertTrue(groupRebalanceConfig.rackId.isEmpty());
     }
+    
+    @ParameterizedTest
+    @EnumSource(value = GroupRebalanceConfig.ProtocolType.class, names = {"CONSUMER", "SHARE"})
+    void testRackIdIsEmptyIfValueIsEmptyString(GroupRebalanceConfig.ProtocolType protocolType) {
+        GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
+            new ConsumerConfig(Map.of(
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer",
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer",
+                ConsumerConfig.CLIENT_RACK_CONFIG, ""
+            )),
+            protocolType
+        );
+        assertTrue(groupRebalanceConfig.rackId.isEmpty());
+    }
 
     @ParameterizedTest
     @EnumSource(value = GroupRebalanceConfig.ProtocolType.class, names = {"CONSUMER", "SHARE"})
