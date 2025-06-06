@@ -1838,7 +1838,7 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <td>ADD_OFFSETS_TO_TXN (25)</td>
             <td>Write</td>
             <td>TransactionalId</td>
-            <td>Similarly to ADD_PARTITIONS_TO_TXN this is only applicable to transactional request. It first checks
+            <td>Similarly to ADD_PARTITIONS_TO_TXN this is only applicable to transactional requests. It first checks
                 for Write action on the TransactionalId resource, then it checks whether it can Read on the given group
                 (below).</td>
         </tr>
@@ -2196,7 +2196,7 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <td></td>
         </tr>
         <tr>
-            <td>LIST_CLIENT_METRICS_RESOURCES (74)</td>
+            <td>LIST_CONFIG_RESOURCES (74)</td>
             <td>DescribeConfigs</td>
             <td>Cluster</td>
             <td></td>
@@ -2272,6 +2272,36 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <td>ClusterAction</td>
             <td>Cluster</td>
             <td></td>
+        </tr>
+        <tr>
+            <td>STREAMS_GROUP_HEARTBEAT (88)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>STREAMS_GROUP_HEARTBEAT (88)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td>Required for all source topics and internal topics used in the topology of the group.</td>
+        </tr>
+        <tr>
+            <td>STREAMS_GROUP_HEARTBEAT (88)</td>
+            <td>Create</td>
+            <td>Topic</td>
+            <td>Required for all internal topics, for the broker to automatically create internal topics. Not required if internal topics exist.</td>
+        </tr>
+        <tr>
+            <td>STREAMS_GROUP_DESCRIBE (89)</td>
+            <td>Describe</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>STREAMS_GROUP_DESCRIBE (89)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td>Required for all source topics and internal topics used in the topology of the group.</td>
         </tr>
         <tr>
             <td>DESCRIBE_SHARE_GROUP_OFFSETS (90)</td>
