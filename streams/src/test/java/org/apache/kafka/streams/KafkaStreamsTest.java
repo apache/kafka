@@ -63,6 +63,7 @@ import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1858,7 +1859,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldThrowIfNonDefaultClientSupplierUsedWithStreamsProtocol() {
+    public void shouldLogWarningIfNonDefaultClientSupplierUsedWithStreamsProtocol() {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
@@ -1866,11 +1867,14 @@ public class KafkaStreamsTest {
         final Topology topology = new Topology();
         topology.addSource("source", "topic");
 
-        @SuppressWarnings("resource") final UnsupportedOperationException ex = assertThrows(
-            UnsupportedOperationException.class,
-            () -> new KafkaStreams(topology, new StreamsConfig(props), new MockClientSupplier())
-        );
-        assert ex.getMessage().contains("A non-default kafka client supplier is not supported with the STREAMS protocol");
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class)) {
+            appender.setClassLogger(KafkaStreams.class, Level.WARN);
+            try (@SuppressWarnings("unused") final KafkaStreams ignored = new KafkaStreams(topology, new StreamsConfig(props), new MockClientSupplier())) {
+                assertTrue(appender.getMessages().stream()
+                    .anyMatch(msg -> msg.contains("A non-default kafka client supplier was supplied. " +
+                        "Note that supplying a custom main consumer is not supported with the STREAMS protocol.")));
+            }
+        }
     }
 
     private Topology getStatefulTopology(final String inputTopic,

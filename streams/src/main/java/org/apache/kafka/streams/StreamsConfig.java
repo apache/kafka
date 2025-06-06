@@ -1529,7 +1529,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
-        if (doLog && getString(GROUP_PROTOCOL_CONFIG).equals(GroupProtocol.STREAMS.name().toLowerCase(Locale.ROOT))) {
+        if (doLog && isStreamsProtocolEnabled()) {
             log.warn("The streams rebalance protocol is still in development and should not be used in production. "
                 + "Please set group.protocol=classic (default) in all production use cases.");
             final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
@@ -2140,6 +2140,10 @@ public class StreamsConfig extends AbstractConfig {
 
     public ProcessingExceptionHandler processingExceptionHandler() {
         return getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
+    }
+
+    protected boolean isStreamsProtocolEnabled() {
+        return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name());
     }
 
     /**

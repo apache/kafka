@@ -1052,7 +1052,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void throwIfUnsupportedFeatureIsUsedWithStreamsRebalanceProtocol() {
-        if (applicationConfigs.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
+        if (applicationConfigs.isStreamsProtocolEnabled()) {
             log.info("Streams rebalance protocol enabled");
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new UnsupportedOperationException("Named topologies are not supported with the STREAMS protocol.");
@@ -1061,7 +1061,8 @@ public class KafkaStreams implements AutoCloseable {
                 throw new UnsupportedOperationException("Pattern subscriptions are not supported with the STREAMS protocol.");
             }
             if (!(clientSupplier instanceof DefaultKafkaClientSupplier)) {
-                throw new UnsupportedOperationException("A non-default kafka client supplier is not supported with the STREAMS protocol.");
+                log.warn("A non-default kafka client supplier was supplied. Note that supplying a custom main consumer" +
+                    " is not supported with the STREAMS protocol.");
             }
         }
     }

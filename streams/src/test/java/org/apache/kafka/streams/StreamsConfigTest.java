@@ -48,6 +48,8 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -1600,6 +1602,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetGroupProtocolToClassicByDefault() {
         assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertFalse(streamsConfig.isStreamsProtocolEnabled());
     }
 
     @Test
@@ -1607,6 +1610,7 @@ public class StreamsConfigTest {
         props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         streamsConfig = new StreamsConfig(props);
         assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertFalse(streamsConfig.isStreamsProtocolEnabled());
     }
 
     @Test
@@ -1614,6 +1618,7 @@ public class StreamsConfigTest {
         props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         streamsConfig = new StreamsConfig(props);
         assertTrue(GroupProtocol.STREAMS.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertTrue(streamsConfig.isStreamsProtocolEnabled());
     }
 
     @Test
@@ -1661,13 +1666,14 @@ public class StreamsConfigTest {
         }
     }
 
-    @Test
-    public void shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership() {
+    @ParameterizedTest
+    @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
+    public void shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership(String prefix) {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
-        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
+        props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
 
         final ConfigException exception = assertThrows(
             ConfigException.class,
