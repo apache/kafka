@@ -1668,7 +1668,7 @@ public class StreamsConfigTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
-    public void shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership(String prefix) {
+    public void shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership(final String prefix) {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
