@@ -36,6 +36,7 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullSourceTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
+                2,
                 null,
                 Map.of(),
                 Set.of(),
@@ -48,6 +49,7 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullRepartitionSourceTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
+                2,
                 Set.of(),
                 null,
                 Set.of(),
@@ -60,6 +62,7 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullRepartitionSinkTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
+                2,
                 Set.of(),
                 Map.of(),
                 null,
@@ -72,10 +75,24 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullStateChangelogTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
+                2,
                 Set.of(),
                 Map.of(),
                 Set.of(),
                 null
+            )
+        );
+    }
+
+    @Test
+    public void testConstructorWithNegativeTaskCount() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new ConfiguredSubtopology(
+                -1,
+                Set.of(),
+                Map.of(),
+                Set.of(),
+                Map.of()
             )
         );
     }
@@ -91,7 +108,7 @@ public class ConfiguredSubtopologyTest {
         Map<String, ConfiguredInternalTopic> repartitionSourceTopics = Map.of("repartitionSourceTopic1", internalTopicMock);
         Map<String, ConfiguredInternalTopic> stateChangelogTopics = Map.of("stateChangelogTopic1", internalTopicMock);
         ConfiguredSubtopology configuredSubtopology = new ConfiguredSubtopology(
-            sourceTopics, repartitionSourceTopics, repartitionSinkTopics, stateChangelogTopics);
+            1, sourceTopics, repartitionSourceTopics, repartitionSinkTopics, stateChangelogTopics);
 
         StreamsGroupDescribeResponseData.Subtopology subtopology = configuredSubtopology.asStreamsGroupDescribeSubtopology(subtopologyId);
 
