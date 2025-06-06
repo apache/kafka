@@ -83,8 +83,9 @@ public abstract class DelayedOperation extends TimerTask {
 
     /**
      * Try to complete the delayed operation by first checking if the operation
-     * can be completed by now. If yes execute the completion logic by calling
-     * forceComplete() and return true iff forceComplete returns true; otherwise return false
+     * can be completed by now. If the completion logic is successfully executed by calling 
+     * forceComplete() without throwing any exception, it will return true; otherwise, 
+     * it will return false.
      * <br/>
      * This function needs to be defined in subclasses
      */
