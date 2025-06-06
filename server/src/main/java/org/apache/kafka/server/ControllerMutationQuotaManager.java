@@ -170,11 +170,8 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
      * @return ControllerMutationQuota instance
      */
     public ControllerMutationQuota newQuotaFor(Session session, RequestHeader header, short strictSinceVersion) {
-        if (header.apiVersion() >= strictSinceVersion) {
-            return newStrictQuotaFor(session, header);
-        } else {
-            return newPermissiveQuotaFor(session, header.clientId());
-        }
+        if (header.apiVersion() >= strictSinceVersion) return newStrictQuotaFor(session, header);
+        return newPermissiveQuotaFor(session, header.clientId());
     }
 
     /**
@@ -186,9 +183,8 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
     public static long throttleTimeMs(QuotaViolationException e) {
         if (e.metric().measurable() instanceof TokenBucket) {
             return Math.round(-e.value() / e.bound() * 1000);
-        } else {
-            throw new IllegalArgumentException(
-                    "Metric " + e.metric().metricName() + " is not a TokenBucket metric, value " + e.metric().measurable());
-        }
+        } 
+        throw new IllegalArgumentException("Metric " + e.metric().metricName() + 
+            " is not a TokenBucket metric, value " + e.metric().measurable());
     }
 }
