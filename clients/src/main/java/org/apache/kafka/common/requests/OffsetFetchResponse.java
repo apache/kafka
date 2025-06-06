@@ -100,27 +100,12 @@ public class OffsetFetchResponse extends AbstractResponse {
                     data.topics().add(newTopic);
 
                     topic.partitions().forEach(partition -> {
-                        OffsetFetchResponsePartition newPartition;
-
-                        if (version < TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION && group.errorCode() != Errors.NONE.code()) {
-                            // Versions prior to version 2 do not support a top level error. Therefore,
-                            // we put it at the partition level.
-                            newPartition = new OffsetFetchResponsePartition()
-                                .setPartitionIndex(partition.partitionIndex())
-                                .setErrorCode(group.errorCode())
-                                .setCommittedOffset(INVALID_OFFSET)
-                                .setMetadata(NO_METADATA)
-                                .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH);
-                        } else {
-                            newPartition = new OffsetFetchResponsePartition()
-                                .setPartitionIndex(partition.partitionIndex())
-                                .setErrorCode(partition.errorCode())
-                                .setCommittedOffset(partition.committedOffset())
-                                .setMetadata(partition.metadata())
-                                .setCommittedLeaderEpoch(partition.committedLeaderEpoch());
-                        }
-
-                        newTopic.partitions().add(newPartition);
+                        newTopic.partitions().add(new OffsetFetchResponsePartition()
+                            .setPartitionIndex(partition.partitionIndex())
+                            .setErrorCode(partition.errorCode())
+                            .setCommittedOffset(partition.committedOffset())
+                            .setMetadata(partition.metadata())
+                            .setCommittedLeaderEpoch(partition.committedLeaderEpoch()));
                     });
                 });
             }
