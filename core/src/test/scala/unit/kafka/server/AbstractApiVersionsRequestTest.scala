@@ -31,13 +31,12 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Tag
 
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOptional
 
 @Tag("integration")
 abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
-    val socket = if (cluster.controllerListenerName().toScala.contains(listenerName)) {
+    val socket = if (cluster.controllerListenerName() == listenerName) {
       cluster.controllerSocketServers().asScala.head
     } else {
       cluster.brokerSocketServers().asScala.head
@@ -92,7 +91,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       assertEquals(0, apiVersionsResponse.data().supportedFeatures().find(StreamsVersion.FEATURE_NAME).minVersion())
       assertEquals(StreamsVersion.SV_1.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(StreamsVersion.FEATURE_NAME).maxVersion())
     }
-    val expectedApis = if (cluster.controllerListenerName().toScala.contains(listenerName)) {
+    val expectedApis = if (cluster.controllerListenerName() == listenerName) {
       ApiVersionsResponse.collectApis(
         ApiMessageType.ListenerType.CONTROLLER,
         ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER),
@@ -110,7 +109,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedApis.size, apiVersionsResponse.data.apiKeys.size,
       "API keys in ApiVersionsResponse must match API keys supported by broker.")
 
-    val defaultApiVersionsResponse = if (cluster.controllerListenerName().toScala.contains(listenerName)) {
+    val defaultApiVersionsResponse = if (cluster.controllerListenerName() == listenerName) {
       TestUtils.defaultApiVersionsResponse(0, ListenerType.CONTROLLER, enableUnstableLastVersion)
     } else {
       TestUtils.createApiVersionsResponse(0, expectedApis)

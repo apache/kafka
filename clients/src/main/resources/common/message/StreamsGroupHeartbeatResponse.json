@@ -65,6 +65,8 @@
       "about": "Assigned warm-up tasks for this client. Null if unchanged since last heartbeat." },
 
     // IQ-related information
+    { "name": "EndpointInformationEpoch", "type": "int32", "versions": "0+",
+      "about": "The endpoint epoch set in the response"},
     { "name": "PartitionsByUserEndpoint", "type": "[]EndpointToPartitions", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Global assignment information used for IQ. Null if unchanged since last heartbeat." ,
       "fields": [

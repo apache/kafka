@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -640,6 +641,7 @@ public class OffsetMetadataManager {
                         .setErrorCode(Errors.NONE.code()));
 
                     final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRequest(
+                        topic.topicId(),
                         partition,
                         currentTimeMs,
                         expireTimestampMs
@@ -881,7 +883,9 @@ public class OffsetMetadataManager {
 
         request.topics().forEach(topic -> {
             final OffsetFetchResponseData.OffsetFetchResponseTopics topicResponse =
-                new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name());
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setTopicId(topic.topicId())
+                    .setName(topic.name());
             topicResponses.add(topicResponse);
 
             final TimelineHashMap<Integer, OffsetAndMetadata> topicOffsets = groupOffsets == null ?
@@ -902,7 +906,7 @@ public class OffsetMetadataManager {
                         .setCommittedOffset(INVALID_OFFSET)
                         .setCommittedLeaderEpoch(-1)
                         .setMetadata(""));
-                } else if (offsetAndMetadata == null) {
+                } else if (isOffsetInvalid(offsetAndMetadata, topic.topicId())) {
                     topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                         .setPartitionIndex(partitionIndex)
                         .setCommittedOffset(INVALID_OFFSET)
@@ -921,6 +925,14 @@ public class OffsetMetadataManager {
         return new OffsetFetchResponseData.OffsetFetchResponseGroup()
             .setGroupId(request.groupId())
             .setTopics(topicResponses);
+    }
+
+    private static boolean isOffsetInvalid(OffsetAndMetadata offsetAndMetadata, Uuid expectedTopicId) {
+        return offsetAndMetadata == null || isMismatchedTopicId(offsetAndMetadata.topicId, expectedTopicId);
+    }
+
+    private static boolean isMismatchedTopicId(Uuid actual, Uuid expected) {
+        return !actual.equals(Uuid.ZERO_UUID) && !expected.equals(Uuid.ZERO_UUID) && !actual.equals(expected);
     }
 
     /**
@@ -962,7 +974,11 @@ public class OffsetMetadataManager {
                     (requireStable && openTransactionsByTopic != null) ? openTransactionsByTopic.get(topic, lastCommittedOffset) : null;
 
                 final OffsetFetchResponseData.OffsetFetchResponseTopics topicResponse =
-                    new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic);
+                    new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                        // It is set to zero for now but it will be set to the persisted
+                        // topic id along the committed offset, if present.
+                        .setTopicId(Uuid.ZERO_UUID)
+                        .setName(topic);
                 topicResponses.add(topicResponse);
 
                 topicOffsets.entrySet(lastCommittedOffset).forEach(partitionEntry -> {
@@ -1000,13 +1016,14 @@ public class OffsetMetadataManager {
      * @param groupId The group id.
      * @param records The list of records to populate with offset commit tombstone records.
      *
-     * @return True if no offsets exist or if all offsets expired, false otherwise.
+     * @return True if no offsets exist after expiry and no pending transactional offsets exist,
+     *         false otherwise.
      */
     public boolean cleanupExpiredOffsets(String groupId, List<CoordinatorRecord> records) {
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
             offsets.offsetsByGroup.get(groupId);
         if (offsetsByTopic == null) {
-            return true;
+            return !openTransactions.contains(groupId);
         }
 
         // We expect the group to exist.

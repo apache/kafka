@@ -17,7 +17,6 @@
 
 package kafka.network
 
-
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.network
 import kafka.server.EnvelopeUtils
@@ -47,9 +46,9 @@ import org.mockito.Mockito.mock
 import java.io.IOException
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.Collections
+import java.util
 import java.util.concurrent.atomic.AtomicReference
-import scala.collection.{Map, Seq}
+import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
@@ -64,9 +63,9 @@ class RequestChannelTest {
   def testAlterRequests(): Unit = {
 
     val sensitiveValue = "secret"
-    def verifyConfig(resource: ConfigResource, entries: Seq[ConfigEntry], expectedValues: Map[String, String]): Unit = {
+    def verifyConfig(resource: ConfigResource, entries: util.List[ConfigEntry], expectedValues: Map[String, String]): Unit = {
       val alterConfigs = request(new AlterConfigsRequest.Builder(
-          Collections.singletonMap(resource, new Config(entries.asJavaCollection)), true).build())
+          util.Map.of(resource, new Config(entries)), true).build())
 
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
@@ -77,37 +76,37 @@ class RequestChannelTest {
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "1")
     val keystorePassword = new ConfigEntry(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, sensitiveValue)
-    verifyConfig(brokerResource, Seq(keystorePassword), Map(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG -> Password.HIDDEN))
+    verifyConfig(brokerResource, util.List.of(keystorePassword), Map(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG -> Password.HIDDEN))
 
     val keystoreLocation = new ConfigEntry(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "/path/to/keystore")
-    verifyConfig(brokerResource, Seq(keystoreLocation), Map(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG -> "/path/to/keystore"))
-    verifyConfig(brokerResource, Seq(keystoreLocation, keystorePassword),
+    verifyConfig(brokerResource, util.List.of(keystoreLocation), Map(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG -> "/path/to/keystore"))
+    verifyConfig(brokerResource, util.List.of(keystoreLocation, keystorePassword),
       Map(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG -> "/path/to/keystore", SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG -> Password.HIDDEN))
 
     val listenerKeyPassword = new ConfigEntry(s"listener.name.internal.${SslConfigs.SSL_KEY_PASSWORD_CONFIG}", sensitiveValue)
-    verifyConfig(brokerResource, Seq(listenerKeyPassword), Map(listenerKeyPassword.name -> Password.HIDDEN))
+    verifyConfig(brokerResource, util.List.of(listenerKeyPassword), Map(listenerKeyPassword.name -> Password.HIDDEN))
 
     val listenerKeystore = new ConfigEntry(s"listener.name.internal.${SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG}", "/path/to/keystore")
-    verifyConfig(brokerResource, Seq(listenerKeystore), Map(listenerKeystore.name -> "/path/to/keystore"))
+    verifyConfig(brokerResource, util.List.of(listenerKeystore), Map(listenerKeystore.name -> "/path/to/keystore"))
 
     val plainJaasConfig = new ConfigEntry(s"listener.name.internal.plain.${SaslConfigs.SASL_JAAS_CONFIG}", sensitiveValue)
-    verifyConfig(brokerResource, Seq(plainJaasConfig), Map(plainJaasConfig.name -> Password.HIDDEN))
+    verifyConfig(brokerResource, util.List.of(plainJaasConfig), Map(plainJaasConfig.name -> Password.HIDDEN))
 
     val plainLoginCallback = new ConfigEntry(s"listener.name.internal.plain.${SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS}", "test.LoginClass")
-    verifyConfig(brokerResource, Seq(plainLoginCallback), Map(plainLoginCallback.name -> plainLoginCallback.value))
+    verifyConfig(brokerResource, util.List.of(plainLoginCallback), Map(plainLoginCallback.name -> plainLoginCallback.value))
 
     val customConfig = new ConfigEntry("custom.config", sensitiveValue)
-    verifyConfig(brokerResource, Seq(customConfig), Map(customConfig.name -> Password.HIDDEN))
+    verifyConfig(brokerResource, util.List.of(customConfig), Map(customConfig.name -> Password.HIDDEN))
 
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "testTopic")
     val compressionType = new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
-    verifyConfig(topicResource, Seq(compressionType), Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> "lz4"))
-    verifyConfig(topicResource, Seq(customConfig), Map(customConfig.name -> Password.HIDDEN))
+    verifyConfig(topicResource, util.List.of(compressionType), Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> "lz4"))
+    verifyConfig(topicResource, util.List.of(customConfig), Map(customConfig.name -> Password.HIDDEN))
 
     // Verify empty request
     val alterConfigs = request(new AlterConfigsRequest.Builder(
-        Collections.emptyMap[ConfigResource, Config], true).build())
-    assertEquals(Collections.emptyMap, alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest].configs)
+        util.Map.of[ConfigResource, Config], true).build())
+    assertEquals(util.Map.of, alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest].configs)
   }
 
   @Test
@@ -189,7 +188,7 @@ class RequestChannelTest {
 
   @Test
   def testNonAlterRequestsNotTransformed(): Unit = {
-    val metadataRequest = request(new MetadataRequest.Builder(List("topic").asJava, true).build())
+    val metadataRequest = request(new MetadataRequest.Builder(util.List.of("topic"), true).build())
     assertSame(metadataRequest.body[MetadataRequest], metadataRequest.loggableRequest)
   }
 
@@ -198,10 +197,10 @@ class RequestChannelTest {
     val sensitiveValue = "secret"
     val resource = new ConfigResource(ConfigResource.Type.BROKER, "1")
     val keystorePassword = new ConfigEntry(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, sensitiveValue)
-    val entries = Seq(keystorePassword)
+    val entries = util.List.of(keystorePassword)
 
-    val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.singletonMap(resource,
-      new Config(entries.asJavaCollection)), true).build())
+    val alterConfigs = request(new AlterConfigsRequest.Builder(util.Map.of(resource,
+      new Config(entries)), true).build())
 
     assertTrue(isValidJson(RequestConvertToJson.request(alterConfigs.loggableRequest).toString))
   }

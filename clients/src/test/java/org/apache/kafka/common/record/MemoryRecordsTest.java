@@ -35,7 +35,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -136,10 +135,6 @@ public class MemoryRecordsTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
         int partitionLeaderEpoch = 998;
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compression,
-                TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false, false,
-                partitionLeaderEpoch, buffer.limit());
-
         SimpleRecord[] records = new SimpleRecord[] {
             new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
             new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
@@ -149,10 +144,30 @@ public class MemoryRecordsTest {
             new SimpleRecord(6L, (byte[]) null, null)
         };
 
-        for (SimpleRecord record : records)
-            builder.append(record);
+        final MemoryRecords memoryRecords;
+        try (var builder = new MemoryRecordsBuilder(
+                buffer,
+                magic,
+                compression,
+                TimestampType.CREATE_TIME,
+                firstOffset,
+                logAppendTime,
+                pid,
+                epoch,
+                firstSequence,
+                false,
+                false,
+                partitionLeaderEpoch,
+                buffer.limit()
+            )
+        ) {
+            for (SimpleRecord record : records) {
+                builder.append(record);
+            }
 
-        MemoryRecords memoryRecords = builder.build();
+            memoryRecords = builder.build();
+        }
+
         for (int iteration = 0; iteration < 2; iteration++) {
             int total = 0;
             for (RecordBatch batch : memoryRecords.batches()) {
@@ -1075,7 +1090,7 @@ public class MemoryRecordsTest {
 
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
-    public void testSlice(Args args) throws IOException {
+    public void testSlice(Args args) {
         // Create a MemoryRecords instance with multiple batches. Prior RecordBatch.MAGIC_VALUE_V2,
         // every append in a batch is a new batch. After RecordBatch.MAGIC_VALUE_V2, we can have multiple
         // batches in a single MemoryRecords instance. Though with compression, we can have multiple
@@ -1087,10 +1102,10 @@ public class MemoryRecordsTest {
         MemoryRecords records = createMemoryRecords(args, recordsPerOffset);
 
         // Test slicing from start
-        Records sliced = records.slice(0, records.sizeInBytes());
+        MemoryRecords sliced = records.slice(0, records.sizeInBytes());
         assertEquals(records.sizeInBytes(), sliced.sizeInBytes());
-        assertEquals(records.validBytes(), ((MemoryRecords) sliced).validBytes());
-        TestUtils.checkEquals(records.batches(), ((MemoryRecords) sliced).batches());
+        assertEquals(records.validBytes(), sliced.validBytes());
+        TestUtils.checkEquals(records.batches(), sliced.batches());
 
         List<RecordBatch> items = batches(records);
         // Test slicing first message.
@@ -1098,19 +1113,19 @@ public class MemoryRecordsTest {
         sliced = records.slice(first.sizeInBytes(), records.sizeInBytes() - first.sizeInBytes());
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
 
         // Read from second message and size is past the end of the file.
         sliced = records.slice(first.sizeInBytes(), records.sizeInBytes());
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
 
         // Read from second message and position + size overflows.
         sliced = records.slice(first.sizeInBytes(), Integer.MAX_VALUE);
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
 
         // Read a single message starting from second message.
         RecordBatch second = items.get(1);
@@ -1131,14 +1146,14 @@ public class MemoryRecordsTest {
             .slice(first.sizeInBytes() - 1, records.sizeInBytes());
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
 
         // Read from second message and position + size overflows on the already sliced view.
         sliced = records.slice(1, records.sizeInBytes() - 1)
             .slice(first.sizeInBytes() - 1, Integer.MAX_VALUE);
         assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
-        assertTrue(((MemoryRecords) sliced).validBytes() <= sliced.sizeInBytes());
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
     }
 
     @ParameterizedTest
@@ -1170,7 +1185,7 @@ public class MemoryRecordsTest {
      */
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
-    public void testSliceForAlreadySlicedMemoryRecords(Args args) throws IOException {
+    public void testSliceForAlreadySlicedMemoryRecords(Args args) {
         LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
         recordsPerOffset.put(args.firstOffset, 5);
         recordsPerOffset.put(args.firstOffset + 5L, 10);

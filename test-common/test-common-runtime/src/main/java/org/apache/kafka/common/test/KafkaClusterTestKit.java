@@ -60,7 +60,6 @@ import java.nio.file.Paths;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -251,7 +250,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     socketFactoryManager.getOrCreatePortForListener(node.id(), brokerListenerName);
                 }
                 for (TestKitNode node : nodes.controllerNodes().values()) {
-                    setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
+                    setupNodeDirectories(baseDirectory, node.metadataDirectory(), List.of());
                     KafkaConfig config = createNodeConfig(node);
                     SharedServer sharedServer = new SharedServer(
                         config,
@@ -259,7 +258,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Time.SYSTEM,
                         new Metrics(),
                         CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                        Collections.emptyList(),
+                        List.of(),
                         faultHandlerFactory,
                         socketFactoryManager.getOrCreateSocketFactory(node.id())
                     );
@@ -287,7 +286,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             Time.SYSTEM,
                             new Metrics(),
                             CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                            Collections.emptyList(),
+                            List.of(),
                             faultHandlerFactory,
                             socketFactoryManager.getOrCreateSocketFactory(node.id())
                         );

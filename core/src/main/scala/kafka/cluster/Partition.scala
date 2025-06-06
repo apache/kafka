@@ -44,6 +44,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, TopicPartitionOperationKey}
+import org.apache.kafka.server.replica.Replica
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, UnexpectedAppendOffsetException}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
@@ -795,10 +796,10 @@ class Partition(val topicPartition: TopicPartition,
         // lastFetchLeaderLogEndOffset.
         remoteReplicas.foreach { replica =>
           replica.resetReplicaState(
-            currentTimeMs = currentTimeMs,
-            leaderEndOffset = leaderEpochStartOffset,
-            isNewLeader = isNewLeader,
-            isFollowerInSync = partitionState.isr.contains(replica.brokerId)
+            currentTimeMs,
+            leaderEpochStartOffset,
+            isNewLeader,
+            partitionState.isr.contains(replica.brokerId)
           )
         }
 
@@ -1072,9 +1073,9 @@ class Partition(val topicPartition: TopicPartition,
       isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
   }
 
-  private def isBrokerEpochIsrEligible(storedBrokerEpoch: Option[Long], cachedBrokerEpoch: Optional[java.lang.Long]): Boolean = {
-    storedBrokerEpoch.isDefined && cachedBrokerEpoch.isPresent() &&
-      (storedBrokerEpoch.get == -1 || storedBrokerEpoch.get == cachedBrokerEpoch.get())
+  private def isBrokerEpochIsrEligible(storedBrokerEpoch: Optional[java.lang.Long], cachedBrokerEpoch: Optional[java.lang.Long]): Boolean = {
+    storedBrokerEpoch.isPresent && cachedBrokerEpoch.isPresent &&
+      (storedBrokerEpoch.get == -1 || storedBrokerEpoch.get == cachedBrokerEpoch.get)
   }
 
   /*
@@ -1802,7 +1803,7 @@ class Partition(val topicPartition: TopicPartition,
         brokerState.setBrokerEpoch(localBrokerEpochSupplier())
       } else {
         val replica = remoteReplicasMap.get(brokerId)
-        val brokerEpoch = if (replica == null) Option.empty else replica.stateSnapshot.brokerEpoch
+        val brokerEpoch = if (replica == null) Optional.empty else replica.stateSnapshot.brokerEpoch
         if (brokerEpoch.isEmpty) {
           // There are two cases where the broker epoch can be missing:
           // 1. During ISR expansion, we already held lock for the partition and did the broker epoch check, so the new

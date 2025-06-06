@@ -82,7 +82,7 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
     IntegrationTestUtils.connectAndReceive[AllocateProducerIdsResponse](
       request,
       controllerSocketServer,
-      cluster.controllerListenerName.get
+      cluster.controllerListenerName
     )
   }
 

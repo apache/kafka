@@ -337,15 +337,31 @@ public class AclControlManagerTest {
     }
 
     @Test
+    public void testCreateDedupe() {
+        AclControlManager manager = new AclControlManager.Builder().build();
+
+        AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
+                new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
+
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding, aclBinding));
+        RecordTestUtils.replayAll(manager, createResult.records());
+        assertEquals(1, createResult.records().size());
+        assertEquals(1, manager.idToAcl().size());
+
+        createResult = manager.createAcls(List.of(aclBinding));
+        assertEquals(0, createResult.records().size());
+        assertEquals(1, manager.idToAcl().size());
+    }
+
+    @Test
     public void testDeleteDedupe() {
         AclControlManager manager = new AclControlManager.Builder().build();
-        MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
-        authorizer.loadSnapshot(manager.idToAcl());
 
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
         ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding));
+        RecordTestUtils.replayAll(manager, createResult.records());
         Uuid id = ((AccessControlEntryRecord) createResult.records().get(0).message()).id();
         assertEquals(1, createResult.records().size());
 

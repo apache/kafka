@@ -20,7 +20,6 @@ package kafka.coordinator
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors}
 import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.cluster.Partition
 import kafka.log.LogManager
@@ -216,7 +215,6 @@ object AbstractCoordinatorConcurrencyTest {
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
                                responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
-                               delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.noCaching,
                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
@@ -227,7 +225,7 @@ object AbstractCoordinatorConcurrencyTest {
         case (tp, _) =>
           (tp, ProducePartitionStatus(0L, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
       })
-      val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback, delayedProduceLock) {
+      val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback) {
         // Complete produce requests after a few attempts to trigger delayed produce from different threads
         val completeAttempts = new AtomicInteger
         override def tryComplete(): Boolean = {

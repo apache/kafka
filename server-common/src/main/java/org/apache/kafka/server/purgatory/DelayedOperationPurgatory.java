@@ -58,6 +58,10 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
         this(purgatoryName, timer, brokerId, 1000, reaperEnabled, true);
     }
 
+    public DelayedOperationPurgatory(String purgatoryName, Timer timer, int brokerId, int purgeInterval) {
+        this(purgatoryName, timer, brokerId, purgeInterval, true, true);
+    }
+
     public DelayedOperationPurgatory(String purgatoryName, int brokerId) {
         this(purgatoryName, brokerId, 1000);
     }

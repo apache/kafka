@@ -39,11 +39,10 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import java.util
-import java.util.Collections
+import java.util.Optional
 import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
 import scala.util.{Failure, Success, Try}
 
 @Timeout(120)
@@ -84,8 +83,8 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   private def setInitialAcls(): Unit = {
     superUserAdmin = createSuperuserAdminClient()
     val ace = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, ALL, ALLOW)
-    superUserAdmin.createAcls(List(new AclBinding(new ResourcePattern(TOPIC, "*", LITERAL), ace)).asJava)
-    superUserAdmin.createAcls(List(new AclBinding(new ResourcePattern(GROUP, "*", LITERAL), ace)).asJava)
+    superUserAdmin.createAcls(java.util.List.of(new AclBinding(new ResourcePattern(TOPIC, "*", LITERAL), ace)))
+    superUserAdmin.createAcls(java.util.List.of(new AclBinding(new ResourcePattern(GROUP, "*", LITERAL), ace)))
 
     val clusterAcls = List(clusterAcl(ALLOW, CREATE),
       clusterAcl(ALLOW, DELETE),
@@ -141,7 +140,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
       val exception = assertThrows(classOf[ExecutionException], () => {
-      brokenClient.createAcls(Collections.singleton(acl), new CreateAclsOptions().timeoutMs(0)).all().get()
+      brokenClient.createAcls(util.Set.of(acl), new CreateAclsOptions().timeoutMs(0)).all().get()
       })
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally brokenClient.close(time.Duration.ZERO)
@@ -157,7 +156,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
     try {
       val exception = assertThrows(classOf[ExecutionException], () => {
-        brokenClient.deleteAcls(Collections.singleton(AclBindingFilter.ANY), new DeleteAclsOptions().timeoutMs(0)).all().get()
+        brokenClient.deleteAcls(util.Set.of(AclBindingFilter.ANY), new DeleteAclsOptions().timeoutMs(0)).all().get()
       })
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally brokenClient.close(time.Duration.ZERO)
@@ -166,10 +165,10 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   @Test
   def testExpireDelegationTokenWithOptionExpireTimePeriodMs(): Unit = {
     client = createAdminClient
-    val renewer = List(SecurityUtils.parseKafkaPrincipal("User:renewer"))
+    val renewer = java.util.List.of(SecurityUtils.parseKafkaPrincipal("User:renewer"))
 
     def generateTokenResult(maxLifeTimeMs: Int, expiryTimePeriodMs: Int, expectedTokenNum: Int): (CreateDelegationTokenResult, ExpireDelegationTokenResult) = {
-      val createResult = client.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer.asJava).maxLifetimeMs(maxLifeTimeMs))
+      val createResult = client.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer).maxLifetimeMs(maxLifeTimeMs))
       val tokenCreated = createResult.delegationToken.get
       TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == expectedTokenNum),
             "Timed out waiting for token to propagate to all servers")
@@ -204,15 +203,15 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
     assertEquals(8, getAcls(AclBindingFilter.ANY).size)
-    val results = client.createAcls(List(acl2, acl3).asJava)
+    val results = client.createAcls(java.util.List.of(acl2, acl3))
     assertEquals(Set(acl2, acl3), results.values.keySet().asScala)
     results.values.values.forEach(value => value.get)
     val aclUnknown = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.UNKNOWN, AclPermissionType.ALLOW))
-    val results2 = client.createAcls(List(aclUnknown).asJava)
+    val results2 = client.createAcls(java.util.List.of(aclUnknown))
     assertEquals(Set(aclUnknown), results2.values.keySet().asScala)
     assertFutureThrows(classOf[InvalidRequestException], results2.all)
-    val results3 = client.deleteAcls(List(acl.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
+    val results3 = client.deleteAcls(java.util.List.of(acl.toFilter, acl2.toFilter, acl3.toFilter)).values
     assertEquals(Set(acl.toFilter, acl2.toFilter, acl3.toFilter), results3.keySet.asScala)
     assertEquals(0, results3.get(acl.toFilter).get.values.size())
     assertEquals(Set(acl2), results3.get(acl2.toFilter).get.values.asScala.map(_.binding).toSet)
@@ -222,7 +221,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   @Test
   def testAclOperations2(): Unit = {
     client = createAdminClient
-    val results = client.createAcls(List(acl2, acl2, transactionalIdAcl).asJava)
+    val results = client.createAcls(java.util.List.of(acl2, acl2, transactionalIdAcl))
     assertEquals(Set(acl2, acl2, transactionalIdAcl), results.values.keySet.asScala)
     results.all.get()
     waitForDescribeAcls(client, acl2.toFilter, Set(acl2))
@@ -235,7 +234,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     waitForDescribeAcls(client, filterA, Set(groupAcl))
     waitForDescribeAcls(client, filterC, Set(transactionalIdAcl))
 
-    val results2 = client.deleteAcls(List(filterA, filterB, filterC).asJava, new DeleteAclsOptions())
+    val results2 = client.deleteAcls(java.util.List.of(filterA, filterB, filterC), new DeleteAclsOptions())
     assertEquals(Set(filterA, filterB, filterC), results2.values.keySet.asScala)
     assertEquals(Set(groupAcl), results2.values.get(filterA).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(transactionalIdAcl), results2.values.get(filterC).get.values.asScala.map(_.binding).toSet)
@@ -282,7 +281,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val allPrefixedTopicAcls = new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC, null, PatternType.PREFIXED), AccessControlEntryFilter.ANY)
 
     // Delete only ACLs on literal 'mytopic2' topic
-    var deleted = client.deleteAcls(List(acl2.toFilter).asJava).all().get().asScala.toSet
+    var deleted = client.deleteAcls(java.util.List.of(acl2.toFilter)).all().get().asScala.toSet
     brokers.foreach { b =>
       waitAndVerifyRemovedAcl(acl2.entry(), b.dataPlaneRequestProcessor.authorizerPlugin.get, acl2.pattern())
     }
@@ -291,7 +290,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     ensureAcls(deleted)
 
     // Delete only ACLs on literal '*' topic
-    deleted = client.deleteAcls(List(anyAcl.toFilter).asJava).all().get().asScala.toSet
+    deleted = client.deleteAcls(java.util.List.of(anyAcl.toFilter)).all().get().asScala.toSet
     brokers.foreach { b =>
       waitAndVerifyRemovedAcl(anyAcl.entry(), b.dataPlaneRequestProcessor.authorizerPlugin.get, anyAcl.pattern())
     }
@@ -300,7 +299,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     ensureAcls(deleted)
 
     // Delete only ACLs on specific prefixed 'mytopic' topics:
-    deleted = client.deleteAcls(List(prefixAcl.toFilter).asJava).all().get().asScala.toSet
+    deleted = client.deleteAcls(java.util.List.of(prefixAcl.toFilter)).all().get().asScala.toSet
     brokers.foreach { b =>
       waitAndVerifyRemovedAcl(prefixAcl.entry(), b.dataPlaneRequestProcessor.authorizerPlugin.get, prefixAcl.pattern())
     }
@@ -309,7 +308,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     ensureAcls(deleted)
 
     // Delete all literal ACLs:
-    deleted = client.deleteAcls(List(allLiteralTopicAcls).asJava).all().get().asScala.toSet
+    deleted = client.deleteAcls(java.util.List.of(allLiteralTopicAcls)).all().get().asScala.toSet
     brokers.foreach { b =>
       Set(anyAcl, acl2, fooAcl).foreach(acl =>
         waitAndVerifyRemovedAcl(acl.entry(), b.dataPlaneRequestProcessor.authorizerPlugin.get, acl.pattern())
@@ -320,7 +319,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     ensureAcls(deleted)
 
     // Delete all prefixed ACLs:
-    deleted = client.deleteAcls(List(allPrefixedTopicAcls).asJava).all().get().asScala.toSet
+    deleted = client.deleteAcls(java.util.List.of(allPrefixedTopicAcls)).all().get().asScala.toSet
     brokers.foreach { b =>
       waitAndVerifyRemovedAcl(prefixAcl.entry(), b.dataPlaneRequestProcessor.authorizerPlugin.get, prefixAcl.pattern())
     }
@@ -329,7 +328,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     ensureAcls(deleted)
 
     // Delete all topic ACLs:
-    deleted = client.deleteAcls(List(allTopicAcls).asJava).all().get().asScala.toSet
+    deleted = client.deleteAcls(java.util.List.of(allTopicAcls)).all().get().asScala.toSet
     brokers.foreach { b =>
       Set(anyAcl, acl2, fooAcl, prefixAcl).foreach(acl =>
         waitAndVerifyRemovedAcl(acl.entry(), b.dataPlaneRequestProcessor.authorizerPlugin.get, acl.pattern())
@@ -356,7 +355,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     assertEquals(Set(fooAcl), getAcls(legacyFooTopicAcls))
 
     // Delete only (legacy) ACLs on 'mytopic2' topic
-    var deleted = client.deleteAcls(List(legacyMyTopic2Acls).asJava).all().get().asScala.toSet
+    var deleted = client.deleteAcls(java.util.List.of(legacyMyTopic2Acls)).all().get().asScala.toSet
     brokers.foreach { b =>
       waitAndVerifyRemovedAcl(acl2.entry(), b.dataPlaneRequestProcessor.authorizerPlugin.get, acl2.pattern())
     }
@@ -365,7 +364,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     ensureAcls(deleted)
 
     // Delete only (legacy) ACLs on '*' topic
-    deleted = client.deleteAcls(List(legacyAnyTopicAcls).asJava).all().get().asScala.toSet
+    deleted = client.deleteAcls(java.util.List.of(legacyAnyTopicAcls)).all().get().asScala.toSet
     brokers.foreach { b =>
       waitAndVerifyRemovedAcl(anyAcl.entry(), b.dataPlaneRequestProcessor.authorizerPlugin.get, anyAcl.pattern())
     }
@@ -374,7 +373,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     ensureAcls(deleted)
 
     // Delete all (legacy) topic ACLs:
-    deleted = client.deleteAcls(List(legacyAllTopicAcls).asJava).all().get().asScala.toSet
+    deleted = client.deleteAcls(java.util.List.of(legacyAllTopicAcls)).all().get().asScala.toSet
     brokers.foreach { b =>
       Set(anyAcl, acl2, fooAcl).foreach(acl =>
         waitAndVerifyRemovedAcl(acl.entry(), b.dataPlaneRequestProcessor.authorizerPlugin.get, acl.pattern())
@@ -391,7 +390,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
     val emptyResourceNameAcl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
-    val results = client.createAcls(List(clusterAcl, emptyResourceNameAcl).asJava, new CreateAclsOptions())
+    val results = client.createAcls(java.util.List.of(clusterAcl, emptyResourceNameAcl), new CreateAclsOptions())
     assertEquals(Set(clusterAcl, emptyResourceNameAcl), results.values.keySet().asScala)
     assertFutureThrows(classOf[InvalidRequestException], results.values.get(clusterAcl))
     assertFutureThrows(classOf[InvalidRequestException], results.values.get(emptyResourceNameAcl))
@@ -434,7 +433,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   private def testAclCreateGetDelete(expectAuth: Boolean): Unit = {
     TestUtils.waitUntilTrue(() => {
-      val result = client.createAcls(List(fooAcl, transactionalIdAcl).asJava, new CreateAclsOptions)
+      val result = client.createAcls(java.util.List.of(fooAcl, transactionalIdAcl), new CreateAclsOptions)
       if (expectAuth) {
         Try(result.all.get) match {
           case Failure(e) =>
@@ -456,7 +455,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set(transactionalIdAcl))
     }
     TestUtils.waitUntilTrue(() => {
-      val result = client.deleteAcls(List(fooAcl.toFilter, transactionalIdAcl.toFilter).asJava, new DeleteAclsOptions)
+      val result = client.deleteAcls(java.util.List.of(fooAcl.toFilter, transactionalIdAcl.toFilter), new DeleteAclsOptions)
       if (expectAuth) {
         Try(result.all.get) match {
           case Failure(e) =>
@@ -541,7 +540,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   private def addClusterAcl(permissionType: AclPermissionType, operation: AclOperation): Unit = {
     val ace = clusterAcl(permissionType, operation)
-    superUserAdmin.createAcls(List(new AclBinding(clusterResourcePattern, ace)).asJava)
+    superUserAdmin.createAcls(java.util.List.of(new AclBinding(clusterResourcePattern, ace)))
     brokers.foreach { b =>
       waitAndVerifyAcl(ace, b.dataPlaneRequestProcessor.authorizerPlugin.get, clusterResourcePattern)
     }
@@ -549,7 +548,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   private def removeClusterAcl(permissionType: AclPermissionType, operation: AclOperation): Unit = {
     val ace = clusterAcl(permissionType, operation)
-    superUserAdmin.deleteAcls(List(new AclBinding(clusterResourcePattern, ace).toFilter).asJava).values
+    superUserAdmin.deleteAcls(java.util.List.of(new AclBinding(clusterResourcePattern, ace).toFilter)).values
 
     brokers.foreach { b =>
       waitAndVerifyRemovedAcl(ace, b.dataPlaneRequestProcessor.authorizerPlugin.get, clusterResourcePattern)
@@ -564,14 +563,14 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       new AccessControlEntry("User:*", "*", AclOperation.DESCRIBE_CONFIGS, AclPermissionType.DENY))
 
     client = createAdminClient
-    client.createAcls(List(denyAcl).asJava, new CreateAclsOptions()).all().get()
+    client.createAcls(java.util.List.of(denyAcl), new CreateAclsOptions()).all().get()
 
     val topics = Seq(topic1, topic2)
-    val configsOverride = Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "100000").asJava
-    val newTopics = Seq(
+    val configsOverride = java.util.Map.of(TopicConfig.SEGMENT_BYTES_CONFIG, "3000000")
+    val newTopics = java.util.List.of(
       new NewTopic(topic1, 2, 3.toShort).configs(configsOverride),
-      new NewTopic(topic2, Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava).configs(configsOverride))
-    val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
+      new NewTopic(topic2, Optional.empty[Integer], Optional.empty[java.lang.Short]).configs(configsOverride))
+    val validateResult = client.createTopics(newTopics, new CreateTopicsOptions().validateOnly(true))
     validateResult.all.get()
     waitForTopics(client, List(), topics)
 
@@ -581,7 +580,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       val topicConfigs = result.config(topic1).get().entries.asScala
       assertTrue(topicConfigs.nonEmpty)
       val segmentBytesConfig = topicConfigs.find(_.name == TopicConfig.SEGMENT_BYTES_CONFIG).get
-      assertEquals(100000, segmentBytesConfig.value.toLong)
+      assertEquals(3000000, segmentBytesConfig.value.toLong)
       assertEquals(ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, segmentBytesConfig.source)
       val compressionConfig = topicConfigs.find(_.name == TopicConfig.COMPRESSION_TYPE_CONFIG).get
       assertEquals(ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, compressionConfig.value)
@@ -593,7 +592,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     }
     validateMetadataAndConfigs(validateResult)
 
-    val createResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions())
+    val createResult = client.createTopics(newTopics, new CreateTopicsOptions())
     createResult.all.get()
     waitForTopics(client, topics, List())
     validateMetadataAndConfigs(createResult)
@@ -680,7 +679,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
     TestUtils.waitUntilTrue(() => {
       try {
-        val topicResponse = client.describeConfigs(List(topicResource).asJava).all.get.get(topicResource)
+        val topicResponse = client.describeConfigs(java.util.List.of(topicResource)).all.get.get(topicResource)
         configEntries = topicResponse.entries.asScala
         true
       } catch {
