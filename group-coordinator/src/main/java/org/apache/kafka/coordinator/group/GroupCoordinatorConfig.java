@@ -572,11 +572,9 @@ public class GroupCoordinatorConfig {
 
         try {
             for (String kclass : config.getList(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG)) {
-                ShareGroupPartitionAssignor assignor;
+                ShareGroupPartitionAssignor assignor = SHARE_GROUP_BUILTIN_ASSIGNOR;
 
-                if (Objects.equals(kclass, SHARE_GROUP_ASSIGNORS_DEFAULT)) {
-                    assignor = SHARE_GROUP_BUILTIN_ASSIGNOR;
-                } else {
+                if (!Objects.equals(kclass, SHARE_GROUP_ASSIGNORS_DEFAULT)) {
                     try {
                         assignor = Utils.newInstance(kclass, ShareGroupPartitionAssignor.class);
                     } catch (ClassNotFoundException e) {
