@@ -84,7 +84,13 @@ public class MetadataRequest extends AbstractRequest {
             super(ApiKeys.METADATA, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
             boolean requestingTopicNames = topicNames != null && !topicNames.isEmpty();
             boolean requestingAllTopics = topicNames == null && (topicIds == null || topicIds.isEmpty());
-            if (requestingTopicNames || requestingAllTopics) {
+            boolean requestingTopicIds = topicIds != null && !topicIds.isEmpty();
+            if (requestingTopicNames && requestingTopicIds) {
+                // Metadata requests in the broker do not support names and IDs at the same time,
+                // so if we need them both we have to request all topics.
+                // This will be the case if the consumer needs metadata for assigned topic IDs and transient topic names.
+                this.data = ALL_TOPICS_REQUEST_DATA;
+            } else if (requestingTopicNames || requestingAllTopics) {
                 this.data = requestTopicNamesOrAllTopics(topicNames, allowAutoTopicCreation);
             } else {
                 this.data = requestTopicIds(topicIds);

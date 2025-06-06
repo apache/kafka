@@ -322,4 +322,13 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     brokerToShutdown.startup()
     checkMetadata(brokers, brokers.size)
   }
+
+  @Test
+  def testRequestsForTopicNamesAndIdsRequestsAllTopics(): Unit = {
+    val transientTopics = List("topic1").asJava
+    val topicIdsFromRegexSubscription = Set(Uuid.randomUuid()).asJava
+
+    val builder = new MetadataRequest.Builder(transientTopics, topicIdsFromRegexSubscription, true)
+    assertTrue(builder.isAllTopics, "Requesting metadata for topic names and IDs should generate a request for all topics")
+  }
 }

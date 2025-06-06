@@ -504,12 +504,12 @@ public class SubscriptionState {
      * Check if the topic ID has been received in an assignment
      * from the coordinator after subscribing to a broker-side regex.
      */
-    public synchronized boolean isAssignedFromRe2j(Uuid topic) {
-        if (topic == null || !hasRe2JPatternSubscription()) {
+    public synchronized boolean isAssignedFromRe2j(Uuid topicId) {
+        if (topicId == null || !hasRe2JPatternSubscription()) {
             return false;
         }
 
-        return this.assignedTopicIds.contains(topic);
+        return this.assignedTopicIds.contains(topicId);
     }
 
     public synchronized void position(TopicPartition tp, FetchPosition position) {
