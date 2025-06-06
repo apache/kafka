@@ -1335,7 +1335,7 @@ public class ConfigDef {
 
             @SuppressWarnings("unchecked")
             protected T self() {
-               return (T) this;
+                return (T) this;
             }
 
             public final T type(final ConfigDef.Type type) {
