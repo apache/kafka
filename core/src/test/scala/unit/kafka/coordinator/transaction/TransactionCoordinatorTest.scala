@@ -1309,7 +1309,7 @@ class TransactionCoordinatorTest {
     // Verify that the epoch did not overflow (should be Short.MaxValue = 32767, not negative)
     assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
     assertEquals(TransactionState.PREPARE_ABORT, txnMetadata.state)
-    assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
+    assertEquals(InitProducerIdResult(-1, -1, Errors.PRODUCER_FENCED), result)
     
     // Verify that the captured transition metadata has the correct epoch
     assertEquals(Short.MaxValue, capturedTxnTransitMetadata.getValue.producerEpoch)

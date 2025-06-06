@@ -819,25 +819,19 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 }
 
               if (nextState == TransactionState.PREPARE_ABORT && isEpochFence) {
-                // We should clear the pending state to make way for the transition to PrepareAbort and also bump
-                // the epoch in the transaction metadata we are about to append.
+                // We should clear the pending state to make way for the transition to PrepareAbort
                 txnMetadata.pendingState = None
-                txnMetadata.producerEpoch = producerEpoch
-                txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
+                if (!clientTransactionVersion.supportsEpochBump()) {
+                  // For TV1, manually bump // the epoch in the transaction metadata we are about to append.
+                  txnMetadata.producerEpoch = producerEpoch
+                  txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
+                }
+                // For TV2+, don't manually set the epoch - let prepareAbortOrCommit handle it naturally.
               }
 
               nextProducerIdOrErrors.flatMap {
                 nextProducerId =>
-                  // For epoch fence case, we don't want to bump the epoch again in prepareAbortOrCommit
-                  // since it was already bumped during the fencing phase to avoid double increment
-                  val transactionVersionForCall = if (isEpochFence) {
-                    // Use TV_0 to prevent epoch bump since it was already bumped during fencing
-                    TransactionVersion.TV_0
-                  } else {
-                    clientTransactionVersion
-                  }
-                  
-                  Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, transactionVersionForCall, nextProducerId.asInstanceOf[Long], time.milliseconds(), noPartitionAdded))
+                  Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, clientTransactionVersion, nextProducerId.asInstanceOf[Long], time.milliseconds(), noPartitionAdded))
               }
             }
 
