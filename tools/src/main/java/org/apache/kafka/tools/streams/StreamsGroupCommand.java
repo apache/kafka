@@ -401,14 +401,14 @@ public class StreamsGroupCommand {
                     topicWithoutPartitions.add(topic);
             }
 
-            List<TopicPartition> knownPartitions = topicWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).toList();
+            List<TopicPartition> specifiedPartitions = topicWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).toList();
 
             // Get the partitions of topics that the user did not explicitly specify the partitions
             DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(
                 topicWithoutPartitions,
                 withTimeoutMs(new DescribeTopicsOptions()));
 
-            Iterator<TopicPartition> unknownPartitions = describeTopicsResult.topicNameValues().entrySet().stream().flatMap(e -> {
+            Iterator<TopicPartition> unspecifiedPartitions = describeTopicsResult.topicNameValues().entrySet().stream().flatMap(e -> {
                 String topic = e.getKey();
                 try {
                     return e.getValue().get().partitions().stream().map(partition ->
@@ -419,9 +419,9 @@ public class StreamsGroupCommand {
                 }
             }).iterator();
 
-            Set<TopicPartition> partitions = new HashSet<>(knownPartitions);
+            Set<TopicPartition> partitions = new HashSet<>(specifiedPartitions);
 
-            unknownPartitions.forEachRemaining(partitions::add);
+            unspecifiedPartitions.forEachRemaining(partitions::add);
 
             return deleteOffsets(groupId, partitions, partitionLevelResult);
         }
@@ -464,7 +464,8 @@ public class StreamsGroupCommand {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
                 res = deleteOffsets(groupId, topics);
             } else {
-                CommandLineUtils.printUsageAndExit(opts.parser, "Option --delete-offsets requires either --all-topics or --topic to be specified.");
+                CommandLineUtils.printUsageAndExit(opts.parser, "Option " + opts.deleteOffsetsOpt +
+                    " requires either" + opts.allInputTopicsOpt + " or " + opts.inputTopicOpt + " to be specified.");
                 return null;
             }
 
@@ -676,7 +677,7 @@ public class StreamsGroupCommand {
                 try {
                     return Integer.parseInt(partition);
                 } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("Invalid partition '" + partition + "' specified in topic arg '" + topicArg + "''");
+                    throw new IllegalArgumentException("Invalid partition '" + partition + "' specified in topic arg '" + topicArg + "'");
                 }
             };
 

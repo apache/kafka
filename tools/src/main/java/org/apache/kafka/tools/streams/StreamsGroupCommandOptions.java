@@ -39,8 +39,9 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String GROUP_DOC = "The streams group we wish to act on.";
     private static final String INPUT_TOPIC_DOC = "The topic whose streams group information should be deleted or topic whose should be included in the reset offset process. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
-        "Reset-offsets also supports multiple topic inputs.";
-    private static final String ALL_INPUT_TOPICS_DOC = "Consider all topics assigned to a group in the `reset-offsets` and `delete-offsets` process.";
+        "Reset-offsets also supports multiple topic inputs. All types of topics are supported.";
+    private static final String ALL_INPUT_TOPICS_DOC = "Consider all input topics assigned to a group in the `reset-offsets` and `delete-offsets` process." +
+        " Only input topics are supported.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
     private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
