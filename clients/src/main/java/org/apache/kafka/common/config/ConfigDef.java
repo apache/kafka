@@ -1491,7 +1491,7 @@ public class ConfigDef {
             public final T dependents(final String... dependents) {
                 return dependents(Arrays.asList(dependents));
             }
-            
+
             /**
              * Adds a dependent to the dependents for the final ConfigDef.ConfigKey.
              * Once added dependents can not be removed within the builder.
@@ -1614,7 +1614,7 @@ public class ConfigDef {
     }
 
     public String toHtmlTable() {
-        return toHtmlTable(Map.of());
+        return toHtmlTable(Collections.emptyMap());
     }
 
     private void addHeader(StringBuilder builder, String headerName) {
@@ -1869,7 +1869,7 @@ public class ConfigDef {
     }
 
     public String toHtml() {
-        return toHtml(Map.of());
+        return toHtml(Collections.emptyMap());
     }
 
     /**
@@ -1878,7 +1878,7 @@ public class ConfigDef {
      * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
      */
     public String toHtml(int headerDepth, Function<String, String> idGenerator) {
-        return toHtml(headerDepth, idGenerator, Map.of());
+        return toHtml(headerDepth, idGenerator, Collections.emptyMap());
     }
 
     /**
