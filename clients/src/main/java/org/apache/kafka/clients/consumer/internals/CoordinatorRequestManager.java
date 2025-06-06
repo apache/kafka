@@ -99,7 +99,7 @@ public class CoordinatorRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (closing || this.coordinator != null)
+        if (this.coordinator != null)
             return EMPTY;
 
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
