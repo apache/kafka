@@ -19,6 +19,8 @@ package org.apache.kafka.server;
 import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.utils.Time;
 
+import java.util.Objects;
+
 /**
  * The AbstractControllerMutationQuota is the base class of StrictControllerMutationQuota and
  * PermissiveControllerMutationQuota.
@@ -32,7 +34,7 @@ public abstract class AbstractControllerMutationQuota implements ControllerMutat
      * @param time Time object to use
      */
     protected AbstractControllerMutationQuota(Time time) {
-        this.time = time;
+        this.time = Objects.requireNonNull(time, "time cannot be null");
     }
 
     protected void updateThrottleTime(QuotaViolationException e, long timeMs) {

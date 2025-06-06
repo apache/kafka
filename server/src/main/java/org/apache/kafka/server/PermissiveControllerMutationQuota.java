@@ -38,7 +38,7 @@ public class PermissiveControllerMutationQuota extends AbstractControllerMutatio
      * @throws IllegalArgumentException if time or quotaSensor is null
      */
     public PermissiveControllerMutationQuota(Time time, Sensor quotaSensor) {
-        super(Objects.requireNonNull(time, "time cannot be null"));
+        super(time);
         this.quotaSensor = Objects.requireNonNull(quotaSensor, "quotaSensor cannot be null");
     }
 

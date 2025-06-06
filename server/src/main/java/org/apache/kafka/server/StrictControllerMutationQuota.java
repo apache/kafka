@@ -41,7 +41,7 @@ public class StrictControllerMutationQuota extends AbstractControllerMutationQuo
      * @throws IllegalArgumentException if time or quotaSensor is null
      */
     public StrictControllerMutationQuota(Time time, Sensor quotaSensor) {
-        super(Objects.requireNonNull(time, "time cannot be null"));
+        super(time);
         this.quotaSensor = Objects.requireNonNull(quotaSensor, "quotaSensor cannot be null");
     }
 
