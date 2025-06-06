@@ -1845,7 +1845,7 @@ public class KafkaStreamsTest {
     public void shouldThrowIfPatternSubscriptionUsedWithStreamsProtocol() {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2018");
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
         // Simulate pattern subscription
         final Topology topology = new Topology();
@@ -1862,7 +1862,7 @@ public class KafkaStreamsTest {
     public void shouldLogWarningIfNonDefaultClientSupplierUsedWithStreamsProtocol() {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2018");
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
         final Topology topology = new Topology();
         topology.addSource("source", "topic");
