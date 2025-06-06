@@ -1329,6 +1329,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            // Since the specific group types are not known, group deletion operations are chained.
+            // The sequence of these deletions is important: the initial share group deletion should
+            // not error if the group ID isn't found, whereas the subsequent consumer group deletion
+            // (the final operation) must return an error if its corresponding group ID is not found.
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList).thenCompose(groupErrMap -> {
                 DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults = new DeleteGroupsResponseData.DeletableGroupResultCollection();
                 List<String> retainedGroupIds = updateResponseAndGetNonErrorGroupList(groupErrMap, groupList, deletableGroupResults);
@@ -1390,7 +1394,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         Set<String> groupSet = new HashSet<>(groupList);
         // Remove all share group ids which have errored out
         // when deleting with persister.
-        groupSet.removeAll(errGroupIds);
+        errGroupIds.forEach(groupSet::remove);
 
         // Let us invoke the standard procedure of any non-share
         // groups or successfully deleted share groups remaining.

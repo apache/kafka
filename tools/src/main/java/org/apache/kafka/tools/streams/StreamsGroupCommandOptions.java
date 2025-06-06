@@ -23,10 +23,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import joptsimple.OptionSpec;
+
+import static org.apache.kafka.tools.ToolsUtils.minus;
 
 public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final Logger LOGGER = LoggerFactory.getLogger(StreamsGroupCommandOptions.class);
@@ -35,6 +39,9 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String GROUP_DOC = "The streams group we wish to act on.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
+    private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
+    private static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
+        "over the entire streams group. For instance --group g1 --group g2";
     public static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
         "to specify the maximum amount of time in milliseconds to wait before the group stabilizes.";
     public static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
@@ -52,12 +59,17 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public final OptionSpec<String> groupOpt;
     public final OptionSpec<Void> listOpt;
     public final OptionSpec<Void> describeOpt;
+    final OptionSpec<Void> allGroupsOpt;
+    final OptionSpec<Void> deleteOpt;
     public final OptionSpec<Long> timeoutMsOpt;
     public final OptionSpec<String> commandConfigOpt;
     public final OptionSpec<String> stateOpt;
     public final OptionSpec<Void> membersOpt;
     public final OptionSpec<Void> offsetsOpt;
     public final OptionSpec<Void> verboseOpt;
+
+    final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
+    final Set<OptionSpec<?>> allStreamsGroupLevelOpts;
 
     public static StreamsGroupCommandOptions fromArgs(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
@@ -78,6 +90,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .ofType(String.class);
         listOpt = parser.accepts("list", LIST_DOC);
         describeOpt = parser.accepts("describe", DESCRIBE_DOC);
+        allGroupsOpt = parser.accepts("all-groups", ALL_GROUPS_DOC);
+        deleteOpt = parser.accepts("delete", DELETE_DOC);
         timeoutMsOpt = parser.accepts("timeout", TIMEOUT_MS_DOC)
             .availableIf(describeOpt)
             .withRequiredArg()
@@ -99,6 +113,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         verboseOpt = parser.accepts("verbose", VERBOSE_DOC)
             .availableIf(describeOpt);
 
+        allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
+        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
         options = parser.parse(args);
     }
 
@@ -121,6 +137,13 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
                 LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
+        if (options.has(deleteOpt)) {
+            if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+        }
+
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
+        CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allStreamsGroupLevelOpts, describeOpt, deleteOpt));
     }
 }

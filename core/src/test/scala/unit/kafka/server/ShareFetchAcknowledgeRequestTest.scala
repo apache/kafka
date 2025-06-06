@@ -17,12 +17,13 @@
 package kafka.server
 
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.DescribeShareGroupsOptions
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords
-import org.apache.kafka.common.message.{ShareAcknowledgeRequestData, ShareAcknowledgeResponseData, ShareFetchRequestData, ShareFetchResponseData}
+import org.apache.kafka.common.message.{FindCoordinatorRequestData, ShareAcknowledgeRequestData, ShareAcknowledgeResponseData, ShareFetchRequestData, ShareFetchResponseData, ShareGroupHeartbeatRequestData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.requests.{ShareAcknowledgeRequest, ShareAcknowledgeResponse, ShareFetchRequest, ShareFetchResponse, ShareRequestMetadata}
+import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse, ShareAcknowledgeRequest, ShareAcknowledgeResponse, ShareFetchRequest, ShareFetchResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, ShareRequestMetadata}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -109,7 +110,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
   )
   def testShareFetchRequestToNonLeaderReplica(): Unit = {
     val groupId: String = "group"
-    val metadata: ShareRequestMetadata = new ShareRequestMetadata(Uuid.randomUuid(), ShareRequestMetadata.INITIAL_EPOCH)
+    val memberId: Uuid = Uuid.randomUuid()
+    val metadata: ShareRequestMetadata = new ShareRequestMetadata(memberId, ShareRequestMetadata.INITIAL_EPOCH)
 
     val topic = "topic"
     val partition = 0
@@ -128,6 +130,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connect(nonReplicaId)
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 1))
 
     // Send the share fetch request to the non-replica and verify the error code
     val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
@@ -171,6 +176,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -237,6 +245,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition1, topicIdPartition2, topicIdPartition3)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partitions
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -349,6 +360,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val socket2: Socket = connect(leader2)
     val socket3: Socket = connect(leader3)
 
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
+
     // Send the first share fetch request to initialize the share partitions
     // Create different share fetch requests for different partitions as they may have leaders on separate brokers
     var shareFetchRequest1 = createShareFetchRequest(groupId, metadata, send1, Seq.empty, acknowledgementsMap)
@@ -455,6 +469,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize share partitions
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -572,6 +589,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket, 15000)
@@ -693,6 +713,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val socket: Socket = connectAny()
 
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
+
     // Send the first share fetch request to initialize the share partiion
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
 
@@ -804,6 +827,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -921,6 +947,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val socket: Socket = connectAny()
 
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
+
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
 
@@ -1035,6 +1064,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -1157,6 +1189,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the shar partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -1323,6 +1358,11 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val socket2: Socket = connectAny()
     val socket3: Socket = connectAny()
 
+    createOffsetsTopic()
+    shareHeartbeat(memberId1, groupId, Map[String, Int](topic -> 3))
+    shareHeartbeat(memberId2, groupId, Map[String, Int](topic -> 3))
+    shareHeartbeat(memberId3, groupId, Map[String, Int](topic -> 3))
+
     // Sending a dummy share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId1, groupId, send, socket1)
 
@@ -1420,6 +1460,11 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val socket2: Socket = connectAny()
     val socket3: Socket = connectAny()
 
+    createOffsetsTopic()
+    shareHeartbeat(memberId1, groupId1, Map[String, Int](topic -> 3))
+    shareHeartbeat(memberId2, groupId2, Map[String, Int](topic -> 3))
+    shareHeartbeat(memberId3, groupId3, Map[String, Int](topic -> 3))
+
     // Sending 3 dummy share Fetch Requests with to inititlaize the share partitions for each share group\
     sendFirstShareFetchRequest(memberId1, groupId1, send, socket1)
     sendFirstShareFetchRequest(memberId2, groupId2, send, socket2)
@@ -1512,6 +1557,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -1622,6 +1670,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -1844,6 +1895,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val socket: Socket = connectAny()
 
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
+
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
 
@@ -1917,6 +1971,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -1997,6 +2054,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -2161,6 +2221,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val socket: Socket = connectAny()
 
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
+
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
 
@@ -2241,6 +2304,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition1, topicIdPartition2)
 
     val socket: Socket = connectAny()
+
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
 
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
@@ -2339,6 +2405,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val socket: Socket = connectAny()
 
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
+
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
 
@@ -2403,6 +2472,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val socket: Socket = connectAny()
 
+    createOffsetsTopic()
+    shareHeartbeat(memberId, groupId, Map[String, Int](topic -> 3))
+
     // Send the first share fetch request to initialize the share partition
     sendFirstShareFetchRequest(memberId, groupId, send, socket)
 
@@ -2453,6 +2525,40 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
       partitions.size() == topicIdPartitions.size
     }, "Share fetch request failed", 5000)
+  }
+
+  private def shareHeartbeat(memberId: Uuid, groupId: String, topics: Map[String, Int]): Unit = {
+    val coordResp = connectAndReceive[FindCoordinatorResponse](new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
+      .setKey(groupId)
+      .setKeyType(0.toByte)
+    ).build(0)
+    )
+
+    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+      new ShareGroupHeartbeatRequestData()
+        .setMemberId(memberId.toString)
+        .setGroupId(groupId)
+        .setMemberEpoch(0)
+        .setSubscribedTopicNames(topics.keys.toList.asJava)
+    ).build()
+
+    TestUtils.waitUntilTrue(() => {
+      val resp = connectAndReceive[ShareGroupHeartbeatResponse](shareGroupHeartbeatRequest, coordResp.node().id())
+      resp.data().errorCode() == Errors.NONE.code() && assignment(memberId.toString, groupId)
+    }, "Heartbeat failed")
+  }
+
+  private def assignment(memberId: String, groupId: String): Boolean = {
+    val admin = cluster.admin()
+
+    val isAssigned = admin.describeShareGroups(List(groupId).asJava, new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
+      .describedGroups()
+      .get(groupId)
+      .get()
+      .members()
+      .asScala.count(desc => desc.consumerId() == memberId && !desc.assignment().topicPartitions().isEmpty) > 0
+    admin.close()
+    isAssigned
   }
 
   private def expectedAcquiredRecords(firstOffsets: util.List[Long], lastOffsets: util.List[Long], deliveryCounts: util.List[Int]): util.List[AcquiredRecords] = {
