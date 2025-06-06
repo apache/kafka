@@ -32,7 +32,6 @@ import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.admin.StreamsGroupMemberAssignment;
 import org.apache.kafka.clients.admin.StreamsGroupMemberDescription;
 import org.apache.kafka.clients.admin.StreamsGroupSubtopologyDescription;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
@@ -43,19 +42,14 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.consumer.group.CsvUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 
 import java.io.IOException;
-import java.text.ParseException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -69,24 +63,17 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
-import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import joptsimple.OptionException;
 
-import static org.apache.kafka.tools.streams.StreamsGroupCommandOptions.LOGGER;
-
 public class StreamsGroupCommand {
-
-    private static final String TOPIC_PARTITION_SEPARATOR = ":";
 
     public static void main(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
         try {
             opts.checkArgs();
-
             // should have exactly one action
             long numberOfActions = Stream.of(
                 opts.listOpt,
@@ -164,6 +151,7 @@ public class StreamsGroupCommand {
     static class StreamsGroupService implements AutoCloseable {
         final StreamsGroupCommandOptions opts;
         private final Admin adminClient;
+        private OffsetsUtils offsetsUtils;
         public StreamsGroupService(StreamsGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
             try {
@@ -171,6 +159,7 @@ public class StreamsGroupCommand {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+            this.offsetsUtils = new OffsetsUtils(adminClient, opts, opts.parser);
         }
 
         public StreamsGroupService(StreamsGroupCommandOptions opts, Admin adminClient) {
@@ -443,7 +432,6 @@ public class StreamsGroupCommand {
             }
         }
 
-
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
             // Dry-run is the default behavior if --execute is not specified
             boolean dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt);
@@ -517,7 +505,6 @@ public class StreamsGroupCommand {
             if (!groupIds.isEmpty()) {
                 // retrieve internal topics before deleting groups
                 internalTopics = retrieveInternalTopics(groupIds);
-
                 // delete streams groups
                 Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteStreamsGroups(
                     groupIds,
@@ -704,7 +691,7 @@ public class StreamsGroupCommand {
             } else if (opts.options.has(opts.inputTopicOpt)) {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
 
-                List<TopicPartition> partitions = parseTopicPartitionsToReset(topics);
+                List<TopicPartition> partitions = offsetsUtils.parseTopicPartitionsToReset(topics);
                 // if the user specified topics that do not belong to this group, we filter them out
                 partitions = filterExistingGroupTopics(groupId, partitions);
                 return partitions;
@@ -716,334 +703,30 @@ public class StreamsGroupCommand {
             }
         }
 
-        private List<TopicPartition> parseTopicPartitionsToReset(List<String> topicArgs) throws ExecutionException, InterruptedException {
-            List<String> topicsWithPartitions = new ArrayList<>();
-            List<String> topics = new ArrayList<>();
-
-            topicArgs.forEach(topicArg -> {
-                if (topicArg.contains(TOPIC_PARTITION_SEPARATOR))
-                    topicsWithPartitions.add(topicArg);
-                else
-                    topics.add(topicArg);
-            });
-
-            List<TopicPartition> specifiedPartitions =
-                topicsWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).collect(Collectors.toList());
-
-            List<TopicPartition> unspecifiedPartitions = new ArrayList<>();
-
-            if (!topics.isEmpty()) {
-                Map<String, TopicDescription> descriptionMap = adminClient.describeTopics(
-                    topics
-                ).allTopicNames().get();
-
-                descriptionMap.forEach((topic, description) ->
-                    description.partitions().forEach(tpInfo -> unspecifiedPartitions.add(new TopicPartition(topic, tpInfo.partition())))
-                );
-            }
-
-            specifiedPartitions.addAll(unspecifiedPartitions);
-
-            return specifiedPartitions;
-        }
-
-        private Stream<TopicPartition> parseTopicsWithPartitions(String topicArg) {
-            ToIntFunction<String> partitionNum = partition -> {
-                try {
-                    return Integer.parseInt(partition);
-                } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("Invalid partition '" + partition + "' specified in topic arg '" + topicArg + "''");
-                }
-            };
-
-            String[] arr = topicArg.split(":");
-
-            if (arr.length != 2)
-                throw new IllegalArgumentException("Invalid topic arg '" + topicArg + "', expected topic name and partitions");
-
-            String topic = arr[0];
-            String partitions = arr[1];
-
-            return Arrays.stream(partitions.split(",")).
-                map(partition -> new TopicPartition(topic, partitionNum.applyAsInt(partition)));
-        }
-
-        @SuppressWarnings("CyclomaticComplexity")
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
             if (opts.options.has(opts.resetToOffsetOpt)) {
-                long offset = opts.options.valueOf(opts.resetToOffsetOpt);
-                return checkOffsetsRange(partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), tp -> offset)))
-                    .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
+                return offsetsUtils.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
-                Map<TopicPartition, LogOffsetResult> logStartOffsets = getLogStartOffsets(partitionsToReset);
-                return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                    LogOffsetResult logOffsetResult = logStartOffsets.get(topicPartition);
-
-                    if (!(logOffsetResult instanceof LogOffset)) {
-                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting starting offset of topic partition: " + topicPartition);
-                    }
-
-                    return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
-                }));
+                return offsetsUtils.resetToEarliest(partitionsToReset);
             } else if (opts.options.has(opts.resetToLatestOpt)) {
-                Map<TopicPartition, LogOffsetResult> logEndOffsets = getLogEndOffsets(partitionsToReset);
-                return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                    LogOffsetResult logOffsetResult = logEndOffsets.get(topicPartition);
-
-                    if (!(logOffsetResult instanceof LogOffset)) {
-                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + topicPartition);
-                    }
-
-                    return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
-                }));
+                return offsetsUtils.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetShiftByOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                Map<TopicPartition, Long> requestedOffsets = partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                    long shiftBy = opts.options.valueOf(opts.resetShiftByOpt);
-                    OffsetAndMetadata currentOffset = currentCommittedOffsets.get(topicPartition);
-
-                    if (currentOffset == null) {
-                        throw new IllegalArgumentException("Cannot shift offset for partition " + topicPartition + " since there is no current committed offset");
-                    }
-
-                    return currentOffset.offset() + shiftBy;
-                }));
-                return checkOffsetsRange(requestedOffsets).entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
+                return offsetsUtils.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
-                try {
-                    long timestamp = Utils.getDateTime(opts.options.valueOf(opts.resetToDatetimeOpt));
-                    Map<TopicPartition, LogOffsetResult> logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp);
-                    return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                        LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
-
-                        if (!(logTimestampOffset instanceof LogOffset)) {
-                            CommandLineUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
-                        }
-
-                        return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
-                    }));
-                } catch (ParseException e) {
-                    throw new RuntimeException(e);
-                }
+                return offsetsUtils.resetToDateTime(partitionsToReset);
             } else if (opts.options.has(opts.resetByDurationOpt)) {
-                String duration = opts.options.valueOf(opts.resetByDurationOpt);
-                Duration durationParsed = Duration.parse(duration);
-                Instant now = Instant.now();
-                durationParsed.negated().addTo(now);
-                long timestamp = now.minus(durationParsed).toEpochMilli();
-                Map<TopicPartition, LogOffsetResult> logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp);
-                return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                    LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
-
-                    if (!(logTimestampOffset instanceof LogOffset)) {
-                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
-                    }
-
-                    return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
-                }));
-            } else if (resetPlanFromFile().isPresent()) {
-                return resetPlanFromFile().map(resetPlan -> {
-                    Map<TopicPartition, OffsetAndMetadata> resetPlanForGroup = resetPlan.get(groupId);
-
-                    if (resetPlanForGroup == null) {
-                        printError("No reset plan for group " + groupId + " found", Optional.empty());
-                        return Collections.<TopicPartition, OffsetAndMetadata>emptyMap();
-                    }
-
-                    Map<TopicPartition, Long> requestedOffsets = resetPlanForGroup.keySet().stream().collect(Collectors.toMap(
-                        Function.identity(),
-                        topicPartition -> resetPlanForGroup.get(topicPartition).offset()));
-
-                    return checkOffsetsRange(requestedOffsets).entrySet().stream()
-                        .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
-                }).orElseGet(Collections::emptyMap);
+                return offsetsUtils.resetByDuration(partitionsToReset);
+            } else if (offsetsUtils.resetPlanFromFile().isPresent()) {
+                return offsetsUtils.resetFromFile(groupId);
             } else if (opts.options.has(opts.resetToCurrentOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                Collection<TopicPartition> partitionsToResetWithCommittedOffset = new ArrayList<>();
-                Collection<TopicPartition> partitionsToResetWithoutCommittedOffset = new ArrayList<>();
-
-                for (TopicPartition topicPartition : partitionsToReset) {
-                    if (currentCommittedOffsets.containsKey(topicPartition))
-                        partitionsToResetWithCommittedOffset.add(topicPartition);
-                    else
-                        partitionsToResetWithoutCommittedOffset.add(topicPartition);
-                }
-
-                Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithCommittedOffset = partitionsToResetWithCommittedOffset.stream()
-                    .collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                        OffsetAndMetadata committedOffset = currentCommittedOffsets.get(topicPartition);
-
-                        if (committedOffset == null) {
-                            throw new IllegalStateException("Expected a valid current offset for topic partition: " + topicPartition);
-                        }
-
-                        return new OffsetAndMetadata(committedOffset.offset());
-                    }));
-
-                Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(partitionsToResetWithoutCommittedOffset)
-                    .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                        if (!(e.getValue() instanceof LogOffset)) {
-                            CommandLineUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + e.getKey());
-                        }
-
-                        return new OffsetAndMetadata(((LogOffset) e.getValue()).value);
-                    }));
-
-                preparedOffsetsForPartitionsWithCommittedOffset.putAll(preparedOffsetsForPartitionsWithoutCommittedOffset);
-
-                return preparedOffsetsForPartitionsWithCommittedOffset;
+                return offsetsUtils.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
-            CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+            CommandLineUtils
+                .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
-        }
-
-        Optional<Map<String, Map<TopicPartition, OffsetAndMetadata>>> resetPlanFromFile() {
-            if (opts.options.has(opts.resetFromFileOpt)) {
-                try {
-                    String resetPlanPath = opts.options.valueOf(opts.resetFromFileOpt);
-                    String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
-                    Map<String, Map<TopicPartition, OffsetAndMetadata>> resetPlan = parseResetPlan(resetPlanCsv);
-                    return Optional.of(resetPlan);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            } else return Optional.empty();
-        }
-
-        private Map<String, Map<TopicPartition, OffsetAndMetadata>> parseResetPlan(String resetPlanCsv) {
-            ObjectReader csvReader = CsvUtils.readerFor(CsvUtils.CsvRecordNoGroup.class);
-            String[] lines = resetPlanCsv.split("\n");
-            boolean isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1;
-            boolean isOldCsvFormat = false;
-            try {
-                if (lines.length > 0) {
-                    csvReader.readValue(lines[0], CsvUtils.CsvRecordNoGroup.class);
-                    isOldCsvFormat = true;
-                }
-            } catch (IOException e) {
-                throw new RuntimeException("Invalid CSV format in reset plan file: " + e.getMessage());
-            }
-
-            Map<String, Map<TopicPartition, OffsetAndMetadata>> dataMap = new HashMap<>();
-
-            try {
-                // Single group CSV format: "topic,partition,offset"
-                if (isSingleGroupQuery && isOldCsvFormat) {
-                    String group = opts.options.valueOf(opts.groupOpt);
-                    for (String line : lines) {
-                        CsvUtils.CsvRecordNoGroup rec = csvReader.readValue(line, CsvUtils.CsvRecordNoGroup.class);
-                        dataMap.computeIfAbsent(group, k -> new HashMap<>())
-                            .put(new TopicPartition(rec.getTopic(), rec.getPartition()), new OffsetAndMetadata(rec.getOffset()));
-                    }
-                } else {
-                    csvReader = CsvUtils.readerFor(CsvUtils.CsvRecordWithGroup.class);
-                    for (String line : lines) {
-                        CsvUtils.CsvRecordWithGroup rec = csvReader.readValue(line, CsvUtils.CsvRecordWithGroup.class);
-                        dataMap.computeIfAbsent(rec.getGroup(), k -> new HashMap<>())
-                            .put(new TopicPartition(rec.getTopic(), rec.getPartition()), new OffsetAndMetadata(rec.getOffset()));
-                    }
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-
-            return dataMap;
-        }
-
-        private Map<TopicPartition, Long> checkOffsetsRange(Map<TopicPartition, Long> requestedOffsets) {
-            Map<TopicPartition, LogOffsetResult> logStartOffsets = getLogStartOffsets(requestedOffsets.keySet());
-            Map<TopicPartition, LogOffsetResult> logEndOffsets = getLogEndOffsets(requestedOffsets.keySet());
-
-            Map<TopicPartition, Long> res = new HashMap<>();
-
-            requestedOffsets.forEach((topicPartition, offset) -> {
-                LogOffsetResult logEndOffset = logEndOffsets.get(topicPartition);
-
-                if (logEndOffset != null) {
-                    if (logEndOffset instanceof LogOffset && offset > ((LogOffset) logEndOffset).value) {
-                        long endOffset = ((LogOffset) logEndOffset).value;
-                        LOGGER.warn("New offset (" + offset + ") is higher than latest offset for topic partition " + topicPartition + ". Value will be set to " + endOffset);
-                        res.put(topicPartition, endOffset);
-                    } else {
-                        LogOffsetResult logStartOffset = logStartOffsets.get(topicPartition);
-
-                        if (logStartOffset instanceof LogOffset && offset < ((LogOffset) logStartOffset).value) {
-                            long startOffset = ((LogOffset) logStartOffset).value;
-                            LOGGER.warn("New offset (" + offset + ") is lower than earliest offset for topic partition " + topicPartition + ". Value will be set to " + startOffset);
-                            res.put(topicPartition, startOffset);
-                        } else
-                            res.put(topicPartition, offset);
-                    }
-                } else {
-                    // the control should not reach here
-                    throw new IllegalStateException("Unexpected non-existing offset value for topic partition " + topicPartition);
-                }
-            });
-
-            return res;
-        }
-
-        private Map<TopicPartition, LogOffsetResult> getLogTimestampOffsets(Collection<TopicPartition> topicPartitions, long timestamp) {
-            try {
-                Map<TopicPartition, OffsetSpec> timestampOffsets = topicPartitions.stream()
-                    .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.forTimestamp(timestamp)));
-
-                Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsets = adminClient.listOffsets(
-                    timestampOffsets).all().get();
-
-                Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> successfulOffsetsForTimes = new HashMap<>();
-                Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> unsuccessfulOffsetsForTimes = new HashMap<>();
-
-                offsets.forEach((tp, offsetsResultInfo) -> {
-                    if (offsetsResultInfo.offset() != ListOffsetsResponse.UNKNOWN_OFFSET)
-                        successfulOffsetsForTimes.put(tp, offsetsResultInfo);
-                    else
-                        unsuccessfulOffsetsForTimes.put(tp, offsetsResultInfo);
-                });
-
-                Map<TopicPartition, LogOffsetResult> successfulLogTimestampOffsets = successfulOffsetsForTimes.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> new LogOffset(e.getValue().offset())));
-
-                unsuccessfulOffsetsForTimes.forEach((tp, offsetResultInfo) ->
-                    System.out.println("\nWarn: Partition " + tp.partition() + " from topic " + tp.topic() +
-                        " is empty. Falling back to latest known offset."));
-
-                successfulLogTimestampOffsets.putAll(getLogEndOffsets(unsuccessfulOffsetsForTimes.keySet()));
-
-                return successfulLogTimestampOffsets;
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        private Map<TopicPartition, LogOffsetResult> getLogStartOffsets(Collection<TopicPartition> topicPartitions) {
-            return getLogOffsets(topicPartitions, OffsetSpec.earliest());
-        }
-
-        private Map<TopicPartition, LogOffsetResult> getLogEndOffsets(Collection<TopicPartition> topicPartitions) {
-            return getLogOffsets(topicPartitions, OffsetSpec.latest());
-        }
-
-        private Map<TopicPartition, LogOffsetResult> getLogOffsets(Collection<TopicPartition> topicPartitions, OffsetSpec offsetSpec) {
-            try {
-                Map<TopicPartition, OffsetSpec> startOffsets = topicPartitions.stream()
-                    .collect(Collectors.toMap(Function.identity(), tp -> offsetSpec));
-
-                Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsets = adminClient.listOffsets(
-                    startOffsets
-                ).all().get();
-
-                return topicPartitions.stream().collect(Collectors.toMap(
-                    Function.identity(),
-                    tp -> offsets.containsKey(tp)
-                        ? new LogOffset(offsets.get(tp).offset())
-                        : new Unknown()
-                ));
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
         }
 
         private boolean isInferredInternalTopic(final String topicName, final String applicationId) {
@@ -1086,20 +769,6 @@ public class StreamsGroupCommand {
             int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
             return options.timeoutMs(t);
         }
-
-        interface LogOffsetResult { }
-
-        private static class LogOffset implements LogOffsetResult {
-            final long value;
-
-            LogOffset(long value) {
-                this.value = value;
-            }
-        }
-
-        private static class Unknown implements LogOffsetResult { }
-
-        private static class Ignore implements LogOffsetResult { }
 
         /**
          * Prints an error message if the group state indicates that the group is either dead or empty.
