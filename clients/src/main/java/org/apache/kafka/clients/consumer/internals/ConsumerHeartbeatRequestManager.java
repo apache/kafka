@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
@@ -317,11 +316,17 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         }
 
         private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Map<Uuid, SortedSet<Integer>> topicIdPartitions) {
-            return topicIdPartitions.entrySet().stream().map(
-                    entry -> new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                        .setTopicId(entry.getKey())
-                        .setPartitions(new ArrayList<>(entry.getValue())))
-                .collect(Collectors.toList());
+            List<ConsumerGroupHeartbeatRequestData.TopicPartitions> list = new ArrayList<>();
+
+            for (Map.Entry<Uuid, SortedSet<Integer>> entry : topicIdPartitions.entrySet()) {
+                ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions = new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                    .setTopicId(entry.getKey())
+                    .setPartitions(new ArrayList<>(entry.getValue()));
+
+                list.add(topicPartitions);
+            }
+
+            return list;
         }
 
         // Fields of ConsumerHeartbeatRequest sent in the most recent request

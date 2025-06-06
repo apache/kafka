@@ -56,6 +56,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -882,11 +883,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * Complete the request future with a TimeoutException if the request has been sent out
          * at least once and the timeout has been reached.
          */
-        void maybeExpire() {
+        boolean maybeExpire() {
             if (numAttempts > 0 && isExpired()) {
-                removeRequest();
                 future().completeExceptionally(new TimeoutException(requestDescription() +
                     " could not complete before timeout expired."));
+                return true;
+            } else {
+                return false;
             }
         }
 
@@ -1212,10 +1215,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * upon completion.
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
-            Optional<OffsetFetchRequestState> dupe =
-                    unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
-            Optional<OffsetFetchRequestState> inflight =
-                    inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
+            Optional<OffsetFetchRequestState> dupe = findFirstMatch(unsentOffsetFetches, request);
+            Optional<OffsetFetchRequestState> inflight = findFirstMatch(inflightOffsetFetches, request);
 
             if (dupe.isPresent() || inflight.isPresent()) {
                 log.debug("Duplicated unsent offset fetch request found for partitions: {}", request.requestedPartitions);
@@ -1227,6 +1228,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return request.future;
         }
 
+        private Optional<OffsetFetchRequestState> findFirstMatch(List<OffsetFetchRequestState> list, OffsetFetchRequestState request) {
+            for (OffsetFetchRequestState requestState : list) {
+                if (requestState.sameRequest(request))
+                    return Optional.of(requestState);
+            }
+
+            return Optional.empty();
+        }
+
         /**
          * Clear {@code unsentOffsetCommits} and moves all the sendable request in {@code
          * unsentOffsetFetches} to the {@code inflightOffsetFetches} to bookkeep all the inflight
@@ -1234,36 +1244,39 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * backoff on failed attempt. See {@link RequestState}.
          */
         List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
-            // not ready to sent request
-            List<OffsetCommitRequestState> unreadyCommitRequests = unsentOffsetCommits.stream()
-                .filter(request -> !request.canSendRequest(currentTimeMs))
-                .collect(Collectors.toList());
-
             failAndRemoveExpiredCommitRequests();
 
             // Add all unsent offset commit requests to the unsentRequests list
-            List<NetworkClientDelegate.UnsentRequest> unsentRequests = unsentOffsetCommits.stream()
-                .filter(request -> request.canSendRequest(currentTimeMs))
-                .peek(request -> request.onSendAttempt(currentTimeMs))
-                .map(OffsetCommitRequestState::toUnsentRequest)
-                .collect(Collectors.toCollection(ArrayList::new));
+            List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
+            Iterator<OffsetCommitRequestState> commitRequestIterator = unsentOffsetCommits.iterator();
 
-            // Partition the unsent offset fetch requests into sendable and non-sendable lists
-            Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
-                    unsentOffsetFetches.stream()
-                            .collect(Collectors.partitioningBy(request -> request.canSendRequest(currentTimeMs)));
+            while (commitRequestIterator.hasNext()) {
+                OffsetCommitRequestState request = commitRequestIterator.next();
 
-            // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
-            for (OffsetFetchRequestState request : partitionedBySendability.get(true)) {
-                request.onSendAttempt(currentTimeMs);
-                unsentRequests.add(request.toUnsentRequest());
-                inflightOffsetFetches.add(request);
+                if (request.canSendRequest(currentTimeMs)) {
+                    request.onSendAttempt(currentTimeMs);
+                    unsentRequests.add(request.toUnsentRequest());
+
+                    // Remove from unsentOffsetCommits now that it's been added to the list to return
+                    commitRequestIterator.remove();
+                }
             }
 
-            // Clear the unsent offset commit and fetch lists and add all non-sendable offset fetch requests to the unsentOffsetFetches list
-            clearAll();
-            unsentOffsetFetches.addAll(partitionedBySendability.get(false));
-            unsentOffsetCommits.addAll(unreadyCommitRequests);
+            Iterator<OffsetFetchRequestState> fetchRequestIterator = unsentOffsetFetches.iterator();
+
+            // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
+            while (fetchRequestIterator.hasNext()) {
+                OffsetFetchRequestState request = fetchRequestIterator.next();
+
+                if (request.canSendRequest(currentTimeMs)) {
+                    request.onSendAttempt(currentTimeMs);
+                    unsentRequests.add(request.toUnsentRequest());
+                    inflightOffsetFetches.add(request);
+
+                    // Remove from unsentOffsetFetches now that it's been added to the list to return.
+                    fetchRequestIterator.remove();
+                }
+            }
 
             return Collections.unmodifiableList(unsentRequests);
         }
@@ -1273,8 +1286,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * futures with a TimeoutException.
          */
         private void failAndRemoveExpiredCommitRequests() {
-            Queue<OffsetCommitRequestState> requestsToPurge = new LinkedList<>(unsentOffsetCommits);
-            requestsToPurge.forEach(RetriableRequestState::maybeExpire);
+            unsentOffsetCommits.removeIf(RetriableRequestState::maybeExpire);
         }
 
         private void clearAll() {
@@ -1292,12 +1304,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         private void maybeFailOnCoordinatorFatalError() {
             coordinatorRequestManager.fatalError().ifPresent(error -> {
-                    log.warn("Failing all unsent commit requests and offset fetches because of coordinator fatal error. ", error);
-                    unsentOffsetCommits.forEach(request -> request.future.completeExceptionally(error));
-                    unsentOffsetFetches.forEach(request -> request.future.completeExceptionally(error));
-                    clearAll();
-                }
-            );
+                log.warn("Failing all unsent commit requests and offset fetches because of coordinator fatal error. ", error);
+                unsentOffsetCommits.forEach(request -> request.future.completeExceptionally(error));
+                unsentOffsetFetches.forEach(request -> request.future.completeExceptionally(error));
+                clearAll();
+            });
         }
     }
 

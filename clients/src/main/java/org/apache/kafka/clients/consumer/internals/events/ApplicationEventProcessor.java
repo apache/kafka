@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.Utils;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -310,7 +311,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             manager.updateTimerAndMaybeCommit(event.currentTimeMs());
         }
 
-        log.info("Assigned to partition(s): {}", event.partitions().stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+        if (log.isInfoEnabled())
+            log.info("Assigned to partition(s): {}", Utils.sortedTopicPartitions(event.partitions()));
+
         try {
             if (subscriptions.assignFromUser(new HashSet<>(event.partitions())))
                 metadata.requestUpdateForNewTopics();

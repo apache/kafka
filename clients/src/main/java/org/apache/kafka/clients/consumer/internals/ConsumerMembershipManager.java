@@ -44,7 +44,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
@@ -414,8 +413,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private void logPausedPartitionsBeingRevoked(Set<TopicPartition> partitionsToRevoke) {
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(partitionsToRevoke);
-        if (!revokePausedPartitions.isEmpty()) {
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", revokePausedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+        if (!revokePausedPartitions.isEmpty() && log.isInfoEnabled()) {
+            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.sortedTopicPartitions(revokePausedPartitions));
         }
     }
 

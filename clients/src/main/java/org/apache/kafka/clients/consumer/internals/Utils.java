@@ -20,11 +20,40 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 public final class Utils {
+
+    public static String sortedTopicPartitions(Collection<TopicPartition> partitions) {
+        SortedSet<TopicPartition> sortedPartitions;
+
+        if (partitions instanceof SortedSet) {
+            sortedPartitions = (SortedSet<TopicPartition>) partitions;
+        } else {
+            sortedPartitions = new TreeSet<>(new TopicPartitionComparator());
+            sortedPartitions.addAll(partitions);
+        }
+
+        return join(sortedPartitions);
+    }
+
+    private static String join(SortedSet<?> elements) {
+        StringBuilder b = new StringBuilder();
+
+        for (Object o : elements) {
+            if (b.length() > 0)
+                b.append(", ");
+
+            b.append(o.toString());
+        }
+
+        return b.toString();
+    }
 
     static final class PartitionComparator implements Comparator<TopicPartition>, Serializable {
         private static final long serialVersionUID = 1L;
