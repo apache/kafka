@@ -1262,9 +1262,9 @@ class TransactionCoordinatorTest {
         time.milliseconds(),
         time.milliseconds(),
         TV_0)),
-          any(),
-          any(),
-          any())
+      any(),
+      any(),
+      any())
   }
 
   @Test
