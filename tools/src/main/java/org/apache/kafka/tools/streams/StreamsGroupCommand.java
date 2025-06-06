@@ -164,7 +164,6 @@ public class StreamsGroupCommand {
     static class StreamsGroupService implements AutoCloseable {
         final StreamsGroupCommandOptions opts;
         private final Admin adminClient;
-
         public StreamsGroupService(StreamsGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
             try {

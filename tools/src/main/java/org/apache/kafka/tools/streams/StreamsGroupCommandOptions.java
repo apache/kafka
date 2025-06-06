@@ -83,7 +83,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public final OptionSpec<Void> listOpt;
     public final OptionSpec<Void> describeOpt;
     public final OptionSpec<Void> deleteOpt;
-    final OptionSpec<Void> allGroupsOpt;
+    public final OptionSpec<Void> allGroupsOpt;
     public final OptionSpec<Long> timeoutMsOpt;
     public final OptionSpec<String> commandConfigOpt;
     public final OptionSpec<String> stateOpt;
