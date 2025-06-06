@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerImpl;
-import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
@@ -49,12 +48,6 @@ public abstract class ApplicationEvent {
     private final Type type;
 
     /**
-     * This identifies a particular event. It is used to disambiguate events via {@link #hashCode()} and
-     * {@link #equals(Object)} and can be used in log messages when debugging.
-     */
-    private final Uuid id;
-
-    /**
      * The time in milliseconds when this event was enqueued.
      * This field can be changed after the event is created, so it should not be used in hashCode or equals.
      */
@@ -62,15 +55,10 @@ public abstract class ApplicationEvent {
 
     protected ApplicationEvent(Type type) {
         this.type = Objects.requireNonNull(type);
-        this.id = Uuid.randomUuid();
     }
 
     public Type type() {
         return type;
-    }
-
-    public Uuid id() {
-        return id;
     }
 
     public void setEnqueuedMs(long enqueuedMs) {
@@ -81,21 +69,8 @@ public abstract class ApplicationEvent {
         return enqueuedMs;
     }
 
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ApplicationEvent that = (ApplicationEvent) o;
-        return type == that.type && id.equals(that.id);
-    }
-
-    @Override
-    public final int hashCode() {
-        return Objects.hash(type, id);
-    }
-
     protected String toStringBase() {
-        return "type=" + type + ", id=" + id + ", enqueuedMs=" + enqueuedMs;
+        return "type=" + type + ", enqueuedMs=" + enqueuedMs;
     }
 
     @Override
