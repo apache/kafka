@@ -4008,12 +4008,13 @@ class UnifiedLogTest {
 
   @ParameterizedTest
   @EnumSource(value = classOf[AppendOrigin], names = Array("CLIENT", "COORDINATOR"))
-  def testTransactionIsOngoingAndVerificationGuard(appendOrigin: AppendOrigin): Unit = {
+  def testTransactionIsOngoingAndVerificationGuardTV2(appendOrigin: AppendOrigin): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
     val producerEpoch = 1.toShort
-    var sequence = if (appendOrigin == AppendOrigin.CLIENT) 3 else 0
+    // For TV2, when there's no existing producer state, sequence must be 0 for both CLIENT and COORDINATOR
+    var sequence = 0
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
@@ -4076,6 +4077,83 @@ class UnifiedLogTest {
 
     // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
     val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
+    assertNotEquals(VerificationGuard.SENTINEL, newVerificationGuard)
+    assertNotEquals(verificationGuard, newVerificationGuard)
+    assertFalse(verificationGuard.verify(newVerificationGuard))
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[AppendOrigin], names = Array("CLIENT", "COORDINATOR"))
+  def testTransactionIsOngoingAndVerificationGuardTV1(appendOrigin: AppendOrigin): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, false)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    // For TV1, can start with non-zero sequences even with non-zero epoch when no existing producer state
+    var sequence = if (appendOrigin == AppendOrigin.CLIENT) 3 else 0
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
+    assertFalse(log.verificationGuard(producerId).verify(VerificationGuard.SENTINEL))
+
+    val idempotentRecords = MemoryRecords.withIdempotentRecords(
+      Compression.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+
+    // Only clients have nonzero sequences
+    if (appendOrigin == AppendOrigin.CLIENT)
+      sequence = sequence + 2
+
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )
+
+    // For TV1, create verification guard with supportsEpochBump=false
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, false)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
+
+    log.appendAsLeader(idempotentRecords, 0, appendOrigin)
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
+
+    // Since we wrote idempotent records, we keep VerificationGuard.
+    assertEquals(verificationGuard, log.verificationGuard(producerId))
+
+    // Now write the transactional records
+    assertTrue(log.verificationGuard(producerId).verify(verificationGuard))
+    log.appendAsLeader(transactionalRecords, 0, appendOrigin, RequestLocal.noCaching(), verificationGuard)
+    assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
+    // VerificationGuard should be cleared now.
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
+
+    // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
+    assertEquals(VerificationGuard.SENTINEL, log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, false))
+
+    val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    )
+
+    log.appendAsLeader(endTransactionMarkerRecord, 0, AppendOrigin.COORDINATOR)
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
+
+    if (appendOrigin == AppendOrigin.CLIENT)
+      sequence = sequence + 1
+
+    // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
+    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, false)
     assertNotEquals(VerificationGuard.SENTINEL, newVerificationGuard)
     assertNotEquals(verificationGuard, newVerificationGuard)
     assertFalse(verificationGuard.verify(newVerificationGuard))
@@ -4165,7 +4243,7 @@ class UnifiedLogTest {
 
     val producerId = 23L
     val producerEpoch = 1.toShort
-    val sequence = 4
+    val sequence = 0
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
@@ -4191,9 +4269,10 @@ class UnifiedLogTest {
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
 
-  @Test
-  def testAllowNonZeroSequenceOnFirstAppendNonZeroEpoch(): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testNonZeroSequenceOnFirstAppendNonZeroEpoch(transactionVerificationEnabled: Boolean): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, transactionVerificationEnabled)
 
     val producerId = 23L
     val producerEpoch = 1.toShort
@@ -4212,9 +4291,19 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
-    // Append should not throw error.
-    log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard)
+    if (transactionVerificationEnabled) {
+      // TV2 behavior: Create verification state that supports epoch bumps
+      val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
+      // Should reject non-zero sequences when there's no existing producer state
+      assertThrows(classOf[OutOfOrderSequenceException], () => 
+        log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard))
+    } else {
+      // TV1 behavior: Create verification state with supportsEpochBump=false
+      val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, false)
+      // Should allow non-zero sequences with non-zero epoch
+      log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard)
+      assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
+    }
   }
 
   @Test
