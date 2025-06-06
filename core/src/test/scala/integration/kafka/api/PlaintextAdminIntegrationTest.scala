@@ -2697,6 +2697,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
+  @Test
   def testShareGroups(): Unit = {
     val testGroupId = "test_group_id"
     val testClientId = "test_client_id"
