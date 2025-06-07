@@ -307,7 +307,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val consumer1 = createConsumerAndReceive(group1, manualAssign = false, numRecords)
 
     val requestTimeout = 6000
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000")
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     }
@@ -338,7 +338,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val partitionCount = consumerCount * 2
 
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     }
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -377,7 +377,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val group = "fatal-exception-test"
     val topic = "fatal-exception-test"
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     }
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -418,7 +418,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val topic = "closetest"
     createTopic(topic, 10, brokerCount)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     }
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")

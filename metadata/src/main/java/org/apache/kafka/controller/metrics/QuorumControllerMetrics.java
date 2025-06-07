@@ -80,7 +80,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong operationsStarted = new AtomicLong(0);
     private final AtomicLong operationsTimedOut = new AtomicLong(0);
     private final AtomicLong newActiveControllers = new AtomicLong(0);
-    private final Map<Integer, AtomicLong> brokerContactTimesMs = new ConcurrentHashMap<>();
+    private final Map<Integer, Long> brokerContactTimesMs = new ConcurrentHashMap<>();
     private final int sessionTimeoutMs;
 
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
@@ -160,7 +160,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     }
 
     public void addTimeSinceLastHeartbeatMetric(int brokerId) {
-        brokerContactTimesMs.put(brokerId, new AtomicLong(time.milliseconds()));
+        brokerContactTimesMs.put(brokerId, time.milliseconds());
         registry.ifPresent(r -> r.newGauge(
             getBrokerIdTagMetricName(
                 "KafkaController",
@@ -267,19 +267,15 @@ public class QuorumControllerMetrics implements AutoCloseable {
     }
 
     public void updateBrokerContactTime(int brokerId) {
-        AtomicLong contactTime = brokerContactTimesMs.computeIfAbsent(brokerId, k -> new AtomicLong());
-        contactTime.set(time.milliseconds());
+        brokerContactTimesMs.put(brokerId, time.milliseconds());
     }
 
     public int timeSinceLastHeartbeatMs(int brokerId) {
-        if (!brokerContactTimesMs.containsKey(brokerId)) {
+        Long lastTime = brokerContactTimesMs.get(brokerId);
+        if (lastTime == null) {
             return sessionTimeoutMs;
-        } else {
-            return Math.min(
-                (int) (time.milliseconds() - brokerContactTimesMs.get(brokerId).get()),
-                sessionTimeoutMs
-            );
         }
+        return Math.min((int) (time.milliseconds() - lastTime), sessionTimeoutMs);
     }
 
     @Override

@@ -713,7 +713,7 @@ public class TargetAssignmentBuilderTest {
             String subtopologyId = Uuid.randomUuid().toString();
             Uuid topicId = Uuid.randomUuid();
             topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numTasks);
-            subtopologies.put(subtopologyId, new ConfiguredSubtopology(Set.of(topicId.toString()), Map.of(), Set.of(), Map.of()));
+            subtopologies.put(subtopologyId, new ConfiguredSubtopology(numTasks, Set.of(topicId.toString()), Map.of(), Set.of(), Map.of()));
 
             return subtopologyId;
         }
