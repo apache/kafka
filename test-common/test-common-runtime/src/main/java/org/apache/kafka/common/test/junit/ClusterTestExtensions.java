@@ -118,6 +118,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return true;
     }
 
+    @Override
     public boolean mayReturnZeroTestTemplateInvocationContexts(ExtensionContext context) {
         return true;
     }
