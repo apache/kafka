@@ -637,15 +637,9 @@ object KafkaMetadataLog extends Logging {
       nodeId
     )
 
-    // Print a warning if users have overridden the internal config
-    if (config.internalSegmentBytes() != null) {
-      metadataLog.error(s"Overriding ${MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG} is only supported for testing. Setting " +
+    if (defaultLogConfig.segmentSize() < config.logSegmentBytes()) {
+      metadataLog.error(s"Overriding ${MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG} is only supported for testing. Setting " +
         s"this value too low may lead to an inability to write batches of metadata records.")
-    }
-    if (config.logSegmentBytes() < MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_DEFAULT) {
-      metadataLog.error(s"${MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG} is smaller than the default value " +
-        s"${MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_DEFAULT}. Setting this value too low may lead " +
-        s"to an inability to write batches of metadata records.")
     }
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
