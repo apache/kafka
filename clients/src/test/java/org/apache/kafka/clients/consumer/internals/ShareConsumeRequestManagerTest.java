@@ -47,6 +47,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
+import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -994,12 +995,14 @@ public class ShareConsumeRequestManagerTest {
 
         // Verify the builder data for node0.
         assertEquals(1, builder1.data().topics().size());
-        assertEquals(tip0.topicId(), builder1.data().topics().get(0).topicId());
-        assertEquals(1, builder1.data().topics().get(0).partitions().size());
-        assertEquals(0, builder1.data().topics().get(0).partitions().get(0).partitionIndex());
-        assertEquals(1, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().size());
-        assertEquals(0L, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).firstOffset());
-        assertEquals(2L, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).lastOffset());
+        ShareFetchRequestData.FetchTopic fetchTopic = builder1.data().topics().stream().findFirst().get();
+        assertEquals(tip0.topicId(), fetchTopic.topicId());
+        assertEquals(1, fetchTopic.partitions().size());
+        ShareFetchRequestData.FetchPartition fetchPartition = fetchTopic.partitions().stream().findFirst().get();
+        assertEquals(0, fetchPartition.partitionIndex());
+        assertEquals(1, fetchPartition.acknowledgementBatches().size());
+        assertEquals(0L, fetchPartition.acknowledgementBatches().get(0).firstOffset());
+        assertEquals(2L, fetchPartition.acknowledgementBatches().get(0).lastOffset());
 
         assertEquals(1, builder1.data().forgottenTopicsData().size());
         assertEquals(tip0.topicId(), builder1.data().forgottenTopicsData().get(0).topicId());
@@ -1008,9 +1011,10 @@ public class ShareConsumeRequestManagerTest {
 
         // Verify the builder data for node1.
         assertEquals(1, builder2.data().topics().size());
-        assertEquals(tip1.topicId(), builder2.data().topics().get(0).topicId());
-        assertEquals(1, builder2.data().topics().get(0).partitions().size());
-        assertEquals(1, builder2.data().topics().get(0).partitions().get(0).partitionIndex());
+        fetchTopic = builder2.data().topics().stream().findFirst().get();
+        assertEquals(tip1.topicId(), fetchTopic.topicId());
+        assertEquals(1, fetchTopic.partitions().size());
+        assertEquals(1, fetchTopic.partitions().stream().findFirst().get().partitionIndex());
     }
 
     @Test
@@ -1049,9 +1053,10 @@ public class ShareConsumeRequestManagerTest {
         ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
 
         assertEquals(1, builder.data().topics().size());
-        assertEquals(tip1.topicId(), builder.data().topics().get(0).topicId());
-        assertEquals(1, builder.data().topics().get(0).partitions().size());
-        assertEquals(1, builder.data().topics().get(0).partitions().get(0).partitionIndex());
+        ShareFetchRequestData.FetchTopic fetchTopic = builder.data().topics().stream().findFirst().get();
+        assertEquals(tip1.topicId(), fetchTopic.topicId());
+        assertEquals(1, fetchTopic.partitions().size());
+        assertEquals(1, fetchTopic.partitions().stream().findFirst().get().partitionIndex());
         assertEquals(0, builder.data().forgottenTopicsData().size());
     }
 

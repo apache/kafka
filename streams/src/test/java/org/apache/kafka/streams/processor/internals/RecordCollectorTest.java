@@ -100,6 +100,8 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1888,6 +1890,68 @@ public class RecordCollectorTest {
             sinkNodeName,
             context
         ));
+    }
+
+    @Test
+    public void shouldFreeRawRecordsInContextBeforeSending() {
+        final KafkaException exception = new KafkaException("KABOOM!");
+        final byte[][] sourceRawData = new byte[][]{new byte[]{}, new byte[]{}};
+
+        final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                getExceptionalStreamsProducerOnSend(exception),
+                new ProductionExceptionHandler() {
+                    @Override
+                    public void configure(final Map<String, ?> configs) {
+
+                    }
+
+                    @Override
+                    public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context, final ProducerRecord<byte[], byte[]> record, final Exception exception) {
+                        sourceRawData[0] = context.sourceRawKey();
+                        sourceRawData[1] = context.sourceRawValue();
+                        return ProductionExceptionHandlerResponse.CONTINUE;
+                    }
+                },
+                streamsMetrics,
+                topology
+        );
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
+
+        assertNull(sourceRawData[0]);
+        assertNull(sourceRawData[1]);
+    }
+
+
+    @Test
+    public void shouldHaveRawDataDuringExceptionInSerialization() {
+        final byte[][] sourceRawData = new byte[][]{new byte[]{}, new byte[]{}};
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(
+                    new ProductionExceptionHandler() {
+                        @Override
+                        @SuppressWarnings({"rawtypes", "unused"})
+                        public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context, final ProducerRecord record, final Exception exception, final SerializationExceptionOrigin origin) {
+                            sourceRawData[0] = context.sourceRawKey();
+                            sourceRawData[1] = context.sourceRawValue();
+                            return ProductionExceptionHandlerResponse.CONTINUE;
+                        }
+
+                        @Override
+                        public void configure(final Map<String, ?> configs) {
+
+                        }
+                    }
+            );
+            collector.initialize();
+
+            collector.send(topic, "hello", "val", null, 0, null, (Serializer) errorSerializer, stringSerializer, sinkNodeName, context);
+
+            assertNotNull(sourceRawData[0]);
+            assertNotNull(sourceRawData[1]);
+        }
     }
 
     private RecordCollector newRecordCollector(final ProductionExceptionHandler productionExceptionHandler) {

@@ -96,6 +96,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
@@ -205,7 +207,7 @@ public class SenderTest {
         }));
         return Collections.unmodifiableMap(partitionRecords);
     }
- 
+
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
@@ -3031,8 +3033,62 @@ public class SenderTest {
         verifyErrorMessage(produceResponse(tp0, 0L, Errors.INVALID_REQUEST, 0, -1, errorMessage), errorMessage);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"COORDINATOR_LOAD_IN_PROGRESS", "INVALID_TXN_STATE"})
+    public void testTransactionShouldTransitionToAbortableForSenderAPI(Errors error) throws InterruptedException {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        TransactionManager txnManager = new TransactionManager(
+                logContext,
+                "testRetriableException",
+                60000,
+                RETRY_BACKOFF_MS,
+                apiVersions,
+                false
+        );
+
+        // Setup with transaction state and initialize transactions with single retry
+        setupWithTransactionState(txnManager, false, null, 1);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+
+        // Begin transaction and add partition
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartition(tp0);
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
+        sender.runOnce();
+
+        // First produce request
+        appendToAccumulator(tp0);
+        client.prepareResponse(produceResponse(tp0, -1, error, -1));
+        sender.runOnce();
+
+        // Sleep for retry backoff
+        time.sleep(RETRY_BACKOFF_MS);
+
+        // Second attempt to process record - PREPARE the response before sending
+        client.prepareResponse(produceResponse(tp0, -1, error, -1));
+        sender.runOnce();
+
+        // Now transaction should be in abortable state after retry is exhausted
+        assertTrue(txnManager.hasAbortableError());
+
+        // Second produce request - should fail with TransactionAbortableException
+        Future<RecordMetadata> future2 = appendToAccumulator(tp0);
+        client.prepareResponse(produceResponse(tp0, -1, Errors.NONE, -1));
+        // Sender will try to send and fail with TransactionAbortableException instead of COORDINATOR_LOAD_IN_PROGRESS, because we're in abortable state
+        sender.runOnce();
+        assertFutureFailure(future2, TransactionAbortableException.class);
+
+        // Verify transaction API requests also fail with TransactionAbortableException
+        try {
+            txnManager.beginCommit();
+            fail("Expected beginCommit() to fail with TransactionAbortableException when in abortable error state");
+        } catch (KafkaException e) {
+            assertEquals(TransactionAbortableException.class, e.getCause().getClass());
+        }
+    }
+
     @Test
-    public void testSenderShouldRetryWithBackoffOnRetriableError() {
+    public void testSenderShouldRetryWithBackoffOnRetriableError() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
@@ -3180,6 +3236,61 @@ public class SenderTest {
 
         txnManager.beginTransaction();
     }
+
+    @Test
+    public void testAbortableErrorIsConvertedToFatalErrorDuringAbort() throws Exception {
+
+        // Initialize and begin transaction
+        TransactionManager transactionManager = new TransactionManager(logContext, "testAbortableErrorIsConvertedToFatalErrorDuringAbort", 60000, 100, apiVersions, false);
+        setupWithTransactionState(transactionManager);
+        doInitTransactions(transactionManager, new ProducerIdAndEpoch(1L, (short) 0));
+        transactionManager.beginTransaction();
+
+        // Add partition and send record
+        TopicPartition tp = new TopicPartition("test", 0);
+        addPartitionToTxn(sender, transactionManager, tp);
+        appendToAccumulator(tp);
+
+        // Send record and get response
+        sender.runOnce();
+        sendIdempotentProducerResponse(0, tp, Errors.NONE, 0);
+        sender.runOnce();
+
+        // Commit API with TRANSACTION_ABORTABLE error should set TM to Abortable state
+        client.prepareResponse(new EndTxnResponse(new EndTxnResponseData()
+                .setErrorCode(Errors.TRANSACTION_ABORTABLE.code())));
+
+        // Attempt to commit transaction
+        TransactionalRequestResult commitResult = transactionManager.beginCommit();
+        sender.runOnce();
+        try {
+            commitResult.await(1000, TimeUnit.MILLISECONDS);
+            fail("Expected abortable error to be thrown for commit");
+        } catch (KafkaException e) {
+            assertTrue(transactionManager.hasAbortableError());
+            assertEquals(commitResult.error().getClass(), TransactionAbortableException.class);
+        }
+
+        // Abort API with TRANSACTION_ABORTABLE error should convert to Fatal error i.e. KafkaException
+        client.prepareResponse(new EndTxnResponse(new EndTxnResponseData()
+                .setErrorCode(Errors.TRANSACTION_ABORTABLE.code())));
+
+        // Attempt to abort transaction
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        sender.runOnce();
+
+        // Verify the error is converted to KafkaException (not TransactionAbortableException)
+        try {
+            abortResult.await(1000, TimeUnit.MILLISECONDS);
+            fail("Expected KafkaException to be thrown");
+        } catch (KafkaException e) {
+            // Verify TM is in FATAL_ERROR state
+            assertTrue(transactionManager.hasFatalError());
+            assertFalse(e instanceof TransactionAbortableException);
+            assertEquals(abortResult.error().getClass(), KafkaException.class);
+        }
+    }
+
     @Test
     public void testProducerBatchRetriesWhenPartitionLeaderChanges() throws Exception {
         Metrics m = new Metrics();
@@ -3672,6 +3783,10 @@ public class SenderTest {
 
     private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool) {
         setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true, Integer.MAX_VALUE, 0);
+    }
+
+    private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool, int retries) {
+        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true, retries, 0);
     }
 
     private void setupWithTransactionState(

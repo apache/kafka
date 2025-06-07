@@ -145,6 +145,7 @@
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
         <allow pkg="org.jose4j" />
+        <allow pkg="javax.crypto"/>
       </subpackage>
     </subpackage>
 
@@ -234,6 +235,7 @@
   <subpackage name="clients">
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
+    <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
     <allow class="org.apache.logging.log4j.Level" />
 

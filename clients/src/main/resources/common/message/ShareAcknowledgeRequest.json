@@ -32,10 +32,10 @@
       "about": "The current share session epoch: 0 to open a share session; -1 to close it; otherwise increments for consecutive requests." },
     { "name": "Topics", "type": "[]AcknowledgeTopic", "versions": "0+",
       "about": "The topics containing records to acknowledge.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID." },
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID.", "mapKey": true },
       { "name": "Partitions", "type": "[]AcknowledgePartition", "versions": "0+",
         "about": "The partitions containing records to acknowledge.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
           "about": "The partition index." },
         { "name": "AcknowledgementBatches", "type": "[]AcknowledgementBatch", "versions": "0+",
           "about": "Record batches to acknowledge.", "fields": [
