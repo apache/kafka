@@ -191,9 +191,7 @@ class ReplicaManagerQuotasTest {
         quota = null,
         responseCallback = null
       ) {
-        override def forceComplete(): Unit = {
-          
-        }
+        override def forceComplete(): Boolean = true
       }
     }
 
@@ -244,9 +242,7 @@ class ReplicaManagerQuotasTest {
         quota = null,
         responseCallback = null
       ) {
-        override def forceComplete(): Unit = {
-          
-        }
+        override def forceComplete(): Boolean = true
       }
     }
 

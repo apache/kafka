@@ -355,8 +355,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 if (anyPartitionHasLogReadError(replicaManagerReadResponse) || isMinBytesSatisfied(topicPartitionData, partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, topicPartitionData.keySet(), topicPartitionData.size()))) {
                     partitionsAcquired = topicPartitionData;
                     localPartitionsAlreadyFetched = replicaManagerReadResponse;
-                    forceComplete();
-                    return true;
+                    return forceComplete();
                 } else {
                     log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
                             "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
@@ -380,12 +379,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 partitionsAcquired.clear();
                 localPartitionsAlreadyFetched.clear();
             }
-            if (isCompleted()) {
-                return false;
-            } else {
-                forceComplete();
-                return true;
-            }
+            return forceComplete();
         }
     }
 
@@ -786,8 +780,7 @@ public class DelayedShareFetch extends DelayedOperation {
         }
 
         if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case d
-            forceComplete();
-            return true;
+            return forceComplete();
         } else
             return false;
     }

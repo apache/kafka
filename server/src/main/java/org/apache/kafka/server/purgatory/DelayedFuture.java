@@ -54,8 +54,7 @@ public class DelayedFuture<T> extends DelayedOperation {
         long pending = futures.stream().filter(future -> !future.isDone()).count();
         if (pending == 0) {
             log.trace("All futures have been completed or have errors, completing the delayed operation");
-            forceComplete();
-            return true;
+            return forceComplete();
         } else {
             log.trace("{} future still pending, not completing the delayed operation", pending);
             return false;

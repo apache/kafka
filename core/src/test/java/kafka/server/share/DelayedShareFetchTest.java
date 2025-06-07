@@ -765,7 +765,7 @@ public class DelayedShareFetchTest {
 
         // Force complete the request as it's still pending. Return false from the share partition lock acquire.
         when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(false);
-        delayedShareFetch.forceComplete();
+        assertTrue(delayedShareFetch.forceComplete());
         assertTrue(delayedShareFetch.isCompleted());
 
         // Read from log and release partition locks should not be called as the request is errored out.
@@ -857,7 +857,7 @@ public class DelayedShareFetchTest {
 
         DelayedShareFetch spy = spy(delayedShareFetch);
         when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
-        doReturn(false).when(spy).isCompleted();
+        doReturn(false).when(spy).forceComplete();
 
         assertFalse(spy.tryComplete());
         Mockito.verify(sp0, times(1)).releaseFetchLock(fetchId);

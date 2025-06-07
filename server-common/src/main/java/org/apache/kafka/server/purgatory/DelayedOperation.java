@@ -51,15 +51,22 @@ public abstract class DelayedOperation extends TimerTask {
      *
      * 1. The operation has been verified to be completable inside tryComplete()
      * 2. The operation has expired and hence needs to be completed right now
-     * 
+     *
+     * Return true iff the operation is completed by the caller: note that
+     * concurrent threads can try to complete the same operation, but only
+     * the first thread will succeed in completing the operation and return
+     * true, others will still return false.
      */
-    public void forceComplete() {
-        // Do not proceed if the operation is already completed.
+    public boolean forceComplete() {
+        // Re-check, if the operation is already completed by some other thread.
         if (!completed) {
             completed = true;
             // cancel the timeout timer
             cancel();
             onComplete();
+            return true;
+        } else {
+            return false;
         }
     }
 
@@ -83,9 +90,8 @@ public abstract class DelayedOperation extends TimerTask {
 
     /**
      * Try to complete the delayed operation by first checking if the operation
-     * can be completed by now. If the completion logic is successfully executed by calling 
-     * forceComplete() without throwing any exception, it will return true; otherwise, 
-     * it will return false.
+     * can be completed by now. If yes execute the completion logic by calling
+     * forceComplete() and return true iff forceComplete returns true; otherwise return false
      * <br/>
      * This function needs to be defined in subclasses
      */

@@ -272,8 +272,7 @@ public class DelayedOperationTest {
         @Override
         public boolean tryComplete() {
             if (completable) {
-                forceComplete();
-                return true;
+                return forceComplete();
             } else {
                 return false;
             }
@@ -321,10 +320,9 @@ public class DelayedOperationTest {
             } catch (InterruptedException ie) {
                 throw new RuntimeException(ie);
             }
-            if (shouldComplete) {
-                forceComplete();
-                return true;
-            } else
+            if (shouldComplete)
+                return forceComplete();
+            else
                 return false;
         }
     }
