@@ -534,7 +534,7 @@ class LogManagerTest {
       true
     }
 
-    logManager.loadLog(log.dir, hadCleanShutdown = true, Collections.emptyMap[TopicPartition, JLong], Collections.emptyMap[TopicPartition, JLong], logConfig, Map.empty, new ConcurrentHashMap[String, Integer](),  providedIsStray)
+    logManager.loadLog(log.dir, hadCleanShutdown = true, util.Map.of[TopicPartition, JLong], util.Map.of[TopicPartition, JLong], logConfig, Map.empty, new ConcurrentHashMap[String, Integer](),  providedIsStray)
     assertEquals(1, invokedCount)
     assertTrue(
       logDir.listFiles().toSet
