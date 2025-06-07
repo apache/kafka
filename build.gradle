@@ -1995,6 +1995,7 @@ project(':clients:clients-integration-tests') {
     implementation project(':server-common')
     testImplementation project(':metadata')
     implementation project(':group-coordinator')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':transaction-coordinator')
 
     testImplementation libs.junitJupiter

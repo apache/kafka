@@ -25,8 +25,10 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
+import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 
 import org.junit.jupiter.api.Test;
@@ -37,13 +39,14 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupCoordinatorConfigTest {
 
-    public static class CustomAssignor implements ConsumerGroupPartitionAssignor, Configurable {
+    public static class CustomAssignor implements ConsumerGroupPartitionAssignor, Configurable, ShareGroupPartitionAssignor {
         public Map<String, ?> configs;
 
         @Override
@@ -124,6 +127,48 @@ public class GroupCoordinatorConfigTest {
         assertEquals(2, assignors.size());
         assertTrue(assignors.get(0) instanceof UniformAssignor);
         assertTrue(assignors.get(1) instanceof CustomAssignor);
+    }
+
+    @Test
+    public void testShareGroupAssignorFullClassNames() {
+        // The full class name of the assignors is part of our public api. Hence,
+        // we should ensure that they are not changed by mistake.
+        assertEquals(
+            "org.apache.kafka.coordinator.group.assignor.SimpleAssignor",
+            SimpleAssignor.class.getName()
+        );
+    }
+
+    @Test
+    public void testShareGroupAssignors() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config;
+        List<ShareGroupPartitionAssignor> assignors;
+
+        // Test default config.
+        config = createConfig(configs);
+        assignors = config.shareGroupAssignors();
+        assertEquals(1, assignors.size());
+
+        // Test short names.
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, "simple");
+        config = createConfig(configs);
+        assignors = config.shareGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(SimpleAssignor.class, assignors.get(0));
+
+        // Test custom assignor.
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, CustomAssignor.class.getName());
+        config = createConfig(configs);
+        assignors = config.shareGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(CustomAssignor.class, assignors.get(0));
+        assertNotNull(((CustomAssignor) assignors.get(0)).configs);
+
+        // Test must contain only one assignor.
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, "simple, " + CustomAssignor.class.getName());
+        assertEquals("group.share.assignors must contain exactly one assignor, but found 2",
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
     }
 
     @Test
