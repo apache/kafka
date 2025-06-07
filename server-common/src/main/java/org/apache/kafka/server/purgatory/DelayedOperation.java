@@ -58,7 +58,6 @@ public abstract class DelayedOperation extends TimerTask {
      * true, others will still return false.
      */
     public boolean forceComplete() {
-        // Re-check, if the operation is already completed by some other thread.
         if (!completed) {
             completed = true;
             // cancel the timeout timer
