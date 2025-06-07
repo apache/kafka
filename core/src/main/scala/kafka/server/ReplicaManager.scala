@@ -919,7 +919,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       def delegate(tp: TopicPartition, requiredOffset: JLong) : util.Map[JBoolean, Errors] = {
         val (hasEnough, error) = getPartitionOrError(tp).fold(
-            // Please refer to the documentation in `DelayedProduce#tryComplete` a comprehensive description of these cases.
+            // Please refer to the documentation in `DelayedProduce#tryComplete` for a comprehensive description of these cases.
             // Case A or Case B
             err => (false, err),
 
