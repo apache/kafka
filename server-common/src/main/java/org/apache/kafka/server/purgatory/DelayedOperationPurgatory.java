@@ -46,7 +46,7 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
     // the number of estimated total operations in the purgatory
     private final AtomicInteger estimatedTotalOperations = new AtomicInteger(0);
     /* background thread expiring operations that have timed out */
-    private final ExpiredOperationReaper expirationReaper = new ExpiredOperationReaper();
+    private final ExpiredOperationReaper expirationReaper;
     private final String purgatoryName;
     private final Timer timeoutTimer;
     private final int brokerId;
@@ -86,6 +86,7 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
         this.purgeInterval = purgeInterval;
         this.reaperEnabled = reaperEnabled;
         this.timerEnabled = timerEnabled;
+        this.expirationReaper = new ExpiredOperationReaper();
 
         watcherLists = new ArrayList<>(SHARDS);
         for (int i = 0; i < SHARDS; i++) {
