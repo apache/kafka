@@ -2279,7 +2279,7 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
-    val sequence = 6
+    val sequence = 0
     val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
     val scheduler = new MockScheduler(time)
 
@@ -2346,7 +2346,7 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
-    val sequence = 6
+    val sequence = 0
     val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
 
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
@@ -2355,7 +2355,7 @@ class ReplicaManagerTest {
         makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), new LeaderAndIsr(1, List(0, 1).map(Int.box).asJava)),
         (_, _) => ())
 
-      // Start with sequence 6
+      // Start with sequence 0
       val transactionalRecords = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
 
@@ -2379,7 +2379,7 @@ class ReplicaManagerTest {
       assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
-      // Try to append a higher sequence (7) after the first one failed with a retriable error.
+      // Try to append a higher sequence (1) after the first one failed with a retriable error.
       val transactionalRecords2 = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence + 1,
         new SimpleRecord("message".getBytes))
 
@@ -2557,7 +2557,7 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
-    val sequence = 6
+    val sequence = 0
     val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
 
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))

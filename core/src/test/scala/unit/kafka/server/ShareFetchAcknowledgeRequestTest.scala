@@ -197,8 +197,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -206,7 +206,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val partitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 
@@ -272,10 +272,10 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
       assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
       assertEquals(1, shareFetchResponseData.responses().size())
-      val partitionsCount = shareFetchResponseData.responses().get(0).partitions().size()
+      val partitionsCount = shareFetchResponseData.responses().stream().findFirst().get().partitions().size()
       if (partitionsCount > 0) {
-        assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-        shareFetchResponseData.responses().get(0).partitions().asScala.foreach(partitionData => {
+        assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+        shareFetchResponseData.responses().stream().findFirst().get().partitions().asScala.foreach(partitionData => {
           if (!partitionData.acquiredRecords().isEmpty) {
             responses = responses :+ partitionData
           }
@@ -393,24 +393,24 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData1.errorCode)
     assertEquals(30000, shareFetchResponseData1.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData1.responses().size())
-    assertEquals(topicId, shareFetchResponseData1.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData1.responses().get(0).partitions().size())
-    val partitionData1 = shareFetchResponseData1.responses().get(0).partitions().get(0)
+    assertEquals(topicId, shareFetchResponseData1.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData1.responses().stream().findFirst().get().partitions().size())
+    val partitionData1 = shareFetchResponseData1.responses().stream().findFirst().get().partitions().get(0)
 
     val shareFetchResponseData2 = shareFetchResponse2.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData2.errorCode)
     assertEquals(30000, shareFetchResponseData2.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData2.responses().size())
-    assertEquals(topicId, shareFetchResponseData2.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData2.responses().get(0).partitions().size())
-    val partitionData2 = shareFetchResponseData2.responses().get(0).partitions().get(0)
+    assertEquals(topicId, shareFetchResponseData2.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData2.responses().stream().findFirst().get().partitions().size())
+    val partitionData2 = shareFetchResponseData2.responses().stream().findFirst().get().partitions().get(0)
 
     val shareFetchResponseData3 = shareFetchResponse3.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData3.errorCode)
     assertEquals(1, shareFetchResponseData3.responses().size())
-    assertEquals(topicId, shareFetchResponseData3.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData3.responses().get(0).partitions().size())
-    val partitionData3 = shareFetchResponseData3.responses().get(0).partitions().get(0)
+    assertEquals(topicId, shareFetchResponseData3.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData3.responses().stream().findFirst().get().partitions().size())
+    val partitionData3 = shareFetchResponseData3.responses().stream().findFirst().get().partitions().get(0)
 
     val expectedPartitionData1 = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(0)
@@ -491,8 +491,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -500,7 +500,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    var fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
@@ -517,14 +517,14 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.NONE.code, shareAcknowledgeResponseData.errorCode)
     assertEquals(1, shareAcknowledgeResponseData.responses().size())
-    assertEquals(topicId, shareAcknowledgeResponseData.responses().get(0).topicId())
-    assertEquals(1, shareAcknowledgeResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
 
     val expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
       .setPartitionIndex(partition)
       .setErrorCode(Errors.NONE.code())
 
-    val acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
+    val acknowledgePartitionData = shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Producing 10 more records to the topic
@@ -540,8 +540,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -549,7 +549,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // Only the records from offset 10 onwards should be fetched because records at offsets 0-9 have been acknowledged
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
@@ -611,8 +611,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(15000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -620,7 +620,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    var fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
@@ -640,8 +640,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(15000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -649,7 +649,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // The records at offsets 0 to 9 will not be re fetched because they have been acknowledged
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic
@@ -665,8 +665,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(15000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -674,7 +674,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(20), Collections.singletonList(29), Collections.singletonList(1))) // Only the records from offset 20 onwards should be fetched because records at offsets 0-9 have been acknowledged before and 10 to 19 are currently acquired
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
@@ -734,8 +734,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -743,7 +743,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    var fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
@@ -760,14 +760,14 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.NONE.code, shareAcknowledgeResponseData.errorCode)
     assertEquals(1, shareAcknowledgeResponseData.responses().size())
-    assertEquals(topicId, shareAcknowledgeResponseData.responses().get(0).topicId())
-    assertEquals(1, shareAcknowledgeResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
 
     val expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
       .setPartitionIndex(partition)
       .setErrorCode(Errors.NONE.code())
 
-    val acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
+    val acknowledgePartitionData = shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Sending a third share fetch request to check if acknowledgements were done successfully
@@ -780,8 +780,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -789,7 +789,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(2))) // Records at offsets 0 to 9 should be fetched again because they were released with delivery count as 2
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
@@ -849,8 +849,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -858,7 +858,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    val fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
@@ -894,10 +894,10 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
       assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
       assertEquals(1, shareFetchResponseData.responses().size())
-      assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-      val responseSize = shareFetchResponseData.responses().get(0).partitions().size()
+      assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+      val responseSize = shareFetchResponseData.responses().stream().findFirst().get().partitions().size()
       if (responseSize > 0) {
-        acquiredRecords.addAll(shareFetchResponseData.responses().get(0).partitions().get(0).acquiredRecords())
+        acquiredRecords.addAll(shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0).acquiredRecords())
       }
       // There should be 2 acquired record batches finally -
       // 1. batch containing 0-9 offsets which were initially acknowledged as RELEASED.
@@ -968,8 +968,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -977,7 +977,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    var fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
@@ -994,14 +994,14 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.NONE.code, shareAcknowledgeResponseData.errorCode)
     assertEquals(1, shareAcknowledgeResponseData.responses().size())
-    assertEquals(topicId, shareAcknowledgeResponseData.responses().get(0).topicId())
-    assertEquals(1, shareAcknowledgeResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
 
     val expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
       .setPartitionIndex(partition)
       .setErrorCode(Errors.NONE.code())
 
-    val acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
+    val acknowledgePartitionData = shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Producing 10 more records to the topic
@@ -1017,8 +1017,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1026,7 +1026,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // Only the records from offset 10 onwards should be fetched because records at offsets 0-9 have been rejected
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
@@ -1086,8 +1086,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1095,7 +1095,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    var fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
@@ -1115,8 +1115,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1124,7 +1124,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // The records at offsets 0 to 9 will not be re fetched because they have been rejected
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic
@@ -1140,8 +1140,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1149,7 +1149,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(20), Collections.singletonList(29), Collections.singletonList(1))) // Only the records from offset 20 onwards should be fetched because records at offsets 0-9 have been rejected before and 10 to 19 are currently acquired
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
@@ -1211,8 +1211,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1220,7 +1220,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    var fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
@@ -1237,14 +1237,14 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.NONE.code, shareAcknowledgeResponseData.errorCode)
     assertEquals(1, shareAcknowledgeResponseData.responses().size())
-    assertEquals(topicId, shareAcknowledgeResponseData.responses().get(0).topicId())
-    assertEquals(1, shareAcknowledgeResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
       .setPartitionIndex(partition)
       .setErrorCode(Errors.NONE.code())
 
-    var acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
+    var acknowledgePartitionData = shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Sending a third share fetch request to check if acknowledgements were done successfully
@@ -1257,8 +1257,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1266,7 +1266,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(2))) // Records at offsets 0 to 9 should be fetched again because they were released with delivery count as 2
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
@@ -1282,14 +1282,14 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.NONE.code, shareAcknowledgeResponseData.errorCode)
     assertEquals(1, shareAcknowledgeResponseData.responses().size())
-    assertEquals(topicId, shareAcknowledgeResponseData.responses().get(0).topicId())
-    assertEquals(1, shareAcknowledgeResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
       .setPartitionIndex(partition)
       .setErrorCode(Errors.NONE.code())
 
-    acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
+    acknowledgePartitionData = shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Producing 10 new records to the topic
@@ -1305,8 +1305,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1314,7 +1314,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // Only new records from offset 10 to 19 will be fetched, records at offsets 0 to 9 have been archived because delivery count limit has been exceeded
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
@@ -1392,26 +1392,26 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareFetchResponseData1 = shareFetchResponse1.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData1.errorCode)
     assertEquals(1, shareFetchResponseData1.responses().size())
-    assertEquals(topicId, shareFetchResponseData1.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData1.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData1.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData1.responses().stream().findFirst().get().partitions().size())
 
-    val partitionData1 = shareFetchResponseData1.responses().get(0).partitions().get(0)
+    val partitionData1 = shareFetchResponseData1.responses().stream().findFirst().get().partitions().get(0)
 
     val shareFetchResponseData2 = shareFetchResponse2.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData2.errorCode)
     assertEquals(1, shareFetchResponseData2.responses().size())
-    assertEquals(topicId, shareFetchResponseData2.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData2.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData2.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData2.responses().stream().findFirst().get().partitions().size())
 
-    val partitionData2 = shareFetchResponseData2.responses().get(0).partitions().get(0)
+    val partitionData2 = shareFetchResponseData2.responses().stream().findFirst().get().partitions().get(0)
 
     val shareFetchResponseData3 = shareFetchResponse3.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData3.errorCode)
     assertEquals(1, shareFetchResponseData3.responses().size())
-    assertEquals(topicId, shareFetchResponseData3.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData3.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData3.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData3.responses().stream().findFirst().get().partitions().size())
 
-    val partitionData3 = shareFetchResponseData3.responses().get(0).partitions().get(0)
+    val partitionData3 = shareFetchResponseData3.responses().stream().findFirst().get().partitions().get(0)
 
     // There should be no common records between the 3 consumers as they are part of the same group
     assertTrue(partitionData1.acquiredRecords().get(0).lastOffset() < partitionData2.acquiredRecords().get(0).firstOffset())
@@ -1496,26 +1496,26 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareFetchResponseData1 = shareFetchResponse1.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData1.errorCode)
     assertEquals(1, shareFetchResponseData1.responses().size())
-    assertEquals(topicId, shareFetchResponseData1.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData1.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData1.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData1.responses().stream().findFirst().get().partitions().size())
 
-    val partitionData1 = shareFetchResponseData1.responses().get(0).partitions().get(0)
+    val partitionData1 = shareFetchResponseData1.responses().stream().findFirst().get().partitions().get(0)
 
     val shareFetchResponseData2 = shareFetchResponse2.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData2.errorCode)
     assertEquals(1, shareFetchResponseData2.responses().size())
-    assertEquals(topicId, shareFetchResponseData2.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData2.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData2.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData2.responses().stream().findFirst().get().partitions().size())
 
-    val partitionData2 = shareFetchResponseData2.responses().get(0).partitions().get(0)
+    val partitionData2 = shareFetchResponseData2.responses().stream().findFirst().get().partitions().get(0)
 
     val shareFetchResponseData3 = shareFetchResponse3.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData3.errorCode)
     assertEquals(1, shareFetchResponseData3.responses().size())
-    assertEquals(topicId, shareFetchResponseData3.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData3.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData3.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData3.responses().stream().findFirst().get().partitions().size())
 
-    val partitionData3 = shareFetchResponseData3.responses().get(0).partitions().get(0)
+    val partitionData3 = shareFetchResponseData3.responses().stream().findFirst().get().partitions().get(0)
 
     // All the consumers should consume all the records since they are part of different groups
     assertEquals(partitionData1.acquiredRecords(), expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
@@ -1579,8 +1579,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1588,7 +1588,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    var fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
@@ -1608,8 +1608,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1617,7 +1617,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // The records at offsets 0 to 9 will not be re fetched because they have been acknowledged
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Sending a final fetch request to close the session
@@ -1692,8 +1692,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     var expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1701,7 +1701,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    var fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
@@ -1721,8 +1721,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1730,7 +1730,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // The records at offsets 0 to 9 will not be re fetched because they have been acknowledged
 
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    fetchPartitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Sending a Share Acknowledge request to close the session
@@ -1747,14 +1747,14 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.NONE.code, shareAcknowledgeResponseData.errorCode)
     assertEquals(1, shareAcknowledgeResponseData.responses().size())
-    assertEquals(topicId, shareAcknowledgeResponseData.responses().get(0).topicId())
-    assertEquals(1, shareAcknowledgeResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
 
     val expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
       .setPartitionIndex(partition)
       .setErrorCode(Errors.NONE.code())
 
-    val acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
+    val acknowledgePartitionData = shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
   }
 
@@ -1915,8 +1915,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -1924,7 +1924,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val partitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
 
     // Sending a thord Share Fetch request with invalid share session epoch
@@ -1992,8 +1992,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -2001,7 +2001,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val partitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
 
     // Sending Share Acknowledge request with invalid share session epoch
@@ -2075,16 +2075,15 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
-
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
       .setErrorCode(Errors.NONE.code())
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val partitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
 
     // Sending a third Share Fetch request with wrong member Id
@@ -2241,8 +2240,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -2250,7 +2249,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val partitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
 
     // Sending a Share Acknowledge request with wrong member Id
@@ -2331,10 +2330,10 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
       assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
       assertEquals(1, shareFetchResponseData.responses().size())
-      val partitionsCount = shareFetchResponseData.responses().get(0).partitions().size()
+      val partitionsCount = shareFetchResponseData.responses().stream().findFirst().get().partitions().size()
       if (partitionsCount > 0) {
-        assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-        shareFetchResponseData.responses().get(0).partitions().asScala.foreach(partitionData => {
+        assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+        shareFetchResponseData.responses().stream().findFirst().get().partitions().asScala.foreach(partitionData => {
           if (!partitionData.acquiredRecords().isEmpty) {
             responses = responses :+ partitionData
           }
@@ -2358,8 +2357,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(topicId, shareFetchResponseData.responses().stream().findFirst().get().topicId())
+    assertEquals(1, shareFetchResponseData.responses().stream().findFirst().get().partitions().size())
 
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition2)
@@ -2367,7 +2366,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1)))
 
-    val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val partitionData = shareFetchResponseData.responses().stream().findFirst().get().partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 
@@ -2425,8 +2424,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses.size)
-    assertEquals(topicId, shareFetchResponseData.responses.get(0).topicId)
-    assertEquals(1, shareFetchResponseData.responses.get(0).partitions.size)
+    assertEquals(topicId, shareFetchResponseData.responses.stream().findFirst().get().topicId)
+    assertEquals(1, shareFetchResponseData.responses.stream().findFirst().get().partitions.size)
 
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -2434,7 +2433,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code)
       .setAcquiredRecords(expectedAcquiredRecords(util.List.of(0), util.List.of(0), util.List.of(1)))
 
-    val partitionData = shareFetchResponseData.responses.get(0).partitions.get(0)
+    val partitionData = shareFetchResponseData.responses.stream().findFirst().get().partitions.get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 
@@ -2492,8 +2491,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses.size)
-    assertEquals(topicId, shareFetchResponseData.responses.get(0).topicId)
-    assertEquals(1, shareFetchResponseData.responses.get(0).partitions.size)
+    assertEquals(topicId, shareFetchResponseData.responses.stream().findFirst().get().topicId)
+    assertEquals(1, shareFetchResponseData.responses.stream().findFirst().get().partitions.size)
 
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
@@ -2501,7 +2500,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code)
       .setAcquiredRecords(expectedAcquiredRecords(util.List.of(0, 1, 2, 3, 4), util.List.of(0, 1, 2, 3, 4), util.List.of(1, 1, 1, 1, 1)))
 
-    val partitionData = shareFetchResponseData.responses.get(0).partitions.get(0)
+    val partitionData = shareFetchResponseData.responses.stream().findFirst().get().partitions.get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 

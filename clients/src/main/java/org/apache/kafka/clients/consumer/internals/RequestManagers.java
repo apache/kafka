@@ -342,7 +342,7 @@ public class RequestManagers implements Closeable {
                 ShareMembershipManager shareMembershipManager = new ShareMembershipManager(
                         logContext,
                         groupRebalanceConfig.groupId,
-                        null,
+                        groupRebalanceConfig.rackId.orElse(null),
                         subscriptions,
                         metadata,
                         time,
