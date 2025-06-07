@@ -300,6 +300,21 @@ public class ClientsTestUtils {
         assertEquals(initialRevokeCalls, rebalanceListener.callsToRevoked);
     }
 
+
+    public static void waitForPollThrowException(
+        Consumer<byte[], byte[]> consumer,
+        Class<? extends Exception> exceptedException
+    ) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            try {
+                consumer.poll(Duration.ZERO);
+                return false;
+            } catch (Exception e) {
+                return exceptedException.isInstance(e);
+            }
+        }, "Continuous poll not fail");
+    }
+
     /**
      * This class is intended to replace the test cases in BaseConsumerTest.scala.
      * When converting tests that extend from BaseConsumerTest.scala to Java,

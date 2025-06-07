@@ -48,6 +48,7 @@ import static org.apache.kafka.clients.ClientsTestUtils.awaitRebalance;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.ensureNoRebalance;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
+import static org.apache.kafka.clients.ClientsTestUtils.waitForPollThrowException;
 import static org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
@@ -503,14 +504,7 @@ public class PlaintextConsumerPollTest {
 
             // continuous poll should eventually fail because there is no offset reset strategy set
             // (fail only when resetting positions after coordinator is known)
-            TestUtils.waitForCondition(() -> {
-                try {
-                    consumer.poll(Duration.ZERO);
-                    return false;
-                } catch (NoOffsetForPartitionException e) {
-                    return true;
-                }
-            }, "Continuous poll not fail");
+            waitForPollThrowException(consumer, NoOffsetForPartitionException.class);
         }
     }
 
