@@ -20,21 +20,42 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import org.apache.kafka.common.test.api.ClusterTest
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
+import org.apache.kafka.clients.admin.{Admin, ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
 import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api.ClusterTest
 import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.{AfterEach, Disabled}
 
 import scala.jdk.CollectionConverters._
+import scala.collection.mutable.ArrayBuffer
 
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
+  private val adminClients = ArrayBuffer.empty[Admin]
+
+  @AfterEach
+  def tearDown(): Unit = {
+    // Close all admin clients
+    adminClients.foreach(_.close())
+    adminClients.clear()
+
+    // Add a small delay to allow threads to terminate
+    Thread.sleep(500)
+  }
+
+  private def createAdminClient(): Admin = {
+    val props = new java.util.Properties()
+    props.put("bootstrap.servers", cluster.bootstrapServers())
+    val admin = Admin.create(props)
+    adminClients += admin
+    admin
+  }
+
   @ClusterTest
   def testAlterClientQuotasRequest(): Unit = {
 
@@ -168,7 +189,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   def testClientQuotasForScramUsers(): Unit = {
     val userName = "user"
 
-    val admin = cluster.admin()
+    val admin = createAdminClient()
     try {
       val results = admin.alterUserScramCredentials(util.Arrays.asList(
         new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "password")))
