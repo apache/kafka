@@ -37,7 +37,7 @@ public class ListGroupsResult {
     private final KafkaFutureImpl<Collection<GroupListing>> valid;
     private final KafkaFutureImpl<Collection<Throwable>> errors;
 
-    public ListGroupsResult(KafkaFuture<Collection<Object>> future) {
+    ListGroupsResult(KafkaFuture<Collection<Object>> future) {
         this.all = new KafkaFutureImpl<>();
         this.valid = new KafkaFutureImpl<>();
         this.errors = new KafkaFutureImpl<>();

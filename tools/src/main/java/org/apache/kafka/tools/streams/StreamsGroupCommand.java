@@ -151,7 +151,7 @@ public class StreamsGroupCommand {
     static class StreamsGroupService implements AutoCloseable {
         final StreamsGroupCommandOptions opts;
         private final Admin adminClient;
-        private OffsetsUtils offsetsUtils;
+        private final OffsetsUtils offsetsUtils;
         public StreamsGroupService(StreamsGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
             try {
@@ -165,6 +165,7 @@ public class StreamsGroupCommand {
         public StreamsGroupService(StreamsGroupCommandOptions opts, Admin adminClient) {
             this.opts = opts;
             this.adminClient = adminClient;
+            this.offsetsUtils = new OffsetsUtils(adminClient, opts, opts.parser);
         }
 
         public void listGroups() throws ExecutionException, InterruptedException {

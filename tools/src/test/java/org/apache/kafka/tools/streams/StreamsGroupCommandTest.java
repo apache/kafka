@@ -298,7 +298,8 @@ public class StreamsGroupCommandTest {
             .thenReturn(describeTopicsResult(topics, 1));
         when(adminClient.listOffsets(any()))
             .thenReturn(listOffsetsResult());
-        when(adminClient.listGroups(any())).thenReturn(listGroupResult(groupId));
+        ListGroupsResult listGroupsResult = listGroupResult(groupId);
+        when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
         ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
         Map<TopicPartition, OffsetAndMetadata> committedOffsetsMap = new HashMap<>();
         committedOffsetsMap.put(new TopicPartition("topic1", 0), mock(OffsetAndMetadata.class));
@@ -423,10 +424,11 @@ public class StreamsGroupCommandTest {
     }
 
     private ListGroupsResult listGroupResult(String groupId) {
-        KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
-        GroupListing groupListing = new GroupListing(groupId, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.DEAD));
-        future.complete(List.of(groupListing));
-        return new ListGroupsResult(future);
+        ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
+        when(listGroupsResult.all()).thenReturn(KafkaFuture.completedFuture(List.of(
+            new GroupListing(groupId, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.DEAD))
+        )));
+        return listGroupsResult;
     }
 
     StreamsGroupCommand.StreamsGroupService getStreamsGroupService(String[] args) {
