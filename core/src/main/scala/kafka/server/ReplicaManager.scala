@@ -68,7 +68,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, Lead
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.File
-import java.lang.{Long => JLong}
+import java.lang.{Long => JLong, Boolean => JBoolean}
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
@@ -917,24 +917,16 @@ class ReplicaManager(val config: KafkaConfig,
       // create delayed produce operation
       val produceMetadata = new ProduceMetadata(requiredAcks, initialProduceStatus.asJava)
 
-      // Updates the status of a produce partition based on the current state.
-      // Please refer to the documentation in `DelayedProduce#tryComplete` for
-      // a comprehensive description of Case A, Case B and Case C.
-      def delegate(tp: TopicPartition, status: ProducePartitionStatus) : Unit = {
-        val (hasEnough, error) = getPartitionOrError(tp) match {
-          case Left(err) =>
-            // Case A
-            (false, err)
+      def delegate(tp: TopicPartition, requiredOffset: JLong) : util.Map[JBoolean, Errors] = {
+        val (hasEnough, error) = getPartitionOrError(tp).fold(
+            // Please refer to the documentation in `DelayedProduce#tryComplete` a comprehensive description of these cases.
+            // Case A or Case B
+            err => (false, err),
 
-          case Right(partition) =>
-            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
-        }
+            // Case B or Case C
+            partition => partition.checkEnoughReplicasReachOffset(requiredOffset))
 
-        // Case B || C.1 || C.2
-        if (error != Errors.NONE || hasEnough) {
-          status.setAcksPending(false)
-          status.responseStatus.error = error
-        }
+        util.Map.of(hasEnough, error)
       }
 
       val delayedProduce = new DelayedProduce(timeoutMs, produceMetadata, delegate, responseCallback.asJava)

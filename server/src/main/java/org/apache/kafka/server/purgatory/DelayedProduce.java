@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -149,17 +149,17 @@ public class DelayedProduce extends DelayedOperation {
     }
 
     private final ProduceMetadata produceMetadata;
-    private final BiConsumer<TopicPartition, ProducePartitionStatus> updateProducePartitionStatusCallback;
+    private final BiFunction<TopicPartition, Long, Map<Boolean, Errors>> validatePartitionAndReplicaStatus;
     private final Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback;
 
     public DelayedProduce(long delayMs,
                           ProduceMetadata produceMetadata,
-                          BiConsumer<TopicPartition, ProducePartitionStatus> updateProducePartitionStatusCallback,
+                          BiFunction<TopicPartition, Long, Map<Boolean, Errors>> validatePartitionAndReplicaStatus,
                           Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback) {
         super(delayMs);
 
         this.produceMetadata = produceMetadata;
-        this.updateProducePartitionStatusCallback = updateProducePartitionStatusCallback;
+        this.validatePartitionAndReplicaStatus = validatePartitionAndReplicaStatus;
         this.responseCallback = responseCallback;
 
         // first update the acks pending variable according to the error code
@@ -187,9 +187,9 @@ public class DelayedProduce extends DelayedOperation {
      *         replicas have caught up to this operation: set an error in response
      *   C.2 - Otherwise, set the response with no error.
      *
-     * These cases were originally handled by some methods in the ReplicaManager.
+     * These cases were originally validated by some methods in the ReplicaManager.
      * However, since DelayedProduce has been moved to the server module, it cannot directly access the ReplicaManager.
-     * Therefore, these cases are now handled in the delegate method within `ReplicaManager#maybeAddDelayedProduce()`.
+     * Therefore, these validations have been delegated to the method within `ReplicaManager#maybeAddDelayedProduce()`.
      */
     @Override
     public boolean tryComplete() {
@@ -199,7 +199,21 @@ public class DelayedProduce extends DelayedOperation {
             // skip those partitions that have already been satisfied
             if (status.acksPending) {
                 // Delegate to `ReplicaManager#maybeAddDelayedProduce`
-                updateProducePartitionStatusCallback.accept(topicIdPartition.topicPartition(), status);
+                // Validate Cases A, B, or C
+                Map.Entry<Boolean, Errors> result = validatePartitionAndReplicaStatus
+                        .apply(topicIdPartition.topicPartition(), status.requiredOffset)
+                        .entrySet().stream()
+                        .findFirst()
+                        .get(); // Safe to call get() with isPresent() as the result must exist.
+
+
+                // Update the partition status to reflect Case A, B, or C:
+                boolean hasEnough = result.getKey();
+                Errors errors = result.getValue();
+                if (errors != Errors.NONE || hasEnough) {
+                    status.setAcksPending(false);
+                    status.responseStatus.error = errors;
+                }
             }
         });
 
