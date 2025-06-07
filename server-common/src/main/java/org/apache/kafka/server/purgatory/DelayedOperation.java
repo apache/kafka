@@ -135,8 +135,7 @@ public abstract class DelayedOperation extends TimerTask {
     public void run() {
         lock.lock();
         try {
-            if (!isCompleted()) {
-                forceComplete();
+            if (forceComplete()) {
                 onExpiration();
             }
         } finally {
