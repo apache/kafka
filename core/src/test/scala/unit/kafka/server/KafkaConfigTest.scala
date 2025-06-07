@@ -441,7 +441,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
     val controllerListenerName = new ListenerName("CONTROLLER")
-    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+    assertEquals(SecurityProtocol.PLAINTEXT,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
     // ensure we don't map it to PLAINTEXT when there is a SSL or SASL controller listener
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER,SSL")
@@ -454,7 +454,7 @@ class KafkaConfigTest {
     props.remove(SocketServerConfigs.LISTENERS_CONFIG)
     // ensure we don't map it to PLAINTEXT when it is explicitly mapped otherwise
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
-    assertEquals(Some(SecurityProtocol.SSL),
+    assertEquals(SecurityProtocol.SSL,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
     // ensure we don't map it to PLAINTEXT when anything is explicitly given
     // (i.e. it is only part of the default value, even with KRaft)
@@ -463,7 +463,7 @@ class KafkaConfigTest {
     // ensure we can map it to a non-PLAINTEXT security protocol by default (i.e. when nothing is given)
     props.remove(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    assertEquals(Some(SecurityProtocol.SSL),
+    assertEquals(SecurityProtocol.SSL,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("SSL")))
   }
 
@@ -475,9 +475,9 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER1,CONTROLLER2")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
-    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+    assertEquals(SecurityProtocol.PLAINTEXT,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER1")))
-    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+    assertEquals(SecurityProtocol.PLAINTEXT,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER2")))
   }
 
@@ -511,11 +511,11 @@ class KafkaConfigTest {
       new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))
     assertEquals(expectedListeners, config.listeners)
     assertEquals(expectedListeners, config.effectiveAdvertisedBrokerListeners)
-    val expectedSecurityProtocolMap = Map(
-      new ListenerName("CLIENT") -> SecurityProtocol.SSL,
-      new ListenerName("REPLICATION") -> SecurityProtocol.SSL,
-      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT,
-      new ListenerName("CONTROLLER") -> SecurityProtocol.PLAINTEXT
+    val expectedSecurityProtocolMap = util.Map.of(
+      new ListenerName("CLIENT"), SecurityProtocol.SSL,
+      new ListenerName("REPLICATION"), SecurityProtocol.SSL,
+      new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT,
+      new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT
     )
     assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
   }
@@ -546,10 +546,10 @@ class KafkaConfigTest {
     )
     assertEquals(expectedAdvertisedListeners, config.effectiveAdvertisedBrokerListeners)
 
-    val expectedSecurityProtocolMap = Map(
-      new ListenerName("EXTERNAL") -> SecurityProtocol.SSL,
-      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT,
-      new ListenerName("CONTROLLER") -> SecurityProtocol.PLAINTEXT
+    val expectedSecurityProtocolMap = util.Map.of(
+      new ListenerName("EXTERNAL"), SecurityProtocol.SSL,
+      new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT,
+      new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT
     )
     assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
   }
@@ -597,7 +597,7 @@ class KafkaConfigTest {
   }
 
   private def listenerListToEndPoints(listenerList: String,
-                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO.asScala) =
+                              securityProtocolMap: util.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO) =
     CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
