@@ -118,6 +118,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return true;
     }
 
+    public boolean mayReturnZeroTestTemplateInvocationContexts(ExtensionContext context) {
+        return true;
+    }
+
     private boolean isClusterTest(ExtensionContext context) {
         Method method = context.getRequiredTestMethod();
         return method.getDeclaredAnnotation(ClusterTemplate.class) != null ||
