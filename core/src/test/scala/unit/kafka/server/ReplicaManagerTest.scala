@@ -4535,33 +4535,76 @@ class ReplicaManagerTest {
       val oofProducerState = replicaManager.activeProducerState(oofPartition)
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(oofProducerState.errorCode))
 
-      // This API is supported by both leaders and followers
-
       val barPartition = new TopicPartition("bar", 0)
-      val barLeaderAndIsrRequest = makeLeaderAndIsrRequest(
-        topicId = Uuid.randomUuid(),
-        topicPartition = barPartition,
-        replicas = Seq(brokerId),
-        leaderAndIsr = new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava)
-      )
-      replicaManager.becomeLeaderOrFollower(0, barLeaderAndIsrRequest, (_, _) => ())
+      val barTopicId = Uuid.randomUuid()
+
+      val leaderDelta = createLeaderDelta(barTopicId, barPartition, brokerId)
+      val leaderMetadataImage = imageFromTopics(leaderDelta.apply())
+      replicaManager.applyDelta(leaderDelta, leaderMetadataImage)
+
       val barProducerState = replicaManager.activeProducerState(barPartition)
       assertEquals(Errors.NONE, Errors.forCode(barProducerState.errorCode))
 
-      val otherBrokerId = 1
       val bazPartition = new TopicPartition("baz", 0)
-      val bazLeaderAndIsrRequest = makeLeaderAndIsrRequest(
-        topicId = Uuid.randomUuid(),
-        topicPartition = bazPartition,
-        replicas = Seq(brokerId, otherBrokerId),
-        leaderAndIsr = new LeaderAndIsr(otherBrokerId, List(brokerId, otherBrokerId).map(Int.box).asJava)
-      )
-      replicaManager.becomeLeaderOrFollower(0, bazLeaderAndIsrRequest, (_, _) => ())
+      val bazTopicId = Uuid.randomUuid()
+      val otherBrokerId = 1
+
+      val followerDelta = createFollowerDelta(bazTopicId, bazPartition, brokerId, otherBrokerId)
+      val followerMetadataImage = imageFromTopics(followerDelta.apply())
+      replicaManager.applyDelta(followerDelta, followerMetadataImage)
+
       val bazProducerState = replicaManager.activeProducerState(bazPartition)
       assertEquals(Errors.NONE, Errors.forCode(bazProducerState.errorCode))
+
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
+  }
+
+  private def createLeaderDelta(topicId: Uuid, partition: TopicPartition, leaderId: Int): TopicsDelta = {
+    val delta = new TopicsDelta(TopicsImage.EMPTY)
+    
+    delta.replay(new TopicRecord()
+      .setName(partition.topic)
+      .setTopicId(topicId)
+    )
+
+    delta.replay(new PartitionRecord()
+      .setPartitionId(partition.partition)
+      .setTopicId(topicId)
+      .setReplicas(util.Arrays.asList(leaderId))
+      .setIsr(util.Arrays.asList(leaderId))
+      .setRemovingReplicas(Collections.emptyList())
+      .setAddingReplicas(Collections.emptyList())
+      .setLeader(leaderId)
+      .setLeaderEpoch(0)
+      .setPartitionEpoch(0)
+    )
+
+    delta
+  }
+
+  private def createFollowerDelta(topicId: Uuid, partition: TopicPartition, followerId: Int, leaderId: Int): TopicsDelta = {
+    val delta = new TopicsDelta(TopicsImage.EMPTY)
+
+    delta.replay(new TopicRecord()
+      .setName(partition.topic)
+      .setTopicId(topicId)
+    )
+
+    delta.replay(new PartitionRecord()
+      .setPartitionId(partition.partition)
+      .setTopicId(topicId)
+      .setReplicas(util.Arrays.asList(followerId, leaderId))
+      .setIsr(util.Arrays.asList(followerId, leaderId))
+      .setRemovingReplicas(Collections.emptyList())
+      .setAddingReplicas(Collections.emptyList())
+      .setLeader(leaderId)
+      .setLeaderEpoch(0)
+      .setPartitionEpoch(0)
+    )
+
+    delta
   }
 
   val FOO_UUID = Uuid.fromString("fFJBx0OmQG-UqeaT6YaSwA")
