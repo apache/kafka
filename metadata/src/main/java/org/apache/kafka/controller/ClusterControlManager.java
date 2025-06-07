@@ -92,7 +92,6 @@ public class ClusterControlManager {
         private ReplicaPlacer replicaPlacer = null;
         private FeatureControlManager featureControl = null;
         private BrokerShutdownHandler brokerShutdownHandler = null;
-        private String interBrokerListenerName = "PLAINTEXT";
         private QuorumControllerMetrics metrics = null;
 
         Builder setLogContext(LogContext logContext) {
@@ -135,10 +134,6 @@ public class ClusterControlManager {
             return this;
         }
 
-        Builder setInterBrokerListenerName(String interBrokerListenerName) {
-            this.interBrokerListenerName = interBrokerListenerName;
-            return this;
-        }
 
         Builder setMetrics(QuorumControllerMetrics metrics) {
             this.metrics = metrics;
@@ -175,7 +170,6 @@ public class ClusterControlManager {
                 replicaPlacer,
                 featureControl,
                 brokerShutdownHandler,
-                interBrokerListenerName,
                 metrics
             );
         }
@@ -266,11 +260,6 @@ public class ClusterControlManager {
     private final BrokerShutdownHandler brokerShutdownHandler;
 
     /**
-     * The statically configured inter-broker listener name.
-     */
-    private final String interBrokerListenerName;
-
-    /**
      * Maps controller IDs to controller registrations.
      */
     private final TimelineHashMap<Integer, ControllerRegistration> controllerRegistrations;
@@ -294,7 +283,6 @@ public class ClusterControlManager {
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
         BrokerShutdownHandler brokerShutdownHandler,
-        String interBrokerListenerName,
         QuorumControllerMetrics metrics
     ) {
         this.logContext = logContext;
@@ -311,7 +299,6 @@ public class ClusterControlManager {
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokerShutdownHandler = brokerShutdownHandler;
-        this.interBrokerListenerName = interBrokerListenerName;
         this.metrics = metrics;
     }
 
