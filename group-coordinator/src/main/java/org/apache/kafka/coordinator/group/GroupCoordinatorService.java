@@ -702,7 +702,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .setErrorMessage(error.message())
             .setResponses(response.responses());
         data.setResponses(
-            response.responses().stream()
+            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
                 .map(topic -> {
                     AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
                         .setTopicName(topic.topicName());
@@ -715,7 +715,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     });
                     return topicData;
                 })
-                .collect(Collectors.toList()));
+                .iterator()));
         // don't uninitialized share group state here, as we regard this alter share group offsets request failed.
         return data;
     }
