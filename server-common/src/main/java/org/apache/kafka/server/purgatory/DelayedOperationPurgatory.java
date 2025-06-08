@@ -86,6 +86,8 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
         this.purgeInterval = purgeInterval;
         this.reaperEnabled = reaperEnabled;
         this.timerEnabled = timerEnabled;
+        // The initialization of the expiration reaper thread is done after the brokerId and purgatoryName
+        // are set, so that the thread name can include these values.
         this.expirationReaper = new ExpiredOperationReaper();
 
         watcherLists = new ArrayList<>(SHARDS);
