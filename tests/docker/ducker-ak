@@ -431,15 +431,15 @@ attempting to start new ones."
     exec 3>&-
     for n in $(seq -f %02g 1 ${num_nodes}); do
         local node="ducker${n}"
-        docker exec --user=root "${node}" \
-            bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
-        [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
         # Filter out ipv4 addresses if ipv6
         if [[ "${ipv6}" == "true" ]]; then
             docker exec --user=root "${node}" \
                 bash -c "grep -v -E '([0-9]{1,3}\.){3}[0-9]{1,3}' /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
-            [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
+        else
+            docker exec --user=root "${node}" \
+                  bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
         fi
+        [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
     done
 
     if [ "$kafka_mode" == "native" ]; then
