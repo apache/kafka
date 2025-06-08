@@ -636,10 +636,10 @@ public final class AssignmentTestUtils {
         final String topicName = changelog ? CHANGELOG_TOPIC_PREFIX : TOPIC_PREFIX;
         for (int i = 0; i < tpSize; i++) {
             for (int j = 0; j < partitionSize; j++) {
-                taskTopicPartitionMap.put(new TaskId(i, j), Set.of(
+                taskTopicPartitionMap.put(new TaskId(i, j), new HashSet<>(List.of(
                     new TopicPartition(topicName + i, j),
                     new TopicPartition(topicName + ((i + 1) % tpSize), j))
-                );
+                ));
             }
         }
         return taskTopicPartitionMap;

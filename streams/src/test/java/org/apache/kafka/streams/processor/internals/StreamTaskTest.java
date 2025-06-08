@@ -159,7 +159,7 @@ public class StreamTaskTest {
     private final String topic2 = "topic2";
     private final TopicPartition partition1 = new TopicPartition(topic1, 0);
     private final TopicPartition partition2 = new TopicPartition(topic2, 0);
-    private final Set<TopicPartition> partitions = Set.of(partition1, partition2);
+    private final Set<TopicPartition> partitions = new HashSet<>(List.of(partition1, partition2));
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
 

@@ -18,6 +18,8 @@ package org.apache.kafka.coordinator.group.streams;
 
 import java.util.AbstractMap;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -42,7 +44,7 @@ public class TaskAssignmentTestUtil {
                                                           Integer... tasks) {
         return new AbstractMap.SimpleEntry<>(
             subtopologyId,
-            Set.of(tasks)
+            new HashSet<>(List.of(tasks))
         );
     }
 

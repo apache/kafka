@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -195,8 +196,8 @@ public class MockAssignorTest {
             Optional.empty(),
             Optional.empty(),
             mkMap(
-                mkEntry("test-subtopology1", Set.of(0, 2, 3)),
-                mkEntry("test-subtopology2", Set.of(0))
+                mkEntry("test-subtopology1", new HashSet<>(List.of(0, 2, 3))),
+                mkEntry("test-subtopology2", new HashSet<>(List.of(0)))
             ),
             Map.of(),
             Map.of(),
@@ -210,8 +211,8 @@ public class MockAssignorTest {
             Optional.empty(),
             Optional.empty(),
             mkMap(
-                mkEntry("test-subtopology1", Set.of(1)),
-                mkEntry("test-subtopology2", Set.of(3))
+                mkEntry("test-subtopology1", new HashSet<>(List.of(1))),
+                mkEntry("test-subtopology2", new HashSet<>(List.of(3)))
             ),
             Map.of(),
             Map.of(),
