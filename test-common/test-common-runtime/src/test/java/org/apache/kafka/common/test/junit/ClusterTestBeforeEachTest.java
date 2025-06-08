@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test;
+package org.apache.kafka.common.test.junit;
 
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.AutoStart;
 import org.apache.kafka.common.test.api.ClusterTest;
 

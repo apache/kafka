@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.test;
+package org.apache.kafka.common.test.junit;
 
 import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
@@ -22,6 +22,9 @@ import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.KafkaClusterTestKit;
+import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
@@ -66,6 +69,48 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     private final String baseDisplayName;
     private final ClusterConfig clusterConfig;
     private final boolean isCombined;
+
+    // Copied from TestUtils (package-private)
+    private static final long DEFAULT_POLL_INTERVAL_MS = 100;
+    private static final long DEFAULT_MAX_WAIT_MS = 15_000;
+
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
+    static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
+                                         final long maxWaitMs,
+                                         final java.util.function.Supplier<String> conditionDetails) throws InterruptedException {
+        final long expectedEnd = System.currentTimeMillis() + maxWaitMs;
+
+        while (true) {
+            try {
+                if (testCondition.get()) {
+                    return;
+                }
+                String conditionDetail = conditionDetails.get() == null ? "" : conditionDetails.get();
+                throw new org.apache.kafka.common.errors.TimeoutException("Condition not met: " + conditionDetail);
+            } catch (final AssertionError t) {
+                if (expectedEnd <= System.currentTimeMillis()) {
+                    throw t;
+                }
+            } catch (final Exception e) {
+                if (expectedEnd <= System.currentTimeMillis()) {
+                    throw new AssertionError(String.format("Assertion failed with an exception after %s ms", maxWaitMs), e);
+                }
+            }
+            Thread.sleep(Math.min(DEFAULT_POLL_INTERVAL_MS, maxWaitMs));
+        }
+    }
+
+    /**
+     * uses default value of 15 seconds for timeout
+     */
+    static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition, final String conditionDetails) throws InterruptedException {
+        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, () -> conditionDetails);
+    }
 
     public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
         this.baseDisplayName = baseDisplayName;
@@ -176,7 +221,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 format();
                 if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
-                    TestUtils.waitForCondition(
+                    waitForCondition(
                             () -> this.clusterTestKit.brokers().values().stream().allMatch(
                                     brokers -> brokers.brokerState() == BrokerState.RUNNING
                             ), "Broker never made it to RUNNING state.");
