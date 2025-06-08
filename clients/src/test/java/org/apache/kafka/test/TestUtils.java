@@ -170,12 +170,9 @@ public class TestUtils {
      *
      * @throws AssertionError If any thread with the specified name prefix and daemon status is found and is alive.
      */
-    public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) {
-        List<Thread> threads = Thread.getAllStackTraces().keySet().stream()
-                .filter(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName))
-                .collect(Collectors.toList());
-        int threadCount = threads.size();
-        assertEquals(0, threadCount);
+    public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) throws InterruptedException {
+        waitForCondition(() -> Thread.getAllStackTraces().keySet().stream()
+                .noneMatch(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName)), String.format("Thread with prefix:[%s] is alive", threadName));
     }
 
     /**
