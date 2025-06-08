@@ -60,6 +60,8 @@ import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchKey, DelayedShareFetchPartitionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{SystemTimer, TimerTask}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
 import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, LogReadResult, common}
@@ -1071,18 +1073,18 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     def invokeCallback(
-      verificationErrors: Map[TopicPartition, Errors]
+      verificationErrors: java.util.Map[TopicPartition, Errors]
     ): Unit = {
-      callback((errors ++ verificationErrors, verificationGuards.toMap))
+      callback((errors ++ verificationErrors.asScala, verificationGuards.toMap))
     }
 
     addPartitionsToTxnManager.foreach(_.addOrVerifyTransaction(
-      transactionalId = transactionalId,
-      producerId = producerId,
-      producerEpoch = producerEpoch,
-      topicPartitions = verificationGuards.keys.toSeq,
-      callback = invokeCallback,
-      transactionSupportedOperation = transactionSupportedOperation
+      transactionalId,
+      producerId,
+      producerEpoch,
+      verificationGuards.keys.toSeq.asJava,
+      invokeCallback,
+      transactionSupportedOperation
     ))
 
   }

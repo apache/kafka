@@ -69,6 +69,9 @@ import org.apache.kafka.server.share.SharePartitionKey
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchGroupKey, DelayedShareFetchKey, ShareFetch}
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation.{ADD_PARTITION, GENERIC_ERROR_SUPPORTED}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
@@ -155,7 +158,7 @@ class ReplicaManagerTest {
     // Anytime we try to verify, just automatically run the callback as though the transaction was verified.
     when(addPartitionsToTxnManager.addOrVerifyTransaction(any(), any(), any(), any(), any(), any())).thenAnswer { invocationOnMock =>
       val callback = invocationOnMock.getArgument(4, classOf[AddPartitionsToTxnManager.AppendCallback])
-      callback(Map.empty[TopicPartition, Errors].toMap)
+      callback.complete(util.Map.of())
     }
     // make sure metadataCache can map between topic name and id
     setupMetadataCacheWithTopicIds(topicIds, metadataCache)
@@ -2195,7 +2198,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         any[AddPartitionsToTxnManager.AppendCallback](),
         any()
       )
@@ -2232,7 +2235,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2241,7 +2244,7 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> Errors.INVALID_TXN_STATE).toMap)
+      callback.complete(util.Map.of(tp0, Errors.INVALID_TXN_STATE))
       assertEquals(Errors.INVALID_TXN_STATE, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2252,14 +2255,14 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback2.capture(),
         any()
       )
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue
-      callback2(Map.empty[TopicPartition, Errors].toMap)
+      callback2.complete(util.Map.of())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
     } finally {
@@ -2295,13 +2298,13 @@ class ReplicaManagerTest {
 
       // We should add these partitions to the manager to verify.
       val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, origin = AppendOrigin.CLIENT,
-        transactionalId = transactionalId, transactionSupportedOperation = addPartition)
+        transactionalId = transactionalId, transactionSupportedOperation = ADD_PARTITION)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2310,7 +2313,7 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       var callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> error).toMap)
+      callback.complete(util.Map.of(tp0, error))
 
       if (error != Errors.CONCURRENT_TRANSACTIONS) {
         // NOT_COORDINATOR is converted to NOT_ENOUGH_REPLICAS
@@ -2327,12 +2330,12 @@ class ReplicaManagerTest {
           ArgumentMatchers.eq(transactionalId),
           ArgumentMatchers.eq(producerId),
           ArgumentMatchers.eq(producerEpoch),
-          ArgumentMatchers.eq(Seq(tp0)),
+          ArgumentMatchers.eq(util.List.of(tp0)),
           appendCallback.capture(),
           any()
         )
         callback = appendCallback.getValue
-        callback(Map.empty[TopicPartition, Errors].toMap)
+        callback.complete(util.Map.of())
         assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
         assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
       }
@@ -2366,7 +2369,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2375,7 +2378,7 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> Errors.INVALID_PRODUCER_ID_MAPPING).toMap)
+      callback.complete(util.Map.of(tp0, Errors.INVALID_PRODUCER_ID_MAPPING))
       assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2389,7 +2392,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback2.capture(),
         any()
       )
@@ -2397,7 +2400,7 @@ class ReplicaManagerTest {
 
       // Verification should succeed, but we expect to fail with OutOfOrderSequence and for the VerificationGuard to remain.
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue
-      callback2(Map.empty[TopicPartition, Errors].toMap)
+      callback2.complete(util.Map.of())
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
       assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, result2.assertFired.error)
     } finally {
@@ -2445,7 +2448,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2455,7 +2458,7 @@ class ReplicaManagerTest {
 
       // simulate successful verification
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map.empty[TopicPartition, Errors].toMap)
+      callback.complete(util.Map.of())
 
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
@@ -2516,6 +2519,7 @@ class ReplicaManagerTest {
 
   @Test
   def testExceptionWhenUnverifiedTransactionHasMultipleProducerIds(): Unit = {
+    val localId = 1
     val tp0 = new TopicPartition(topic, 0)
     val tp1 = new TopicPartition(topic, 1)
     val transactionalId = "txn1"
@@ -2528,13 +2532,9 @@ class ReplicaManagerTest {
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0, tp1))
 
     try {
-      replicaManager.becomeLeaderOrFollower(1,
-        makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), new LeaderAndIsr(1, List(0, 1).map(Int.box).asJava)),
-        (_, _) => ())
-
-      replicaManager.becomeLeaderOrFollower(1,
-        makeLeaderAndIsrRequest(topicIds(tp1.topic), tp1, Seq(0, 1), new LeaderAndIsr(1, List(0, 1).map(Int.box).asJava)),
-        (_, _) => ())
+      val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
+      val leaderImage = imageFromTopics(leaderDelta.apply())
+      replicaManager.applyDelta(leaderDelta, leaderImage)
 
       // Append some transactional records with different producer IDs
       val transactionalRecords = mutable.Map[TopicPartition, MemoryRecords]()
@@ -2652,7 +2652,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -2669,7 +2669,7 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> Errors.INVALID_TXN_STATE).toMap)
+      callback.complete(util.Map.of(tp0, Errors.INVALID_TXN_STATE))
       assertEquals(Errors.INVALID_TXN_STATE, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2711,20 +2711,20 @@ class ReplicaManagerTest {
 
       // Start verification and return the coordinator related errors.
       val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"
-      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionSupportedOperation = addPartition)
+      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionSupportedOperation = ADD_PARTITION)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
 
       // Confirm we did not write to the log and instead returned the converted error with the correct error message.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> error).toMap)
+      callback.complete(util.Map.of(tp0, error))
       assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
       assertEquals(expectedMessage, result.assertFired.errorMessage)
     } finally {
@@ -2767,14 +2767,14 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
 
       // Confirm we did not write to the log and instead returned the converted error with the correct error message.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue
-      callback(Map(tp0 -> error).toMap)
+      callback.complete(util.Map.of(tp0, error))
       assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
       assertEquals(expectedMessage, result.assertFired.errorMessage)
     } finally {
@@ -2798,7 +2798,7 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
+        ArgumentMatchers.eq(util.List.of(tp0)),
         appendCallback.capture(),
         any()
       )
@@ -3088,7 +3088,7 @@ class ReplicaManagerTest {
                                                   entriesToAppend: Map[TopicPartition, MemoryRecords],
                                                   transactionalId: String,
                                                   requiredAcks: Short = -1,
-                                                  transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
+                                                  transactionSupportedOperation: TransactionSupportedOperation = GENERIC_ERROR_SUPPORTED
                                                  ): CallbackResult[Map[TopicIdPartition, PartitionResponse]] = {
     val result = new CallbackResult[Map[TopicIdPartition, PartitionResponse]]()
     def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
@@ -3115,7 +3115,7 @@ class ReplicaManagerTest {
                                   origin: AppendOrigin = AppendOrigin.CLIENT,
                                   requiredAcks: Short = -1,
                                   transactionalId: String,
-                                  transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
+                                  transactionSupportedOperation: TransactionSupportedOperation = GENERIC_ERROR_SUPPORTED
                                  ): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
 
@@ -3148,7 +3148,7 @@ class ReplicaManagerTest {
                                                             producerId: Long,
                                                             producerEpoch: Short,
                                                             baseSequence: Int = 0,
-                                                            transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
+                                                            transactionSupportedOperation: TransactionSupportedOperation = GENERIC_ERROR_SUPPORTED
                                                            ): CallbackResult[Either[Errors, VerificationGuard]] = {
     val result = new CallbackResult[Either[Errors, VerificationGuard]]()
     def postVerificationCallback(errorAndGuard: (Errors, VerificationGuard)): Unit = {
@@ -4532,33 +4532,76 @@ class ReplicaManagerTest {
       val oofProducerState = replicaManager.activeProducerState(oofPartition)
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(oofProducerState.errorCode))
 
-      // This API is supported by both leaders and followers
-
       val barPartition = new TopicPartition("bar", 0)
-      val barLeaderAndIsrRequest = makeLeaderAndIsrRequest(
-        topicId = Uuid.randomUuid(),
-        topicPartition = barPartition,
-        replicas = Seq(brokerId),
-        leaderAndIsr = new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava)
-      )
-      replicaManager.becomeLeaderOrFollower(0, barLeaderAndIsrRequest, (_, _) => ())
+      val barTopicId = Uuid.randomUuid()
+
+      val leaderDelta = createLeaderDelta(barTopicId, barPartition, brokerId)
+      val leaderMetadataImage = imageFromTopics(leaderDelta.apply())
+      replicaManager.applyDelta(leaderDelta, leaderMetadataImage)
+
       val barProducerState = replicaManager.activeProducerState(barPartition)
       assertEquals(Errors.NONE, Errors.forCode(barProducerState.errorCode))
 
-      val otherBrokerId = 1
       val bazPartition = new TopicPartition("baz", 0)
-      val bazLeaderAndIsrRequest = makeLeaderAndIsrRequest(
-        topicId = Uuid.randomUuid(),
-        topicPartition = bazPartition,
-        replicas = Seq(brokerId, otherBrokerId),
-        leaderAndIsr = new LeaderAndIsr(otherBrokerId, List(brokerId, otherBrokerId).map(Int.box).asJava)
-      )
-      replicaManager.becomeLeaderOrFollower(0, bazLeaderAndIsrRequest, (_, _) => ())
+      val bazTopicId = Uuid.randomUuid()
+      val otherBrokerId = 1
+
+      val followerDelta = createFollowerDelta(bazTopicId, bazPartition, brokerId, otherBrokerId)
+      val followerMetadataImage = imageFromTopics(followerDelta.apply())
+      replicaManager.applyDelta(followerDelta, followerMetadataImage)
+
       val bazProducerState = replicaManager.activeProducerState(bazPartition)
       assertEquals(Errors.NONE, Errors.forCode(bazProducerState.errorCode))
+
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
+  }
+
+  private def createLeaderDelta(topicId: Uuid, partition: TopicPartition, leaderId: Int): TopicsDelta = {
+    val delta = new TopicsDelta(TopicsImage.EMPTY)
+    
+    delta.replay(new TopicRecord()
+      .setName(partition.topic)
+      .setTopicId(topicId)
+    )
+
+    delta.replay(new PartitionRecord()
+      .setPartitionId(partition.partition)
+      .setTopicId(topicId)
+      .setReplicas(util.Arrays.asList(leaderId))
+      .setIsr(util.Arrays.asList(leaderId))
+      .setRemovingReplicas(Collections.emptyList())
+      .setAddingReplicas(Collections.emptyList())
+      .setLeader(leaderId)
+      .setLeaderEpoch(0)
+      .setPartitionEpoch(0)
+    )
+
+    delta
+  }
+
+  private def createFollowerDelta(topicId: Uuid, partition: TopicPartition, followerId: Int, leaderId: Int): TopicsDelta = {
+    val delta = new TopicsDelta(TopicsImage.EMPTY)
+
+    delta.replay(new TopicRecord()
+      .setName(partition.topic)
+      .setTopicId(topicId)
+    )
+
+    delta.replay(new PartitionRecord()
+      .setPartitionId(partition.partition)
+      .setTopicId(topicId)
+      .setReplicas(util.Arrays.asList(followerId, leaderId))
+      .setIsr(util.Arrays.asList(followerId, leaderId))
+      .setRemovingReplicas(Collections.emptyList())
+      .setAddingReplicas(Collections.emptyList())
+      .setLeader(leaderId)
+      .setLeaderEpoch(0)
+      .setPartitionEpoch(0)
+    )
+
+    delta
   }
 
   val FOO_UUID = Uuid.fromString("fFJBx0OmQG-UqeaT6YaSwA")
@@ -4605,7 +4648,7 @@ class ReplicaManagerTest {
     try {
       val directoryIds = replicaManager.logManager.directoryIdsSet.toList
       assertEquals(directoryIds.size, 2)
-      val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
+      val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
       partition.makeLeader(leaderAndIsrPartitionState(topicPartition0.topicPartition(), 1, localId, Seq(1, 2)),
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava),
@@ -4652,7 +4695,7 @@ class ReplicaManagerTest {
       // Test applying delta as leader
       val directoryIds = replicaManager.logManager.directoryIdsSet.toList
       // Make the local replica the leader
-      val leaderTopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
+      val leaderTopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
@@ -4662,7 +4705,7 @@ class ReplicaManagerTest {
       assertEquals(directoryIds.head, logDirIdHostingPartition0)
 
       // Test applying delta as follower
-      val followerTopicsDelta = topicsCreateDelta(localId, false, partition = 1, directoryIds = directoryIds)
+      val followerTopicsDelta = topicsCreateDelta(localId, false, partitions = List(1), directoryIds = directoryIds)
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
 
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
@@ -4690,7 +4733,7 @@ class ReplicaManagerTest {
 
     try {
       // Make the local replica the leader
-      val leaderTopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
+      val leaderTopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
       val topicId = leaderMetadataImage.topics().topicsByName.get("foo").id
       val topicIdPartition0 = new TopicIdPartition(topicId, topicPartition0)
@@ -4698,7 +4741,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Make the local replica the as follower
-      val followerTopicsDelta = topicsCreateDelta(localId, false, partition = 1, directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
+      val followerTopicsDelta = topicsCreateDelta(localId, false, partitions = List(1), directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
@@ -4744,7 +4787,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Make the local replica the as follower
-      val followerTopicsDelta = topicsCreateDelta(localId, false, partition = 1, directoryIds = List(DirectoryId.LOST, DirectoryId.LOST))
+      val followerTopicsDelta = topicsCreateDelta(localId, false, partitions = List(1), directoryIds = List(DirectoryId.LOST, DirectoryId.LOST))
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
@@ -5741,23 +5784,26 @@ class ReplicaManagerTest {
     }
   }
 
-  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partition:Int = 0, directoryIds: List[Uuid] = List.empty): TopicsDelta = {
+  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partitions:List[Int] = List(0), directoryIds: List[Uuid] = List.empty, topicName: String = "foo", topicId: Uuid = FOO_UUID): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1
     val delta = new TopicsDelta(TopicsImage.EMPTY)
-    delta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
-    val record = partitionRecord(startId, leader, partition)
-    if (directoryIds.nonEmpty) {
-      record.setDirectories(directoryIds.asJava)
+    delta.replay(new TopicRecord().setName(topicName).setTopicId(topicId))
+
+    partitions.foreach { partition =>
+      val record = partitionRecord(startId, leader, partition, topicId)
+      if (directoryIds.nonEmpty) {
+        record.setDirectories(directoryIds.asJava)
+      }
+      delta.replay(record)
     }
-    delta.replay(record)
 
     delta
   }
 
-  private def partitionRecord(startId: Int, leader: Int, partition: Int = 0) = {
+  private def partitionRecord(startId: Int, leader: Int, partition: Int = 0, topicId: Uuid = FOO_UUID) = {
     new PartitionRecord()
       .setPartitionId(partition)
-      .setTopicId(FOO_UUID)
+      .setTopicId(topicId)
       .setReplicas(util.Arrays.asList(startId, startId + 1))
       .setIsr(util.Arrays.asList(startId, startId + 1))
       .setRemovingReplicas(Collections.emptyList())
