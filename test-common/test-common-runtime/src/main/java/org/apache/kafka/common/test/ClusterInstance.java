@@ -66,6 +66,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -439,7 +440,7 @@ public interface ClusterInstance {
                 // Continue retrying on any exception (network issues, topic not ready, etc.)
             }
 
-            Thread.sleep(Math.min(100L, timeoutMs));
+            TimeUnit.MILLISECONDS.sleep(Math.min(100L, timeoutMs));
         }
 
         throw new AssertionError("Timing out after " + timeoutMs +
