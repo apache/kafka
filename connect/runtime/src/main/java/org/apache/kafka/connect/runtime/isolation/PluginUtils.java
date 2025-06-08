@@ -475,7 +475,7 @@ public class PluginUtils {
             if (classLoader instanceof URLClassLoader) {
                 URL[] urls = ((URLClassLoader) classLoader).getURLs();
                 if (urls != null) {
-                    result.addAll(Set.of(urls));
+                    result.addAll(new HashSet<>(Arrays.asList(urls)));
                 }
             }
             classLoader = classLoader.getParent();

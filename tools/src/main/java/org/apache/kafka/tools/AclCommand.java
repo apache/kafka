@@ -249,8 +249,8 @@ public class AclCommand {
         Set<ResourcePatternFilter> transactionalIds = filters.stream().filter(f -> f.resourceType() == ResourceType.TRANSACTIONAL_ID).collect(Collectors.toSet());
         boolean enableIdempotence = opts.options.has(opts.idempotentOpt);
 
-        Set<AccessControlEntry> topicAcls = getAcl(opts, Set.of(WRITE, DESCRIBE, CREATE));
-        Set<AccessControlEntry> transactionalIdAcls = getAcl(opts, Set.of(WRITE, DESCRIBE));
+        Set<AccessControlEntry> topicAcls = getAcl(opts, new HashSet<>(Arrays.asList(WRITE, DESCRIBE, CREATE)));
+        Set<AccessControlEntry> transactionalIdAcls = getAcl(opts, new HashSet<>(Arrays.asList(WRITE, DESCRIBE)));
 
         //Write, Describe, Create permission on topics, Write, Describe on transactionalIds
         Map<ResourcePatternFilter, Set<AccessControlEntry>> result = new HashMap<>();
@@ -272,7 +272,7 @@ public class AclCommand {
         Set<ResourcePatternFilter> groups = filters.stream().filter(f -> f.resourceType() == ResourceType.GROUP).collect(Collectors.toSet());
 
         //Read, Describe on topic, Read on consumerGroup
-        Set<AccessControlEntry> topicAcls = getAcl(opts, Set.of(READ, DESCRIBE));
+        Set<AccessControlEntry> topicAcls = getAcl(opts, new HashSet<>(Arrays.asList(READ, DESCRIBE)));
         Set<AccessControlEntry> groupAcls = getAcl(opts, Collections.singleton(READ));
 
         Map<ResourcePatternFilter, Set<AccessControlEntry>> result = new HashMap<>();
