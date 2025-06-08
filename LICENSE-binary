@@ -245,7 +245,7 @@ License Version 2.0:
 - lz4-java-1.8.0
 - maven-artifact-3.9.6
 - metrics-core-2.2.0
-- opentelemetry-proto-1.7.0-alpha
+- opentelemetry-proto-1.0.0-alpha
 - plexus-utils-3.5.1
 - rocksdbjni-9.7.3
 - scala-library-2.13.16
@@ -314,7 +314,7 @@ BSD 2-Clause
 BSD 3-Clause
 
 - jline-3.30.4, see: licenses/jline-BSD-3-clause
-- protobuf-java-4.31.0, see: licenses/protobuf-java-BSD-3-clause
+- protobuf-java-3.25.5, see: licenses/protobuf-java-BSD-3-clause
 - jakarta.activation-2.0.1, see: licenses/jakarta-BSD-3-clause
 
 ---------------------------------------
