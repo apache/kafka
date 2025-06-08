@@ -485,7 +485,7 @@ class DumpLogSegmentsTest {
         new TopicRecord().setName("test-topic").setTopicId(Uuid.randomUuid()), 0.toShort),
       new ApiMessageAndVersion(
         new PartitionChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).
-          setPartitionId(0).setIsr(util.Arrays.asList(0, 1, 2)), 0.toShort)
+          setPartitionId(0).setIsr(util.List.of(0, 1, 2)), 0.toShort)
     )
 
     val records: Array[SimpleRecord] = metadataRecords.map(message => {
@@ -565,7 +565,7 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpMetadataSnapshot(): Unit = {
-    val metadataRecords = Seq(
+    val metadataRecords = util.List.of(
       new ApiMessageAndVersion(
         new RegisterBrokerRecord().setBrokerId(0).setBrokerEpoch(10), 0.toShort),
       new ApiMessageAndVersion(
@@ -574,7 +574,7 @@ class DumpLogSegmentsTest {
         new TopicRecord().setName("test-topic").setTopicId(Uuid.randomUuid()), 0.toShort),
       new ApiMessageAndVersion(
         new PartitionChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).
-          setPartitionId(0).setIsr(util.Arrays.asList(0, 1, 2)), 0.toShort)
+          setPartitionId(0).setIsr(util.List.of(0, 1, 2)), 0.toShort)
     )
 
     val metadataLog = KafkaMetadataLog(
@@ -603,7 +603,7 @@ class DumpLogSegmentsTest {
         .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))))
         .build(MetadataRecordSerde.INSTANCE)
     ) { snapshotWriter =>
-      snapshotWriter.append(metadataRecords.asJava)
+      snapshotWriter.append(metadataRecords)
       snapshotWriter.freeze()
     }
 
@@ -662,14 +662,14 @@ class DumpLogSegmentsTest {
 
     // Get all the batches
     val output = runDumpLogSegments(Array("--files", logFilePath))
-    val lines = util.Arrays.asList(output.split("\n"): _*).listIterator()
+    val lines = util.List.of(output.split("\n"): _*).listIterator()
 
     // Get total bytes of the partial batches
     val partialBatchesBytes = readPartialBatchesBytes(lines, partialBatches)
 
     // Request only the partial batches by bytes
     val partialOutput = runDumpLogSegments(Array("--max-bytes", partialBatchesBytes.toString, "--files", logFilePath))
-    val partialLines = util.Arrays.asList(partialOutput.split("\n"): _*).listIterator()
+    val partialLines = util.List.of(partialOutput.split("\n"): _*).listIterator()
 
     // Count the total of partial batches limited by bytes
     val partialBatchesCount = countBatches(partialLines)
@@ -922,14 +922,14 @@ class DumpLogSegmentsTest {
             .setProducerEpoch(2.toShort)
             .setProducerId(12L)
             .setTransactionLastUpdateTimestampMs(123L)
-            .setTransactionPartitions(List(
+            .setTransactionPartitions(util.List.of(
               new TransactionLogValue.PartitionsSchema()
                 .setTopic("topic1")
-                .setPartitionIds(List(0, 1, 2).map(Integer.valueOf).asJava),
+                .setPartitionIds(util.List.of[Integer](0, 1, 2)),
               new TransactionLogValue.PartitionsSchema()
                 .setTopic("topic2")
-                .setPartitionIds(List(3, 4, 5).map(Integer.valueOf).asJava)
-            ).asJava)
+                .setPartitionIds(util.List.of[Integer](3, 4, 5))
+            ))
             .setTransactionStartTimestampMs(13L)
             .setTransactionStatus(0)
             .setTransactionTimeoutMs(14),
@@ -1024,7 +1024,7 @@ class DumpLogSegmentsTest {
     )
 
     val output = runDumpLogSegments(Array("--deep-iteration", "--files", logFilePath))
-    val lines = util.Arrays.asList(output.split("\n"): _*).listIterator()
+    val lines = util.List.of(output.split("\n"): _*).listIterator()
 
     for (batch <- logReadInfo.records.batches.asScala) {
       val parsedBatchOpt = readBatchMetadata(lines)
@@ -1101,13 +1101,13 @@ class DumpLogSegmentsTest {
           .setStartOffset(0)
           .setCreateTimestamp(timestamp)
           .setWriteTimestamp(timestamp)
-          .setStateBatches(List[ShareSnapshotValue.StateBatch](
+          .setStateBatches(util.List.of[ShareSnapshotValue.StateBatch](
             new ShareSnapshotValue.StateBatch()
               .setFirstOffset(0)
               .setLastOffset(4)
               .setDeliveryState(2)
               .setDeliveryCount(1)
-          ).asJava),
+          )),
           0.toShort)
       ))
     )
@@ -1127,13 +1127,13 @@ class DumpLogSegmentsTest {
           .setSnapshotEpoch(0)
           .setLeaderEpoch(0)
           .setStartOffset(0)
-          .setStateBatches(List[ShareUpdateValue.StateBatch](
+          .setStateBatches(util.List.of[ShareUpdateValue.StateBatch](
             new ShareUpdateValue.StateBatch()
               .setFirstOffset(0)
               .setLastOffset(4)
               .setDeliveryState(2)
               .setDeliveryCount(1)
-          ).asJava),
+          )),
           0.toShort)
       ))
     )

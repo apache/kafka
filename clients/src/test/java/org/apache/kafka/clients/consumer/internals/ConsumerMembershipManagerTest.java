@@ -142,17 +142,20 @@ public class ConsumerMembershipManagerTest {
 
     private ConsumerMembershipManager createMembershipManager(String groupInstanceId) {
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
-            GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
+            GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
             subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
             backgroundEventHandler, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
         return manager;
     }
 
-    private ConsumerMembershipManager createMembershipManagerJoiningGroup(String groupInstanceId,
-                                                                      String serverAssignor) {
+    private ConsumerMembershipManager createMembershipManagerJoiningGroup(
+        String groupInstanceId,
+        String serverAssignor,
+        String rackId
+    ) {
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
-                GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT,
+                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(rackId), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
                 metadata, LOG_CONTEXT, backgroundEventHandler, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
@@ -165,8 +168,17 @@ public class ConsumerMembershipManagerTest {
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         assertEquals(Optional.empty(), membershipManager.serverAssignor());
 
-        membershipManager = createMembershipManagerJoiningGroup("instance1", "Uniform");
+        membershipManager = createMembershipManagerJoiningGroup("instance1", "Uniform", null);
         assertEquals(Optional.of("Uniform"), membershipManager.serverAssignor());
+    }
+
+    @Test
+    public void testMembershipManagerRackId() {
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
+        assertEquals(Optional.empty(), membershipManager.rackId());
+
+        membershipManager = createMembershipManagerJoiningGroup(null, null, "rack1");
+        assertEquals(Optional.of("rack1"), membershipManager.rackId());
     }
 
     @Test
@@ -231,7 +243,7 @@ public class ConsumerMembershipManagerTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         ConsumerMembershipManager membershipManager = new ConsumerMembershipManager(
-                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
+                GROUP_ID, Optional.empty(), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
             backgroundEventHandler, time, rebalanceMetricsManager, true);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
@@ -2737,7 +2749,7 @@ public class ConsumerMembershipManagerTest {
     }
 
     private ConsumerMembershipManager createMemberInStableState(String groupInstanceId) {
-        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup(groupInstanceId, null);
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup(groupInstanceId, null, null);
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(new Assignment(), membershipManager.memberId());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());

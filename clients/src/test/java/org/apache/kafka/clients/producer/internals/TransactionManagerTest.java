@@ -2958,7 +2958,7 @@ public class TransactionManagerTest {
             "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
         runUntil(commitResult::isCompleted);  // the commit shouldn't be completed without being sent since the produce request failed.
         assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
-        assertThrows(TimeoutException.class, commitResult::await);
+        assertInstanceOf(TimeoutException.class, assertThrows(TransactionAbortableException.class, commitResult::await).getCause());
 
         assertTrue(transactionManager.hasAbortableError());
         assertTrue(transactionManager.hasOngoingTransaction());
