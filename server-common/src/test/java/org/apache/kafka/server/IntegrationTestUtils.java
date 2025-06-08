@@ -87,7 +87,7 @@ public class IntegrationTestUtils {
         Integer correlationId
     ) throws IOException {
         send(request, socket, clientId, correlationId);
-        return receive(socket, request.apiKey(), request.version());
+        return (T) receive(socket, request.apiKey(), request.version());
     }
 
     @SuppressWarnings("unchecked")
@@ -95,7 +95,7 @@ public class IntegrationTestUtils {
         AbstractRequest request,
         Socket socket
     ) throws IOException {
-        return sendAndReceive(request, socket, "client-id", 0);
+        return (T) sendAndReceive(request, socket, "client-id", 0);
     }
 
     @SuppressWarnings("unchecked")
@@ -104,7 +104,7 @@ public class IntegrationTestUtils {
         int port
     ) throws IOException {
         try (Socket socket = connect(port)) {
-            return sendAndReceive(request, socket);
+            return (T) sendAndReceive(request, socket);
         }
     }
 
