@@ -2694,6 +2694,7 @@ class ReplicaManagerTest {
     )
   )
   def testVerificationErrorConversionsTV2(error: Errors): Unit = {
+    val localId = 1
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
@@ -2702,9 +2703,9 @@ class ReplicaManagerTest {
 
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
     try {
-      replicaManager.becomeLeaderOrFollower(1,
-        makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), new LeaderAndIsr(1, List(0, 1).map(Int.box).asJava)),
-        (_, _) => ())
+      val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
+      val leaderImage = imageFromTopics(leaderDelta.apply())
+      replicaManager.applyDelta(leaderDelta, leaderImage)
 
       val transactionalRecords = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
@@ -2744,6 +2745,7 @@ class ReplicaManagerTest {
     )
   )
   def testVerificationErrorConversionsTV1(error: Errors): Unit = {
+    val localId = 1
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
@@ -2752,9 +2754,9 @@ class ReplicaManagerTest {
 
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
     try {
-      replicaManager.becomeLeaderOrFollower(1,
-        makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), new LeaderAndIsr(1, List(0, 1).map(Int.box).asJava)),
-        (_, _) => ())
+      val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
+      val leaderImage = imageFromTopics(leaderDelta.apply())
+      replicaManager.applyDelta(leaderDelta, leaderImage)
 
       val transactionalRecords = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
