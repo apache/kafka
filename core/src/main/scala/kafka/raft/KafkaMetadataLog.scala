@@ -638,7 +638,7 @@ object KafkaMetadataLog extends Logging {
     )
 
     if (defaultLogConfig.segmentSize() < config.logSegmentBytes()) {
-      metadataLog.error(s"Overriding ${MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG} is only supported for testing. Setting " +
+      metadataLog.error(s"Overriding ${MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG} is only supported for testing. Setting " +
         s"this value too low may lead to an inability to write batches of metadata records.")
     }
 
