@@ -961,7 +961,7 @@ public abstract class AbstractSessionBytesStoreTest {
             sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)
         ) {
             if (storeType() == StoreType.InMemoryStore) {
-                assertEquals(valuesToSet(iterator), new HashSet<>(Arrays.asList(2L, 3L, 4L)));
+                assertEquals(valuesToSet(iterator), Set.of(2L, 3L, 4L));
             } else {
                 // The 2 records with values 2L and 3L are considered expired as
                 // their end times < observed stream time - retentionPeriod + 1.

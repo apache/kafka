@@ -56,13 +56,13 @@ import org.mockito.Mockito;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -1127,7 +1127,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilRequest();
         context.collectEndQuorumRequests(
             epoch,
-            new HashSet<>(List.of(follower1.id(), follower2.id())),
+            Set.of(follower1.id(), follower2.id()),
             Optional.empty()
         );
 

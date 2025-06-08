@@ -23,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -113,8 +112,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         verboseOpt = parser.accepts("verbose", VERBOSE_DOC)
             .availableIf(describeOpt);
 
-        allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
-        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
+        allStreamsGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt);
+        allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
         options = parser.parse(args);
     }
 

@@ -1275,14 +1275,14 @@ public class ClassicGroupTest {
 
 
         group.transitionTo(COMPLETING_REBALANCE);
-        assertTrue(group.isInStates(new HashSet<>(List.of("completingrebalance")), 0));
+        assertTrue(group.isInStates(Set.of("completingrebalance"), 0));
 
         group.transitionTo(STABLE);
         assertTrue(group.isInStates(Set.of("stable"), 0));
         assertFalse(group.isInStates(Set.of("empty"), 0));
 
         group.transitionTo(DEAD);
-        assertTrue(group.isInStates(new HashSet<>(List.of("dead", " ")), 0));
+        assertTrue(group.isInStates(Set.of("dead", " "), 0));
     }
 
     @Test

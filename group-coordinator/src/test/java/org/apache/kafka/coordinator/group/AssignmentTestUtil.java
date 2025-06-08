@@ -24,7 +24,6 @@ import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -39,7 +38,7 @@ public class AssignmentTestUtil {
     ) {
         return new AbstractMap.SimpleEntry<>(
             topicId,
-            new HashSet<>(Arrays.asList(partitions))
+            Set.of(partitions)
         );
     }
 
