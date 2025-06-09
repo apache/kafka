@@ -231,7 +231,7 @@ class KafkaRequestHandlerTest {
   }
 
   def makeRequest(
-    time: Time, 
+    time: Time,
     metrics: RequestChannelMetrics,
     apiKeys: ApiKeys = ApiKeys.API_VERSIONS,
     version: Short = 0,
@@ -709,7 +709,7 @@ class KafkaRequestHandlerTest {
   @Test
   def testRequestBufferRelease(): Unit = {
     val time = new MockTime()
-    val metrics = new RequestChannelMetrics(Collections.emptySet[ApiKeys])
+    val metrics = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
     val requestChannel = new RequestChannel(10, time, metrics)
     val apiHandler = mock(classOf[ApiRequestHandler])
     val memoryPool = mock(classOf[MemoryPool])
