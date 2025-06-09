@@ -87,7 +87,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         private final Punctuator punctuator;
         private boolean cancelled = false;
 
-        private CapturedPunctuator(Instant startTime, final long intervalMs, final PunctuationType type, final Punctuator punctuator) {
+        private CapturedPunctuator(final Instant startTime, final long intervalMs, final PunctuationType type, final Punctuator punctuator) {
             this.startTime = startTime;
             this.intervalMs = intervalMs;
             this.type = type;

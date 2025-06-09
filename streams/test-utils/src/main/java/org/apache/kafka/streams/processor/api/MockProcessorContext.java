@@ -121,7 +121,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
         private final Punctuator punctuator;
         private boolean cancelled = false;
 
-        private CapturedPunctuator(Instant startTime, final Duration interval, final PunctuationType type, final Punctuator punctuator) {
+        private CapturedPunctuator(final Instant startTime, final Duration interval, final PunctuationType type, final Punctuator punctuator) {
             this.startTime = startTime;
             this.interval = interval;
             this.type = type;
