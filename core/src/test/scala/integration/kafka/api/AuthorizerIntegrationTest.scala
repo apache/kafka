@@ -3077,19 +3077,25 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @Test
-  def testConsumerGroupHeartbeatWithRegexWithGrantedTopicDescribeAcl(): Unit = {
+  def testConsumerGroupHeartbeatWithRegexWithTopicDescribeAclAddedAndRemoved(): Unit = {
     createTopicWithBrokerPrincipal(topic)
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
 
     val memberId = Uuid.randomUuid.toString;
-    val response1 = sendAndReceiveFirstRegexHeartbeat(memberId, listenerName)
-    sendAndReceiveRegexHeartbeat(response1, listenerName, None)
+    var response = sendAndReceiveFirstRegexHeartbeat(memberId, listenerName)
+    TestUtils.tryUntilNoAssertionError() {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(0), true)
+    }
 
     addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
     TestUtils.tryUntilNoAssertionError() {
-      val response2 = sendAndReceiveFirstRegexHeartbeat(memberId, listenerName)
-      sendAndReceiveRegexHeartbeat(response2, listenerName, Some(1))
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
+    }
+
+    removeAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+    TestUtils.tryUntilNoAssertionError() {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(0))
     }
   }
 
@@ -3641,6 +3647,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       data = data
         .setTopicPartitions(partitions.asJava)
         .setSubscribedTopicRegex("^top.*")
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
     }
     val request = new ConsumerGroupHeartbeatRequest.Builder(data).build()
     val resource = Set[ResourceType](GROUP, TOPIC)
