@@ -198,6 +198,19 @@ class TxnPartitionEntry {
                 return false;
             }
 
+            if (queue.isEmpty()) {
+                return false;
+            }
+
+            if (queue.peekFirst().sequence == batch.baseSequence()) {
+                queue.pollFirst();
+
+                while (!queue.isEmpty() && queue.peekFirst().complete) {
+                    queue.pollFirst();
+                }
+                return true;
+            }
+
             SequenceAwaitingCompletion correspondingEntry = null;
             for (SequenceAwaitingCompletion entry : queue) {
                 if (batch.hasSequence() && entry.sequence == batch.baseSequence()) {
