@@ -805,11 +805,11 @@ public class DelayedShareFetch extends DelayedOperation {
         }
         // Releasing the lock to move ahead with the next request in queue.
         releasePartitionLocks(topicIdPartitions);
-        // If we have a fetch request completed for a topic-partition, we release the locks for that partition,
-        // then we should check if there is a pending share fetch request for the topic-partition and complete it.
-        // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
-        // we directly call delayedShareFetchPurgatory.checkAndComplete
         replicaManager.addToActionQueue(() -> topicIdPartitions.forEach(topicIdPartition -> {
+            // If we have a fetch request completed for a share-partition, we release the locks for that partition,
+            // then we should check if there is a pending share fetch request for the share-partition and complete it.
+            // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
+            // we directly call delayedShareFetchPurgatory.checkAndComplete.
             replicaManager.completeDelayedShareFetchRequest(
                 new DelayedShareFetchGroupKey(shareFetch.groupId(), topicIdPartition.topicId(), topicIdPartition.partition()));
             // As DelayedShareFetch operation is watched over multiple keys, same operation might be
