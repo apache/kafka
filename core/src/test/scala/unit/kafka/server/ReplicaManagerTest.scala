@@ -458,8 +458,6 @@ class ReplicaManagerTest {
         .setTopicId(topicIds.get(topic))
         .setReplicas(brokerList)
         .setIsr(brokerList)
-        .setRemovingReplicas(util.List.of())
-        .setAddingReplicas(util.List.of())
         .setLeader(brokerList.get(0))
         .setLeaderEpoch(0)
         .setPartitionEpoch(0)
@@ -488,8 +486,8 @@ class ReplicaManagerTest {
         .setLeaderEpoch(1)
         .setPartitionEpoch(0)
       delta1.replay(record1)
-      val leaderMetadataImage1 = imageFromTopics(delta1.apply())
-      rm.applyDelta(delta1, leaderMetadataImage1)
+      val followerMetadataImage = imageFromTopics(delta1.apply())
+      rm.applyDelta(delta1, followerMetadataImage)
 
       assertTrue(appendResult.hasFired)
     } finally {
@@ -4147,7 +4145,6 @@ class ReplicaManagerTest {
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-      val topicIds = Map(tp0.topic -> topicId).asJava
 
       // Verify the metrics for build remote log state and for failures is zero before replicas start to fetch
       assertEquals(0, brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count)
@@ -4157,14 +4154,12 @@ class ReplicaManagerTest {
       assertEquals(0, brokerTopicStats.allTopicsStats.failedBuildRemoteLogAuxStateRate.count)
 
       val delta = new TopicsDelta(TopicsImage.EMPTY)
-      delta.replay(new TopicRecord().setName(topic).setTopicId(topicIds.get(topic)))
+      delta.replay(new TopicRecord().setName(topic).setTopicId(topicIds(topic)))
       val record = new PartitionRecord()
         .setPartitionId(0)
-        .setTopicId(topicIds.get(topic))
+        .setTopicId(topicIds(topic))
         .setReplicas(util.List.of(0, 1))
         .setIsr(util.List.of(0, 1))
-        .setRemovingReplicas(util.List.of())
-        .setAddingReplicas(util.List.of())
         .setLeader(1)
         .setLeaderEpoch(0)
         .setPartitionEpoch(0)
