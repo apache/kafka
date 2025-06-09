@@ -61,6 +61,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -4835,6 +4837,18 @@ public class TaskManagerTest {
         // verify the startup Standby is now being used as an assigned Standby
         assertEquals(Collections.emptyMap(), taskManager.activeTaskMap());
         assertEquals(Collections.singletonMap(taskId00, startupTask), taskManager.standbyTaskMap());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldStartStateUpdaterOnInit(final boolean stateUpdaterEnabled) {
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, stateUpdaterEnabled);
+        taskManager.init();
+        if (stateUpdaterEnabled) {
+            verify(stateUpdater).start();
+        } else {
+            verify(stateUpdater, never()).start();
+        }
     }
 
     private static KafkaFutureImpl<DeletedRecords> completedFuture() {

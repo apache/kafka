@@ -476,7 +476,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void subscribeInternal(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
         acquireAndEnsureOpen();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             if (topics == null)
                 throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
             if (topics.isEmpty()) {
@@ -557,7 +557,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                               configured at-least one partition assignment strategy
      */
     private void subscribeInternal(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        maybeThrowInvalidGroupIdException();
+        throwIfGroupIdNotDefined();
         if (pattern == null || pattern.toString().isEmpty())
             throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
@@ -741,7 +741,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         long commitStart = time.nanoseconds();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
@@ -767,7 +767,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             log.debug("Committing offsets: {}", offsets);
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
@@ -888,7 +888,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         long start = time.nanoseconds();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             final Map<TopicPartition, OffsetAndMetadata> offsets;
             offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
             if (offsets == null) {
@@ -1077,7 +1077,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public ConsumerGroupMetadata groupMetadata() {
         acquireAndEnsureOpen();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             return coordinator.groupMetadata();
         } finally {
             release();
@@ -1271,7 +1271,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
     }
 
-    private void maybeThrowInvalidGroupIdException() {
+    private void throwIfGroupIdNotDefined() {
         if (groupId.isEmpty())
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
                     "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
