@@ -375,6 +375,43 @@ public class PlaintextConsumerSubscriptionTest {
     }
 
     @ClusterTest
+    public void testTopicIdSubscriptionWithRe2JRegexAndOffsetsFetch() throws InterruptedException {
+        var topic1 = "topic1"; // matches subscribed pattern
+        cluster.createTopic(topic1, 2, (short) BROKER_COUNT);
+
+        Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+        try (
+                Producer<byte[], byte[]> producer = cluster.producer();
+                Consumer<byte[], byte[]> consumer = cluster.consumer(config)
+        ) {
+            assertEquals(0, consumer.assignment().size());
+            var pattern = new SubscriptionPattern("topic.*");
+            consumer.subscribe(pattern);
+
+            var assignment = Set.of(
+                    new TopicPartition(topic, 0),
+                    new TopicPartition(topic, 1),
+                    new TopicPartition(topic1, 0),
+                    new TopicPartition(topic1, 1));
+            awaitAssignment(consumer, assignment);
+
+            var totalRecords = 10;
+            var startingTimestamp = System.currentTimeMillis();
+            var tp = new TopicPartition(topic1, 0);
+            sendRecords(producer, tp, totalRecords, startingTimestamp);
+            consumeAndVerifyRecords(consumer, tp, totalRecords, 0, 0, startingTimestamp);
+
+            // Request offsets for known and unknown topics
+            var unassignedPartition = new TopicPartition(topic, 0);
+            var offsets = consumer.endOffsets(List.of(unassignedPartition, tp));
+            var expectedOffsets = Map.of(
+                    unassignedPartition, 0L,
+                    tp, (long) totalRecords);
+            assertEquals(expectedOffsets, offsets);
+        }
+    }
+
+    @ClusterTest
     public void testRe2JPatternSubscriptionAndTopicSubscription() throws InterruptedException {
         Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
