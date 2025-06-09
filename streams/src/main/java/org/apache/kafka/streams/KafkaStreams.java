@@ -487,7 +487,7 @@ public class KafkaStreams implements AutoCloseable {
             closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
-        deadThread.shutdown(true);
+        deadThread.shutdown(false);
         addStreamThread();
         if (throwable instanceof RuntimeException) {
             throw (RuntimeException) throwable;
@@ -1178,7 +1178,7 @@ public class KafkaStreams implements AutoCloseable {
                     if (streamThread.isThreadAlive() && (callingThreadIsNotCurrentStreamThread || numLiveStreamThreads() == 1)) {
                         log.info("Removing StreamThread {}", streamThread.getName());
                         streamThread.shutdown(true);
-                        if (!streamThread.getName().equals(Thread.currentThread().getName())) {
+                        if (callingThreadIsNotCurrentStreamThread) {
                             final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                             if (remainingTimeMs <= 0 || !streamThread.waitOnThreadState(StreamThread.State.DEAD, remainingTimeMs)) {
                                 log.warn("{} did not shutdown in the allotted time.", streamThread.getName());

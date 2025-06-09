@@ -893,7 +893,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            requestLeaveGroupDuringShutdown();
+            leaveGroupRequested.set(true);
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
@@ -1828,7 +1828,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
         if (leaveGroup) {
-            requestLeaveGroupDuringShutdown();
+            leaveGroupRequested.set(true);
         }
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
@@ -1869,7 +1869,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         try {
             // restore consumer isn't part of a consumer group so we use REMAIN_IN_GROUP to skip any leaveGroup checks
-            restoreConsumer.close(CloseOptions.groupMembershipOperation(REMAIN_IN_GROUP));
+            restoreConsumer.close();
         } catch (final Throwable e) {
             log.error("Failed to close restore consumer due to the following error:", e);
         }
@@ -1984,10 +1984,6 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public Optional<String> groupInstanceID() {
         return groupInstanceID;
-    }
-
-    public void requestLeaveGroupDuringShutdown() {
-        leaveGroupRequested.set(true);
     }
 
     public Map<MetricName, Metric> producerMetrics() {
