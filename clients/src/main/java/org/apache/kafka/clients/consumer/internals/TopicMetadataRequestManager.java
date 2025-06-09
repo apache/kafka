@@ -84,14 +84,10 @@ public class TopicMetadataRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // Prune any requests which have timed out
-        List<TopicMetadataRequestState> expiredRequests = new ArrayList<>();
-
         for (TopicMetadataRequestState requestState : inflightRequests) {
             if (requestState.isExpired())
-                expiredRequests.add(requestState);
+                requestState.expire();
         }
-
-        expiredRequests.forEach(TopicMetadataRequestState::expire);
 
         List<NetworkClientDelegate.UnsentRequest> requests = new ArrayList<>();
 
