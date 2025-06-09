@@ -194,8 +194,8 @@ public interface ProcessorContext {
      * @return a handle allowing cancellation of the punctuation schedule established by this method
      * @throws IllegalArgumentException if the interval is not representable in milliseconds
      */
-    Cancellable schedule(final Duration interval,
-                         final Instant startTime,
+    Cancellable schedule(final Instant startTime,
+                         final Duration interval,
                          final PunctuationType type,
                          final Punctuator callback);
 
