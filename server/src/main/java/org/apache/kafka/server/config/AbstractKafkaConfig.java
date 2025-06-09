@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
@@ -36,8 +40,10 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * During moving {@link kafka.server.KafkaConfig} out of core AbstractKafkaConfig will be the future KafkaConfig
@@ -90,5 +96,114 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public int backgroundThreads() {
         return getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG);
+    }
+
+    public int brokerId() {
+        return getInt(ServerConfigs.BROKER_ID_CONFIG);
+    }
+
+    public int requestTimeoutMs() {
+        return getInt(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG);
+    }
+
+    public List<String> controllerListenerNames() {
+        return Csv.parseCsvList(getString(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG));
+    }
+
+    public ListenerName interBrokerListenerName() {
+        return interBrokerListenerNameAndSecurityProtocol().getKey();
+    }
+
+    public SecurityProtocol interBrokerSecurityProtocol() {
+        return interBrokerListenerNameAndSecurityProtocol().getValue();
+    }
+
+    public Map<ListenerName, SecurityProtocol> effectiveListenerSecurityProtocolMap() {
+        Map<ListenerName, SecurityProtocol> mapValue =
+                getMap(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
+                        getString(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG))
+                        .entrySet()
+                        .stream()
+                        .collect(Collectors.toMap(
+                                e -> ListenerName.normalised(e.getKey()),
+                                e -> securityProtocol(
+                                        e.getValue(),
+                                        SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)));
+
+        if (!originals().containsKey(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)) {
+            // Using the default configuration since listener.security.protocol.map is not explicitly set.
+            // Before adding default PLAINTEXT mappings for controller listeners, verify that:
+            // 1. No SSL or SASL protocols are used in controller listeners
+            // 2. No SSL or SASL protocols are used in regular listeners (Note: controller listeners
+            //    are not included in 'listeners' config when process.roles=broker)
+            if (controllerListenerNames().stream().anyMatch(AbstractKafkaConfig::isSslOrSasl) ||
+                    Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).stream()
+                            .anyMatch(listenerName -> isSslOrSasl(parseListenerName(listenerName)))) {
+                return mapValue;
+            } else {
+                // Add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
+                mapValue.putAll(controllerListenerNames().stream()
+                        .filter(listenerName -> !SecurityProtocol.PLAINTEXT.name.equals(listenerName))
+                        .collect(Collectors.toMap(ListenerName::new, ignored -> SecurityProtocol.PLAINTEXT)));
+                return mapValue;
+            }
+        } else {
+            return mapValue;
+        }
+    }
+
+    public static Map<String, String> getMap(String propName, String propValue) {
+        try {
+            return Csv.parseCsvMap(propValue);
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                    String.format("Error parsing configuration property '%s': %s", propName, e.getMessage()));
+        }
+    }
+
+    private static SecurityProtocol securityProtocol(String protocolName, String configName) {
+        try {
+            return SecurityProtocol.forName(protocolName);
+        } catch (IllegalArgumentException e) {
+            throw new ConfigException(
+                    String.format("Invalid security protocol `%s` defined in %s", protocolName, configName));
+        }
+    }
+
+    private Map.Entry<ListenerName, SecurityProtocol> interBrokerListenerNameAndSecurityProtocol() {
+        String interBrokerListenerName = getString(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG);
+        if (interBrokerListenerName != null) {
+            if (originals().containsKey(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG)) {
+                throw new ConfigException(String.format("Only one of %s and %s should be set.",
+                        ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG,
+                        ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG));
+            }
+            ListenerName listenerName = ListenerName.normalised(interBrokerListenerName);
+            SecurityProtocol securityProtocol = effectiveListenerSecurityProtocolMap().get(listenerName);
+            if (securityProtocol == null) {
+                throw new ConfigException("Listener with name " + listenerName.value() + " defined in " +
+                        ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG + " not found in " +
+                        SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG + ".");
+            }
+            return Map.entry(listenerName, securityProtocol);
+        } else {
+            SecurityProtocol securityProtocol = securityProtocol(
+                    getString(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG),
+                    ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG);
+            return Map.entry(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
+        }
+    }
+
+    private static boolean isSslOrSasl(String name) {
+        return name.equals(SecurityProtocol.SSL.name) || name.equals(SecurityProtocol.SASL_SSL.name) ||
+                name.equals(SecurityProtocol.SASL_PLAINTEXT.name);
+    }
+
+    private static String parseListenerName(String connectionString) {
+        int firstColon = connectionString.indexOf(':');
+        if (firstColon < 0) {
+            throw new KafkaException("Unable to parse a listener name from " + connectionString);
+        }
+        return connectionString.substring(0, firstColon).toUpperCase(Locale.ROOT);
     }
 }
