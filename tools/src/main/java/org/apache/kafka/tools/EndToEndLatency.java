@@ -123,7 +123,7 @@ public class EndToEndLatency {
             }
 
             printResults(numMessages, totalTime, latencies);
-            consumer.commitSync();
+
         }
     }
 
