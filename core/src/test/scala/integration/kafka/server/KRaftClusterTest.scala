@@ -131,6 +131,27 @@ class KRaftClusterTest {
   }
 
   @Test
+  def testClusterWithLowerCaseListeners(): Unit = {
+    Using.resource(new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setBrokerListenerName(new ListenerName("external")).
+        setNumControllerNodes(3).
+        build()).build()
+    ) { cluster =>
+      cluster.format()
+      cluster.startup()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
+        "RaftManager was not initialized.")
+      Using.resource(Admin.create(cluster.clientProperties())) { admin =>
+        assertEquals(cluster.nodes().clusterId().toString, admin.describeCluster().clusterId().get())
+      }
+    }
+  }
+
+  @Test
   def testCreateClusterAndWaitForBrokerInRunningState(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
