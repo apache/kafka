@@ -1271,6 +1271,7 @@ class TransactionCoordinatorTest {
   def shouldNotCauseEpochOverflowWhenInitPidDuringOngoingTxnV2(): Unit = {
     // When InitProducerId is called with an ongoing transaction at epoch 32766 (Short.MaxValue - 1),
     // it should not cause an epoch overflow by incrementing twice.
+    // The only true increment happens in prepareAbortOrCommit
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_2)
 
