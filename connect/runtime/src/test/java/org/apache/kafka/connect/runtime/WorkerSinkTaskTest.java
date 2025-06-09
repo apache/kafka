@@ -710,9 +710,9 @@ public class WorkerSinkTaskTest {
 
         when(consumer.assignment())
                 .thenReturn(INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT)
-                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2))
                 .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
                 .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
                 .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3));

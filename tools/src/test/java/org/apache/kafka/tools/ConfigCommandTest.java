@@ -639,11 +639,11 @@ public class ConfigCommandTest {
 
 
         List<String> deleteArgs = Arrays.asList("--delete-config", "connection_creation_rate");
-        Set<ClientQuotaAlteration.Op> deleteAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", null)));
+        Set<ClientQuotaAlteration.Op> deleteAlterationOps = Set.of(new ClientQuotaAlteration.Op("connection_creation_rate", null));
         Map<String, Double> propsToDelete = Collections.singletonMap("connection_creation_rate", 50.0);
 
         List<String> addArgs = Arrays.asList("--add-config", "connection_creation_rate=100");
-        Set<ClientQuotaAlteration.Op> addAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0)));
+        Set<ClientQuotaAlteration.Op> addAlterationOps = Set.of(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0));
 
         verifyAlterQuotas(
             concat(singleIpArgsAndEntity.getKey(), deleteArgs),

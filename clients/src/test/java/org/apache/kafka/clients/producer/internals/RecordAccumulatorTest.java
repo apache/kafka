@@ -59,7 +59,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -1430,7 +1429,7 @@ public class RecordAccumulatorTest {
 
             // Try to drain from node1, it should return no batches.
             Map<Integer, List<ProducerBatch>> batches = accum.drain(metadataCache,
-                new HashSet<>(Collections.singletonList(node1)), 999999 /* maxSize */, now);
+                Set.of(node1), 999999 /* maxSize */, now);
             assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).isEmpty(),
                 "No batches ready to be drained on Node1");
         }
@@ -1511,7 +1510,7 @@ public class RecordAccumulatorTest {
 
         // Drain for node2, it should return 0 batches,
         Map<Integer, List<ProducerBatch>> batches = accum.drain(metadataCache,
-            new HashSet<>(Collections.singletonList(node2)), 999999 /* maxSize */, time.milliseconds());
+            Set.of(node2), 999999 /* maxSize */, time.milliseconds());
         assertTrue(batches.get(node2.id()).isEmpty());
     }
 

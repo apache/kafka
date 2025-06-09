@@ -584,7 +584,7 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions("a", "aa", 10, 0)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(2L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -640,7 +640,7 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions("a", "aa", 10, 0)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(2L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -965,7 +965,7 @@ public abstract class AbstractSessionBytesStoreTest {
             } else {
                 // The 2 records with values 2L and 3L are considered expired as
                 // their end times < observed stream time - retentionPeriod + 1.
-                assertEquals(valuesToSet(iterator), new HashSet<>(Collections.singletonList(4L)));
+                assertEquals(valuesToSet(iterator), Set.of(4L));
             }
         }
     }
