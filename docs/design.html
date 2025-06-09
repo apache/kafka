@@ -342,12 +342,12 @@
     <p>
     The error handling for transactional producer has been standardized which ensures consistent behavior and clearer error handling patterns. The exception categories are now more precisely defined:
     <ol>
-        <li><strong>RetriableException</strong>: Temporary exceptions that are retried automatically by the client. These are handled internally and don't require application intervention.</li>
-        <li><strong>RefreshRetriableException</strong>: Exceptions requiring metadata refresh before retry. These are also handled automatically by the client after refreshing metadata.</li>
-        <li><strong>AbortableException</strong>: Exceptions that require transaction abort and reprocessing. The application must handle these by aborting the transaction and resetting the consumer position.</li>
-        <li><strong>ApplicationRecoverableException</strong>: Exceptions that require application handling and producer restart. The application must implement its own recovery strategy.</li>
-        <li><strong>InvalidConfigurationException</strong>: Configuration-related exceptions that require application handling and producer restart.</li>
-        <li><strong>KafkaException</strong>: General Kafka exceptions that don't fit into the above categories.</li>
+        <li><strong>RetriableException</strong>: Temporary exceptions that are retried automatically by the client. These are handled internally and don't bubble up to the application.</li>
+        <li><strong>RefreshRetriableException</strong>: Exceptions requiring metadata refresh before retry. These are handled internally by the client after refreshing metadata and don't bubble up to the application.</li>
+        <li><strong>AbortableException</strong>: Exceptions that require transaction abort and reprocessing. These bubble up to the application, which must handle them by aborting the transaction and resetting the consumer position.</li>
+        <li><strong>ApplicationRecoverableException</strong>: Exceptions that bubble up to the application and require application handling. The application must implement its own recovery strategy, which must include restarting the producer.</li>
+        <li><strong>InvalidConfigurationException</strong>: Configuration-related exceptions that bubble up to the application and require application handling and producer restart.</li>
+        <li><strong>KafkaException</strong>: General Kafka exceptions that don't fit into the above categories. These bubble up to the application for handling.</li>
     </ol>
     <p>
     Example template code for handling transaction exceptions link : <a href="https://github.com/apache/kafka/blob/trunk/examples/src/main/java/kafka/examples/TransactionalClientDemo.java"> Transaction Client Demo</a>
