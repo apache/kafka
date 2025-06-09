@@ -458,7 +458,7 @@ public class ShareSessionHandlerTest {
         ShareFetchRequestData requestData = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
 
         // We should have cleared the unsent acknowledgements before this ShareFetch.
-        assertEquals(0, requestData.topics().get(0).partitions().get(0).acknowledgementBatches().size());
+        assertEquals(0, requestData.topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().size());
 
         ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
         expectedToSend1.add(new TopicIdPartition(fooId, 1, "foo"));

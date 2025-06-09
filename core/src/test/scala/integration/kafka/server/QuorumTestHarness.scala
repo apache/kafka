@@ -275,7 +275,7 @@ abstract class QuorumTestHarness extends Logging {
     formatter.addDirectory(metadataDir.getAbsolutePath)
     formatter.setReleaseVersion(metadataVersion)
     formatter.setUnstableFeatureVersionsEnabled(true)
-    formatter.setControllerListenerName(config.controllerListenerNames.head)
+    formatter.setControllerListenerName(config.controllerListenerNames.get(0))
     formatter.setMetadataLogDirectory(config.metadataLogDir)
 
     val transactionVersion =
