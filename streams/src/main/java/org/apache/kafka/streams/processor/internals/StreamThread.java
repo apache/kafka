@@ -1138,19 +1138,29 @@ public class StreamThread extends Thread implements ProcessingThread {
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
             if (streamsRebalanceData.isPresent()) {
-                final AsyncKafkaConsumer<byte[], byte[]> consumer = mainConsumer instanceof ConsumerWrapper
-                    ? ((ConsumerWrapper) mainConsumer).consumer()
-                    : (AsyncKafkaConsumer<byte[], byte[]>) mainConsumer;
-                consumer.subscribe(
-                    topologyMetadata.allFullSourceTopicNames(),
-                    new DefaultStreamsRebalanceListener(
-                        log,
-                        time,
-                        streamsRebalanceData.get(),
-                        this,
-                        taskManager
-                    )
-                );
+                if (mainConsumer instanceof ConsumerWrapper) {
+                    ((ConsumerWrapper) mainConsumer).subscribe(
+                        topologyMetadata.allFullSourceTopicNames(),
+                        new DefaultStreamsRebalanceListener(
+                            log,
+                            time,
+                            streamsRebalanceData.get(),
+                            this,
+                            taskManager
+                        )
+                    );
+                } else {
+                    ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
+                        topologyMetadata.allFullSourceTopicNames(),
+                        new DefaultStreamsRebalanceListener(
+                            log,
+                            time,
+                            streamsRebalanceData.get(),
+                            this,
+                            taskManager
+                        )
+                    );
+                }
             } else {
                 mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
             }

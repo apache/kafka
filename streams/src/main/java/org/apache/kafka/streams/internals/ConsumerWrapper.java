@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceListener;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
@@ -54,10 +55,6 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
         this.delegate = delegate;
     }
 
-    public AsyncKafkaConsumer<byte[], byte[]> consumer() {
-        return delegate;
-    }
-
     @Override
     public Set<TopicPartition> assignment() {
         return delegate.assignment();
@@ -76,6 +73,10 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
     @Override
     public void subscribe(final Collection<String> topics, final ConsumerRebalanceListener callback) {
         delegate.subscribe(topics, callback);
+    }
+
+    public void subscribe(final Collection<String> topics, final StreamsRebalanceListener streamsRebalanceListener) {
+        delegate.subscribe(topics, streamsRebalanceListener);
     }
 
     @Override
