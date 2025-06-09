@@ -470,10 +470,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public Cancellable schedule(Instant startTime,
-                                Duration interval,
-                                PunctuationType type,
-                                Punctuator callback) throws IllegalArgumentException {
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
         final long intervalMs = ApiUtils.validateMillisecondDuration(interval, "interval");
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");

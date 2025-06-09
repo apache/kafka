@@ -98,7 +98,10 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
-    public Cancellable schedule(Instant startTime, Duration interval, PunctuationType type, Punctuator callback) {
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) {
         return delegate.schedule(startTime, interval, type, callback);
     }
 
