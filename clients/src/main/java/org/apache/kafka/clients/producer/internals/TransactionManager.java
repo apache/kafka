@@ -795,19 +795,14 @@ public class TransactionManager {
         // or the sequence numbers; the stale batch is only removed from the inflight set.
         boolean isStaleBatch = batch.producerId() != producerIdAndEpoch.producerId || batch.producerEpoch() != producerIdAndEpoch.epoch;
 
-        // It's possible the transaction manager is already in the FATAL_ERROR
-        // state at this point. Depending on the incoming exception type,
-        // maybeTransitionToErrorState() could attempt to set the state to
-        // ABORTABLE_ERROR. For example, suppose a fatal error occurred during a
-        // transaction, and then moments later one of the batches in that
-        // transaction failed with a TimeoutException.
-        // maybeTransitionToErrorState() would then (blindly) attempt to
-        // transition to ABORTABLE_ERROR, which is invalid and would result
-        // in an IllegalStateException.
+        // It's possible the transaction manager is already in the FATAL_ERROR state at this point. Depending on the
+        // incoming exception type, maybeTransitionToErrorState() could attempt to set the state to ABORTABLE_ERROR.
+        // For example, suppose a fatal error occurred during a transaction, and then moments later one of the batches
+        // in that transaction failed with a TimeoutException. maybeTransitionToErrorState() would then (blindly)
+        // attempt to transition to ABORTABLE_ERROR, which is invalid and would result in an IllegalStateException.
         //
-        // Therefore, only attempt to transition to the FATAL_ERROR state if
-        // the batch is "fresh" *and* the transaction manager is not already
-        // in the FATAL_ERROR state.
+        // Therefore, only attempt to transition to the FATAL_ERROR state if the batch is "fresh" *and* the
+        // transaction manager is not already in the FATAL_ERROR state.
         if (!isStaleBatch && !hasFatalError())
             maybeTransitionToErrorState(exception);
 
