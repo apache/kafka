@@ -480,8 +480,6 @@ class ReplicaManagerTest {
         .setTopicId(topicIds.get(topic))
         .setReplicas(brokerList)
         .setIsr(brokerList)
-        .setRemovingReplicas(util.List.of())
-        .setAddingReplicas(util.List.of())
         .setLeader(brokerList.get(1))
         .setLeaderEpoch(1)
         .setPartitionEpoch(0)
