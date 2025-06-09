@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -307,13 +308,21 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
+        return schedule(null, interval, type, callback);
+    }
+
+    @Override
+    public Cancellable schedule(Instant startTime, Duration interval, PunctuationType type, Punctuator callback) {
         throwUnsupportedOperationExceptionIfStandby("schedule");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
         final long intervalMs = validateMillisecondDuration(interval, msgPrefix);
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
-        return streamTask.schedule(intervalMs, type, callback);
+        if (startTime == null) {
+            return streamTask.schedule(intervalMs, type, callback);
+        }
+        return streamTask.schedule(startTime, intervalMs, type, callback);
     }
 
     @Override
