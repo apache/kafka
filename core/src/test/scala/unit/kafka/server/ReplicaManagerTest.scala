@@ -5864,6 +5864,7 @@ class ReplicaManagerTest {
 
   @Test
   def testReplicaAlterLogDirs(): Unit = {
+    val localId = 0
     val tp = new TopicPartition(topic, 0)
 
     val mockReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
@@ -5880,13 +5881,9 @@ class ReplicaManagerTest {
         topicId = None
       )
 
-      val leaderAndIsrRequest = makeLeaderAndIsrRequest(
-        topicId = topicId,
-        topicPartition = tp,
-        replicas = Seq(0, 1),
-        leaderAndIsr = new LeaderAndIsr(0, List(0, 1).map(Int.box).asJava),
-      )
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+      val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
+      val leaderImage = imageFromTopics(leaderDelta.apply())
+      replicaManager.applyDelta(leaderDelta, leaderImage)
 
       // Move the replica to the second log directory.
       val partition = replicaManager.getPartitionOrException(tp)
