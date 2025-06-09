@@ -2704,8 +2704,7 @@ class ReplicaManagerTest {
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
     try {
       val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
-      val leaderImage = imageFromTopics(leaderDelta.apply())
-      replicaManager.applyDelta(leaderDelta, leaderImage)
+      replicaManager.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
 
       val transactionalRecords = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
@@ -2755,8 +2754,7 @@ class ReplicaManagerTest {
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
     try {
       val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
-      val leaderImage = imageFromTopics(leaderDelta.apply())
-      replicaManager.applyDelta(leaderDelta, leaderImage)
+      replicaManager.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
 
       val transactionalRecords = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
