@@ -185,8 +185,8 @@ public interface ProcessorContext {
      *   <li>with {@link PunctuationType#WALL_CLOCK_TIME}, on GC pause, too short interval, ...</li>
      * </ul>
      *
-     * @param startTime the time for the first punctuation. The subsequent trigger times are calculated
-     *                  using the {@code startTime} and the {@code interval}
+     * @param startTime the time for the first punctuation.
+     *                  The subsequent trigger times are calculated using the {@code startTime} and the {@code interval}
      * @param interval the time interval between punctuations (supported minimum is 1 millisecond)
      * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
      * @param callback a function consuming timestamps representing the current stream or system time
