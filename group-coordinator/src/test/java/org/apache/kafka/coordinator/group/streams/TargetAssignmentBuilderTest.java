@@ -28,6 +28,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -659,7 +660,7 @@ public class TargetAssignmentBuilderTest {
         private final int groupEpoch;
         private final TaskAssignor assignor = mock(TaskAssignor.class);
         private final SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>();
-        private final ConfiguredTopology topology = new ConfiguredTopology(0, Optional.of(subtopologies), new HashMap<>(),
+        private final ConfiguredTopology topology = new ConfiguredTopology(0, 0, Optional.of(subtopologies), new HashMap<>(),
             Optional.empty());
         private final Map<String, StreamsGroupMember> members = new HashMap<>();
         private final Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata = new HashMap<>();
@@ -711,13 +712,8 @@ public class TargetAssignmentBuilderTest {
         ) {
             String subtopologyId = Uuid.randomUuid().toString();
             Uuid topicId = Uuid.randomUuid();
-            subscriptionMetadata.put(topicName, new org.apache.kafka.coordinator.group.streams.TopicMetadata(
-                topicId,
-                topicName,
-                numTasks
-            ));
             topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numTasks);
-            subtopologies.put(subtopologyId, new ConfiguredSubtopology(Set.of(topicId.toString()), Map.of(), Set.of(), Map.of()));
+            subtopologies.put(subtopologyId, new ConfiguredSubtopology(numTasks, Set.of(topicId.toString()), Map.of(), Set.of(), Map.of()));
 
             return subtopologyId;
         }
@@ -805,8 +801,10 @@ public class TargetAssignmentBuilderTest {
                 }
             });
 
+            MetadataImage metadataImage = topicsImageBuilder.build();
+
             // Prepare the expected topology metadata.
-            TopologyMetadata topologyMetadata = new TopologyMetadata(subscriptionMetadata, subtopologies);
+            TopologyMetadata topologyMetadata = new TopologyMetadata(metadataImage, subtopologies);
 
             // Prepare the expected assignment spec.
             GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, new HashMap<>());
@@ -822,7 +820,7 @@ public class TargetAssignmentBuilderTest {
                 .withMembers(members)
                 .withTopology(topology)
                 .withStaticMembers(staticMembers)
-                .withPartitionMetadata(subscriptionMetadata)
+                .withMetadataImage(metadataImage)
                 .withTargetAssignment(targetAssignment);
 
             // Add the updated members or delete the deleted members.

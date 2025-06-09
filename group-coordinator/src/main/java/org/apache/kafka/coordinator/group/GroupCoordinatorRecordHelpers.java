@@ -44,15 +44,12 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
@@ -566,51 +563,6 @@ public class GroupCoordinatorRecordHelpers {
             new ShareGroupMemberMetadataKey()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-        );
-    }
-
-    /**
-     * Creates a ShareGroupPartitionMetadata record.
-     *
-     * @param groupId                   The group id.
-     * @param newSubscriptionMetadata   The subscription metadata.
-     * @return The record.
-     */
-    public static CoordinatorRecord newShareGroupSubscriptionMetadataRecord(
-        String groupId,
-        Map<String, TopicMetadata> newSubscriptionMetadata
-    ) {
-        ShareGroupPartitionMetadataValue value = new ShareGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) ->
-            value.topics().add(new ShareGroupPartitionMetadataValue.TopicMetadata()
-                .setTopicId(topicMetadata.id())
-                .setTopicName(topicMetadata.name())
-                .setNumPartitions(topicMetadata.numPartitions())
-            )
-        );
-
-        return CoordinatorRecord.record(
-            new ShareGroupPartitionMetadataKey()
-                .setGroupId(groupId),
-            new ApiMessageAndVersion(
-                value,
-                (short) 0
-            )
-        );
-    }
-
-    /**
-     * Creates a ShareGroupPartitionMetadata tombstone.
-     *
-     * @param groupId   The group id.
-     * @return The record.
-     */
-    public static CoordinatorRecord newShareGroupSubscriptionMetadataTombstoneRecord(
-        String groupId
-    ) {
-        return CoordinatorRecord.tombstone(
-            new ShareGroupPartitionMetadataKey()
-                .setGroupId(groupId)
         );
     }
 

@@ -454,7 +454,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final DefaultTaskManager schedulingTaskManager =
             maybeCreateSchedulingTaskManager(processingThreadsEnabled, stateUpdaterEnabled, topologyMetadata, time, threadId, tasks);
         final StateUpdater stateUpdater =
-            maybeCreateAndStartStateUpdater(
+            maybeCreateStateUpdater(
                 stateUpdaterEnabled,
                 streamsMetrics,
                 config,
@@ -635,7 +635,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return null;
     }
 
-    private static StateUpdater maybeCreateAndStartStateUpdater(final boolean stateUpdaterEnabled,
+    private static StateUpdater maybeCreateStateUpdater(final boolean stateUpdaterEnabled,
                                                                 final StreamsMetricsImpl streamsMetrics,
                                                                 final StreamsConfig streamsConfig,
                                                                 final Consumer<byte[], byte[]> restoreConsumer,
@@ -646,7 +646,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                                 final int threadIdx) {
         if (stateUpdaterEnabled) {
             final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
-            final StateUpdater stateUpdater = new DefaultStateUpdater(
+            return new DefaultStateUpdater(
                 name,
                 streamsMetrics.metricsRegistry(),
                 streamsConfig,
@@ -655,8 +655,6 @@ public class StreamThread extends Thread implements ProcessingThread {
                 topologyMetadata,
                 time
             );
-            stateUpdater.start();
-            return stateUpdater;
         } else {
             return null;
         }
@@ -885,6 +883,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         boolean cleanRun = false;
         try {
+            if (stateUpdaterEnabled) {
+                taskManager.init();
+            }
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
@@ -1137,19 +1138,29 @@ public class StreamThread extends Thread implements ProcessingThread {
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
             if (streamsRebalanceData.isPresent()) {
-                final AsyncKafkaConsumer<byte[], byte[]> consumer = mainConsumer instanceof ConsumerWrapper
-                    ? ((ConsumerWrapper) mainConsumer).consumer()
-                    : (AsyncKafkaConsumer<byte[], byte[]>) mainConsumer;
-                consumer.subscribe(
-                    topologyMetadata.allFullSourceTopicNames(),
-                    new DefaultStreamsRebalanceListener(
-                        log,
-                        time,
-                        streamsRebalanceData.get(),
-                        this,
-                        taskManager
-                    )
-                );
+                if (mainConsumer instanceof ConsumerWrapper) {
+                    ((ConsumerWrapper) mainConsumer).subscribe(
+                        topologyMetadata.allFullSourceTopicNames(),
+                        new DefaultStreamsRebalanceListener(
+                            log,
+                            time,
+                            streamsRebalanceData.get(),
+                            this,
+                            taskManager
+                        )
+                    );
+                } else {
+                    ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
+                        topologyMetadata.allFullSourceTopicNames(),
+                        new DefaultStreamsRebalanceListener(
+                            log,
+                            time,
+                            streamsRebalanceData.get(),
+                            this,
+                            taskManager
+                        )
+                    );
+                }
             } else {
                 mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
             }
