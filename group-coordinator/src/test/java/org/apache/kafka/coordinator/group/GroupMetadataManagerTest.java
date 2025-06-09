@@ -20995,7 +20995,7 @@ public class GroupMetadataManagerTest {
         Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_BATCH_REFRESH_MAX_INTERVAL_MS_CONFIG, 30000)
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 30000)
             .withMetadataImage(metadataImage)
             .withAuthorizerPlugin(authorizerPlugin)
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)

@@ -3078,6 +3078,7 @@ public class GroupMetadataManager {
         ConsumerGroupMember updatedMember,
         List<CoordinatorRecord> records
     ) {
+        final long currentTimeMs = time.milliseconds();
         String groupId = group.groupId();
         String memberId = updatedMember.memberId();
         String oldSubscribedTopicRegex = member.subscribedTopicRegex();
@@ -3137,7 +3138,7 @@ public class GroupMetadataManager {
         // 2. The last refresh is older than 10s. If the group does not have any regular
         //    expressions but the current member just brought a new one, we should continue.
         long lastRefreshTimeMs = group.lastResolvedRegularExpressionRefreshTimeMs();
-        if (time.milliseconds() <= lastRefreshTimeMs + REGEX_BATCH_REFRESH_MIN_INTERVAL_MS) {
+        if (currentTimeMs <= lastRefreshTimeMs + REGEX_BATCH_REFRESH_MIN_INTERVAL_MS) {
             return bumpGroupEpoch;
         }
 
@@ -3156,7 +3157,7 @@ public class GroupMetadataManager {
         requireRefresh |= group.lastResolvedRegularExpressionVersion() < lastMetadataImageWithNewTopics;
 
         // 3.3 The last refresh is older than the batch refresh max interval.
-        requireRefresh |= time.milliseconds() > lastRefreshTimeMs + config.consumerGroupRegexBatchRefreshMaxIntervalMs();
+        requireRefresh |= currentTimeMs > lastRefreshTimeMs + config.consumerGroupRegexRefreshIntervalMs();
 
         if (requireRefresh && !subscribedRegularExpressions.isEmpty()) {
             Set<String> regexes = Collections.unmodifiableSet(subscribedRegularExpressions.keySet());
