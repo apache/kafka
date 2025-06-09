@@ -22,37 +22,47 @@ import org.apache.kafka.common.TopicPartition;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
 
 public final class Utils {
 
-    public static String sortedTopicPartitions(Collection<TopicPartition> partitions) {
-        SortedSet<TopicPartition> sortedPartitions;
+    private static class TopicPartitionIterable implements Iterable<String> {
 
-        if (partitions instanceof SortedSet) {
-            sortedPartitions = (SortedSet<TopicPartition>) partitions;
-        } else {
-            sortedPartitions = new TreeSet<>(new TopicPartitionComparator());
-            sortedPartitions.addAll(partitions);
+        private final Collection<TopicPartition> partitions;
+
+        public TopicPartitionIterable(Collection<TopicPartition> partitions) {
+            this.partitions = partitions;
         }
 
-        return join(sortedPartitions);
+        @Override
+        public Iterator<String> iterator() {
+            return new TopicPartitionIterator(partitions);
+        }
     }
 
-    private static String join(SortedSet<?> elements) {
-        StringBuilder b = new StringBuilder();
+    private static class TopicPartitionIterator implements Iterator<String> {
 
-        for (Object o : elements) {
-            if (b.length() > 0)
-                b.append(", ");
+        private final Iterator<TopicPartition> partitionIterator;
 
-            b.append(o.toString());
+        private TopicPartitionIterator(Collection<TopicPartition> partitions) {
+            this.partitionIterator = partitions.iterator();
         }
 
-        return b.toString();
+        @Override
+        public boolean hasNext() {
+            return partitionIterator.hasNext();
+        }
+
+        @Override
+        public String next() {
+            return partitionIterator.next().toString();
+        }
+    }
+
+    public static String topicPartitionString(Collection<TopicPartition> partitions) {
+        return String.join(", ", new TopicPartitionIterable(partitions));
     }
 
     static final class PartitionComparator implements Comparator<TopicPartition>, Serializable {

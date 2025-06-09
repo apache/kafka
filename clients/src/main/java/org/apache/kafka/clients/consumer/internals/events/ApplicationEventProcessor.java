@@ -312,7 +312,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         if (log.isInfoEnabled())
-            log.info("Assigned to partition(s): {}", Utils.sortedTopicPartitions(event.partitions()));
+            log.info("Assigned to partition(s): {}", Utils.topicPartitionString(event.partitions()));
 
         try {
             if (subscriptions.assignFromUser(new HashSet<>(event.partitions())))

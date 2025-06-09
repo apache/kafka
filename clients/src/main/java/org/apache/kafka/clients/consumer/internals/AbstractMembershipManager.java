@@ -1136,7 +1136,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         revokedPartitions.retainAll(subscriptions.assignedPartitions());
 
         if (log.isInfoEnabled())
-            log.info("Revoking previously assigned partitions {}", Utils.sortedTopicPartitions(revokedPartitions));
+            log.info("Revoking previously assigned partitions {}", Utils.topicPartitionString(revokedPartitions));
 
         signalPartitionsBeingRevoked(revokedPartitions);
 

@@ -55,7 +55,7 @@ public class ConsumerRebalanceListenerInvoker {
 
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         if (log.isInfoEnabled())
-            log.info("Adding newly assigned partitions: {}", Utils.sortedTopicPartitions(assignedPartitions));
+            log.info("Adding newly assigned partitions: {}", Utils.topicPartitionString(assignedPartitions));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
@@ -70,7 +70,7 @@ public class ConsumerRebalanceListenerInvoker {
                 log.error(
                     "User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
                     listener.get().getClass().getName(),
-                    Utils.sortedTopicPartitions(assignedPartitions),
+                    Utils.topicPartitionString(assignedPartitions),
                     e
                 );
                 return e;
@@ -82,13 +82,13 @@ public class ConsumerRebalanceListenerInvoker {
 
     public Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
         if (log.isInfoEnabled())
-            log.info("Revoke previously assigned partitions {}", Utils.sortedTopicPartitions(revokedPartitions));
+            log.info("Revoke previously assigned partitions {}", Utils.topicPartitionString(revokedPartitions));
 
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
 
         if (!revokePausedPartitions.isEmpty() && log.isInfoEnabled())
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.sortedTopicPartitions(revokePausedPartitions));
+            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.topicPartitionString(revokePausedPartitions));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
@@ -103,7 +103,7 @@ public class ConsumerRebalanceListenerInvoker {
                 log.error(
                     "User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
                     listener.get().getClass().getName(),
-                    Utils.sortedTopicPartitions(revokedPartitions),
+                    Utils.topicPartitionString(revokedPartitions),
                     e
                 );
                 return e;
@@ -115,13 +115,13 @@ public class ConsumerRebalanceListenerInvoker {
 
     public Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
         if (log.isInfoEnabled())
-            log.info("Lost previously assigned partitions {}", Utils.sortedTopicPartitions(lostPartitions));
+            log.info("Lost previously assigned partitions {}", Utils.topicPartitionString(lostPartitions));
 
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
 
         if (!lostPausedPartitions.isEmpty() && log.isInfoEnabled())
-            log.info("The pause flag in partitions [{}] will be removed due to partition lost.", Utils.sortedTopicPartitions(lostPartitions));
+            log.info("The pause flag in partitions [{}] will be removed due to partition lost.", Utils.topicPartitionString(lostPartitions));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
@@ -136,7 +136,7 @@ public class ConsumerRebalanceListenerInvoker {
                 log.error(
                     "User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
                     listener.get().getClass().getName(),
-                    Utils.sortedTopicPartitions(lostPartitions),
+                    Utils.topicPartitionString(lostPartitions),
                     e
                 );
                 return e;
