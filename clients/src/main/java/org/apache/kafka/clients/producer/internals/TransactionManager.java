@@ -790,9 +790,10 @@ public class TransactionManager {
     }
 
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
-        // Compare the batch with the current ProducerIdAndEpoch. If the producer IDs are the *same* but the epochs
-        // are *different*, consider the batch as stale.
-        boolean isStaleBatch = batch.producerId() == producerIdAndEpoch.producerId && batch.producerEpoch() != producerIdAndEpoch.epoch;
+        // Compare the batch with the current ProducerIdAndEpoch. If either the producer IDs or the epochs are
+        // *different*, consider the batch as stale. This means this batch will not cause a change to either the state
+        // or the sequence numbers; the stale batch is only removed from the inflight set.
+        boolean isStaleBatch = batch.producerId() != producerIdAndEpoch.producerId || batch.producerEpoch() != producerIdAndEpoch.epoch;
 
         if (!isStaleBatch && !hasFatalError())
             maybeTransitionToErrorState(exception);
