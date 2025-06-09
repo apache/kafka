@@ -420,7 +420,7 @@ public class ClassicGroupTest {
 
         group.initNextGeneration();
 
-        Set<String> expectedTopics = new HashSet<>(Set.of("foo"));
+        Set<String> expectedTopics = Set.of("foo");
         assertEquals(expectedTopics, group.subscribedTopics().get());
 
         group.transitionTo(PREPARING_REBALANCE);
