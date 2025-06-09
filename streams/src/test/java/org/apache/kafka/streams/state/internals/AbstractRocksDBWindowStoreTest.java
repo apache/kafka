@@ -33,7 +33,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -785,7 +784,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
     private Set<String> segmentDirs(final File baseDir) {
         final File windowDir = new File(baseDir, windowStore.name());
 
-        return new HashSet<>(asList(requireNonNull(windowDir.list())));
+        return Set.of(requireNonNull(windowDir.list()));
     }
 
 }

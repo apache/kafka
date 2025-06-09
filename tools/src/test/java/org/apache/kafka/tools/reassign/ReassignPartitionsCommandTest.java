@@ -416,7 +416,7 @@ public class ReassignPartitionsCommandTest {
         long initialLogDirThrottle = 1L;
         runExecuteAssignment(false, reassignment.json, -1L, initialLogDirThrottle);
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            waitForLogDirThrottle(admin, Set.of(0), initialLogDirThrottle);
+            waitForLogDirThrottle(admin, new HashSet<>(singletonList(0)), initialLogDirThrottle);
 
             // Now increase the throttle and verify that the log dir movement completes
             long updatedLogDirThrottle = 3000000L;
@@ -749,7 +749,7 @@ public class ReassignPartitionsCommandTest {
             waitForVerifyAssignment(admin, assignment, true,
                     new VerifyAssignmentResult(partStates, true, Collections.emptyMap(), false));
             // Cancel the reassignment.
-            assertEquals(new AbstractMap.SimpleImmutableEntry<>(new HashSet<>(asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(assignment, true, useBootstrapServer));
+            assertEquals(new AbstractMap.SimpleImmutableEntry<>(Set.of(foo0, baz1), Collections.emptySet()), runCancelAssignment(assignment, true, useBootstrapServer));
             // Broker throttles are still active because we passed --preserve-throttles
             waitForInterBrokerThrottle(admin, asList(0, 1, 2, 3), interBrokerThrottle);
             // Cancelling the reassignment again should reveal nothing to cancel.
@@ -769,7 +769,7 @@ public class ReassignPartitionsCommandTest {
      */
     private void removeReplicationThrottleForPartitions(TopicPartition part) {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            removePartitionReplicaThrottles(admin, Set.of(part));
+            removePartitionReplicaThrottles(admin, new HashSet<>(singleton(part)));
             assertDoesNotThrow(() -> throttleAllBrokersReplication(admin, asList(0, 1, 2, 3), Integer.MAX_VALUE));
         }
     }
