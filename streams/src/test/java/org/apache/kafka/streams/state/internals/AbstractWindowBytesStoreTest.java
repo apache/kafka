@@ -145,7 +145,7 @@ public abstract class AbstractWindowBytesStoreTest {
         assertEquals("two+6", windowStore.fetch(2, defaultStartTime + 8L));
 
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(
                 2,
                 ofEpochMilli(defaultStartTime - 2L - WINDOW_SIZE),
@@ -229,7 +229,7 @@ public abstract class AbstractWindowBytesStoreTest {
                 ofEpochMilli(defaultStartTime + 11L - WINDOW_SIZE),
                 ofEpochMilli(defaultStartTime + 11L + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(
                 2,
                 ofEpochMilli(defaultStartTime + 12L - WINDOW_SIZE),
@@ -582,13 +582,13 @@ public abstract class AbstractWindowBytesStoreTest {
         putSecondBatch(windowStore, defaultStartTime);
 
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime - 1L - WINDOW_SIZE), ofEpochMilli(defaultStartTime - 1L))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime - WINDOW_SIZE), ofEpochMilli(defaultStartTime))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 1L - WINDOW_SIZE), ofEpochMilli(defaultStartTime + 1L))));
         assertEquals(
             new HashSet<>(Collections.singletonList("two")),
@@ -621,10 +621,10 @@ public abstract class AbstractWindowBytesStoreTest {
             new HashSet<>(Collections.singletonList("two+6")),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 11L - WINDOW_SIZE), ofEpochMilli(defaultStartTime + 11L))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 12L - WINDOW_SIZE), ofEpochMilli(defaultStartTime + 12L))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 13L - WINDOW_SIZE), ofEpochMilli(defaultStartTime + 13L))));
 
         // Flush the store and verify all current entries were properly flushed ...
@@ -662,7 +662,7 @@ public abstract class AbstractWindowBytesStoreTest {
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 2L),
                 ofEpochMilli(defaultStartTime + 2L + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(3, ofEpochMilli(defaultStartTime + 3L),
                 ofEpochMilli(defaultStartTime + 3L + WINDOW_SIZE))));
         assertEquals(
@@ -677,7 +677,7 @@ public abstract class AbstractWindowBytesStoreTest {
         putSecondBatch(windowStore, defaultStartTime);
 
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime - 2L),
                 ofEpochMilli(defaultStartTime - 2L + WINDOW_SIZE))));
         assertEquals(
@@ -721,19 +721,19 @@ public abstract class AbstractWindowBytesStoreTest {
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 8L),
                 ofEpochMilli(defaultStartTime + 8L + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 9L),
                 ofEpochMilli(defaultStartTime + 9L + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 10L),
                 ofEpochMilli(defaultStartTime + 10L + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 11L),
                 ofEpochMilli(defaultStartTime + 11L + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 12L),
                 ofEpochMilli(defaultStartTime + 12L + WINDOW_SIZE))));
 
@@ -800,7 +800,7 @@ public abstract class AbstractWindowBytesStoreTest {
                 ofEpochMilli(defaultStartTime + 3L - WINDOW_SIZE),
                 ofEpochMilli(defaultStartTime + 3L + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.emptyList()),
+            Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(
                 0,
                 ofEpochMilli(defaultStartTime + 4L - WINDOW_SIZE),
