@@ -312,7 +312,11 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
     }
 
     @Override
-    public Cancellable schedule(Instant startTime, Duration interval, PunctuationType type, Punctuator callback) {
+    public Cancellable schedule(
+            final Instant startTime,
+            final Duration interval,
+            final PunctuationType type,
+            final Punctuator callback) throws IllegalArgumentException {
         throwUnsupportedOperationExceptionIfStandby("schedule");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
         final long intervalMs = validateMillisecondDuration(interval, msgPrefix);
