@@ -2189,7 +2189,7 @@ public class KafkaAdminClientTest {
                             .setConfigs(emptyList())))));
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(singletonList(
                     topic)).values();
-            assertEquals(new HashSet<>(singletonList(topic)), result.keySet());
+            assertEquals(Set.of(topic), result.keySet());
             assertNotNull(result.get(topic).get());
             assertNull(result.get(unrequested));
         }

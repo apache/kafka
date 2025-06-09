@@ -416,7 +416,7 @@ public class ReassignPartitionsCommandTest {
         long initialLogDirThrottle = 1L;
         runExecuteAssignment(false, reassignment.json, -1L, initialLogDirThrottle);
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            waitForLogDirThrottle(admin, new HashSet<>(singletonList(0)), initialLogDirThrottle);
+            waitForLogDirThrottle(admin, Set.of(0), initialLogDirThrottle);
 
             // Now increase the throttle and verify that the log dir movement completes
             long updatedLogDirThrottle = 3000000L;
@@ -769,7 +769,7 @@ public class ReassignPartitionsCommandTest {
      */
     private void removeReplicationThrottleForPartitions(TopicPartition part) {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            removePartitionReplicaThrottles(admin, new HashSet<>(singleton(part)));
+            removePartitionReplicaThrottles(admin, Set.of(part));
             assertDoesNotThrow(() -> throttleAllBrokersReplication(admin, asList(0, 1, 2, 3), Integer.MAX_VALUE));
         }
     }
