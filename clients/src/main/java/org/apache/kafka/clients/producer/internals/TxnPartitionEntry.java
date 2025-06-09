@@ -23,11 +23,7 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 
-import java.util.Comparator;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
-import java.util.SortedSet;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.function.Consumer;
 
 class TxnPartitionEntry {
@@ -170,5 +166,80 @@ class TxnPartitionEntry {
         }
         this.nextSequence = updatedSequence;
         return true;
+    }
+
+    private static class SequenceAwaitingCompletion {
+        private final int sequence;
+        private boolean complete;
+
+        SequenceAwaitingCompletion(int sequence) {
+            this.sequence = sequence;
+            this.complete = false;
+        }
+
+        public void markComplete() {
+            this.complete = true;
+        }
+    }
+
+    private static class SequencesAwaitingCompletion {
+        private final Deque<SequenceAwaitingCompletion> queue = new ArrayDeque<>();
+        private final ProducerIdAndEpoch producerIdAndEpoch;
+        private final int capacity;
+
+        SequencesAwaitingCompletion(int capacity, ProducerIdAndEpoch producerIdAndEpoch) {
+            this.capacity = capacity;
+            this.producerIdAndEpoch = producerIdAndEpoch;
+        }
+
+        public boolean markComplete(ProducerBatch batch) {
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(batch.producerId(), batch.producerEpoch());
+            if (!producerIdAndEpoch.equals(this.producerIdAndEpoch)) {
+                return false;
+            }
+
+            SequenceAwaitingCompletion correspondingEntry = null;
+            for (SequenceAwaitingCompletion entry : queue) {
+                if (batch.hasSequence() && entry.sequence == batch.baseSequence()) {
+                    correspondingEntry = entry;
+                    break;
+                }
+            }
+
+            if (correspondingEntry == null) {
+                return false;
+            }
+
+            correspondingEntry.markComplete();
+            return true;
+        }
+
+        public boolean canInsert(ProducerBatch batch) {
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(batch.producerId(), batch.producerEpoch());
+            if (!producerIdAndEpoch.equals(this.producerIdAndEpoch)) {
+                return false;
+            }
+            if (queue.size() < this.capacity) {
+                return true;
+            }
+
+            for (SequenceAwaitingCompletion entry : queue) {
+                if (batch.hasSequence() && entry.sequence == batch.baseSequence()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public boolean insert(ProducerBatch batch) {
+            for (SequenceAwaitingCompletion entry : queue) {
+                if (batch.hasSequence() && entry.sequence == batch.baseSequence()) {
+                    return true;
+                }
+            }
+
+            this.queue.push(new SequenceAwaitingCompletion(batch.baseSequence()));
+            return true;
+        }
     }
 }
