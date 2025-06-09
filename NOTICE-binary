@@ -160,7 +160,7 @@ The project maintains the following source code repositories:
 
 This project leverages the following third party content.
 
-JUnit (4.12)
+JUnit (5.13)
 
 * License: Eclipse Public License
 
@@ -248,7 +248,7 @@ javaee-api (7.0)
 
 * License: Apache-2.0 AND W3C
 
-JUnit (4.11)
+JUnit (5.13)
 
 * License: Common Public License 1.0
 
