@@ -78,7 +78,7 @@ versions += [
   jfreechart: "1.0.0",
   jopt: "5.0.4",
   jose4j: "0.9.6",
-  junit: "5.10.2",
+  junit: "5.13.1",
   jqwik: "1.9.2",
   kafka_0110: "0.11.0.3",
   kafka_10: "1.0.2",
@@ -127,7 +127,7 @@ versions += [
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   zstd: "1.5.6-10",
-  junitPlatform: "1.10.2",
+  junitPlatform: "1.13.1",
   hdrHistogram: "2.2.2",
   hash4j: "0.22.0"
 ]
