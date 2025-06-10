@@ -3116,7 +3116,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // member permissions while computing assignments.
     var member2Response = sendAndReceiveFirstRegexHeartbeat("memberWithLimitedAccess", listenerName)
     member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(1))
-    member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, None, fullRequest = true)
+    member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(1), fullRequest = true)
     member2Response = sendAndReceiveRegexHeartbeat(member2Response, listenerName, Some(1))
 
     // Create another topic and send heartbeats on member1 to trigger regex refresh
