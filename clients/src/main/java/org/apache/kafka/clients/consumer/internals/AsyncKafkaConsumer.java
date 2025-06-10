@@ -954,7 +954,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commit(final CommitEvent commitEvent) {
-        maybeThrowInvalidGroupIdException();
+        throwIfGroupIdNotDefined();
         offsetCommitCallbackInvoker.executeCallbacks();
 
         if (commitEvent.offsets().isPresent() && commitEvent.offsets().get().isEmpty()) {
@@ -1083,7 +1083,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         long start = time.nanoseconds();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             if (partitions.isEmpty()) {
                 return Collections.emptyMap();
             }
@@ -1107,7 +1107,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private void maybeThrowInvalidGroupIdException() {
+    private void throwIfGroupIdNotDefined() {
         if (groupMetadata.get().isEmpty()) {
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
                 "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
@@ -1346,7 +1346,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public ConsumerGroupMetadata groupMetadata() {
         acquireAndEnsureOpen();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             return groupMetadata.get().get();
         } finally {
             release();
@@ -2028,7 +2028,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void subscribeInternal(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
         acquireAndEnsureOpen();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             if (pattern == null || pattern.toString().isEmpty())
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
@@ -2052,7 +2052,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                                   Optional<ConsumerRebalanceListener> listener) {
         acquireAndEnsureOpen();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             throwIfSubscriptionPatternIsInvalid(pattern);
             log.info("Subscribing to regular expression {}", pattern);
             applicationEventHandler.addAndGet(new TopicRe2JPatternSubscriptionChangeEvent(
@@ -2076,7 +2076,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void subscribeInternal(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
         acquireAndEnsureOpen();
         try {
-            maybeThrowInvalidGroupIdException();
+            throwIfGroupIdNotDefined();
             if (topics == null)
                 throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
             if (topics.isEmpty()) {

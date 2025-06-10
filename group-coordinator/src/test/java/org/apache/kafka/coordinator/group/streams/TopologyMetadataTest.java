@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -82,11 +81,9 @@ class TopologyMetadataTest {
 
     @Test
     void testMaxNumInputPartitions() {
-        ConfiguredInternalTopic internalTopic = mock(ConfiguredInternalTopic.class);
         ConfiguredSubtopology subtopology = mock(ConfiguredSubtopology.class);
         subtopologyMap.put("subtopology1", subtopology);
-        when(subtopology.sourceTopics()).thenReturn(Set.of("source_topic"));
-        when(subtopology.repartitionSourceTopics()).thenReturn(Map.of("repartition_source_topic", internalTopic));
+        when(subtopology.numberOfTasks()).thenReturn(4);
 
         assertEquals(4, topologyMetadata.maxNumInputPartitions("subtopology1"));
     }
@@ -110,15 +107,5 @@ class TopologyMetadataTest {
     @Test
     void testMaxNumInputPartitionsThrowsExceptionWhenSubtopologyIdDoesNotExist() {
         assertThrows(NoSuchElementException.class, () -> topologyMetadata.maxNumInputPartitions("non_existent_subtopology"));
-    }
-
-    @Test
-    void testMaxNumInputPartitionsThrowsExceptionWhenSubtopologyContainsNoSourceTopics() {
-        ConfiguredSubtopology subtopology = mock(ConfiguredSubtopology.class);
-        when(subtopology.sourceTopics()).thenReturn(Set.of());
-        when(subtopology.repartitionSourceTopics()).thenReturn(Map.of());
-        subtopologyMap.put("subtopology1", subtopology);
-
-        assertThrows(IllegalStateException.class, () -> topologyMetadata.maxNumInputPartitions("subtopology1"));
     }
 }

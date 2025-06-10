@@ -65,9 +65,9 @@ class EndpointToPartitionsManagerTest {
         streamsGroup = mock(StreamsGroup.class);
         streamsGroupMember = mock(StreamsGroupMember.class);
         configuredTopology = mock(ConfiguredTopology.class);
-        configuredSubtopologyOne = new ConfiguredSubtopology(Set.of("Topic-A"), new HashMap<>(), new HashSet<>(), new HashMap<>());
+        configuredSubtopologyOne = new ConfiguredSubtopology(1, Set.of("Topic-A"), new HashMap<>(), new HashSet<>(), new HashMap<>());
         Map<String, ConfiguredInternalTopic> repartitionSourceTopics = Map.of("Topic-B",  new ConfiguredInternalTopic("Topic-B", 1, Optional.of((short) 1), Collections.emptyMap()));
-        configuredSubtopologyTwo = new ConfiguredSubtopology(new HashSet<>(), repartitionSourceTopics, new HashSet<>(), new HashMap<>());
+        configuredSubtopologyTwo = new ConfiguredSubtopology(1, new HashSet<>(), repartitionSourceTopics, new HashSet<>(), new HashMap<>());
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyOneMap = new TreeMap<>();
         configuredSubtopologyOneMap.put("0", configuredSubtopologyOne);
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyTwoMap = new TreeMap<>();
@@ -128,7 +128,7 @@ class EndpointToPartitionsManagerTest {
             .addTopic(Uuid.randomUuid(), "Topic-A", topicAPartitions)
             .addTopic(Uuid.randomUuid(), "Topic-B", topicBPartitions)
             .build();
-        configuredSubtopologyOne = new ConfiguredSubtopology(Set.of("Topic-A", "Topic-B"), new HashMap<>(), new HashSet<>(), new HashMap<>());
+        configuredSubtopologyOne = new ConfiguredSubtopology(Math.max(topicAPartitions, topicBPartitions), Set.of("Topic-A", "Topic-B"), new HashMap<>(), new HashSet<>(), new HashMap<>());
 
         activeTasks.put("0", Set.of(0, 1, 2, 3, 4));
         when(streamsGroupMember.assignedTasks()).thenReturn(new TasksTuple(activeTasks, Collections.emptyMap(), Collections.emptyMap()));
