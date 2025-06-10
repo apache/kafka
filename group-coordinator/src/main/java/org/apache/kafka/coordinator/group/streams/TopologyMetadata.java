@@ -19,14 +19,12 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.SortedMap;
-import java.util.stream.Stream;
 
 /**
  * The topology metadata class is used by the {@link org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor} to get topic and
@@ -40,14 +38,6 @@ public record TopologyMetadata(MetadataImage metadataImage, SortedMap<String, Co
     public TopologyMetadata {
         metadataImage = Objects.requireNonNull(metadataImage);
         subtopologyMap = Objects.requireNonNull(Collections.unmodifiableSortedMap(subtopologyMap));
-    }
-
-    /**
-     * @return The metadata image in topology metadata.
-     */
-    @Override
-    public MetadataImage metadataImage() {
-        return this.metadataImage;
     }
 
     /**
@@ -85,18 +75,7 @@ public record TopologyMetadata(MetadataImage metadataImage, SortedMap<String, Co
     @Override
     public int maxNumInputPartitions(String subtopologyId) {
         final ConfiguredSubtopology subtopology = getSubtopologyOrFail(subtopologyId);
-        return Stream.concat(
-            subtopology.sourceTopics().stream(),
-            subtopology.repartitionSourceTopics().keySet().stream()
-        ).map(topic -> {
-            TopicImage topicImage = metadataImage.topics().getTopic(topic);
-            if (topicImage == null) {
-                throw new IllegalStateException("Topic " + topic + " not found in metadata image");
-            }
-            return topicImage.partitions().size();
-        }).max(Integer::compareTo).orElseThrow(
-            () -> new IllegalStateException("Subtopology does not contain any source topics")
-        );
+        return subtopology.numberOfTasks();
     }
 
     private ConfiguredSubtopology getSubtopologyOrFail(String subtopologyId) {
