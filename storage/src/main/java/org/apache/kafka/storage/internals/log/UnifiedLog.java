@@ -23,6 +23,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -864,6 +865,14 @@ public class UnifiedLog implements AutoCloseable {
      */
     public VerificationGuard maybeStartTransactionVerification(long producerId, int sequence, short epoch, boolean supportsEpochBump) {
         synchronized (lock) {
+            // Check if the producer epoch is lower than the stored one, and reject early if it is
+            ProducerStateEntry entry = producerStateManager.activeProducers().get(producerId);
+            if (entry != null && epoch < entry.producerEpoch()) {
+                String message = "Epoch of producer " + producerId + " is " + epoch + ", " +
+                        "which is smaller than the last seen epoch " + entry.producerEpoch();
+                throw new InvalidProducerEpochException(message);
+            }
+
             if (hasOngoingTransaction(producerId, epoch)) {
                 return VerificationGuard.SENTINEL;
             } else {

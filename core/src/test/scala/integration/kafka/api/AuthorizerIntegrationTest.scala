@@ -725,9 +725,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       .setGroupId(shareGroup)
       .setMemberId(Uuid.randomUuid().toString)
       .setShareSessionEpoch(1)
-      .setTopics(List(new ShareAcknowledgeRequestData.AcknowledgeTopic()
+      .setTopics(new ShareAcknowledgeRequestData.AcknowledgeTopicCollection(util.List.of(new ShareAcknowledgeRequestData.AcknowledgeTopic()
         .setTopicId(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID))
-        .setPartitions(List(
+        .setPartitions(new ShareAcknowledgeRequestData.AcknowledgePartitionCollection(util.List.of(
           new ShareAcknowledgeRequestData.AcknowledgePartition()
             .setPartitionIndex(part)
             .setAcknowledgementBatches(List(
@@ -736,8 +736,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
                 .setLastOffset(1)
                 .setAcknowledgeTypes(util.List.of(1.toByte))
             ).asJava)
-        ).asJava)
-      ).asJava)
+        ).iterator))
+      ).iterator))
 
     new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
   }
@@ -3261,7 +3261,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
     val request = createShareFetchRequest
     val response = connectAndReceive[ShareFetchResponse](request, listenerName = listenerName)
-    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.data.responses.get(0).partitions.get(0).errorCode))
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.data.responses.stream().findFirst().get().partitions.get(0).errorCode))
   }
 
   @Test
@@ -3586,7 +3586,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val request = alterShareGroupOffsetsRequest
     val response = connectAndReceive[AlterShareGroupOffsetsResponse](request, listenerName = listenerName)
     assertEquals(1, response.data.responses.size)
-    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.responses.get(0).partitions.get(0).errorCode, s"Unexpected response $response")
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.responses.stream().findFirst().get().partitions.get(0).errorCode, s"Unexpected response $response")
   }
 
   private def sendAndReceiveFirstRegexHeartbeat(memberId: String,
