@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -23,7 +24,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
-import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -237,11 +237,9 @@ public class PlaintextConsumerCallbackTest {
                 // noop
             }
         });
-        TestUtils.waitForCondition(
-            () -> {
-                consumer.poll(Duration.ofMillis(100));
-                return partitionsAssigned.get();
-            },
+        ClientsTestUtils.pollUntilTrue(
+            consumer, 
+            partitionsAssigned::get, 
             "Timed out before expected rebalance completed"
         );
     }
@@ -272,11 +270,9 @@ public class PlaintextConsumerCallbackTest {
                     }
                 }
             });
-            TestUtils.waitForCondition(
-                () -> {
-                    consumer.poll(Duration.ofMillis(100));
-                    return partitionsAssigned.get();
-                },
+            ClientsTestUtils.pollUntilTrue(
+                consumer,
+                partitionsAssigned::get,
                 "Timed out before expected rebalance completed"
             );
         }

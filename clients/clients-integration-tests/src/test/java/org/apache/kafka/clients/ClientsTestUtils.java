@@ -109,12 +109,31 @@ public class ClientsTestUtils {
     }
 
     public static void pollUntilTrue(
-            Consumer<byte[], byte[]> consumer,
-            Supplier<Boolean> testCondition,
-            long waitTimeMs, String msg
+        Consumer<byte[], byte[]> consumer,
+        Supplier<Boolean> testCondition,
+        String msg
+    ) throws InterruptedException {
+        pollUntilTrue(consumer, Duration.ofMillis(100), testCondition, 15_000L, msg);
+    }
+
+    public static void pollUntilTrue(
+        Consumer<byte[], byte[]> consumer,
+        Supplier<Boolean> testCondition,
+        long waitTimeMs,
+        String msg
+    ) throws InterruptedException {
+        pollUntilTrue(consumer, Duration.ofMillis(100), testCondition, waitTimeMs, msg);
+    }
+
+    public static void pollUntilTrue(
+        Consumer<byte[], byte[]> consumer,
+        Duration timeout,
+        Supplier<Boolean> testCondition,
+        long waitTimeMs, 
+        String msg
     ) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
-            consumer.poll(Duration.ofMillis(100));
+            consumer.poll(timeout);
             return testCondition.get();
         }, waitTimeMs, msg);
     }
