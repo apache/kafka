@@ -179,6 +179,8 @@ public class QuorumControllerMetricsTest {
             metrics.updateBrokerContactTime(brokerId);
             time.sleep(1000);
             assertEquals(1000, timeSinceLastHeartbeatReceivedMs.value());
+            metrics.updateBrokerContactTime(brokerId);
+            assertEquals(0, timeSinceLastHeartbeatReceivedMs.value());
             time.sleep(100000);
             assertEquals(sessionTimeoutMs, timeSinceLastHeartbeatReceivedMs.value());
             metrics.removeTimeSinceLastHeartbeatMetrics();

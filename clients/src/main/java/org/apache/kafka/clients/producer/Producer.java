@@ -78,6 +78,11 @@ public interface Producer<K, V> extends Closeable {
     void abortTransaction() throws ProducerFencedException;
 
     /**
+     * See {@link KafkaProducer#completeTransaction(PreparedTxnState)}
+     */
+    void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException;
+
+    /**
      * @see KafkaProducer#registerMetricForSubscription(KafkaMetric) 
      */
     void registerMetricForSubscription(KafkaMetric metric);

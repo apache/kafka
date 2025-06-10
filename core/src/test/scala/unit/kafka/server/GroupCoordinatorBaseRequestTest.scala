@@ -100,6 +100,20 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     }
   }
 
+  protected def deleteTopic(
+    topic: String
+  ): Unit = {
+    val admin = cluster.admin()
+    try {
+      admin
+        .deleteTopics(TopicCollection.ofTopicNames(List(topic).asJava))
+        .all()
+        .get()
+    } finally {
+      admin.close()
+    }
+  }
+
   protected def createTopicAndReturnLeaders(
     topic: String,
     numPartitions: Int = 1,
