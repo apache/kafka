@@ -83,11 +83,11 @@ public class ConsumerMetadata extends Metadata {
             // Consumer subscribed to client-side regex => needs to request all topics to compute regex
             return MetadataRequest.Builder.allTopics();
         }
-        if (subscription.hasRe2JPatternSubscription()) {
-            // Consumer subscribed to broker-side regex => needs to request topic IDs received in assignment
+        if (subscription.hasRe2JPatternSubscription() && !subscription.assignedTopicIds().isEmpty()) {
+            // Consumer subscribed to broker-side regex with unknown assigned topics => needs to request topic IDs
             return MetadataRequest.Builder.forTopicIds(subscription.assignedTopicIds());
         }
-        // Subscription to explicit topic names.
+        // Subscription to explicit topic names or transient topics present
         List<String> topics = new ArrayList<>();
         topics.addAll(subscription.metadataTopics());
         topics.addAll(transientTopics);
