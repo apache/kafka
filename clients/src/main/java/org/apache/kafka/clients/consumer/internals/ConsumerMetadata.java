@@ -79,12 +79,19 @@ public class ConsumerMetadata extends Metadata {
      */
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
-        if (subscription.hasPatternSubscription())
+        if (subscription.hasPatternSubscription()) {
+            // Consumer subscribed to client-side regex => needs to request all topics to compute regex
             return MetadataRequest.Builder.allTopics();
+        }
+        if (subscription.hasRe2JPatternSubscription()) {
+            // Consumer subscribed to broker-side regex => needs to request topic IDs received in assignment
+            return MetadataRequest.Builder.forTopicIds(subscription.assignedTopicIds());
+        }
+        // Subscription to explicit topic names.
         List<String> topics = new ArrayList<>();
         topics.addAll(subscription.metadataTopics());
         topics.addAll(transientTopics);
-        return new MetadataRequest.Builder(topics, subscription.assignedTopicIds(), allowAutoTopicCreation);
+        return MetadataRequest.Builder.forTopicNames(topics, allowAutoTopicCreation);
     }
 
     synchronized void addTransientTopics(Set<String> topics) {

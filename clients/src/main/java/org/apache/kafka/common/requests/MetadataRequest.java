@@ -65,7 +65,7 @@ public class MetadataRequest extends AbstractRequest {
             return data;
         }
 
-        private MetadataRequestData requestTopicIds(Set<Uuid> topicIds) {
+        private static MetadataRequestData requestTopicIds(Set<Uuid> topicIds) {
             MetadataRequestData data = new MetadataRequestData();
             if (topicIds == null)
                 data.setTopics(null);
@@ -80,33 +80,24 @@ public class MetadataRequest extends AbstractRequest {
             this(topics, allowAutoTopicCreation, ApiKeys.METADATA.oldestVersion(),  ApiKeys.METADATA.latestVersion());
         }
 
-        public Builder(List<String> topicNames, Set<Uuid> topicIds, boolean allowAutoTopicCreation) {
-            super(ApiKeys.METADATA, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
-            boolean requestingTopicNames = topicNames != null && !topicNames.isEmpty();
-            boolean requestingAllTopics = topicNames == null && (topicIds == null || topicIds.isEmpty());
-            boolean requestingTopicIds = topicIds != null && !topicIds.isEmpty();
-            if (requestingTopicNames && requestingTopicIds) {
-                // Metadata requests in the broker do not support names and IDs at the same time,
-                // so if we need them both we have to request all topics.
-                // This will be the case if the consumer needs metadata for assigned topic IDs and transient topic names.
-                this.data = ALL_TOPICS_REQUEST_DATA;
-            } else if (requestingTopicNames || requestingAllTopics) {
-                this.data = requestTopicNamesOrAllTopics(topicNames, allowAutoTopicCreation);
-            } else {
-                this.data = requestTopicIds(topicIds);
-
-            }
-        }
-
-        public Builder(List<Uuid> topicIds) {
-            super(ApiKeys.METADATA, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
-            this.data = requestTopicIds(new HashSet<>(topicIds));
-        }
-
         public static Builder allTopics() {
             // This never causes auto-creation, but we set the boolean to true because that is the default value when
             // deserializing V2 and older. This way, the value is consistent after serialization and deserialization.
             return new Builder(ALL_TOPICS_REQUEST_DATA);
+        }
+
+        /**
+         * @return Builder for metadata request using topic names.
+         */
+        public static Builder forTopicNames(List<String> topicNames, boolean allowAutoTopicCreation) {
+            return new MetadataRequest.Builder(topicNames, allowAutoTopicCreation);
+        }
+
+        /**
+         * @return Builder for metadata request using topic IDs.
+         */
+        public static Builder forTopicIds(Set<Uuid> topicIds) {
+            return new MetadataRequest.Builder(requestTopicIds(new HashSet<>(topicIds)));
         }
 
         public boolean emptyTopicList() {
