@@ -445,23 +445,13 @@ class ReplicaManagerTest {
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
-      val topicIds = Collections.singletonMap(topic, topicId)
 
-      val partition = rm.createPartition(new TopicPartition(topic, 0))
+      val topicPartition = new TopicPartition(topic, 0)
+      val partition = rm.createPartition(topicPartition)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       // Make this replica the leader.
-      val delta = new TopicsDelta(TopicsImage.EMPTY)
-      delta.replay(new TopicRecord().setName(topic).setTopicId(topicIds.get(topic)))
-      val record = new PartitionRecord()
-        .setPartitionId(0)
-        .setTopicId(topicIds.get(topic))
-        .setReplicas(brokerList)
-        .setIsr(brokerList)
-        .setLeader(brokerList.get(0))
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(0)
-      delta.replay(record)
+      val delta = createLeaderDelta(topicIds(topic), topicPartition, brokerList.get(0), brokerList, brokerList)
       val leaderMetadataImage = imageFromTopics(delta.apply())
       rm.applyDelta(delta, leaderMetadataImage)
       rm.getPartitionOrException(new TopicPartition(topic, 0))
@@ -473,17 +463,7 @@ class ReplicaManagerTest {
       }
 
       // Make this replica the follower
-      val delta1 = new TopicsDelta(TopicsImage.EMPTY)
-      delta1.replay(new TopicRecord().setName(topic).setTopicId(topicIds.get(topic)))
-      val record1 = new PartitionRecord()
-        .setPartitionId(0)
-        .setTopicId(topicIds.get(topic))
-        .setReplicas(brokerList)
-        .setIsr(brokerList)
-        .setLeader(brokerList.get(1))
-        .setLeaderEpoch(1)
-        .setPartitionEpoch(0)
-      delta1.replay(record1)
+      val delta1 = createLeaderDelta(topicIds(topic), topicPartition, brokerList.get(1), brokerList, brokerList, 1)
       val followerMetadataImage = imageFromTopics(delta1.apply())
       rm.applyDelta(delta1, followerMetadataImage)
 
@@ -4106,17 +4086,7 @@ class ReplicaManagerTest {
       assertEquals(0, brokerTopicStats.allTopicsStats.buildRemoteLogAuxStateRequestRate.count)
       assertEquals(0, brokerTopicStats.allTopicsStats.failedBuildRemoteLogAuxStateRate.count)
 
-      val delta = new TopicsDelta(TopicsImage.EMPTY)
-      delta.replay(new TopicRecord().setName(topic).setTopicId(topicIds(topic)))
-      val record = new PartitionRecord()
-        .setPartitionId(0)
-        .setTopicId(topicIds(topic))
-        .setReplicas(util.List.of(0, 1))
-        .setIsr(util.List.of(0, 1))
-        .setLeader(1)
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(0)
-      delta.replay(record)
+      val delta = createLeaderDelta(topicIds(topic), new TopicPartition(topic, 0), 1, util.List.of(0, 1), util.List.of(0, 1))
       val leaderMetadataImage = imageFromTopics(delta.apply())
       replicaManager.applyDelta(delta, leaderMetadataImage)
 
