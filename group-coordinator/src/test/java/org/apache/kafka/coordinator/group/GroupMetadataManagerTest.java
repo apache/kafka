@@ -20995,7 +20995,7 @@ public class GroupMetadataManagerTest {
         Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 30000)
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 60000)
             .withMetadataImage(metadataImage)
             .withAuthorizerPlugin(authorizerPlugin)
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
@@ -21116,8 +21116,8 @@ public class GroupMetadataManagerTest {
             context.processTasks()
         );
 
-        // sleep for more than REGEX_BATCH_REFRESH_MAX_INTERVAL_MS
-        context.time.sleep(30001L);
+        // sleep for more than REGEX_REFRESH_INTERVAL_MS
+        context.time.sleep(60001L);
 
         // Access to the bar topic is granted.
         acls.put(barTopicName, AuthorizationResult.ALLOWED);

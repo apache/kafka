@@ -3089,12 +3089,12 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     }
 
     addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
-    TestUtils.tryUntilNoAssertionError() {
+    TestUtils.tryUntilNoAssertionError(waitTime = 75000) {
       response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
     }
 
     removeAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
-    TestUtils.tryUntilNoAssertionError() {
+    TestUtils.tryUntilNoAssertionError(waitTime = 75000) {
       response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(0))
     }
   }
