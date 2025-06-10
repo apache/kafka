@@ -444,7 +444,7 @@ public interface ClusterInstance {
                 Throwable cause = e.getCause();
                 if (cause instanceof UnknownTopicOrPartitionException ||
                     cause instanceof LeaderNotAvailableException) {
-
+                    continue;
                 } else {
                     throw e;
                 }
