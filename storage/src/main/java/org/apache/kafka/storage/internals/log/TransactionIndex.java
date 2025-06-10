@@ -110,7 +110,7 @@ public class TransactionIndex implements Closeable {
 
     public void close() throws IOException {
         FileChannel channel = channelOrNull();
-        if (channel != null)
+        if (channel != null && channel.isOpen())
             channel.close();
         maybeChannel = Optional.empty();
     }

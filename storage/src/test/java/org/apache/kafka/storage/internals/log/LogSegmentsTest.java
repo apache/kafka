@@ -40,7 +40,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class LogSegmentsTest {
@@ -49,7 +52,7 @@ public class LogSegmentsTest {
 
     /* create a segment with the given base offset */
     private static LogSegment createSegment(Long offset) throws IOException {
-        return LogTestUtils.createSegment(offset, logDir, 10, Time.SYSTEM);
+        return spy(LogTestUtils.createSegment(offset, logDir, 10, Time.SYSTEM));
     }
 
     @BeforeEach
@@ -274,6 +277,24 @@ public class LogSegmentsTest {
 
             Utils.delete(newDir);
         }
+    }
+
+    @Test
+    public void testCloseClosesAllLogSegmentsOnExceptionWhileClosingOne() throws IOException {
+        LogSegment seg1 = createSegment(0L);
+        LogSegment seg2 = createSegment(100L);
+        LogSegment seg3 = createSegment(200L);
+        LogSegments segments = new LogSegments(topicPartition);
+        segments.add(seg1);
+        segments.add(seg2);
+        segments.add(seg3);
+
+        doThrow(new IOException("Failure")).when(seg2).close();
+
+        assertThrows(IOException.class, segments::close, "Expected IOException to be thrown");
+        verify(seg1).close();
+        verify(seg2).close();
+        verify(seg3).close();
     }
 
 }
