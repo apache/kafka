@@ -236,11 +236,9 @@ class KafkaRaftManager[T](
   }
 
   private def buildNetworkClient(): (ListenerName, NetworkClient) = {
-    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(
-      controllerListenerName,
-      SecurityProtocol.forName(controllerListenerName.value())
-    )
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.get(0))
+    val controllerSecurityProtocol = Option(config.effectiveListenerSecurityProtocolMap.get(controllerListenerName))
+      .getOrElse(SecurityProtocol.forName(controllerListenerName.value()))
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       controllerSecurityProtocol,
       JaasContext.Type.SERVER,

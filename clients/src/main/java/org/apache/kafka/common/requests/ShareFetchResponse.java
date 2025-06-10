@@ -168,7 +168,7 @@ public class ShareFetchResponse extends AbstractResponse {
     private static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
                                                    Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
                                                    List<Node> nodeEndpoints, int acquisitionLockTimeout) {
-        Map<Uuid, ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new LinkedHashMap<>();
+        ShareFetchResponseData.ShareFetchableTopicResponseCollection topicResponses = new ShareFetchResponseData.ShareFetchableTopicResponseCollection();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry = partIterator.next();
             ShareFetchResponseData.PartitionData partitionData = entry.getValue();
@@ -180,15 +180,14 @@ public class ShareFetchResponse extends AbstractResponse {
             if (partitionData.records() == null)
                 partitionData.setRecords(MemoryRecords.EMPTY);
             // Checking if the topic is already present in the map
-            if (topicResponseList.containsKey(entry.getKey().topicId())) {
-                topicResponseList.get(entry.getKey().topicId()).partitions().add(partitionData);
-            } else {
-                List<ShareFetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
-                partitionResponses.add(partitionData);
-                topicResponseList.put(entry.getKey().topicId(), new ShareFetchResponseData.ShareFetchableTopicResponse()
+            ShareFetchResponseData.ShareFetchableTopicResponse topicResponse = topicResponses.find(entry.getKey().topicId());
+            if (topicResponse == null) {
+                topicResponse = new ShareFetchResponseData.ShareFetchableTopicResponse()
                         .setTopicId(entry.getKey().topicId())
-                        .setPartitions(partitionResponses));
+                        .setPartitions(new ArrayList<>());
+                topicResponses.add(topicResponse);
             }
+            topicResponse.partitions().add(partitionData);
         }
         ShareFetchResponseData data = new ShareFetchResponseData();
         // KafkaApis should only pass in node endpoints on error, otherwise this should be an empty list
@@ -201,7 +200,7 @@ public class ShareFetchResponse extends AbstractResponse {
         return data.setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
                 .setAcquisitionLockTimeoutMs(acquisitionLockTimeout)
-                .setResponses(new ArrayList<>(topicResponseList.values()));
+                .setResponses(topicResponses);
     }
 
     public static ShareFetchResponseData.PartitionData partitionResponse(TopicIdPartition topicIdPartition, Errors error) {
