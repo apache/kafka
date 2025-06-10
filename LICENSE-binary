@@ -205,7 +205,7 @@
 This project bundles some components that are also licensed under the Apache
 License Version 2.0:
 
-- caffeine-3.1.8
+- caffeine-3.2.0
 - commons-beanutils-1.9.4
 - commons-collections-3.2.2
 - commons-digester-2.1
@@ -225,18 +225,19 @@ License Version 2.0:
 - jackson-module-jakarta-xmlbind-annotations-2.19.0
 - jakarta.inject-api-2.0.1
 - jakarta.validation-api-3.0.2
-- javassist-3.29.2-GA
-- jetty-alpn-client-12.0.15
-- jetty-client-12.0.15
-- jetty-ee10-servlet-12.0.15
-- jetty-ee10-servlets-12.0.15
-- jetty-http-12.0.15
-- jetty-io-12.0.15
-- jetty-security-12.0.15
-- jetty-server-12.0.15
-- jetty-session-12.0.15
-- jetty-util-12.0.15
-- jose4j-0.9.4
+- javassist-3.30.2-GA
+- jetty-alpn-client-12.0.22
+- jetty-client-12.0.22
+- jetty-ee10-servlet-12.0.22
+- jetty-ee10-servlets-12.0.22
+- jetty-http-12.0.22
+- jetty-io-12.0.22
+- jetty-security-12.0.22
+- jetty-server-12.0.22
+- jetty-session-12.0.22
+- jetty-util-12.0.22
+- jose4j-0.9.6
+- jspecify-1.0.0
 - log4j-api-2.24.3
 - log4j-core-2.24.3
 - log4j-slf4j-impl-2.24.3
@@ -250,7 +251,7 @@ License Version 2.0:
 - scala-library-2.13.16
 - scala-logging_2.13-3.9.5
 - scala-reflect-2.13.16
-- snappy-java-1.1.10.5
+- snappy-java-1.1.10.7
 - snakeyaml-2.4
 - swagger-annotations-2.2.25
 
@@ -277,12 +278,12 @@ see: licenses/eclipse-public-license-2.0
 - hk2-utils-3.0.6
 - osgi-resource-locator-1.0.3
 - aopalliance-repackaged-3.0.6
-- jersey-client-3.1.9
-- jersey-common-3.1.9
-- jersey-container-servlet-3.1.9
-- jersey-container-servlet-core-3.1.9
-- jersey-hk2-3.1.9
-- jersey-server-3.1.9
+- jersey-client-3.1.10
+- jersey-common-3.1.10
+- jersey-container-servlet-3.1.10
+- jersey-container-servlet-core-3.1.10
+- jersey-hk2-3.1.10
+- jersey-server-3.1.10
 
 ---------------------------------------
 CDDL 1.1 + GPLv2 with classpath exception
@@ -298,10 +299,10 @@ see: licenses/CDDL+GPL-1.1
 MIT License
 
 - argparse4j-0.7.0, see: licenses/argparse-MIT
-- classgraph-4.8.173, see: licenses/classgraph-MIT
+- classgraph-4.8.179, see: licenses/classgraph-MIT
 - jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 - slf4j-api-1.7.36, see: licenses/slf4j-MIT
-- pcollections-4.0.1, see: licenses/pcollections-MIT
+- pcollections-4.0.2, see: licenses/pcollections-MIT
 
 ---------------------------------------
 BSD 2-Clause
@@ -312,11 +313,11 @@ BSD 2-Clause
 ---------------------------------------
 BSD 3-Clause
 
-- jline-3.25.1, see: licenses/jline-BSD-3-clause
+- jline-3.30.4, see: licenses/jline-BSD-3-clause
 - protobuf-java-3.25.5, see: licenses/protobuf-java-BSD-3-clause
 - jakarta.activation-2.0.1, see: licenses/jakarta-BSD-3-clause
 
 ---------------------------------------
 Go License
 
-- re2j-1.7, see: licenses/re2j-GO
+- re2j-1.8, see: licenses/re2j-GO
