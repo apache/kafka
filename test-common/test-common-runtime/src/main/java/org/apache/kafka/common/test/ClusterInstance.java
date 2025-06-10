@@ -41,6 +41,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -435,9 +437,17 @@ public interface ClusterInstance {
                 if (leader.isPresent()) {
                     return leader.get();
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw e;
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof UnknownTopicOrPartitionException ||
+                    cause instanceof LeaderNotAvailableException) {
 
-            } catch (InterruptedException | ExecutionException ignored) {
-                // Continue retrying on any exception (network issues, topic not ready, etc.)
+                } else {
+                    throw e;
+                }
             }
 
             TimeUnit.MILLISECONDS.sleep(Math.min(100L, timeoutMs));
