@@ -160,9 +160,9 @@ The project maintains the following source code repositories:
 
 This project leverages the following third party content.
 
-JUnit (5.13.1)
+JUnit (4.12)
 
-* License: Eclipse Public License v2.0
+* License: Eclipse Public License
 
 
 # Notices for Jakarta Annotations
@@ -248,7 +248,7 @@ javaee-api (7.0)
 
 * License: Apache-2.0 AND W3C
 
-JUnit (5.13.1)
+JUnit (5.10.2)
 
 * License: Eclipse Public License v2.0
 
