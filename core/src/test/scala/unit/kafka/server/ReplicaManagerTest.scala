@@ -4265,7 +4265,7 @@ class ReplicaManagerTest {
       val leaderImage = imageFromTopics(leaderDelta.apply())
       replicaManager.applyDelta(leaderDelta, leaderImage)
 
-      assertNotEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
+      assertTrue(replicaManager.getPartition(topicPartition).isInstanceOf[HostedPartition.Online])
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val id = topicIds(topicPartition.topic)
       val log = replicaManager.localLog(topicPartition).get
