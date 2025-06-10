@@ -42,10 +42,10 @@
       "about": "The optimal number of records for batches of acquired records and acknowledgements." },
     { "name": "Topics", "type": "[]FetchTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID."},
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID.", "mapKey":  true },
       { "name": "Partitions", "type": "[]FetchPartition", "versions": "0+",
         "about": "The partitions to fetch.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey":  true,
           "about": "The partition index." },
         { "name": "PartitionMaxBytes", "type": "int32", "versions": "0",
           "about": "The maximum bytes to fetch from this partition. 0 when only acknowledgement with no fetching is required. See KIP-74 for cases where this limit may not be honored." },
