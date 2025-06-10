@@ -20,13 +20,12 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.Map;
 
 public class AlterShareGroupOffsetsResponse extends AbstractResponse {
@@ -71,15 +70,15 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
 
     public static class Builder {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
-        HashMap<String, AlterShareGroupOffsetsResponseTopic> topics = new HashMap<>();
+        AlterShareGroupOffsetsResponseTopicCollection topics = new AlterShareGroupOffsetsResponseTopicCollection();
 
         private AlterShareGroupOffsetsResponseTopic getOrCreateTopic(String topic, Uuid topicId) {
-            AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = topics.get(topic);
+            AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = topics.find(topic);
             if (topicData == null) {
                 topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
                     .setTopicName(topic)
                     .setTopicId(topicId == null ? Uuid.ZERO_UUID : topicId);
-                topics.put(topic, topicData);
+                topics.add(topicData);
             }
             return topicData;
         }
@@ -94,7 +93,7 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
         }
 
         public AlterShareGroupOffsetsResponse build() {
-            data.setResponses(new ArrayList<>(topics.values()));
+            data.setResponses(topics);
             return new AlterShareGroupOffsetsResponse(data);
         }
 
