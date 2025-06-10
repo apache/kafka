@@ -191,6 +191,9 @@ public class StreamTaskTest {
     private final MockProcessorNode<Integer, Integer, ?, ?> processorStreamTime = new MockProcessorNode<>(10L);
     private final MockProcessorNode<Integer, Integer, ?, ?> processorSystemTime = new MockProcessorNode<>(10L, PunctuationType.WALL_CLOCK_TIME);
 
+    private final MockProcessorNode<Integer, Integer, ?, ?> anchoredProcessorStreamTime = new MockProcessorNode<>(Instant.ofEpochMilli(15), 10L, PunctuationType.STREAM_TIME);
+    private final MockProcessorNode<Integer, Integer, ?, ?> anchoredProcessorSystemTime = new MockProcessorNode<>(Instant.ofEpochMilli(15), 10L, PunctuationType.WALL_CLOCK_TIME);
+
     private final String storeName = "store";
     private final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, false);
     private final TopicPartition changelogPartition = new TopicPartition("store-changelog", 1);
@@ -1266,6 +1269,69 @@ public class StreamTaskTest {
         assertFalse(task.maybePunctuateStreamTime());
 
         processorStreamTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L, 142L, 155L, 160L);
+    }
+
+    @Test
+    public void shouldPunctuateUsingAnchoredStreamStartTime() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTaskWithAnchoredPunctuation(createConfig());
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        task.resumePollingForPartitionsWithAvailableSpace();
+
+        task.addRecords(partition1, asList(
+                getConsumerRecordWithOffsetAsTimestamp(partition1, 14),
+                getConsumerRecordWithOffsetAsTimestamp(partition1, 24)
+        ));
+
+        task.addRecords(partition2, asList(
+                getConsumerRecordWithOffsetAsTimestamp(partition2, 15),
+                getConsumerRecordWithOffsetAsTimestamp(partition2, 25)
+        ));
+
+        task.updateLags();
+
+        // st: -1
+        assertFalse(task.canPunctuateStreamTime());
+        assertFalse(task.maybePunctuateStreamTime()); // punctuate at 15
+
+        // st: 14
+        assertTrue(task.process(0L));
+        assertEquals(3, task.numBuffered());
+        assertEquals(1, source1.numReceived);
+        assertEquals(0, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
+        assertFalse(task.maybePunctuateStreamTime());
+
+        // st: 15
+        // punctuate at 15 due to startTime
+        assertTrue(task.process(0L));
+        assertEquals(2, task.numBuffered());
+        assertEquals(1, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
+        assertTrue(task.maybePunctuateStreamTime());
+
+        // st: 24
+        assertTrue(task.process(0L));
+        assertEquals(1, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
+        assertFalse(task.maybePunctuateStreamTime());
+
+        // st: 25
+        // punctuate at 25 due to startTime + interval
+        assertTrue(task.process(0L));
+        assertEquals(0, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
+        assertTrue(task.maybePunctuateStreamTime());
+
+        anchoredProcessorStreamTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 15L, 25L);
     }
 
     @Test
@@ -3359,6 +3425,43 @@ public class StreamTaskTest {
             context,
             logContext,
             false
+        );
+    }
+
+    private StreamTask createStatelessTaskWithAnchoredPunctuation(final StreamsConfig config) {
+        final ProcessorTopology topology = withSources(
+                asList(source1, source2, anchoredProcessorStreamTime, anchoredProcessorSystemTime),
+                mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
+        );
+
+        source1.addChild(anchoredProcessorStreamTime);
+        source2.addChild(anchoredProcessorStreamTime);
+        source1.addChild(anchoredProcessorSystemTime);
+        source2.addChild(anchoredProcessorSystemTime);
+
+        final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
+                taskId,
+                config,
+                stateManager,
+                streamsMetrics,
+                null
+        );
+
+        return new StreamTask(
+                taskId,
+                partitions,
+                topology,
+                consumer,
+                new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+                new StreamsMetricsImpl(metrics, "test", "processId", time),
+                stateDirectory,
+                cache,
+                time,
+                stateManager,
+                recordCollector,
+                context,
+                logContext,
+                false
         );
     }
 

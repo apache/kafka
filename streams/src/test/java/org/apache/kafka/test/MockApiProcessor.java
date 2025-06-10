@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -46,6 +47,7 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     private Cancellable scheduleCancellable;
 
     private final PunctuationType punctuationType;
+    private final Instant startTime;
     private final long scheduleInterval;
 
     private boolean commitRequested = false;
@@ -53,7 +55,14 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
 
     public MockApiProcessor(final PunctuationType punctuationType,
                             final long scheduleInterval) {
+        this(punctuationType, null, scheduleInterval);
+    }
+
+    public MockApiProcessor(final PunctuationType punctuationType,
+                            final Instant startTime,
+                            final long scheduleInterval) {
         this.punctuationType = punctuationType;
+        this.startTime = startTime;
         this.scheduleInterval = scheduleInterval;
     }
 
@@ -66,6 +75,7 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         this.context = context;
         if (scheduleInterval > 0L) {
             scheduleCancellable = context.schedule(
+                startTime,
                 Duration.ofMillis(scheduleInterval),
                 punctuationType,
                 (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)::add
