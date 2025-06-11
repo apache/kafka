@@ -44,12 +44,15 @@ public class ClientJwtValidatorTest extends JwtValidatorTest {
 
         // Verify that decoding the payload fails for "plain" base 64, but works with URL-safe base 64.
         String urlEncodedPayload = Base64.getUrlEncoder().encodeToString(Utils.utf8(payload));
-        assertThrows(IllegalArgumentException.class, () -> Base64.getDecoder().decode(urlEndodedPayload));
-        assertDoesNotThrow(() -> Base64.getUrlDecoder().decode(urlEndodedPayload));
+        assertThrows(IllegalArgumentException.class, () -> Base64.getDecoder().decode(urlEncodedPayload));
+        assertDoesNotThrow(() -> Base64.getUrlDecoder().decode(urlEncodedPayload));
 
         try (JwtValidator validator = createJwtValidator()) {
             validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, getJaasConfigEntries());
-            validator.validate(jwt);
+            assertDoesNotThrow(
+                () -> validator.validate(jwt),
+                "Valid, URL-safe base 64-encoded JWT should be decodable"
+            );
         }
     }
 }
