@@ -183,7 +183,7 @@ public class LogDirsCommandTest {
                     add((Integer) ((HashMap<String, Object>) brokersInformation.get(1)).get("broker"));
                 }};
             assertEquals(2, brokersInformation.size());
-            assertEquals(new HashSet<>(Arrays.asList(2, 1)), brokerIds);
+            assertEquals(Set.of(2, 1), brokerIds);
         }
     }
 
