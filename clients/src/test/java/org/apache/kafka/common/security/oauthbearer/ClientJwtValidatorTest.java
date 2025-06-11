@@ -43,7 +43,7 @@ public class ClientJwtValidatorTest extends JwtValidatorTest {
         String jwt = createJwt(header, payload, signature);
 
         // Verify that decoding the payload fails for "plain" base 64, but works with URL-safe base 64.
-        String urlEndodedPayload = Base64.getUrlEncoder().encodeToString(Utils.utf8(payload));
+        String urlEncodedPayload = Base64.getUrlEncoder().encodeToString(Utils.utf8(payload));
         assertThrows(IllegalArgumentException.class, () -> Base64.getDecoder().decode(urlEndodedPayload));
         assertDoesNotThrow(() -> Base64.getUrlDecoder().decode(urlEndodedPayload));
 
