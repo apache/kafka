@@ -34,27 +34,27 @@ import static org.apache.kafka.tools.ToolsUtils.minus;
 
 public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String NL = System.lineSeparator();
-    public static final Logger LOGGER = LoggerFactory.getLogger(StreamsGroupCommandOptions.class);
+    static final Logger LOGGER = LoggerFactory.getLogger(StreamsGroupCommandOptions.class);
 
-    public static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
-    public static final String GROUP_DOC = "The streams group we wish to act on.";
+    private static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
+    private static final String GROUP_DOC = "The streams group we wish to act on.";
     private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
     private static final String INPUT_TOPIC_DOC = "The input topic whose committed offset should be deleted or reset. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
         "Multiple input topics can be specified. Supported operations: delete-offsets, reset-offsets.";
     private static final String ALL_INPUT_TOPICS_DOC = "Consider all source topics used in the topology of the group. Supported operations: delete-offsets, reset-offsets.";
-    public static final String LIST_DOC = "List all streams groups.";
-    public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
+    private static final String LIST_DOC = "List all streams groups.";
+    private static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
     private static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
         "over the entire streams group. For instance --group g1 --group g2";
     private static final String DELETE_OFFSETS_DOC = "Delete offsets of streams group. Supports one streams group at the time, and multiple topics.";
-    public static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
+    private static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
         "to specify the maximum amount of time in milliseconds to wait before the group stabilizes.";
-    public static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
-    public static final String STATE_DOC = "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states. " +
+    private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
+    private static final String STATE_DOC = "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states. " +
         "Valid values are Empty, NotReady, Stable, Assigning, Reconciling, and Dead.";
-    public static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the '--describe' option only.";
-    public static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset information." +
+    private static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the '--describe' option only.";
+    private static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset information." +
         "This is the default sub-action and may be used with the '--describe' option only.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of streams group. The instances should be inactive." + NL +
         "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets." + NL +
@@ -73,38 +73,38 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String RESET_TO_LATEST_DOC = "Reset offsets to latest offset.";
     private static final String RESET_TO_CURRENT_DOC = "Reset offsets to current offset.";
     private static final String RESET_SHIFT_BY_DOC = "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative.";
-    public static final String VERBOSE_DOC = """
+    private static final String VERBOSE_DOC = """
         Use with --describe --state  to show group epoch and target assignment epoch.
         Use with --describe --members to show for each member the member epoch, target assignment epoch, current assignment, target assignment, and whether member is still using the classic rebalance protocol.
         Use with --describe --offsets  and --describe  to show leader epochs for each partition.""";
 
-    public final OptionSpec<String> bootstrapServerOpt;
-    public final OptionSpec<String> groupOpt;
-    public final OptionSpec<String> inputTopicOpt;
-    public final OptionSpec<Void> allInputTopicsOpt;
-    public final OptionSpec<Void> listOpt;
-    public final OptionSpec<Void> describeOpt;
-    public final OptionSpec<Void> deleteOpt;
-    public final OptionSpec<Void> deleteOffsetsOpt;
-    public final OptionSpec<Void> allGroupsOpt;
-    public final OptionSpec<Long> timeoutMsOpt;
-    public final OptionSpec<String> commandConfigOpt;
-    public final OptionSpec<String> stateOpt;
-    public final OptionSpec<Void> membersOpt;
-    public final OptionSpec<Void> offsetsOpt;
-    public final OptionSpec<Void> resetOffsetsOpt;
-    public final OptionSpec<Long> resetToOffsetOpt;
-    public final OptionSpec<String> resetFromFileOpt;
-    public final OptionSpec<String> resetToDatetimeOpt;
-    public final OptionSpec<String> resetByDurationOpt;
-    public final OptionSpec<Void> resetToEarliestOpt;
-    public final OptionSpec<Void> resetToLatestOpt;
-    public final OptionSpec<Void> resetToCurrentOpt;
-    public final OptionSpec<Long> resetShiftByOpt;
-    public final OptionSpec<Void> dryRunOpt;
-    public final OptionSpec<Void> executeOpt;
-    public final OptionSpec<Void> exportOpt;
-    public final OptionSpec<Void> verboseOpt;
+    final OptionSpec<String> bootstrapServerOpt;
+    final OptionSpec<String> groupOpt;
+    final OptionSpec<String> inputTopicOpt;
+    final OptionSpec<Void> allInputTopicsOpt;
+    final OptionSpec<Void> listOpt;
+    final OptionSpec<Void> describeOpt;
+    final OptionSpec<Void> deleteOpt;
+    final OptionSpec<Void> deleteOffsetsOpt;
+    final OptionSpec<Void> allGroupsOpt;
+    final OptionSpec<Long> timeoutMsOpt;
+    final OptionSpec<String> commandConfigOpt;
+    final OptionSpec<String> stateOpt;
+    final OptionSpec<Void> membersOpt;
+    final OptionSpec<Void> offsetsOpt;
+    final OptionSpec<Void> resetOffsetsOpt;
+    final OptionSpec<Long> resetToOffsetOpt;
+    final OptionSpec<String> resetFromFileOpt;
+    final OptionSpec<String> resetToDatetimeOpt;
+    final OptionSpec<String> resetByDurationOpt;
+    final OptionSpec<Void> resetToEarliestOpt;
+    final OptionSpec<Void> resetToLatestOpt;
+    final OptionSpec<Void> resetToCurrentOpt;
+    final OptionSpec<Long> resetShiftByOpt;
+    final OptionSpec<Void> dryRunOpt;
+    final OptionSpec<Void> executeOpt;
+    final OptionSpec<Void> exportOpt;
+    final OptionSpec<Void> verboseOpt;
 
     final Set<OptionSpec<?>> allResetOffsetScenarioOpts;
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
@@ -196,7 +196,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(inputTopicOpt, allInputTopicsOpt));
     }
 
-    public void checkArgs() {
+    void checkArgs() {
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list, or describe streams groups.");
 
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
