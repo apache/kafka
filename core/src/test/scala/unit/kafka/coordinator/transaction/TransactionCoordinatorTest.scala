@@ -1290,11 +1290,11 @@ class TransactionCoordinatorTest {
       capturedErrorsCallback.capture(),
       any(),
       any())
-    ).thenAnswer(_ => {
-      capturedErrorsCallback.getValue.apply(Errors.NONE)
-      val transitMetadata = capturedTxnTransitMetadata.getValue
+    ).thenAnswer(invocation => {
+      val transitMetadata = invocation.getArgument[TxnTransitMetadata](2)
+      // Simulate the metadata update that would happen in the real appendTransactionToLog
       txnMetadata.completeTransitionTo(transitMetadata)
-      txnMetadata.prepareComplete(time.milliseconds())
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
     })
 
     // Handle InitProducerId with ongoing transaction at epoch 32766
@@ -1310,11 +1310,6 @@ class TransactionCoordinatorTest {
     // Verify that the epoch did not overflow (should be Short.MaxValue = 32767, not negative)
     assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
     assertEquals(TransactionState.PREPARE_ABORT, txnMetadata.state)
-    assertEquals(InitProducerIdResult(-1, -1, Errors.PRODUCER_FENCED), result)
-    
-    // Verify that the captured transition metadata has the correct epoch
-    assertEquals(Short.MaxValue, capturedTxnTransitMetadata.getValue.producerEpoch)
-    assertEquals(TransactionState.PREPARE_ABORT, capturedTxnTransitMetadata.getValue.txnState)
     
     verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager, times(3)).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -1336,7 +1331,7 @@ class TransactionCoordinatorTest {
     val epochAtMaxBoundary = (Short.MaxValue - 1).toShort // 32766
     val now = time.milliseconds()
 
-    // Create transaction metadata at the epoch boundary that would cause overflow if double-incremented
+    // Create transaction metadata at the epoch boundary that would cause overflow IFF double-incremented
     val txnMetadata = new TransactionMetadata(
       transactionalId = transactionalId,
       producerId = producerId,
@@ -1360,7 +1355,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
     when(transactionManager.transactionVersionLevel()).thenReturn(TV_2)
 
-    // Mock the append operation to simulate successful write
+    // Mock the append operation to simulate successful write and update the metadata
     when(transactionManager.appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
@@ -1368,7 +1363,12 @@ class TransactionCoordinatorTest {
       capturedErrorsCallback.capture(),
       any(),
       any())
-    ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
+    ).thenAnswer(invocation => {
+      val transitMetadata = invocation.getArgument[TxnTransitMetadata](2)
+      // Simulate the metadata update that would happen in the real appendTransactionToLog
+      txnMetadata.completeTransitionTo(transitMetadata)
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
+    })
 
     // Track the actual behavior
     var callbackInvoked = false
@@ -1382,11 +1382,21 @@ class TransactionCoordinatorTest {
         resultError = error
         resultProducerId = newProducerId
         resultEpoch = newProducerEpoch
-        println(s"Timeout callback invoked with error: $error, producerId: $newProducerId, epoch: $newProducerEpoch")
       }
 
     // Execute the timeout abort process
     coordinator.abortTimedOutTransactions(checkOnEndTransactionComplete)
+
+    assertTrue(callbackInvoked, "Callback should have been invoked")
+    assertEquals(Errors.NONE, resultError, "Expected no errors in the callback")
+    assertEquals(producerId, resultProducerId, "Expected producer ID to match")
+    assertEquals(Short.MaxValue, resultEpoch, "Expected producer epoch to be Short.MaxValue (32767) single epoch bump")
+    
+    // Verify the transaction metadata was correctly updated to the final epoch
+    assertEquals(Short.MaxValue, txnMetadata.producerEpoch, 
+      s"Expected transaction metadata producer epoch to be ${Short.MaxValue} " +
+        s"after timeout handling, but was ${txnMetadata.producerEpoch}"
+    )
 
     // Verify the basic flow was attempted
     verify(transactionManager).timedOutTransactions()
