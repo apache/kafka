@@ -14,9 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.streams;
+package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
+import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -28,6 +31,9 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.consumer.group.CsvUtils;
 
 import com.fasterxml.jackson.databind.ObjectReader;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -49,31 +55,21 @@ import java.util.stream.Stream;
 
 import joptsimple.OptionParser;
 
-import static org.apache.kafka.tools.streams.StreamsGroupCommandOptions.LOGGER;
 
 public class OffsetsUtils {
+    public static final Logger LOGGER = LoggerFactory.getLogger(OffsetsUtils.class);
     private static final String TOPIC_PARTITION_SEPARATOR = ":";
     private final Admin adminClient;
     private final OffsetsUtilsOptions opts;
     private final OptionParser parser;
-    public OffsetsUtils(Admin adminClient, StreamsGroupCommandOptions options, OptionParser parser) {
+
+    public OffsetsUtils(Admin adminClient, OptionParser parser, OffsetsUtilsOptions opts) {
         this.adminClient = adminClient;
-        this.opts = fromStreamsGroupCommandOptions(options);
+        this.opts = opts;
         this.parser = parser;
     }
 
-    private OffsetsUtilsOptions fromStreamsGroupCommandOptions(StreamsGroupCommandOptions opts) {
-        return new OffsetsUtilsOptions(
-            opts.options.has(opts.groupOpt) ? opts.options.valuesOf(opts.groupOpt) : null,
-            opts.options.has(opts.resetToOffsetOpt) ? opts.options.valuesOf(opts.resetToOffsetOpt) : null,
-            opts.options.has(opts.resetFromFileOpt) ? opts.options.valuesOf(opts.resetFromFileOpt) : null,
-            opts.options.has(opts.resetToDatetimeOpt) ? opts.options.valuesOf(opts.resetToDatetimeOpt) : null,
-            opts.options.has(opts.resetByDurationOpt) ? opts.options.valuesOf(opts.resetByDurationOpt) : null,
-            opts.options.has(opts.resetShiftByOpt) ? opts.options.valuesOf(opts.resetShiftByOpt) : null
-        );
-    }
-
-    Optional<Map<String, Map<TopicPartition, OffsetAndMetadata>>> resetPlanFromFile() {
+    public Optional<Map<String, Map<TopicPartition, OffsetAndMetadata>>> resetPlanFromFile() {
         if (opts.resetFromFileOpt != null && !opts.resetFromFileOpt.isEmpty()) {
             try {
                 String resetPlanPath = opts.resetFromFileOpt.get(0);
@@ -97,7 +93,8 @@ public class OffsetsUtils {
                 isOldCsvFormat = true;
             }
         } catch (IOException e) {
-            throw new RuntimeException("Invalid CSV format in reset plan file: " + e.getMessage());
+            e.printStackTrace();
+            // Ignore.
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> dataMap = new HashMap<>();
@@ -126,7 +123,7 @@ public class OffsetsUtils {
         return dataMap;
     }
 
-    Map<TopicPartition, Long> checkOffsetsRange(Map<TopicPartition, Long> requestedOffsets) {
+    private Map<TopicPartition, Long> checkOffsetsRange(Map<TopicPartition, Long> requestedOffsets) {
         Map<TopicPartition, LogOffsetResult> logStartOffsets = getLogStartOffsets(requestedOffsets.keySet());
         Map<TopicPartition, LogOffsetResult> logEndOffsets = getLogEndOffsets(requestedOffsets.keySet());
 
@@ -159,13 +156,15 @@ public class OffsetsUtils {
         return res;
     }
 
-    Map<TopicPartition, LogOffsetResult> getLogTimestampOffsets(Collection<TopicPartition> topicPartitions, long timestamp) {
+    private Map<TopicPartition, LogOffsetResult> getLogTimestampOffsets(Collection<TopicPartition> topicPartitions, long timestamp) {
         try {
             Map<TopicPartition, OffsetSpec> timestampOffsets = topicPartitions.stream()
                 .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.forTimestamp(timestamp)));
 
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsets = adminClient.listOffsets(
-                timestampOffsets).all().get();
+                timestampOffsets,
+                withTimeoutMs(new ListOffsetsOptions())
+            ).all().get();
 
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> successfulOffsetsForTimes = new HashMap<>();
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> unsuccessfulOffsetsForTimes = new HashMap<>();
@@ -192,21 +191,22 @@ public class OffsetsUtils {
         }
     }
 
-    Map<TopicPartition, LogOffsetResult> getLogStartOffsets(Collection<TopicPartition> topicPartitions) {
+    private Map<TopicPartition, LogOffsetResult> getLogStartOffsets(Collection<TopicPartition> topicPartitions) {
         return getLogOffsets(topicPartitions, OffsetSpec.earliest());
     }
 
-    Map<TopicPartition, LogOffsetResult> getLogEndOffsets(Collection<TopicPartition> topicPartitions) {
+    public Map<TopicPartition, LogOffsetResult> getLogEndOffsets(Collection<TopicPartition> topicPartitions) {
         return getLogOffsets(topicPartitions, OffsetSpec.latest());
     }
 
-    private Map<TopicPartition, LogOffsetResult> getLogOffsets(Collection<TopicPartition> topicPartitions, OffsetSpec offsetSpec) {
+    public Map<TopicPartition, LogOffsetResult> getLogOffsets(Collection<TopicPartition> topicPartitions, OffsetSpec offsetSpec) {
         try {
             Map<TopicPartition, OffsetSpec> startOffsets = topicPartitions.stream()
                 .collect(Collectors.toMap(Function.identity(), tp -> offsetSpec));
 
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsets = adminClient.listOffsets(
-                startOffsets
+                startOffsets,
+                withTimeoutMs(new ListOffsetsOptions())
             ).all().get();
 
             return topicPartitions.stream().collect(Collectors.toMap(
@@ -220,7 +220,7 @@ public class OffsetsUtils {
         }
     }
 
-    List<TopicPartition> parseTopicPartitionsToReset(List<String> topicArgs) throws ExecutionException, InterruptedException {
+    public List<TopicPartition> parseTopicPartitionsToReset(List<String> topicArgs) throws ExecutionException, InterruptedException {
         List<String> topicsWithPartitions = new ArrayList<>();
         List<String> topics = new ArrayList<>();
 
@@ -238,7 +238,8 @@ public class OffsetsUtils {
 
         if (!topics.isEmpty()) {
             Map<String, TopicDescription> descriptionMap = adminClient.describeTopics(
-                topics
+                topics,
+                withTimeoutMs(new DescribeTopicsOptions())
             ).allTopicNames().get();
 
             descriptionMap.forEach((topic, description) ->
@@ -251,7 +252,7 @@ public class OffsetsUtils {
         return specifiedPartitions;
     }
 
-    private Stream<TopicPartition> parseTopicsWithPartitions(String topicArg) {
+    public Stream<TopicPartition> parseTopicsWithPartitions(String topicArg) {
         ToIntFunction<String> partitionNum = partition -> {
             try {
                 return Integer.parseInt(partition);
@@ -272,7 +273,7 @@ public class OffsetsUtils {
             map(partition -> new TopicPartition(topic, partitionNum.applyAsInt(partition)));
     }
 
-    Map<TopicPartition, OffsetAndMetadata> resetToOffset(Collection<TopicPartition> partitionsToReset) {
+    public Map<TopicPartition, OffsetAndMetadata> resetToOffset(Collection<TopicPartition> partitionsToReset) {
         long offset = opts.resetToOffsetOpt != null && !opts.resetToOffsetOpt.isEmpty()
             ? opts.resetToOffsetOpt.get(0)
             : 0L;
@@ -280,7 +281,7 @@ public class OffsetsUtils {
             .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
     }
 
-    Map<TopicPartition, OffsetAndMetadata> resetToEarliest(Collection<TopicPartition> partitionsToReset) {
+    public Map<TopicPartition, OffsetAndMetadata> resetToEarliest(Collection<TopicPartition> partitionsToReset) {
         Map<TopicPartition, LogOffsetResult> logStartOffsets = getLogStartOffsets(partitionsToReset);
         return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
             LogOffsetResult logOffsetResult = logStartOffsets.get(topicPartition);
@@ -293,7 +294,7 @@ public class OffsetsUtils {
         }));
     }
 
-    Map<TopicPartition, OffsetAndMetadata> resetToLatest(Collection<TopicPartition> partitionsToReset) {
+    public Map<TopicPartition, OffsetAndMetadata> resetToLatest(Collection<TopicPartition> partitionsToReset) {
         Map<TopicPartition, LogOffsetResult> logEndOffsets = getLogEndOffsets(partitionsToReset);
         return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
             LogOffsetResult logOffsetResult = logEndOffsets.get(topicPartition);
@@ -306,12 +307,12 @@ public class OffsetsUtils {
         }));
     }
 
-    Map<TopicPartition, OffsetAndMetadata> resetByShiftBy(
+    public Map<TopicPartition, OffsetAndMetadata> resetByShiftBy(
         Collection<TopicPartition> partitionsToReset,
         Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets) {
 
         Map<TopicPartition, Long> requestedOffsets = partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-            long shiftBy = opts.resetShiftByOpt.get(0);
+            long shiftBy = opts.resetShiftByOpt;
             OffsetAndMetadata currentOffset = currentCommittedOffsets.get(topicPartition);
 
             if (currentOffset == null) {
@@ -324,18 +325,16 @@ public class OffsetsUtils {
             .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
     }
 
-    Map<TopicPartition, OffsetAndMetadata> resetToDateTime(Collection<TopicPartition> partitionsToReset) {
+    public Map<TopicPartition, OffsetAndMetadata> resetToDateTime(Collection<TopicPartition> partitionsToReset) {
         try {
             long timestamp = Utils.getDateTime(opts.resetToDatetimeOpt.get(0));
             Map<TopicPartition, LogOffsetResult> logTimestampOffsets =
                 getLogTimestampOffsets(partitionsToReset, timestamp);
             return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
                 LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
-
                 if (!(logTimestampOffset instanceof LogOffset)) {
                     CommandLineUtils.printUsageAndExit(parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
                 }
-
                 return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
             }));
         } catch (ParseException e) {
@@ -343,8 +342,8 @@ public class OffsetsUtils {
         }
     }
 
-    Map<TopicPartition, OffsetAndMetadata> resetByDuration(Collection<TopicPartition> partitionsToReset) {
-        String duration = opts.resetByDurationOpt.get(0);
+    public Map<TopicPartition, OffsetAndMetadata> resetByDuration(Collection<TopicPartition> partitionsToReset) {
+        String duration = opts.resetByDurationOpt;
         Duration durationParsed = Duration.parse(duration);
         Instant now = Instant.now();
         durationParsed.negated().addTo(now);
@@ -362,7 +361,7 @@ public class OffsetsUtils {
         }));
     }
 
-    Map<TopicPartition, OffsetAndMetadata> resetFromFile(String groupId) {
+    public Map<TopicPartition, OffsetAndMetadata> resetFromFile(String groupId) {
         return resetPlanFromFile().map(resetPlan -> {
             Map<TopicPartition, OffsetAndMetadata> resetPlanForGroup = resetPlan.get(groupId);
 
@@ -380,7 +379,7 @@ public class OffsetsUtils {
         }).orElseGet(Collections::emptyMap);
     }
 
-    Map<TopicPartition, OffsetAndMetadata> resetToCurrent(Collection<TopicPartition> partitionsToReset, Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets) {
+    public Map<TopicPartition, OffsetAndMetadata> resetToCurrent(Collection<TopicPartition> partitionsToReset, Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets) {
         Collection<TopicPartition> partitionsToResetWithCommittedOffset = new ArrayList<>();
         Collection<TopicPartition> partitionsToResetWithoutCommittedOffset = new ArrayList<>();
 
@@ -416,26 +415,33 @@ public class OffsetsUtils {
         return preparedOffsetsForPartitionsWithCommittedOffset;
     }
 
+    private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
+        int t = (int) opts.timeoutMsOpt;
+        return options.timeoutMs(t);
+    }
 
-
-    public static void printError(String msg, Optional<Throwable> e) {
+    private static void printError(String msg, Optional<Throwable> e) {
         System.out.println("\nError: " + msg);
         e.ifPresent(Throwable::printStackTrace);
     }
 
-    interface LogOffsetResult { }
+    public interface LogOffsetResult { }
 
-    static class LogOffset implements LogOffsetResult {
+    public static class LogOffset implements LogOffsetResult {
         final long value;
 
-        LogOffset(long value) {
+        public LogOffset(long value) {
             this.value = value;
+        }
+
+        public long value() {
+            return value;
         }
     }
 
-    private static class Unknown implements LogOffsetResult { }
+    public static class Unknown implements LogOffsetResult { }
 
-    private static class Ignore implements LogOffsetResult { }
+    public static class Ignore implements LogOffsetResult { }
 
 
     public static class OffsetsUtilsOptions {
@@ -443,16 +449,18 @@ public class OffsetsUtils {
         List<Long> resetToOffsetOpt;
         List<String> resetFromFileOpt;
         List<String> resetToDatetimeOpt;
-        List<String> resetByDurationOpt;
-        List<Long> resetShiftByOpt;
+        String resetByDurationOpt;
+        Long resetShiftByOpt;
+        long timeoutMsOpt;
 
         public OffsetsUtilsOptions(
             List<String> groupOpt,
             List<Long> resetToOffsetOpt,
             List<String> resetFromFileOpt,
             List<String> resetToDatetimeOpt,
-            List<String> resetByDurationOpt,
-            List<Long> resetShiftByOpt) {
+            String resetByDurationOpt,
+            Long resetShiftByOpt,
+            long timeoutMsOpt) {
 
             this.groupOpt = groupOpt;
             this.resetToOffsetOpt = resetToOffsetOpt;
@@ -460,6 +468,7 @@ public class OffsetsUtils {
             this.resetToDatetimeOpt = resetToDatetimeOpt;
             this.resetByDurationOpt = resetByDurationOpt;
             this.resetShiftByOpt = resetShiftByOpt;
+            this.timeoutMsOpt = timeoutMsOpt;
         }
     }
 }

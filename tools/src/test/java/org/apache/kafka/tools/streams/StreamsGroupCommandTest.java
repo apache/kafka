@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
@@ -172,10 +173,13 @@ public class StreamsGroupCommandTest {
             new Node(0, "bar", 0),
             null);
         resultMap.put(firstGroup, exp);
-
         when(result.all()).thenReturn(KafkaFuture.completedFuture(resultMap));
         when(ADMIN_CLIENT.describeStreamsGroups(ArgumentMatchers.anyCollection())).thenReturn(result);
-        StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(null, ADMIN_CLIENT);
+
+        StreamsGroupCommandOptions streamsGroupCommandOptions = new StreamsGroupCommandOptions(
+            new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", firstGroup, "--describe"});
+        StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(streamsGroupCommandOptions, ADMIN_CLIENT);
+
         assertEquals(exp, service.getDescribeGroup(firstGroup));
 
         service.close();
@@ -229,8 +233,12 @@ public class StreamsGroupCommandTest {
             GroupState.STABLE,
             new Node(0, "host", 0),
             null);
-        StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(null, ADMIN_CLIENT);
+        StreamsGroupCommandOptions streamsGroupCommandOptions = new StreamsGroupCommandOptions(
+            new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", groupId, "--describe"});
+
+        StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(streamsGroupCommandOptions, ADMIN_CLIENT);
         Map<TopicPartition, StreamsGroupCommand.OffsetsInfo> lags = service.getOffsets(x);
+
         assertEquals(1, lags.size());
         assertEquals(new StreamsGroupCommand.OffsetsInfo(Optional.of(12L), Optional.of(0), 30L, 18L), lags.get(new TopicPartition("topic1", 0)));
 
@@ -294,9 +302,9 @@ public class StreamsGroupCommandTest {
 
         when(adminClient.describeStreamsGroups(List.of(groupId)))
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
-        when(adminClient.describeTopics(topics))
+        when(adminClient.describeTopics(eq(topics), any(DescribeTopicsOptions.class)))
             .thenReturn(describeTopicsResult(topics, 1));
-        when(adminClient.listOffsets(any()))
+        when(adminClient.listOffsets(any(), any()))
             .thenReturn(listOffsetsResult());
         ListGroupsResult listGroupsResult = listGroupResult(groupId);
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
@@ -314,8 +322,8 @@ public class StreamsGroupCommandTest {
             resetResult.get(groupId).keySet());
 
         verify(adminClient, times(1)).describeStreamsGroups(List.of(groupId));
-        verify(adminClient, times(1)).describeTopics(topics);
-        verify(adminClient, times(1)).listOffsets(any());
+        verify(adminClient, times(1)).describeTopics(eq(topics), any(DescribeTopicsOptions.class));
+        verify(adminClient, times(1)).listOffsets(any(), any());
         verify(adminClient, times(1)).listStreamsGroupOffsets(any());
 
         service.close();

@@ -39,9 +39,9 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     public static final String GROUP_DOC = "The streams group we wish to act on.";
     private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
-    private static final String INPUT_TOPIC_DOC = "The input topic whose streams group information should be deleted or topic that should be included in the reset offset process. " +
+    private static final String INPUT_TOPIC_DOC = "The input topic whose committed offset should be deleted or reset. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
-        "Reset-offsets also supports multiple topic inputs.";
+        "Multiple input topics can be specified. Supported operations: delete-offsets, reset-offsets.";
     private static final String ALL_INPUT_TOPICS_DOC = "Consider all topics assigned to a group in the `reset-offsets` process.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
@@ -55,11 +55,12 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the '--describe' option only.";
     public static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset information." +
         "This is the default sub-action and may be used with the '--describe' option only.";
-    private static final String RESET_OFFSETS_DOC = "Reset offsets of streams group. The instances should be inactive" + NL +
+    private static final String RESET_OFFSETS_DOC = "Reset offsets of streams group. The instances should be inactive." + NL +
         "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets." + NL +
+        "If you use --execute, all internal topics linked to the group will also be deleted." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
         "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + NL +
-        "To define the scope use --all-topics or --topic. One scope must be specified unless you use '--from-file'.";
+        "To define the scope use --all-input-topics or --input-topic. One scope must be specified unless you use '--from-file'.";
     private static final String DRY_RUN_DOC = "Only show results without executing changes on streams group. Supported operations: reset-offsets.";
     private static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
     private static final String EXPORT_DOC = "Export operation execution to a CSV file. Supported operations: reset-offsets.";
@@ -206,6 +207,9 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+            if (options.has(inputTopicOpt) || options.has(allInputTopicsOpt))
+                CommandLineUtils.printUsageAndExit(parser, "Kafka Streams does not support topic-specific offset " +
+                    "deletion from a streams group.");
         }
 
         if (options.has(resetOffsetsOpt)) {

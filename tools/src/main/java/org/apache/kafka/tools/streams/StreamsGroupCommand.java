@@ -44,6 +44,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
+import org.apache.kafka.tools.OffsetsUtils;
 import org.apache.kafka.tools.consumer.group.CsvUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -152,6 +153,7 @@ public class StreamsGroupCommand {
         final StreamsGroupCommandOptions opts;
         private final Admin adminClient;
         private final OffsetsUtils offsetsUtils;
+
         public StreamsGroupService(StreamsGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
             try {
@@ -159,13 +161,24 @@ public class StreamsGroupCommand {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts, opts.parser);
+            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
         }
 
         public StreamsGroupService(StreamsGroupCommandOptions opts, Admin adminClient) {
             this.opts = opts;
             this.adminClient = adminClient;
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts, opts.parser);
+            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+        }
+
+        private OffsetsUtils.OffsetsUtilsOptions getOffsetsUtilsOptions(StreamsGroupCommandOptions opts) {
+            return
+                new OffsetsUtils.OffsetsUtilsOptions(opts.options.valuesOf(opts.groupOpt),
+                    opts.options.valuesOf(opts.resetToOffsetOpt),
+                    opts.options.valuesOf(opts.resetFromFileOpt),
+                    opts.options.valuesOf(opts.resetToDatetimeOpt),
+                    opts.options.valueOf(opts.resetByDurationOpt),
+                    opts.options.valueOf(opts.resetShiftByOpt),
+                    opts.options.valueOf(opts.timeoutMsOpt));
         }
 
         public void listGroups() throws ExecutionException, InterruptedException {
