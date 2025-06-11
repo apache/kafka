@@ -479,24 +479,18 @@ public class KafkaRaftLog implements RaftLog {
     @Override
     public Optional<OffsetAndEpoch> latestSnapshotId() {
         synchronized (snapshots) {
-            try {
-                OffsetAndEpoch epoch = snapshots.lastKey();
-                return epoch == null ? Optional.empty() : Optional.of(epoch);
-            } catch (NoSuchElementException e) {
-                return Optional.empty();
-            }
+            return snapshots.isEmpty()
+                    ? Optional.empty()
+                    : Optional.of(snapshots.lastKey());
         }
     }
 
     @Override
     public Optional<OffsetAndEpoch> earliestSnapshotId() {
         synchronized (snapshots) {
-            try {
-                OffsetAndEpoch epoch = snapshots.firstKey();
-                return epoch == null ? Optional.empty() : Optional.of(epoch);
-            } catch (NoSuchElementException e) {
-                return Optional.empty();
-            }
+            return snapshots.isEmpty()
+                    ? Optional.empty()
+                    : Optional.of(snapshots.firstKey());
         }
     }
 
@@ -545,9 +539,9 @@ public class KafkaRaftLog implements RaftLog {
                     deleted = deletedSegments != 0 || !forgottenSnapshots.isEmpty();
                 }
             }
-            removeSnapshots(forgottenSnapshots, reason);
-            return deleted;
         }
+        removeSnapshots(forgottenSnapshots, reason);
+        return deleted;
     }
 
     /**
@@ -557,10 +551,8 @@ public class KafkaRaftLog implements RaftLog {
         Map<OffsetAndEpoch, Long> snapshotSizes = new HashMap<>();
         for (OffsetAndEpoch key : snapshots.keySet()) {
             Optional<RawSnapshotReader> snapshotReader = readSnapshot(key);
-            snapshotReader.ifPresent(fileRawSnapshotReader -> {
-                    snapshots.put(key, Optional.of((FileRawSnapshotReader) snapshotReader.get()));
-                    snapshotSizes.put(key, fileRawSnapshotReader.sizeInBytes());
-                }
+            snapshotReader.ifPresent(fileRawSnapshotReader ->
+                    snapshotSizes.put(key, fileRawSnapshotReader.sizeInBytes())
             );
         }
         return snapshotSizes;
