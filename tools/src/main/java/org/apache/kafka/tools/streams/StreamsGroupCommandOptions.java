@@ -42,7 +42,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String INPUT_TOPIC_DOC = "The input topic whose committed offset should be deleted or reset. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
         "Multiple input topics can be specified. Supported operations: delete-offsets, reset-offsets.";
-    private static final String ALL_INPUT_TOPICS_DOC = "Consider all topics assigned to a group in the `reset-offsets` process.";
+    private static final String ALL_INPUT_TOPICS_DOC = "Consider all source topics used in the topology of the group. Supported operations: delete-offsets, reset-offsets.";
     public static final String LIST_DOC = "List all streams groups.";
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
     private static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
