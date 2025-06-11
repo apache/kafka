@@ -673,7 +673,7 @@ public class KafkaRaftLogTest {
     }
 
     @Test
-    public void testCreateReplicatedLogTruncatesFully() throws IOException {
+    public void testCreateRaftLogTruncatesFully() throws IOException {
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime);
         int numberOfRecords = 10;
         int epoch = 1;
@@ -1140,7 +1140,7 @@ public class KafkaRaftLogTest {
         snapshot.freeze();
     }
 
-    private static void append(ReplicatedLog log, int numberOfRecords, int epoch) {
+    private static void append(RaftLog log, int numberOfRecords, int epoch) {
         SimpleRecord[] records = new SimpleRecord[numberOfRecords];
         for (int i = 0; i < numberOfRecords; i++) {
             records[i] = new SimpleRecord(String.valueOf(i).getBytes(StandardCharsets.UTF_8));

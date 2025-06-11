@@ -888,7 +888,7 @@ object TestUtils extends Logging {
       controllerServer: ControllerServer,
       msg: String = "Timeout waiting for controller metadata propagating to brokers"
   ): Unit = {
-    val controllerOffset = controllerServer.raftManager.replicatedLog.endOffset().offset - 1
+    val controllerOffset = controllerServer.raftManager.raftLog.endOffset().offset - 1
     TestUtils.waitUntilTrue(
       () => {
         brokers.forall { broker =>

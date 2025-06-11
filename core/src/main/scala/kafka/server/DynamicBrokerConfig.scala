@@ -213,8 +213,8 @@ object DynamicBrokerConfig {
         props.put(key, value)
       }
     }
-    raftManager.replicatedLog.latestSnapshotId().ifPresent { latestSnapshotId =>
-      raftManager.replicatedLog.readSnapshot(latestSnapshotId).ifPresent { rawSnapshotReader =>
+    raftManager.raftLog.latestSnapshotId().ifPresent { latestSnapshotId =>
+      raftManager.raftLog.readSnapshot(latestSnapshotId).ifPresent { rawSnapshotReader =>
         Using.resource(
           RecordsSnapshotReader.of(
             rawSnapshotReader,

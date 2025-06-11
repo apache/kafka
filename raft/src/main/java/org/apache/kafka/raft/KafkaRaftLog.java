@@ -67,7 +67,7 @@ import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
-public class KafkaRaftLog implements ReplicatedLog {
+public class KafkaRaftLog implements RaftLog {
 
     private static final Logger LOG = LoggerFactory.getLogger(KafkaRaftLog.class);
 
