@@ -107,7 +107,6 @@ public class ConsumerBounceTest {
     private final int numPartitions = 3;
     private final short numReplica = 3;
     private final TopicPartition topicPartition = new TopicPartition(topic, partition);
-    private final String groupId = "group";
 
     private final ClusterInstance clusterInstance;
 
@@ -610,15 +609,14 @@ public class ConsumerBounceTest {
 
     private void checkCloseDuringRebalance(Map<String, String> consumerConfig) throws Exception {
         Map<String, Object> configs = new HashMap<>(consumerConfig);
+        String groupId = "group";
         configs.put(GROUP_ID_CONFIG, groupId);
 
         Consumer<byte[], byte[]> consumer1 = clusterInstance.consumer(configs);
-        consumers.add(consumer1);
         Future<?> f1 = subscribeAndPoll(consumer1, Optional.empty());
-        waitForRebalance(2000, f1);
+        waitForRebalance(2000, f1, null);
 
         Consumer<byte[], byte[]> consumer2 = clusterInstance.consumer(configs);
-        consumers.add(consumer2);
         Future<?> f2 = subscribeAndPoll(consumer2, Optional.empty());
         waitForRebalance(2000, f2, consumer1);
 
@@ -646,11 +644,11 @@ public class ConsumerBounceTest {
         });
     }
 
-    void waitForRebalance(long timeoutMs, Future<?> future, Consumer<byte[], byte[]>... otherConsumers) throws Exception {
+    void waitForRebalance(long timeoutMs, Future<?> future, Consumer<byte[], byte[]> otherConsumers) {
         long startMs = System.currentTimeMillis();
         while (System.currentTimeMillis() < startMs + timeoutMs && !future.isDone()) {
-            for (Consumer<byte[], byte[]> consumer : otherConsumers) {
-                consumer.poll(Duration.ofMillis(100));
+            if (otherConsumers != null) {
+                otherConsumers.poll(Duration.ofMillis(100));
             }
         }
         assertTrue(future.isDone(), "Rebalance did not complete in time");
@@ -658,6 +656,7 @@ public class ConsumerBounceTest {
 
     Future<?> createConsumerToRebalance(String groupId) throws Exception {
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_ID_CONFIG, groupId));
+        consumers.add(consumer);
         Semaphore rebalanceSemaphore = new Semaphore(0);
         Future<?> future = subscribeAndPoll(consumer, Optional.of(rebalanceSemaphore));
         assertTrue(rebalanceSemaphore.tryAcquire(2000, TimeUnit.MILLISECONDS), "Rebalance not triggered");
@@ -740,18 +739,18 @@ public class ConsumerBounceTest {
         return executor.submit(() -> {
             final long closeGraceTimeMs = 2000;
             long startMs = System.currentTimeMillis();
-            logger.info("Closing consumer with timeout " + closeTimeoutMs + " ms.");
+            logger.info("Closing consumer with timeout {} ms.", closeTimeoutMs);
 
             consumer.close(CloseOptions.timeout(Duration.ofMillis(closeTimeoutMs)));
             long timeTakenMs = System.currentTimeMillis() - startMs;
 
-            maxCloseTimeMs.ifPresent(ms -> {
-                assertTrue(timeTakenMs < ms + closeGraceTimeMs, "Close took too long " + timeTakenMs);
-            });
+            maxCloseTimeMs.ifPresent(ms ->
+                assertTrue(timeTakenMs < ms + closeGraceTimeMs, "Close took too long " + timeTakenMs)
+            );
 
-            minCloseTimeMs.ifPresent(ms -> {
-                assertTrue(timeTakenMs >= ms, "Close finished too quickly " + timeTakenMs);
-            });
+            minCloseTimeMs.ifPresent(ms ->
+                assertTrue(timeTakenMs >= ms, "Close finished too quickly " + timeTakenMs)
+            );
 
             logger.info("consumer.close() completed in {} ms.", timeTakenMs);
         }, 0);
