@@ -74,6 +74,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     types = {Type.KRAFT},
     brokers = ConsumerBounceTest.BROKER_COUNT,
     serverProperties = {
+        @ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "134217728"),
+        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000"),
+        @ClusterConfigProperty(key = "controlled.shutdown.enable", value = "false"),
+        @ClusterConfigProperty(key = "controller.socket.timeout.ms", value = "1500"),
+        @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
+        @ClusterConfigProperty(key = "replica.socket.timeout.ms", value = "1500"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"), // don't want to lose offset
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "10"), // set small enough session timeout
@@ -257,7 +263,7 @@ public class ConsumerBounceTest {
         TopicPartition newTopicPartition = new TopicPartition(newTopic, 0);
         int numRecords = 1000;
 
-        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name));
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name, "max.poll.interval.ms", 6000, "metadata.max.age.ms", 100));
         consumers.add(consumer);
         consumer.subscribe(List.of(newTopic));
         consumer.poll(Duration.ZERO);
@@ -284,14 +290,7 @@ public class ConsumerBounceTest {
         poller2.start();
 
         ClientsTestUtils.sendRecords(clusterInstance, newTopicPartition, numRecords);
-        // FIXME: is this correct? the second consumer is not used here.
-        // change to poller2, the old framework is not very flaky but it is right now.
         receiveExactRecords(poller2, numRecords, 60000L);
-//        if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
-//            receiveExactRecords(poller2, numRecords * 2, 60000L);
-//        } else {
-//            receiveExactRecords(poller2, numRecords, 60000L);
-//        }
     }
 
 
@@ -335,8 +334,8 @@ public class ConsumerBounceTest {
         Consumer<byte[], byte[]> dynamicConsumer = createConsumerAndReceive(dynamicGroup, false, numRecords);
         Consumer<byte[], byte[]> manualConsumer = createConsumerAndReceive(manualGroup, true, numRecords);
 
-        // We don't need to shut down coordinator of manual group since it won't be created.
         clusterInstance.shutdownBroker(findCoordinator(dynamicGroup));
+        clusterInstance.shutdownBroker(findCoordinator(manualGroup));
 
         submitCloseAndValidate(dynamicConsumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get();
         submitCloseAndValidate(manualConsumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get();
