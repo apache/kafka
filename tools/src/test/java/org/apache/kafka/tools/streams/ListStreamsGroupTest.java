@@ -102,7 +102,7 @@ public class ListStreamsGroupTest {
     @Test
     public void testListStreamsGroupWithoutFilters() throws Exception {
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list"})) {
-            Set<String> expectedGroups = new HashSet<>(Collections.singleton(APP_ID));
+            Set<String> expectedGroups = Set.of(APP_ID);
 
             final AtomicReference<Set> foundGroups = new AtomicReference<>();
             TestUtils.waitForCondition(() -> {
