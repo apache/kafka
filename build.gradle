@@ -157,7 +157,7 @@ ext {
     libs.log4j2Api,
     libs.log4j2Core
   ]
-  
+
 }
 
 allprojects {
@@ -548,7 +548,7 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
-    
+
     finalizedBy("copyTestXml")
   }
 
@@ -1025,6 +1025,7 @@ project(':core') {
     implementation libs.scalaReflect
     implementation libs.scalaLogging
     implementation libs.slf4jApi
+    runtimeOnly "org.apache.logging.log4j:log4j-slf4j-impl:2.24.3"
     implementation libs.re2j
 
     testImplementation project(':clients').sourceSets.test.output
@@ -1072,6 +1073,21 @@ project(':core') {
       highlighting = false
       minimumRate = 0.0
     }
+  }
+
+  tasks.register("runKafkaBroker", JavaExec) {
+    group = "nilext"
+    description = "Run Kafka broker with Gradle-managed classpath"
+
+    mainClass.set("kafka.Kafka")
+    classpath = sourceSets.main.runtimeClasspath
+
+    jvmArgs = [
+            "-Dlog4j2.configurationFile=$rootDir/config/log4j2.yaml",
+            "-Dkafka.logs.dir=/tmp/kafka-logs"
+    ]
+
+    args = ["$rootDir/config/server.properties"]
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
