@@ -143,6 +143,37 @@ public class ConsumerMetadataTest {
     }
 
     @Test
+    public void testSubscriptionToBrokerRegexAllowsTransientTopics() {
+        // Subscribe to broker-side regex
+        subscription.subscribe(new SubscriptionPattern("__.*"), Optional.empty());
+
+        // Receive assignment from coordinator with topic IDs only
+        Uuid assignedTopicId = Uuid.randomUuid();
+        subscription.setAssignedTopicIds(Set.of(assignedTopicId));
+
+        // Metadata request should only include the assigned topic IDs
+        try (ConsumerMetadata metadata = newConsumerMetadata(false)) {
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics());
+            assertEquals(List.of(assignedTopicId), builder.topicIds());
+
+            // Call to offsets-related APIs starts. Metadata requests should move to requesting topic names temporarily.
+            String transientTopic = "__transient_topic";
+            metadata.addTransientTopics(Set.of(transientTopic));
+            builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics());
+            // assertTrue(builder.topicIds().isEmpty());
+            assertEquals(List.of(transientTopic), builder.topics());
+
+            // Call to offsets-related APIs ends. Metadata requests should move back to requesting topic IDs for RE2J.
+            metadata.clearTransientTopics();
+            builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics());
+            assertEquals(List.of(assignedTopicId), builder.topicIds());
+        }
+    }
+
+    @Test
     public void testUserAssignment() {
         subscription.assignFromUser(Set.of(
                 new TopicPartition("foo", 0),
