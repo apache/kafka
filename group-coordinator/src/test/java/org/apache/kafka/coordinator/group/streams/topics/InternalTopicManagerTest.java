@@ -107,6 +107,7 @@ class InternalTopicManagerTest {
         return mkMap(
             mkEntry(SUBTOPOLOGY_1,
                 new ConfiguredSubtopology(
+                    2,
                     Set.of(SOURCE_TOPIC_1),
                     Map.of(),
                     Set.of(REPARTITION_TOPIC),
@@ -121,6 +122,7 @@ class InternalTopicManagerTest {
             ),
             mkEntry(SUBTOPOLOGY_2,
                 new ConfiguredSubtopology(
+                    2,
                     Set.of(SOURCE_TOPIC_2),
                     Map.of(REPARTITION_TOPIC,
                         new ConfiguredInternalTopic(REPARTITION_TOPIC,

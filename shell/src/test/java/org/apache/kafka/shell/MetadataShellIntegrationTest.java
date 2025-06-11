@@ -97,12 +97,16 @@ public class MetadataShellIntegrationTest {
                 FileLock fileLock = new FileLock(new File(env.tempDir, ".lock"));
                 try {
                     fileLock.lock();
-                    assertEquals("Unable to lock " + env.tempDir.getAbsolutePath() +
-                        ". Please ensure that no broker or controller process is using this " +
-                        "directory before proceeding.",
-                        assertThrows(RuntimeException.class,
-                            () -> env.shell.run(List.of())).
-                                getMessage());
+                    // We had a bug where the shell can lock the directory unintentionally
+                    // at the 2nd run, so we check that it fails (See KAFKA-19334)
+                    for (int i = 0; i < 2; i++) {
+                        assertEquals("Unable to lock " + env.tempDir.getAbsolutePath() +
+                                     ". Please ensure that no broker or controller process is using this " +
+                                     "directory before proceeding.",
+                                     assertThrows(RuntimeException.class,
+                                                  () -> env.shell.run(List.of())).
+                                             getMessage());
+                    }
                 } finally {
                     fileLock.destroy();
                 }

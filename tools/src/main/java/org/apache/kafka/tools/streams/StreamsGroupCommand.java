@@ -19,9 +19,13 @@ package org.apache.kafka.tools.streams;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
@@ -42,6 +46,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.OffsetsUtils;
@@ -51,12 +56,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectWriter;
 
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +77,10 @@ import java.util.stream.Stream;
 
 import joptsimple.OptionException;
 
+
 public class StreamsGroupCommand {
+
+    static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
@@ -80,10 +91,11 @@ public class StreamsGroupCommand {
                 opts.listOpt,
                 opts.describeOpt,
                 opts.resetOffsetsOpt,
-                opts.deleteOpt
+                opts.deleteOpt,
+                opts.deleteOffsetsOpt
             ).filter(opts.options::has).count();
             if (numberOfActions != 1)
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, or --reset-offsets.");
+                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
 
             run(opts);
         } catch (OptionException e) {
@@ -106,6 +118,8 @@ public class StreamsGroupCommand {
                     printOffsetsToReset(offsetsToReset);
             } else if (opts.options.has(opts.deleteOpt)) {
                 streamsGroupService.deleteGroups();
+            } else if (opts.options.has(opts.deleteOffsetsOpt)) {
+                streamsGroupService.deleteOffsets();
             } else {
                 throw new IllegalArgumentException("Unknown action!");
             }
@@ -502,6 +516,133 @@ public class StreamsGroupCommand {
                 });
             }
             return result;
+        }
+
+        private Map.Entry<Errors, Map<TopicPartition, Throwable>> deleteOffsets(String groupId, List<String> topics) {
+            Map<TopicPartition, Throwable> partitionLevelResult = new HashMap<>();
+            Set<String> topicWithPartitions = new HashSet<>();
+            Set<String> topicWithoutPartitions = new HashSet<>();
+
+            for (String topic : topics) {
+                if (topic.contains(":"))
+                    topicWithPartitions.add(topic);
+                else
+                    topicWithoutPartitions.add(topic);
+            }
+
+            List<TopicPartition> specifiedPartitions = topicWithPartitions.stream().flatMap(offsetsUtils::parseTopicsWithPartitions).toList();
+
+            // Get the partitions of topics that the user did not explicitly specify the partitions
+            DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(
+                topicWithoutPartitions,
+                withTimeoutMs(new DescribeTopicsOptions()));
+
+            Iterator<TopicPartition> unspecifiedPartitions = describeTopicsResult.topicNameValues().entrySet().stream().flatMap(e -> {
+                String topic = e.getKey();
+                try {
+                    return e.getValue().get().partitions().stream().map(partition ->
+                        new TopicPartition(topic, partition.partition()));
+                } catch (ExecutionException | InterruptedException err) {
+                    partitionLevelResult.put(new TopicPartition(topic, -1), err);
+                    return Stream.empty();
+                }
+            }).iterator();
+
+            Set<TopicPartition> partitions = new HashSet<>(specifiedPartitions);
+
+            unspecifiedPartitions.forEachRemaining(partitions::add);
+
+            return deleteOffsets(groupId, partitions, partitionLevelResult);
+        }
+
+        private Map.Entry<Errors, Map<TopicPartition, Throwable>> deleteOffsets(String groupId, Set<TopicPartition> partitions, Map<TopicPartition, Throwable> partitionLevelResult) {
+
+            DeleteStreamsGroupOffsetsResult deleteResult = adminClient.deleteStreamsGroupOffsets(
+                groupId,
+                partitions,
+                withTimeoutMs(new DeleteStreamsGroupOffsetsOptions())
+            );
+
+            Errors topLevelException = Errors.NONE;
+
+            try {
+                deleteResult.all().get();
+            } catch (ExecutionException | InterruptedException e) {
+                topLevelException = Errors.forException(e.getCause());
+            }
+
+            partitions.forEach(partition -> {
+                try {
+                    deleteResult.partitionResult(partition).get();
+                    partitionLevelResult.put(partition, null);
+                } catch (ExecutionException | InterruptedException e) {
+                    partitionLevelResult.put(partition, e);
+                }
+            });
+
+            return new AbstractMap.SimpleImmutableEntry<>(topLevelException, partitionLevelResult);
+        }
+
+        Map.Entry<Errors, Map<TopicPartition, Throwable>> deleteOffsets() {
+            String groupId = opts.options.valueOf(opts.groupOpt);
+            Map.Entry<Errors, Map<TopicPartition, Throwable>> res;
+            if (opts.options.has(opts.allInputTopicsOpt)) {
+                Set<TopicPartition> partitions = getCommittedOffsets(groupId).keySet();
+                res = deleteOffsets(groupId, partitions, new HashMap<>());
+            } else if (opts.options.has(opts.inputTopicOpt)) {
+                List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
+                res = deleteOffsets(groupId, topics);
+            } else {
+                CommandLineUtils.printUsageAndExit(opts.parser, "Option " + opts.deleteOffsetsOpt +
+                    " requires either" + opts.allInputTopicsOpt + " or " + opts.inputTopicOpt + " to be specified.");
+                return null;
+            }
+
+
+            Errors topLevelResult = res.getKey();
+            Map<TopicPartition, Throwable> partitionLevelResult = res.getValue();
+
+            switch (topLevelResult) {
+                case NONE:
+                    System.out.println("Request succeeded for deleting offsets from group " + groupId + ".");
+                    break;
+                case INVALID_GROUP_ID:
+                case GROUP_ID_NOT_FOUND:
+                case GROUP_AUTHORIZATION_FAILED:
+                case NON_EMPTY_GROUP:
+                    printError(topLevelResult.message(), Optional.empty());
+                    break;
+                case GROUP_SUBSCRIBED_TO_TOPIC:
+                case TOPIC_AUTHORIZATION_FAILED:
+                case UNKNOWN_TOPIC_OR_PARTITION:
+                    printError("Encountered some partition-level error, see the follow-up details.", Optional.empty());
+                    break;
+                default:
+                    printError("Encountered some unknown error: " + topLevelResult, Optional.empty());
+            }
+
+            int maxTopicLen = 15;
+            for (TopicPartition tp : partitionLevelResult.keySet()) {
+                maxTopicLen = Math.max(maxTopicLen, tp.topic().length());
+            }
+
+            String format = "%n%" + (-maxTopicLen) + "s %-10s %-15s";
+
+            System.out.printf(format, "TOPIC", "PARTITION", "STATUS");
+            partitionLevelResult.entrySet().stream()
+                .sorted(Comparator.comparing(e -> e.getKey().topic() + e.getKey().partition()))
+                .forEach(e -> {
+                    TopicPartition tp = e.getKey();
+                    Throwable error = e.getValue();
+                    System.out.printf(format,
+                        tp.topic(),
+                        tp.partition() >= 0 ? tp.partition() : MISSING_COLUMN_VALUE,
+                        error != null ? "Error: " + error.getMessage() : "Successful"
+                    );
+                });
+            System.out.println();
+            // testing purpose: return the result of the delete operation
+            return res;
         }
 
         Map<String, Throwable> deleteGroups() {

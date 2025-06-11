@@ -47,6 +47,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
     private static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
         "over the entire streams group. For instance --group g1 --group g2";
+    private static final String DELETE_OFFSETS_DOC = "Delete offsets of streams group. Supports one streams group at the time, and multiple topics.";
     public static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
         "to specify the maximum amount of time in milliseconds to wait before the group stabilizes.";
     public static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
@@ -84,6 +85,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public final OptionSpec<Void> listOpt;
     public final OptionSpec<Void> describeOpt;
     public final OptionSpec<Void> deleteOpt;
+    public final OptionSpec<Void> deleteOffsetsOpt;
     public final OptionSpec<Void> allGroupsOpt;
     public final OptionSpec<Long> timeoutMsOpt;
     public final OptionSpec<String> commandConfigOpt;
@@ -107,6 +109,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     final Set<OptionSpec<?>> allResetOffsetScenarioOpts;
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
     final Set<OptionSpec<?>> allStreamsGroupLevelOpts;
+    final Set<OptionSpec<?>> allDeleteOffsetsOpts;
 
     public static StreamsGroupCommandOptions fromArgs(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
@@ -134,6 +137,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         describeOpt = parser.accepts("describe", DESCRIBE_DOC);
         allGroupsOpt = parser.accepts("all-groups", ALL_GROUPS_DOC);
         deleteOpt = parser.accepts("delete", DELETE_DOC);
+        deleteOffsetsOpt = parser.accepts("delete-offsets", DELETE_OFFSETS_DOC);
         timeoutMsOpt = parser.accepts("timeout", TIMEOUT_MS_DOC)
             .availableIf(describeOpt)
             .withRequiredArg()
@@ -189,6 +193,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt));
         allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
         allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
+        allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(inputTopicOpt, allInputTopicsOpt));
     }
 
     public void checkArgs() {
@@ -210,6 +215,9 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             if (options.has(inputTopicOpt) || options.has(allInputTopicsOpt))
                 CommandLineUtils.printUsageAndExit(parser, "Kafka Streams does not support topic-specific offset " +
                     "deletion from a streams group.");
+        }
+        if (options.has(deleteOffsetsOpt)) {
+            checkDeleteOffsetsArgs();
         }
 
         if (options.has(resetOffsetsOpt)) {
@@ -236,6 +244,16 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             CommandLineUtils.printUsageAndExit(parser,
                 "Option " + describeOpt + " does not take a value for " + stateOpt);
     }
+
+    private void checkDeleteOffsetsArgs() {
+        if ((!options.has(inputTopicOpt) && !options.has(allInputTopicsOpt)) || !options.has(groupOpt))
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + deleteOffsetsOpt + " takes the " + groupOpt + " and one of these options: " + allDeleteOffsetsOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+        if (options.valuesOf(groupOpt).size() > 1)
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + deleteOffsetsOpt + " supports only one " + groupOpt + " at a time, but found: " + options.valuesOf(groupOpt));
+    }
+
     private void checkOffsetResetArgs() {
         if (options.has(dryRunOpt) && options.has(executeOpt))
             CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);

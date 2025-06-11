@@ -16,7 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewPartitionReassignment;
+import org.apache.kafka.clients.admin.NewPartitions;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -31,12 +36,16 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -213,6 +222,116 @@ public class ConsumerIntegrationTest {
                 }
                 consumed += records.count();
             }
+        }
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT},
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
+            @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
+            @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor")
+        }
+    )
+    public void testRackAwareAssignment(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        String topic = "test-topic";
+        try (Admin admin = clusterInstance.admin();
+             Producer<byte[], byte[]> producer = clusterInstance.producer();
+             Consumer<byte[], byte[]> consumer0 = clusterInstance.consumer(Map.of(
+                 ConsumerConfig.GROUP_ID_CONFIG, "group0",
+                 ConsumerConfig.CLIENT_RACK_CONFIG, "rack0",
+                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()
+             ));
+             Consumer<byte[], byte[]> consumer1 = clusterInstance.consumer(Map.of(
+                 ConsumerConfig.GROUP_ID_CONFIG, "group0",
+                 ConsumerConfig.CLIENT_RACK_CONFIG, "rack1",
+                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()
+             ));
+             Consumer<byte[], byte[]> consumer2 = clusterInstance.consumer(Map.of(
+                 ConsumerConfig.GROUP_ID_CONFIG, "group0",
+                 ConsumerConfig.CLIENT_RACK_CONFIG, "rack2",
+                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()
+             ))
+        ) {
+            // Create a new topic with 1 partition on broker 0.
+            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0)))));
+            clusterInstance.waitForTopic(topic, 1);
+
+            producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes()));
+            producer.flush();
+
+            consumer0.subscribe(List.of(topic));
+            consumer1.subscribe(List.of(topic));
+            consumer2.subscribe(List.of(topic));
+
+            TestUtils.waitForCondition(() -> {
+                consumer0.poll(Duration.ofMillis(1000));
+                consumer1.poll(Duration.ofMillis(1000));
+                consumer2.poll(Duration.ofMillis(1000));
+                return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 0))) &&
+                    consumer1.assignment().isEmpty() &&
+                    consumer2.assignment().isEmpty();
+            }, "Consumer 0 should be assigned to topic partition 0");
+
+            // Add a new partition 1 and 2 to broker 1.
+            admin.createPartitions(
+                Map.of(
+                    topic,
+                    NewPartitions.increaseTo(3, List.of(List.of(1), List.of(1)))
+                )
+            );
+            clusterInstance.waitForTopic(topic, 3);
+            TestUtils.waitForCondition(() -> {
+                consumer0.poll(Duration.ofMillis(1000));
+                consumer1.poll(Duration.ofMillis(1000));
+                consumer2.poll(Duration.ofMillis(1000));
+                return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 0))) &&
+                    consumer1.assignment().equals(Set.of(new TopicPartition(topic, 1), new TopicPartition(topic, 2))) &&
+                    consumer2.assignment().isEmpty();
+            }, "Consumer 1 should be assigned to topic partition 1 and 2");
+
+            // Add a new partition 3, 4, and 5 to broker 2.
+            admin.createPartitions(
+                Map.of(
+                    topic,
+                    NewPartitions.increaseTo(6, List.of(List.of(2), List.of(2), List.of(2)))
+                )
+            );
+            clusterInstance.waitForTopic(topic, 6);
+            TestUtils.waitForCondition(() -> {
+                consumer0.poll(Duration.ofMillis(1000));
+                consumer1.poll(Duration.ofMillis(1000));
+                consumer2.poll(Duration.ofMillis(1000));
+                return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 0))) &&
+                    consumer1.assignment().equals(Set.of(new TopicPartition(topic, 1), new TopicPartition(topic, 2))) &&
+                    consumer2.assignment().equals(Set.of(new TopicPartition(topic, 3), new TopicPartition(topic, 4), new TopicPartition(topic, 5)));
+            }, "Consumer 2 should be assigned to topic partition 3, 4, and 5");
+
+            // Change partitions to different brokers.
+            // partition 0 -> broker 2
+            // partition 1 -> broker 2
+            // partition 2 -> broker 2
+            // partition 3 -> broker 1
+            // partition 4 -> broker 1
+            // partition 5 -> broker 0
+            admin.alterPartitionReassignments(Map.of(
+                new TopicPartition(topic, 0), Optional.of(new NewPartitionReassignment(List.of(2))),
+                new TopicPartition(topic, 1), Optional.of(new NewPartitionReassignment(List.of(2))),
+                new TopicPartition(topic, 2), Optional.of(new NewPartitionReassignment(List.of(2))),
+                new TopicPartition(topic, 3), Optional.of(new NewPartitionReassignment(List.of(1))),
+                new TopicPartition(topic, 4), Optional.of(new NewPartitionReassignment(List.of(1))),
+                new TopicPartition(topic, 5), Optional.of(new NewPartitionReassignment(List.of(0)))
+            )).all().get();
+            TestUtils.waitForCondition(() -> {
+                consumer0.poll(Duration.ofMillis(1000));
+                consumer1.poll(Duration.ofMillis(1000));
+                consumer2.poll(Duration.ofMillis(1000));
+                return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 5))) &&
+                    consumer1.assignment().equals(Set.of(new TopicPartition(topic, 3), new TopicPartition(topic, 4))) &&
+                    consumer2.assignment().equals(Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(topic, 2)));
+            }, "Consumer with topic partition mapping should be 0 -> 5 | 1 -> 3, 4 | 2 -> 0, 1, 2");
         }
     }
 
