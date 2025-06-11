@@ -385,29 +385,35 @@ public class PlaintextConsumerSubscriptionTest {
                 Consumer<byte[], byte[]> consumer = cluster.consumer(config)
         ) {
             assertEquals(0, consumer.assignment().size());
+
+            // Subscribe to broker-side regex and fetch. This will require metadata for topic IDs.
             var pattern = new SubscriptionPattern("topic.*");
             consumer.subscribe(pattern);
-
             var assignment = Set.of(
                     new TopicPartition(topic, 0),
                     new TopicPartition(topic, 1),
                     new TopicPartition(topic1, 0),
                     new TopicPartition(topic1, 1));
             awaitAssignment(consumer, assignment);
-
             var totalRecords = 10;
             var startingTimestamp = System.currentTimeMillis();
             var tp = new TopicPartition(topic1, 0);
             sendRecords(producer, tp, totalRecords, startingTimestamp);
             consumeAndVerifyRecords(consumer, tp, totalRecords, 0, 0, startingTimestamp);
 
-            // Request offsets for known and unknown topics
-            var unassignedPartition = new TopicPartition(topic, 0);
+            // Fetch offsets for known and unknown topics. This will require metadata for topic names temporarily (transient topics)
+            var topic2 = "newTopic2";
+            cluster.createTopic(topic2, 2, (short) BROKER_COUNT);
+            var unassignedPartition = new TopicPartition(topic2, 0);
             var offsets = consumer.endOffsets(List.of(unassignedPartition, tp));
             var expectedOffsets = Map.of(
                     unassignedPartition, 0L,
                     tp, (long) totalRecords);
             assertEquals(expectedOffsets, offsets);
+
+            // Fetch records again with the regex subscription. This will require metadata for topic IDs again.
+            sendRecords(producer, tp, totalRecords, startingTimestamp);
+            consumeAndVerifyRecords(consumer, tp, totalRecords, totalRecords, 0, startingTimestamp);
         }
     }
 

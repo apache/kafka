@@ -80,14 +80,17 @@ public class ConsumerMetadata extends Metadata {
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
         if (subscription.hasPatternSubscription()) {
-            // Consumer subscribed to client-side regex => needs to request all topics to compute regex
+            // Consumer subscribed to client-side regex => request all topics to compute regex
             return MetadataRequest.Builder.allTopics();
         }
-        if (subscription.hasRe2JPatternSubscription() && assignedTopicIdsUnresolved(subscription.assignedTopicIds())) {
-            // Consumer subscribed to broker-side regex with unknown assigned topics => needs to request topic IDs
+        if (subscription.hasRe2JPatternSubscription() && transientTopics.isEmpty()) {
+            // Consumer subscribed to broker-side regex and no need for transient topic names metadata => request topic IDs
             return MetadataRequest.Builder.forTopicIds(subscription.assignedTopicIds());
         }
-        // Subscription to explicit topic names or transient topics present
+        // Subscription to explicit topic names or transient topics present.
+        // Note that in the case of RE2J broker-side regex subscription, we may end up in this path
+        // if there are transient topics. They are just needed temporarily (lifetime of offsets-related API calls),
+        // so we'll request them to unblock their APIs, then go back to requesting assigned topic IDs as needed
         List<String> topics = new ArrayList<>();
         topics.addAll(subscription.metadataTopics());
         topics.addAll(transientTopics);
@@ -98,10 +101,6 @@ public class ConsumerMetadata extends Metadata {
         this.transientTopics.addAll(topics);
         if (!fetch().topics().containsAll(topics))
             requestUpdateForNewTopics();
-    }
-
-    synchronized boolean assignedTopicIdsUnresolved(Set<Uuid> assignedTopicIds) {
-        return !fetch().topicIds().containsAll(assignedTopicIds);
     }
 
     synchronized void clearTransientTopics() {
