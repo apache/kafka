@@ -252,10 +252,10 @@ JUnit (5.10.2)
 
 * License: Eclipse Public License v2.0
 
-Mockito (2.16.0)
+Mockito (5.11.0)
 
 * Project: http://site.mockito.org
-* Source: https://github.com/mockito/mockito/releases/tag/v2.16.0
+* Source: https://github.com/mockito/mockito/releases/tag/v5.11.0
 
 ## Cryptography
 
