@@ -182,7 +182,7 @@ public class AsyncKafkaConsumerTest {
         if (consumer != null) {
             try {
                 consumer.close(CloseOptions.timeout(Duration.ZERO));
-            } catch (Exception e) {
+            } catch (Exception swallow) {
                 // best effort to clean up after each test, but may throw (ex. if callbacks where
                 // throwing errors)
             }
