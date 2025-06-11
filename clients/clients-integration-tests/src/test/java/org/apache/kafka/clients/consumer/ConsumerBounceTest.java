@@ -227,7 +227,7 @@ public class ConsumerBounceTest {
                         assertEquals(numRecords, consumer.position(topicPartition));
                     } else if (coin == 1) {
                         int pos = SEEDED_RANDOM.nextInt(numRecords);
-                        logger.info("Seeking to " + pos);
+                        logger.info("Seeking to {}", pos);
                         consumer.seek(topicPartition, pos);
                         assertEquals(pos, consumer.position(topicPartition));
                     } else {
@@ -335,9 +335,8 @@ public class ConsumerBounceTest {
         Consumer<byte[], byte[]> dynamicConsumer = createConsumerAndReceive(dynamicGroup, false, numRecords);
         Consumer<byte[], byte[]> manualConsumer = createConsumerAndReceive(manualGroup, true, numRecords);
 
+        // We don't need to shut down coordinator of manual group since it won't be created.
         clusterInstance.shutdownBroker(findCoordinator(dynamicGroup));
-        // FIXME: Use consumer.assign can't create manual group so comment this line
-//        clusterInstance.shutdownBroker(findCoordinator(manualGroup));
 
         submitCloseAndValidate(dynamicConsumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get();
         submitCloseAndValidate(manualConsumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get();
