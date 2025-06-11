@@ -83,7 +83,7 @@ public class ConsumerMetadata extends Metadata {
             // Consumer subscribed to client-side regex => needs to request all topics to compute regex
             return MetadataRequest.Builder.allTopics();
         }
-        if (subscription.hasRe2JPatternSubscription() && !subscription.assignedTopicIds().isEmpty()) {
+        if (subscription.hasRe2JPatternSubscription() && assignedTopicIdsUnresolved(subscription.assignedTopicIds())) {
             // Consumer subscribed to broker-side regex with unknown assigned topics => needs to request topic IDs
             return MetadataRequest.Builder.forTopicIds(subscription.assignedTopicIds());
         }
@@ -98,6 +98,10 @@ public class ConsumerMetadata extends Metadata {
         this.transientTopics.addAll(topics);
         if (!fetch().topics().containsAll(topics))
             requestUpdateForNewTopics();
+    }
+
+    synchronized boolean assignedTopicIdsUnresolved(Set<Uuid> assignedTopicIds) {
+        return !fetch().topicIds().containsAll(assignedTopicIds);
     }
 
     synchronized void clearTransientTopics() {
