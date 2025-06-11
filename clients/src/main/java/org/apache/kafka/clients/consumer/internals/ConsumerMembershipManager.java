@@ -112,6 +112,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     protected final Optional<String> groupInstanceId;
 
+    private final Optional<String> rackId;
+
     /**
      * Rebalance timeout. To be used as time limit for the commit request issued
      * when a new assignment is received, that is retried until it succeeds, fails with a
@@ -140,6 +142,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
 
     public ConsumerMembershipManager(String groupId,
                                      Optional<String> groupInstanceId,
+                                     Optional<String> rackId,
                                      int rebalanceTimeoutMs,
                                      Optional<String> serverAssignor,
                                      SubscriptionState subscriptions,
@@ -152,6 +155,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      boolean autoCommitEnabled) {
         this(groupId,
             groupInstanceId,
+            rackId,
             rebalanceTimeoutMs,
             serverAssignor,
             subscriptions,
@@ -167,6 +171,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     // Visible for testing
     ConsumerMembershipManager(String groupId,
                               Optional<String> groupInstanceId,
+                              Optional<String> rackId,
                               int rebalanceTimeoutMs,
                               Optional<String> serverAssignor,
                               SubscriptionState subscriptions,
@@ -185,6 +190,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             metricsManager,
             autoCommitEnabled);
         this.groupInstanceId = groupInstanceId;
+        this.rackId = rackId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.serverAssignor = serverAssignor;
         this.commitRequestManager = commitRequestManager;
@@ -197,6 +203,10 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
+    }
+
+    public Optional<String> rackId() {
+        return rackId;
     }
 
     /**
@@ -218,7 +228,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                     "already leaving the group.", memberId, memberEpoch);
             return;
         }
-        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
+        if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
                     "to leave the group and completed the leave operation. ", memberId, memberEpoch);
             return;
@@ -226,6 +236,13 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
                     " so it's not a member of the group. ", memberId, state);
+            return;
+        }
+        if (responseData.memberEpoch() < 0) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
+                    "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
+                    responseData.memberEpoch());
+            maybeCompleteLeaveInProgress();
             return;
         }
 

@@ -1354,13 +1354,13 @@ public class ConsumerGroupCommand {
             });
 
             if (failed.isEmpty())
-                System.out.println("Deletion of requested consumer groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
+                System.out.println("Deletion of requested consumer groups (" + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")) + ") was successful.");
             else {
                 printError("Deletion of some consumer groups failed:", Optional.empty());
                 failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty())
-                    System.out.println("\nThese consumer groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
+                    System.out.println("\nThese consumer groups were deleted successfully: " + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")));
             }
 
             failed.putAll(success);
