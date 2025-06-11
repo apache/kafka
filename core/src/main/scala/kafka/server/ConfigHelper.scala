@@ -82,31 +82,27 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                       includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
     resourceToConfigNames.map { resource =>
       def createResponseConfig(configs: Any,
-                               createConfigEntry: (String, Object) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
+                               createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
         val stream = configs match {
           case c: AbstractConfig =>
             java.util.stream.Stream.concat(
               c.originals.entrySet.stream.filter(_.getValue != null),
-              c.nonInternalValues.entrySet.stream.map(_.asInstanceOf[java.util.Map.Entry[String, Object]])
+              c.nonInternalValues.entrySet.stream
             )
           case m: java.util.Map[_, _] =>
             m.asInstanceOf[java.util.Map[String, String]].entrySet().stream()
           case _ => throw new IllegalArgumentException("Unsupported configs type")
         }
 
-        val configEntries: java.util.List[DescribeConfigsResponseData.DescribeConfigsResourceResult] = {
-          stream
-            .filter(entry =>
-              resource.configurationKeys == null ||
-                resource.configurationKeys.isEmpty ||
-                resource.configurationKeys.contains(entry.getKey)
-            )
-            .map[DescribeConfigsResponseData.DescribeConfigsResourceResult](entry =>
-              createConfigEntry(entry.getKey, entry.getValue)
-            )
-            .toList
-        }
-
+        val configEntries = stream
+          .filter(entry =>
+            resource.configurationKeys == null ||
+              resource.configurationKeys.isEmpty ||
+              resource.configurationKeys.contains(entry.getKey)
+          )
+          .map[DescribeConfigsResponseData.DescribeConfigsResourceResult](entry => createConfigEntry(entry.getKey, entry.getValue))
+          .toList
+        
         new DescribeConfigsResponseData.DescribeConfigsResult()
           .setErrorCode(Errors.NONE.code)
           .setConfigs(configEntries)
