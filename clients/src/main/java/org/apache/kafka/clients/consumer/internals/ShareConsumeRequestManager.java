@@ -134,6 +134,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     @Override
     public PollResult poll(long currentTimeMs) {
         if (memberId == null) {
+            if (closing && !closeFuture.isDone()) {
+                closeFuture.complete(null);
+            }
             return PollResult.EMPTY;
         }
 
