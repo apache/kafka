@@ -228,10 +228,14 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             CommandLineUtils.printUsageAndExit(parser, "Only Option " + resetOffsetsOpt + "accepts " + executeOpt + " or " + dryRunOpt);
 
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
-        CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allStreamsGroupLevelOpts, describeOpt, deleteOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allGroupSelectionScopeOpts, groupOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allStreamsGroupLevelOpts, describeOpt, deleteOpt, resetOffsetsOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, inputTopicOpt, minus(allStreamsGroupLevelOpts, resetOffsetsOpt));
     }
 
     private void checkDescribeArgs() {
+        CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list all streams groups, describe a streams group, delete streams group info, or reset streams group offsets.");
+
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
             CommandLineUtils.printUsageAndExit(parser,
                 "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
