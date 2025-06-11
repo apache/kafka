@@ -178,7 +178,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
-                               String rackId,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this(rebalanceConfig,
             logContext,
@@ -193,7 +192,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             autoCommitIntervalMs,
             interceptors,
             throwOnFetchStableOffsetsUnsupported,
-            rackId,
             clientTelemetryReporter,
             Optional.empty());
     }
@@ -214,7 +212,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
-                               String rackId,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
         super(rebalanceConfig,
@@ -228,7 +225,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
-        this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
+        this.rackId = rebalanceConfig.rackId;
         this.metadataSnapshot = new MetadataSnapshot(this.rackId, subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
@@ -1305,23 +1302,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         final Generation generation;
         final String groupInstanceId;
         if (subscriptions.hasAutoAssignedPartitions()) {
-            generation = generationIfStable();
-            groupInstanceId = rebalanceConfig.groupInstanceId.orElse(null);
-            // if the generation is null, we are not part of an active group (and we expect to be).
-            // the only thing we can do is fail the commit and let the user rejoin the group in poll().
-            if (generation == null) {
-                log.info("Failing OffsetCommit request since the consumer is not part of an active group");
+            synchronized (ConsumerCoordinator.this) {
+                generation = generationIfStable();
+                groupInstanceId = rebalanceConfig.groupInstanceId.orElse(null);
+                // if the generation is null, we are not part of an active group (and we expect to be).
+                // the only thing we can do is fail the commit and let the user rejoin the group in poll().
+                if (generation == null) {
+                    log.info("Failing OffsetCommit request since the consumer is not part of an active group");
 
-                if (rebalanceInProgress()) {
-                    // if the client knows it is already rebalancing, we can use RebalanceInProgressException instead of
-                    // CommitFailedException to indicate this is not a fatal error
-                    return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
-                        "consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance " +
-                        "by calling poll() and then retry the operation."));
-                } else {
-                    return RequestFuture.failure(new CommitFailedException("Offset commit cannot be completed since the " +
-                        "consumer is not part of an active group for auto partition assignment; it is likely that the consumer " +
-                        "was kicked out of the group."));
+                    if (rebalanceInProgress()) {
+                        // if the client knows it is already rebalancing, we can use RebalanceInProgressException instead of
+                        // CommitFailedException to indicate this is not a fatal error
+                        return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                            "consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance " +
+                            "by calling poll() and then retry the operation."));
+                    } else {
+                        return RequestFuture.failure(new CommitFailedException("Offset commit cannot be completed since the " +
+                            "consumer is not part of an active group for auto partition assignment; it is likely that the consumer " +
+                            "was kicked out of the group."));
+                    }
                 }
             }
         } else {
@@ -1492,7 +1491,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     .collect(Collectors.toList())))
             .collect(Collectors.toList());
 
-        OffsetFetchRequest.Builder requestBuilder = new OffsetFetchRequest.Builder(
+        OffsetFetchRequest.Builder requestBuilder = OffsetFetchRequest.Builder.forTopicNames(
             new OffsetFetchRequestData()
                 .setRequireStable(true)
                 .setGroups(List.of(

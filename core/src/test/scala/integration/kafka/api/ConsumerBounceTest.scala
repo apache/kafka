@@ -15,7 +15,7 @@ package kafka.api
 
 import java.{time, util}
 import java.util.concurrent._
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
@@ -114,7 +114,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     var consumed = 0L
     val consumer = createConsumer()
 
-    consumer.subscribe(Collections.singletonList(topic))
+    consumer.subscribe(util.List.of(topic))
 
     val scheduler = new BounceBrokerScheduler(numIters)
     try {
@@ -130,10 +130,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
         if (records.nonEmpty) {
           consumer.commitSync()
-          assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
+          assertEquals(consumer.position(tp), consumer.committed(util.Set.of(tp)).get(tp).offset)
 
           if (consumer.position(tp) == numRecords) {
-            consumer.seekToBeginning(Collections.emptyList())
+            consumer.seekToBeginning(util.List.of())
             consumed = 0
           }
         }
@@ -153,7 +153,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     producerSend(producer, numRecords)
 
     val consumer = createConsumer()
-    consumer.assign(Collections.singletonList(tp))
+    consumer.assign(util.List.of(tp))
     consumer.seek(tp, 0)
 
     // wait until all the followers have synced the last HW with leader
@@ -169,7 +169,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
         val coin = TestUtils.random.nextInt(3)
         if (coin == 0) {
           info("Seeking to end of log")
-          consumer.seekToEnd(Collections.emptyList())
+          consumer.seekToEnd(util.List.of())
           assertEquals(numRecords.toLong, consumer.position(tp))
         } else if (coin == 1) {
           val pos = TestUtils.random.nextInt(numRecords).toLong
@@ -179,7 +179,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
         } else if (coin == 2) {
           info("Committing offset.")
           consumer.commitSync()
-          assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
+          assertEquals(consumer.position(tp), consumer.committed(java.util.Set.of(tp)).get(tp).offset)
         }
       }
     } finally {
@@ -194,7 +194,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val newtopic = "newtopic"
 
     val consumer = createConsumer()
-    consumer.subscribe(Collections.singleton(newtopic))
+    consumer.subscribe(util.Set.of(newtopic))
     executor.schedule(new Runnable {
         def run(): Unit = createTopic(newtopic, numPartitions = brokerCount, replicationFactor = brokerCount)
       }, 2, TimeUnit.SECONDS)
@@ -287,7 +287,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   private def findCoordinator(group: String): Int = {
     val request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
       .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-      .setCoordinatorKeys(Collections.singletonList(group))).build()
+      .setCoordinatorKeys(util.List.of(group))).build()
     var nodeId = -1
     TestUtils.waitUntilTrue(() => {
       val response = connectAndReceive[FindCoordinatorResponse](request)
@@ -307,7 +307,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val consumer1 = createConsumerAndReceive(group1, manualAssign = false, numRecords)
 
     val requestTimeout = 6000
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000")
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     }
@@ -338,7 +338,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val partitionCount = consumerCount * 2
 
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     }
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -377,7 +377,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val group = "fatal-exception-test"
     val topic = "fatal-exception-test"
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     }
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -418,7 +418,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val topic = "closetest"
     createTopic(topic, 10, brokerCount)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
-    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     }
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -429,7 +429,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     def subscribeAndPoll(consumer: Consumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
       executor.submit(() => {
-        consumer.subscribe(Collections.singletonList(topic))
+        consumer.subscribe(util.List.of(topic))
         revokeSemaphore.foreach(s => s.release())
           consumer.poll(Duration.ofMillis(500))
         }, 0)
@@ -519,7 +519,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     // New instance of consumer should be assigned partitions immediately and should see committed offsets.
     val assignSemaphore = new Semaphore(0)
     val consumer = createConsumerWithGroupId(groupId)
-    consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener {
+    consumer.subscribe(util.List.of(topic), new ConsumerRebalanceListener {
       def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         assignSemaphore.release()
       }
@@ -532,7 +532,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }, "Assignment did not complete on time")
 
     if (committedRecords > 0)
-      assertEquals(committedRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+      assertEquals(committedRecords, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
     consumer.close()
   }
 

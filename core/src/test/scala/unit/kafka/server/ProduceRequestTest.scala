@@ -32,9 +32,9 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
@@ -47,9 +47,8 @@ class ProduceRequestTest extends BaseRequestTest {
 
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSimpleProduceRequest(quorum: String): Unit = {
+  @Test
+  def testSimpleProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
     def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): Unit = {
@@ -163,9 +162,8 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals("One or more records have been rejected due to invalid timestamp", partitionProduceResponse.errorMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testProduceToNonReplica(quorum: String): Unit = {
+  @Test
+  def testProduceToNonReplica(): Unit = {
     val topic = "topic"
     val partition = 0
 
@@ -212,9 +210,8 @@ class ProduceRequestTest extends BaseRequestTest {
     }.getOrElse(throw new AssertionError(s"No leader elected for topic $topic"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCorruptLz4ProduceRequest(quorum: String): Unit = {
+  @Test
+  def testCorruptLz4ProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val topicId = getTopicIds().get("topic").get
     val timestamp = 1000000
@@ -247,9 +244,8 @@ class ProduceRequestTest extends BaseRequestTest {
     assertTrue(TestUtils.meterCount(s"${BrokerTopicMetrics.INVALID_MESSAGE_CRC_RECORDS_PER_SEC}") > 0)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testZSTDProduceRequest(quorum: String): Unit = {
+  @Test
+  def testZSTDProduceRequest(): Unit = {
     val topic = "topic"
     val partition = 0
 

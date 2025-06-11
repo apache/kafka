@@ -39,7 +39,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -251,11 +250,11 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("baz", 0))),
+            Set.of(new TopicPartition("baz", 0)),
             changes.electedLeaders().keySet()
         );
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("baz", 0))),
+            Set.of(new TopicPartition("baz", 0)),
             changes.leaders().keySet()
         );
         assertEquals(
@@ -307,7 +306,7 @@ public class TopicsImageTest {
         RecordTestUtils.replayAll(delta, topicRecords);
 
         LocalReplicaChanges changes = delta.localChanges(localId);
-        assertEquals(new HashSet<>(List.of(new TopicPartition("zoo", 0))), changes.deletes());
+        assertEquals(Set.of(new TopicPartition("zoo", 0)), changes.deletes());
         assertEquals(Map.of(), changes.electedLeaders());
         assertEquals(Map.of(), changes.leaders());
         assertEquals(Map.of(), changes.followers());
@@ -349,7 +348,7 @@ public class TopicsImageTest {
         assertEquals(Set.of(), changes.deletes());
         assertEquals(Map.of(), changes.electedLeaders());
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 0))),
+            Set.of(new TopicPartition("zoo", 0)),
             changes.leaders().keySet()
         );
         assertEquals(Map.of(), changes.followers());
@@ -446,7 +445,7 @@ public class TopicsImageTest {
 
     @Test
     public void testTopicDeltaElectionStatsWithEmptyImage() {
-        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Collections.EMPTY_MAP);
+        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Map.of());
         TopicDelta delta = new TopicDelta(image);
         delta.replay(new PartitionRecord().setPartitionId(0).setLeader(0).setIsr(List.of(0, 1)).setReplicas(List.of(0, 1, 2)));
         delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(2).setIsr(List.of(2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
@@ -568,19 +567,19 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 2), new TopicPartition("zoo", 3))),
+            Set.of(new TopicPartition("zoo", 2), new TopicPartition("zoo", 3)),
             changes.deletes()
         );
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4))),
+            Set.of(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4)),
             changes.electedLeaders().keySet()
         );
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4))),
+            Set.of(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4)),
             changes.leaders().keySet()
         );
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 1), new TopicPartition("zoo", 5))),
+            Set.of(new TopicPartition("zoo", 1), new TopicPartition("zoo", 5)),
             changes.followers().keySet()
         );
 
@@ -648,9 +647,9 @@ public class TopicsImageTest {
         assertNull(map.get("baz"));
         HashSet<Uuid> uuids = new HashSet<>();
         map.values().iterator().forEachRemaining(uuids::add);
-        HashSet<Uuid> expectedUuids = new HashSet<>(List.of(
+        Set<Uuid> expectedUuids = Set.of(
             Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA"),
-            Uuid.fromString("f62ptyETTjet8SL5ZeREiw")));
+            Uuid.fromString("f62ptyETTjet8SL5ZeREiw"));
         assertEquals(expectedUuids, uuids);
         assertThrows(UnsupportedOperationException.class, () -> map.remove("foo"));
         assertThrows(UnsupportedOperationException.class, () -> map.put("bar", FOO_UUID));
@@ -667,7 +666,7 @@ public class TopicsImageTest {
         assertNull(map.get(BAZ_UUID));
         HashSet<String> names = new HashSet<>();
         map.values().iterator().forEachRemaining(names::add);
-        HashSet<String> expectedNames = new HashSet<>(List.of("foo", "bar"));
+        Set<String> expectedNames = Set.of("foo", "bar");
         assertEquals(expectedNames, names);
         assertThrows(UnsupportedOperationException.class, () -> map.remove(FOO_UUID));
         assertThrows(UnsupportedOperationException.class, () -> map.put(FOO_UUID, "bar"));

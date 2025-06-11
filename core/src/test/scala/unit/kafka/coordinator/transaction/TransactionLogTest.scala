@@ -23,14 +23,15 @@ import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection
 import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, Struct, Type}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
-import org.apache.kafka.coordinator.transaction.TransactionState
+import org.apache.kafka.coordinator.transaction.{TransactionState, TxnTransitMetadata}
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
 import java.nio.ByteBuffer
-import scala.collection.{Seq, mutable}
+import java.util.Collections
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class TransactionLogTest {
@@ -114,14 +115,14 @@ class TransactionLogTest {
 
   @Test
   def testSerializeTransactionLogValueToHighestNonFlexibleVersion(): Unit = {
-    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, mutable.Set.empty, 500, 500, TV_0)
+    val txnTransitMetadata = new TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, Collections.emptySet(), 500, 500, TV_0)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_0))
     assertEquals(0, txnLogValueBuffer.getShort)
   }
 
   @Test
   def testSerializeTransactionLogValueToFlexibleVersion(): Unit = {
-    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, mutable.Set.empty, 500, 500, TV_2)
+    val txnTransitMetadata = new TxnTransitMetadata(1, 1, 1, 1, 1, 1000, TransactionState.COMPLETE_COMMIT, Collections.emptySet(), 500, 500, TV_2)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_2))
     assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_VERSION, txnLogValueBuffer.getShort)
   }

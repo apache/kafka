@@ -198,6 +198,11 @@ public class LogCleaner implements BrokerReconfigurable {
      * Start the background cleaner threads.
      */
     public void startup() {
+        if (config.numThreads < 1) {
+            LOG.warn("Invalid value for `log.cleaner.threads`: must be >= 1 starting from Kafka 5.0 since log cleaner" +
+                    " is always enabled.");
+        }
+
         LOG.info("Starting the log cleaner");
         IntStream.range(0, config.numThreads).forEach(i -> {
             try {

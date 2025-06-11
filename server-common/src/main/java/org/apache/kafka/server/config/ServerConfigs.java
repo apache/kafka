@@ -68,7 +68,8 @@ public class ServerConfigs {
 
     public static final String DELETE_TOPIC_ENABLE_CONFIG = "delete.topic.enable";
     public static final boolean DELETE_TOPIC_ENABLE_DEFAULT = true;
-    public static final String DELETE_TOPIC_ENABLE_DOC = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off";
+    public static final String DELETE_TOPIC_ENABLE_DOC = "When set to true, topics can be deleted by the admin client. " +
+            "When set to false, deletion requests will be explicitly rejected by the broker.";
 
     public static final String COMPRESSION_TYPE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_TYPE_CONFIG);
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +

@@ -33,10 +33,8 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.LongSupplier;
@@ -80,7 +78,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void partitionAssignmentChangeOnTopicSubscription() {
-        state.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        state.assignFromUser(Set.of(tp0, tp1));
         // assigned partitions should immediately change
         assertEquals(2, state.assignedPartitions().size());
         assertEquals(2, state.numAssignedPartitions());
@@ -394,7 +392,7 @@ public class SubscriptionStateTest {
     @Test
     public void patternSubscription() {
         state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
-        state.subscribeFromPattern(new HashSet<>(Arrays.asList(topic, topic1)));
+        state.subscribeFromPattern(Set.of(topic, topic1));
         assertEquals(2, state.subscription().size(), "Expected subscribed topics count is incorrect");
     }
 
@@ -434,7 +432,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void unsubscribeUserAssignment() {
-        state.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        state.assignFromUser(Set.of(tp0, tp1));
         state.unsubscribe();
         state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         assertEquals(singleton(topic), state.subscription());
@@ -452,7 +450,7 @@ public class SubscriptionStateTest {
     @Test
     public void unsubscription() {
         state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
-        state.subscribeFromPattern(new HashSet<>(Arrays.asList(topic, topic1)));
+        state.subscribeFromPattern(Set.of(topic, topic1));
         assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp1)));
         state.assignFromSubscribed(singleton(tp1));
 

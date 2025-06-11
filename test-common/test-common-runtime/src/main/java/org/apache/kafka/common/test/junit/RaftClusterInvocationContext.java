@@ -42,7 +42,6 @@ import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -54,9 +53,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import scala.jdk.javaapi.OptionConverters;
-
 
 /**
  * Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation. Each instance of this
@@ -89,7 +85,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     @Override
     public List<Extension> getAdditionalExtensions() {
         RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterConfig, isCombined);
-        return Arrays.asList(
+        return List.of(
                 (BeforeEachCallback) context -> {
                     clusterInstance.format();
                     if (clusterConfig.isAutoStart()) {
@@ -133,11 +129,16 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public Optional<ListenerName> controllerListenerName() {
-            return controllers().values().stream()
-                    .findAny()
-                    .flatMap(s -> OptionConverters.toJava(s.config().controllerListenerNames().headOption()))
-                    .map(ListenerName::new);
+        public ListenerName controllerListenerName() {
+            return new ListenerName(
+                controllers()
+                    .values()
+                    .iterator()
+                    .next()
+                    .config()
+                    .controllerListenerNames()
+                    .get(0)
+            );
         }
 
         @Override

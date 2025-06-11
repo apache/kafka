@@ -396,27 +396,37 @@ public final class RemoteLogManagerConfig {
     }
 
     public int remoteLogManagerCopierThreadPoolSize() {
-        int size = config.getInt(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP);
-        return size == -1 ? remoteLogManagerThreadPoolSize() : size;
+        return config.getInt(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP);
     }
 
     public int remoteLogManagerExpirationThreadPoolSize() {
-        int size = config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP);
-        return size == -1 ? remoteLogManagerThreadPoolSize() : size;
+        return config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP);
     }
 
     public long remoteLogManagerTaskIntervalMs() {
         return config.getLong(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP);
     }
 
+    /**
+     * Used by the RemoteStorageManager and RemoteLogMetadataManager plugins.
+     */
+    @SuppressWarnings("unused")
     public long remoteLogManagerTaskRetryBackoffMs() {
         return config.getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP);
     }
 
+    /**
+     * Used by the RemoteStorageManager and RemoteLogMetadataManager plugins.
+     */
+    @SuppressWarnings("unused")
     public long remoteLogManagerTaskRetryBackoffMaxMs() {
         return config.getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP);
     }
 
+    /**
+     * Used by the RemoteStorageManager and RemoteLogMetadataManager plugins.
+     */
+    @SuppressWarnings("unused")
     public double remoteLogManagerTaskRetryJitter() {
         return config.getDouble(REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP);
     }
@@ -437,10 +447,18 @@ public final class RemoteLogManagerConfig {
         return config.getInt(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP);
     }
 
+    /**
+     * Used by the RemoteStorageManager plugin.
+     */
+    @SuppressWarnings("unused")
     public String remoteStorageManagerPrefix() {
         return config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP);
     }
 
+    /**
+     * Used by the RemoteLogMetadataManager plugin.
+     */
+    @SuppressWarnings("unused")
     public String remoteLogMetadataManagerPrefix() {
         return config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP);
     }

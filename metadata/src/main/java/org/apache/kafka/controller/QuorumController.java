@@ -220,7 +220,6 @@ public final class QuorumController implements Controller {
         private long delegationTokenExpiryTimeMs;
         private long delegationTokenExpiryCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
         private long uncleanLeaderElectionCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
-        private String interBrokerListenerName = "PLAINTEXT";
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -381,10 +380,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setInterBrokerListenerName(String interBrokerListenerName) {
-            this.interBrokerListenerName = interBrokerListenerName;
-            return this;
-        }
 
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -406,7 +401,7 @@ public final class QuorumController implements Controller {
                 logContext = new LogContext(String.format("[QuorumController id=%d] ", nodeId));
             }
             if (controllerMetrics == null) {
-                controllerMetrics = new QuorumControllerMetrics(Optional.empty(), time);
+                controllerMetrics = new QuorumControllerMetrics(Optional.empty(), time, 0);
             }
 
             KafkaEventQueue queue = null;
@@ -443,7 +438,6 @@ public final class QuorumController implements Controller {
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs,
                     uncleanLeaderElectionCheckIntervalMs,
-                    interBrokerListenerName,
                     controllerPerformanceSamplePeriodMs,
                     controllerPerformanceAlwaysLogThresholdMs
                 );
@@ -1488,7 +1482,6 @@ public final class QuorumController implements Controller {
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs,
         long uncleanLeaderElectionCheckIntervalMs,
-        String interBrokerListenerName,
         long controllerPerformanceSamplePeriodMs,
         long controllerPerformanceAlwaysLogThresholdMs
     ) {
@@ -1530,7 +1523,7 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setFeatureControlManager(featureControl).
             setBrokerShutdownHandler(this::handleBrokerShutdown).
-            setInterBrokerListenerName(interBrokerListenerName).
+            setMetrics(controllerMetrics).
             build();
         this.configurationControl = new ConfigurationControlManager.Builder().
             setLogContext(logContext).
@@ -1781,6 +1774,7 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         int brokerId
     ) {
+        controllerMetrics.removeTimeSinceLastHeartbeatMetric(brokerId);
         return appendWriteEvent("unregisterBroker", context.deadlineNs(),
             () -> replicationControl.unregisterBroker(brokerId),
                 EnumSet.noneOf(ControllerOperationFlag.class));
@@ -1928,6 +1922,7 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerHeartbeatRequestData request
     ) {
+        controllerMetrics.updateBrokerContactTime(request.brokerId());
         // We start by updating the broker heartbeat in a lockless data structure.
         // We do this first so that if the main controller thread is backlogged, the
         // last contact time update still gets through.

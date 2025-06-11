@@ -48,6 +48,8 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -248,7 +250,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, 99_999L);
         props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, 7L);
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
-        props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 100);
+        props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 1024 * 1024);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
 
@@ -263,7 +265,7 @@ public class StreamsConfigTest {
         );
         assertEquals(7L, returnedProps.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
         assertEquals("dummy:host", returnedProps.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
-        assertEquals(100, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
+        assertEquals(1024 * 1024, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
     }
 
     @Test
@@ -1600,6 +1602,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetGroupProtocolToClassicByDefault() {
         assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertFalse(streamsConfig.isStreamsProtocolEnabled());
     }
 
     @Test
@@ -1607,6 +1610,7 @@ public class StreamsConfigTest {
         props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         streamsConfig = new StreamsConfig(props);
         assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertFalse(streamsConfig.isStreamsProtocolEnabled());
     }
 
     @Test
@@ -1614,6 +1618,69 @@ public class StreamsConfigTest {
         props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         streamsConfig = new StreamsConfig(props);
         assertTrue(GroupProtocol.STREAMS.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertTrue(streamsConfig.isStreamsProtocolEnabled());
+    }
+
+    @Test
+    public void shouldLogWarningWhenStreamsProtocolIsUsed() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+
+            new StreamsConfig(props);
+
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("The streams rebalance protocol is still in development and should " +
+                    "not be used in production. Please set group.protocol=classic (default) in all production use cases.")));
+        }
+    }
+
+    @Test
+    public void shouldLogWarningWhenWarmupReplicasSetWithStreamsProtocol() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+            props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 1);
+
+            new StreamsConfig(props);
+
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Warmup replicas are not supported yet with the streams protocol and " +
+                    "will be ignored. If you want to use warmup replicas, please set group.protocol=classic.")));
+        }
+    }
+
+    @Test
+    public void shouldLogWarningWhenStandbyReplicasSetWithStreamsProtocol() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+            props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+
+            new StreamsConfig(props);
+
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Standby replicas are configured broker-side in the streams group " +
+                    "protocol and will be ignored. Please use the admin client or kafka-configs.sh to set the streams " +
+                    "groups's standby replicas.")));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
+    public void shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership(final String prefix) {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
+
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> new StreamsConfig(props)
+        );
+        assertTrue(exception.getMessage().contains("Streams rebalance protocol does not support static membership. " +
+            "Please set group.protocol=classic or remove group.instance.id from the configuration."));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

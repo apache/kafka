@@ -100,7 +100,7 @@ class AbstractPartitionTest {
 
   def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000: java.lang.Integer)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, 999: java.lang.Integer)
     overrides.foreach { case (k, v) => logProps.put(k, v) }

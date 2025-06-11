@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.replica.Replica
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -1732,9 +1733,8 @@ class PartitionTest extends AbstractPartitionTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testIsrNotExpandedIfReplicaIsFencedOrShutdown(quorum: String): Unit = {
+  @Test
+  def testIsrNotExpandedIfReplicaIsFencedOrShutdown(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 

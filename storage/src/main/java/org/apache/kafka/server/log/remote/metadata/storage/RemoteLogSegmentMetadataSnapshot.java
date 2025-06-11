@@ -99,37 +99,6 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
      * @param customMetadata      Custom metadata.
      * @param state               State of the respective segment of remoteLogSegmentId.
      * @param segmentLeaderEpochs leader epochs occurred within this segment.
-     */
-    public RemoteLogSegmentMetadataSnapshot(Uuid segmentId,
-                                            long startOffset,
-                                            long endOffset,
-                                            long maxTimestampMs,
-                                            int brokerId,
-                                            long eventTimestampMs,
-                                            int segmentSizeInBytes,
-                                            Optional<CustomMetadata> customMetadata,
-                                            RemoteLogSegmentState state,
-                                            Map<Integer, Long> segmentLeaderEpochs) {
-        this(segmentId, startOffset, endOffset, maxTimestampMs, brokerId, eventTimestampMs, segmentSizeInBytes,
-                customMetadata, state, segmentLeaderEpochs, false);
-    }
-
-    /**
-     * Creates an instance with the given metadata of remote log segment.
-     * <p>
-     * {@code segmentLeaderEpochs} can not be empty. If all the records in this segment belong to the same leader epoch
-     * then it should have an entry with epoch mapping to start-offset of this segment.
-     *
-     * @param segmentId           Universally unique remote log segment id.
-     * @param startOffset         Start offset of this segment (inclusive).
-     * @param endOffset           End offset of this segment (inclusive).
-     * @param maxTimestampMs      Maximum timestamp in milliseconds in this segment.
-     * @param brokerId            Broker id from which this event is generated.
-     * @param eventTimestampMs    Epoch time in milliseconds at which the remote log segment is copied to the remote tier storage.
-     * @param segmentSizeInBytes  Size of this segment in bytes.
-     * @param customMetadata      Custom metadata.
-     * @param state               State of the respective segment of remoteLogSegmentId.
-     * @param segmentLeaderEpochs leader epochs occurred within this segment.
      * @param txnIdxEmpty         true if the transaction index is empty, false otherwise.
      */
     public RemoteLogSegmentMetadataSnapshot(Uuid segmentId,

@@ -158,7 +158,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
                             .setPartitionIndexes(List.of(t2p0.partition(), t2p1.partition(), t2p2.partition()))
                     ))
             ),
-            new HashSet(request1.data().groups())
+            Set.copyOf(request1.data().groups())
         );
 
         var request2 = handler.buildBatchedRequest(coordinatorKeys(group3)).build();
@@ -173,7 +173,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
                             .setPartitionIndexes(List.of(t3p0.partition(), t3p1.partition()))
                     ))
             ),
-            new HashSet(request2.data().groups())
+            Set.copyOf(request2.data().groups())
         );
     }
 

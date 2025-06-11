@@ -19,7 +19,7 @@ package kafka.coordinator.transaction
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.coordinator.transaction.TransactionState
+import org.apache.kafka.coordinator.transaction.{TransactionState, TxnTransitMetadata}
 import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.server.util.MockTime

@@ -15,18 +15,18 @@
 
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
-from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.kafka import quorum
 from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTestJobRunnerService, \
     StreamsComplexEosTestJobRunnerService, StreamsEosTestVerifyRunnerService, StreamsComplexEosTestVerifyRunnerService
+from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
-class StreamsEosTest(KafkaTest):
+class StreamsEosTest(BaseStreamsTest):
     """
     Test of Kafka Streams exactly-once semantics
     """
 
     def __init__(self, test_context):
-        super(StreamsEosTest, self).__init__(test_context, num_zk=1, num_brokers=3, topics={
+        super(StreamsEosTest, self).__init__(test_context, num_controllers=1, num_brokers=3, topics={
             'data': {'partitions': 5, 'replication-factor': 2},
             'echo': {'partitions': 5, 'replication-factor': 2},
             'min': {'partitions': 5, 'replication-factor': 2},
@@ -38,20 +38,24 @@ class StreamsEosTest(KafkaTest):
         self.driver = StreamsEosTestDriverService(test_context, self.kafka)
         self.test_context = test_context
 
-    @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.combined_kraft])
-    def test_rebalance_simple(self, metadata_quorum):
-        self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
-    @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.combined_kraft])
-    def test_rebalance_complex(self, metadata_quorum):
-        self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                           StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
+    @cluster(num_nodes=8)
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_rebalance_simple(self, metadata_quorum, group_protocol):
+        self.group_protocol = group_protocol
+        self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                           StreamsEosTestVerifyRunnerService(self.test_context, self.kafka, group_protocol))
+    @cluster(num_nodes=8)
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_rebalance_complex(self, metadata_quorum, group_protocol):
+        self.group_protocol = group_protocol
+        self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                           StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka, group_protocol))
 
     def run_rebalance(self, processor1, processor2, processor3, verifier):
         """
@@ -79,20 +83,24 @@ class StreamsEosTest(KafkaTest):
 
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
-    @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.combined_kraft])
-    def test_failure_and_recovery(self, metadata_quorum):
-        self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
-    @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.combined_kraft])
-    def test_failure_and_recovery_complex(self, metadata_quorum):
-        self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
-                                      StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
+    @cluster(num_nodes=8)
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_failure_and_recovery(self, metadata_quorum, group_protocol):
+        self.group_protocol = group_protocol
+        self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                                      StreamsEosTestVerifyRunnerService(self.test_context, self.kafka, group_protocol))
+    @cluster(num_nodes=8)
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_failure_and_recovery_complex(self, metadata_quorum, group_protocol):
+        self.group_protocol = group_protocol
+        self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, group_protocol),
+                                      StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka, group_protocol))
 
     def run_failure_and_recovery(self, processor1, processor2, processor3, verifier):
         """
@@ -160,10 +168,16 @@ class StreamsEosTest(KafkaTest):
         self.wait_for_startup(monitor1, keep_alive_processor1)
 
     def wait_for_startup(self, monitor, processor):
-        self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
+        if self.group_protocol == "classic":
+            self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
+        else:
+            # In the streams group protocol, not all members will take part in the rebalance.
+            # We can indirectly observe the progress of the group by seeing the member epoch being bumped.
+            self.wait_for(monitor, processor, "MemberEpochBump")
         self.wait_for(monitor, processor, "processed [0-9]* records from topic")
 
-    def wait_for(self, monitor, processor, output):
+    @staticmethod
+    def wait_for(monitor, processor, output):
         monitor.wait_until(output,
                            timeout_sec=480,
                            err_msg=("Never saw output '%s' on " % output) + str(processor.node.account))

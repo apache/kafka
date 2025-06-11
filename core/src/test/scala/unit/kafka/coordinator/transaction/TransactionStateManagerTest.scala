@@ -19,7 +19,6 @@ package kafka.coordinator.transaction
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
-import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
 import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
@@ -33,7 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.coordinator.transaction.TransactionState
+import org.apache.kafka.coordinator.transaction.{TransactionState, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
@@ -758,7 +757,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -803,7 +801,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -847,7 +844,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any())
@@ -901,7 +897,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -1118,7 +1113,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -1271,7 +1265,6 @@ class TransactionStateManagerTest {
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicIdPartition, MemoryRecords]],
       capturedArgument.capture(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()

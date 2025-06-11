@@ -22,8 +22,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.HashSet;
+import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,14 +47,14 @@ public class AsyncConsumerMetricsTest {
     public void shouldMetricNames() {
         // create
         consumerMetrics = new AsyncConsumerMetrics(metrics);
-        HashSet<MetricName> expectedMetrics = new HashSet<>(Arrays.asList(
+        Set<MetricName> expectedMetrics = Set.of(
             metrics.metricName("last-poll-seconds-ago", CONSUMER_METRIC_GROUP),
             metrics.metricName("time-between-poll-avg", CONSUMER_METRIC_GROUP),
             metrics.metricName("time-between-poll-max", CONSUMER_METRIC_GROUP),
             metrics.metricName("poll-idle-ratio-avg", CONSUMER_METRIC_GROUP),
             metrics.metricName("commit-sync-time-ns-total", CONSUMER_METRIC_GROUP),
             metrics.metricName("committed-time-ns-total", CONSUMER_METRIC_GROUP)
-        ));
+        );
         expectedMetrics.forEach(
             metricName -> assertTrue(
                 metrics.metrics().containsKey(metricName),
@@ -63,7 +62,7 @@ public class AsyncConsumerMetricsTest {
             )
         );
 
-        HashSet<MetricName> expectedConsumerMetrics = new HashSet<>(Arrays.asList(
+        Set<MetricName> expectedConsumerMetrics = Set.of(
             metrics.metricName("time-between-network-thread-poll-avg", CONSUMER_METRIC_GROUP),
             metrics.metricName("time-between-network-thread-poll-max", CONSUMER_METRIC_GROUP),
             metrics.metricName("application-event-queue-size", CONSUMER_METRIC_GROUP),
@@ -79,7 +78,7 @@ public class AsyncConsumerMetricsTest {
             metrics.metricName("background-event-queue-time-max", CONSUMER_METRIC_GROUP),
             metrics.metricName("background-event-queue-processing-time-avg", CONSUMER_METRIC_GROUP),
             metrics.metricName("background-event-queue-processing-time-max", CONSUMER_METRIC_GROUP)
-        ));
+        );
         expectedConsumerMetrics.forEach(
             metricName -> assertTrue(
                 metrics.metrics().containsKey(metricName),
