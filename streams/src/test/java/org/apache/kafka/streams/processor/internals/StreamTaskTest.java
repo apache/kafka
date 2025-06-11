@@ -192,7 +192,6 @@ public class StreamTaskTest {
     private final MockProcessorNode<Integer, Integer, ?, ?> processorSystemTime = new MockProcessorNode<>(10L, PunctuationType.WALL_CLOCK_TIME);
 
     private final MockProcessorNode<Integer, Integer, ?, ?> anchoredProcessorStreamTime = new MockProcessorNode<>(Instant.ofEpochMilli(15), 10L, PunctuationType.STREAM_TIME);
-    private final MockProcessorNode<Integer, Integer, ?, ?> anchoredProcessorSystemTime = new MockProcessorNode<>(Instant.ofEpochMilli(15), 10L, PunctuationType.WALL_CLOCK_TIME);
 
     private final String storeName = "store";
     private final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, false);
@@ -1275,7 +1274,8 @@ public class StreamTaskTest {
     public void shouldPunctuateUsingAnchoredStreamStartTime() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatelessTaskWithAnchoredPunctuation(createConfig());
+        final MockProcessorNode<Integer, Integer, ?, ?> anchoredProcessorSystemTime = new MockProcessorNode<>(Instant.ofEpochMilli(15), 10L, PunctuationType.WALL_CLOCK_TIME);  // Dummy
+        task = createStatelessTaskWithAnchoredPunctuation(createConfig(), anchoredProcessorSystemTime);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1810,6 +1810,35 @@ public class StreamTaskTest {
         assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 100, now + 110, now + 122, now + 130, now + 235, now + 240);
+    }
+
+    @Test
+    public void shouldPunctuateUsingAnchoredSystemStartTimeWithStartTimeBeforeNow() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+
+        final long now = time.milliseconds();
+        final long testStartTime = now + (10L - (now % 10L));   // Used to make test deterministic
+        time.setCurrentTimeMs(testStartTime);
+        final MockProcessorNode<Integer, Integer, ?, ?> anchoredProcessorSystemTime = new MockProcessorNode<>(Instant.ofEpochMilli(testStartTime - 10), 10L, PunctuationType.WALL_CLOCK_TIME);
+        task = createStatelessTaskWithAnchoredPunctuation(createConfig("100"), anchoredProcessorSystemTime);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        // now is after startTime -> initial punctuation
+        assertTrue(task.canPunctuateSystemTime());
+        assertTrue(task.maybePunctuateSystemTime());
+
+        time.sleep(9);
+        assertFalse(task.canPunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(1);
+        assertTrue(task.canPunctuateSystemTime());
+        assertTrue(task.maybePunctuateSystemTime());
+        time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
+        assertTrue(task.maybePunctuateSystemTime());
+        anchoredProcessorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, testStartTime, testStartTime + 10, testStartTime + 20);
     }
 
     @Test
@@ -3428,7 +3457,10 @@ public class StreamTaskTest {
         );
     }
 
-    private StreamTask createStatelessTaskWithAnchoredPunctuation(final StreamsConfig config) {
+    private StreamTask createStatelessTaskWithAnchoredPunctuation(
+            final StreamsConfig config,
+            final MockProcessorNode<Integer, Integer, ?, ?>  anchoredProcessorSystemTime
+    ) {
         final ProcessorTopology topology = withSources(
                 asList(source1, source2, anchoredProcessorStreamTime, anchoredProcessorSystemTime),
                 mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
