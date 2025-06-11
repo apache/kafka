@@ -439,7 +439,7 @@ public class TopicsImageTest {
                 CLEAR_ELR_RECORD.highestSupportedVersion()
             ))
         );
-        TopicsDelta delta = new TopicsDelta(image, __ -> null);
+        TopicsDelta delta = new TopicsDelta(image);
         assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
     }
 
@@ -455,12 +455,11 @@ public class TopicsImageTest {
             newTopicImage(
                 "foo",
                 fooId,
-                NULL_MIRROR_TOPIC_STATE,
                 newPartition(new int[] {0, 1, 2, 3})
             )
         );
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
-            newTopicsByNameMap(topics), ImmutableMap.empty(), ImmutableMap.empty());
+            newTopicsByNameMap(topics));
 
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
         topicRecords.add(
@@ -473,7 +472,7 @@ public class TopicsImageTest {
             )
         );
 
-        TopicsDelta delta = new TopicsDelta(image, __ -> null);
+        TopicsDelta delta = new TopicsDelta(image);
         RecordTestUtils.replayAll(delta, topicRecords);
         image = delta.apply();
 
@@ -534,7 +533,7 @@ public class TopicsImageTest {
                 CLEAR_ELR_RECORD.highestSupportedVersion()
             ))
         );
-        delta = new TopicsDelta(image, __ -> null);
+        delta = new TopicsDelta(image);
         RecordTestUtils.replayAll(delta, topicRecords);
         image = delta.apply();
         assertEquals(2, image.topicsById().size());
@@ -558,12 +557,11 @@ public class TopicsImageTest {
             newTopicImage(
                 "foo",
                 fooId,
-                NULL_MIRROR_TOPIC_STATE,
                 newPartition(new int[] {0, 1, 2, 3})
             )
         );
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
-            newTopicsByNameMap(topics), ImmutableMap.empty(), ImmutableMap.empty());
+            newTopicsByNameMap(topics));
 
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
         topicRecords.add(
@@ -576,7 +574,7 @@ public class TopicsImageTest {
             )
         );
 
-        TopicsDelta delta = new TopicsDelta(image, __ -> null);
+        TopicsDelta delta = new TopicsDelta(image);
         RecordTestUtils.replayAll(delta, topicRecords);
         image = delta.apply();
 
@@ -641,7 +639,7 @@ public class TopicsImageTest {
                 CLEAR_ELR_RECORD.highestSupportedVersion()
             ))
         );
-        delta = new TopicsDelta(image, __ -> null);
+        delta = new TopicsDelta(image);
         RecordTestUtils.replayAll(delta, topicRecords);
         image = delta.apply();
         assertEquals(2, image.topicsById().size());
