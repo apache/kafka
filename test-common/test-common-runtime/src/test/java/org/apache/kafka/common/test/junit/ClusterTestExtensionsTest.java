@@ -55,7 +55,6 @@ import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
 
@@ -545,49 +544,31 @@ public class ClusterTestExtensionsTest {
         }
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest(brokers = 3, controllers = 3, types = {Type.CO_KRAFT, Type.KRAFT})
     public void testRestartWithoutOverride(ClusterInstance clusterInstance) throws Exception {
-        // Ignore listeners config because testkit sets port as 0 to find an available port when starting.
-        // To avoid the broker or controller to bind another port when restarting, the testkit sets listeners with previous bound ports.
-        Map<Integer, Map<String, Object>> brokerConfigs = clusterInstance.brokers().values().stream()
+        Map<Integer, Map<String, ?>> brokerConfigs = clusterInstance.brokers().values().stream()
             .collect(Collectors.toMap(
                 broker -> broker.config().nodeId(),
-                broker -> {
-                    Map<String, Object> config = new HashMap<>(broker.config().values());
-                    config.remove(SocketServerConfigs.LISTENERS_CONFIG);
-                    return config;
-                }
+                broker -> broker.config().values()
             ));
-        Map<Integer, Map<String, Object>> controllerConfigs = clusterInstance.controllers().values().stream()
+        Map<Integer, Map<String, ?>> controllerConfigs = clusterInstance.controllers().values().stream()
             .collect(Collectors.toMap(
                 controller -> controller.config().nodeId(),
-                controller -> {
-                    Map<String, Object> config = new HashMap<>(controller.config().values());
-                    config.remove(SocketServerConfigs.LISTENERS_CONFIG);
-                    return config;
-                }
+                controller -> controller.config().values()
             ));
 
         clusterInstance.restart();
         clusterInstance.waitForReadyBrokers();
 
-        Map<Integer, Map<String, Object>> newBrokerConfigs = clusterInstance.brokers().values().stream()
+        Map<Integer, Map<String, ?>> newBrokerConfigs = clusterInstance.brokers().values().stream()
             .collect(Collectors.toMap(
                 broker -> broker.config().nodeId(),
-                broker -> {
-                    Map<String, Object> config = new HashMap<>(broker.config().values());
-                    config.remove(SocketServerConfigs.LISTENERS_CONFIG);
-                    return config;
-                }
+                broker -> broker.config().values()
             ));
-        Map<Integer, Map<String, Object>> newControllerConfigs = clusterInstance.controllers().values().stream()
+        Map<Integer, Map<String, ?>> newControllerConfigs = clusterInstance.controllers().values().stream()
             .collect(Collectors.toMap(
                 controller -> controller.config().nodeId(),
-                controller -> {
-                    Map<String, Object> config = new HashMap<>(controller.config().values());
-                    config.remove(SocketServerConfigs.LISTENERS_CONFIG);
-                    return config;
-                }
+                controller -> controller.config().values()
             ));
 
         assertEquals(brokerConfigs, newBrokerConfigs);
