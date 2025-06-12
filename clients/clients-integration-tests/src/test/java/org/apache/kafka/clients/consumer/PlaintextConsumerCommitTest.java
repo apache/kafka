@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -203,10 +203,11 @@ public class PlaintextConsumerCommitTest {
             for (var i = 1; i <= count; i++)
                 consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(i)), callback);
 
-            TestUtils.waitForCondition(() -> {
-                consumer.poll(Duration.ofMillis(100));
-                return callback.successCount >= count || callback.lastError.isPresent();
-            }, "Failed to observe commit callback before timeout");
+            ClientsTestUtils.pollUntilTrue(
+                consumer,
+                () -> callback.successCount >= count || callback.lastError.isPresent(),
+                "Failed to observe commit callback before timeout"
+            );
 
             assertEquals(Optional.empty(), callback.lastError);
             assertEquals(count, callback.successCount);
@@ -533,10 +534,10 @@ public class PlaintextConsumerCommitTest {
         var commitCallback = new RetryCommitCallback(consumer, offsetsOpt);
 
         commitCallback.sendAsyncCommit();
-        TestUtils.waitForCondition(() -> {
-                consumer.poll(Duration.ofMillis(100));
-                return commitCallback.isComplete;
-            }, "Failed to observe commit callback before timeout"
+        ClientsTestUtils.pollUntilTrue(
+            consumer,
+            () -> commitCallback.isComplete,
+            "Failed to observe commit callback before timeout"
         );
 
         assertEquals(Optional.empty(), commitCallback.error);

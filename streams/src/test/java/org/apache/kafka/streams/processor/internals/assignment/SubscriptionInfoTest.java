@@ -23,8 +23,6 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -58,13 +56,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class SubscriptionInfoTest {
-    private static final Set<TaskId> ACTIVE_TASKS = new HashSet<>(Arrays.asList(
+    private static final Set<TaskId> ACTIVE_TASKS = Set.of(
         TASK_0_0,
         TASK_0_1,
-        TASK_1_0));
-    private static final Set<TaskId> STANDBY_TASKS = new HashSet<>(Arrays.asList(
+        TASK_1_0);
+    private static final Set<TaskId> STANDBY_TASKS = Set.of(
         TASK_1_1,
-        TASK_2_0));
+        TASK_2_0);
     private static final Map<TaskId, Long> TASK_OFFSET_SUMS = mkMap(
         mkEntry(TASK_0_0, Task.LATEST_OFFSET),
         mkEntry(TASK_0_1, Task.LATEST_OFFSET),

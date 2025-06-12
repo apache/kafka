@@ -1991,7 +1991,7 @@ public class StreamTaskTest {
 
         task = new StreamTask(
             taskId,
-            new HashSet<>(List.of(partition1, repartition)),
+            Set.of(partition1, repartition),
             topology,
             consumer,
             new TopologyConfig(null, config, new Properties()).getTaskConfig(),
@@ -2920,7 +2920,7 @@ public class StreamTaskTest {
         final TaskCorruptedException expectedException = new TaskCorruptedException(tasksIds, new InvalidOffsetException("Invalid offset") {
             @Override
             public Set<TopicPartition> partitions() {
-                return new HashSet<>(Collections.singletonList(new TopicPartition("topic", 0)));
+                return Set.of(new TopicPartition("topic", 0));
             }
         });
 
@@ -3084,7 +3084,7 @@ public class StreamTaskTest {
 
         return new StreamTask(
             taskId,
-            new HashSet<>(List.of(partition1)),
+            Set.of(partition1),
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
@@ -3234,7 +3234,7 @@ public class StreamTaskTest {
 
         return new StreamTask(
             taskId,
-            new HashSet<>(List.of(partition1)),
+            Set.of(partition1),
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
@@ -3340,7 +3340,7 @@ public class StreamTaskTest {
 
         task = new StreamTask(
             taskId,
-            new HashSet<>(List.of(partition1)),
+            Set.of(partition1),
             topology,
             consumer,
             new TopologyConfig(null, config, new Properties()).getTaskConfig(),

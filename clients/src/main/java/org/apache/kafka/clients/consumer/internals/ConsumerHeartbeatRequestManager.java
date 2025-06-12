@@ -247,6 +247,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             sentFields.reset();
         }
 
+        @SuppressWarnings("NPathComplexity")
         public ConsumerGroupHeartbeatRequestData buildRequestData() {
             ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
 
@@ -304,6 +305,12 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                         buildTopicPartitionsList(local.partitions);
                 data.setTopicPartitions(topicPartitions);
                 sentFields.localAssignment = local;
+            }
+
+            // RackId - sent when joining
+            String rackId = membershipManager.rackId().orElse(null);
+            if (sendAllFields) {
+                data.setRackId(rackId);
             }
 
             return data;
