@@ -79,7 +79,7 @@ class StorageToolTest {
     val tempDir = TestUtils.tempDir()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -97,7 +97,7 @@ Found problem:
     tempDir.delete()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempDir.toString)))
       assertEquals(s"""Found problem:
   ${tempDir.toString} does not exist
 
@@ -111,7 +111,7 @@ Found problem:
     val tempFile = TestUtils.tempFile()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempFile.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempFile.toString)))
       assertEquals(s"""Found problem:
   ${tempFile.toString} is not a directory
 
@@ -125,13 +125,13 @@ Found problem:
     val tempDir = TestUtils.tempDir()
     try {
       Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
-        String.join("\n", util.Arrays.asList(
+        String.join("\n", util.List.of(
           "version=1",
           "node.id=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
             getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), false, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = false, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -150,13 +150,13 @@ Found problem:
     val tempDir = TestUtils.tempDir()
     try {
       Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
-        String.join("\n", util.Arrays.asList(
+        String.join("\n", util.List.of(
           "version=0",
           "broker.id=1",
           "cluster.id=26c36907-4158-4a35-919d-6534229f5241")).
           getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -193,7 +193,7 @@ Found problem:
    ): Int = {
     val tempDir = TestUtils.tempDir()
     try {
-      val configPathString = new File(tempDir.getAbsolutePath(), "format.props").toString
+      val configPathString = new File(tempDir.getAbsolutePath, "format.props").toString
       PropertiesUtils.writePropertiesFile(properties, configPathString, true)
       val arguments = ListBuffer[String]("format",
         "--cluster-id", "XcZZOzUqS4yHOjhMQB6JLQ")
@@ -234,7 +234,7 @@ Found problem:
     val unavailableDir1 = TestUtils.tempFile()
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", s"${availableDir1},${unavailableDir1}")
+    properties.setProperty("log.dirs", s"$availableDir1,$unavailableDir1")
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties))
 
@@ -273,7 +273,7 @@ Found problem:
     assertEquals(0, runFormatCommand(stream, properties))
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream2 = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream2, properties, Seq(), true))
+    assertEquals(0, runFormatCommand(stream2, properties, Seq(), ignoreFormatted = true))
   }
 
   @Test
@@ -282,7 +282,7 @@ Found problem:
     val unavailableDir2 = TestUtils.tempFile()
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", s"${unavailableDir1},${unavailableDir2}")
+    properties.setProperty("log.dirs", s"$unavailableDir1,$unavailableDir2")
     val stream = new ByteArrayOutputStream()
     assertEquals("No available log directories to format.", assertThrows(classOf[FormatterException],
       () => runFormatCommand(stream, properties)).getMessage)

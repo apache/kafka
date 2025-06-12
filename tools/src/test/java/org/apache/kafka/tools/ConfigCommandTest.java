@@ -639,11 +639,11 @@ public class ConfigCommandTest {
 
 
         List<String> deleteArgs = Arrays.asList("--delete-config", "connection_creation_rate");
-        Set<ClientQuotaAlteration.Op> deleteAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", null)));
+        Set<ClientQuotaAlteration.Op> deleteAlterationOps = Set.of(new ClientQuotaAlteration.Op("connection_creation_rate", null));
         Map<String, Double> propsToDelete = Collections.singletonMap("connection_creation_rate", 50.0);
 
         List<String> addArgs = Arrays.asList("--add-config", "connection_creation_rate=100");
-        Set<ClientQuotaAlteration.Op> addAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0)));
+        Set<ClientQuotaAlteration.Op> addAlterationOps = Set.of(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0));
 
         verifyAlterQuotas(
             concat(singleIpArgsAndEntity.getKey(), deleteArgs),
@@ -672,11 +672,11 @@ public class ConfigCommandTest {
             "--delete-config", "request_percentage");
         Map<String, Double> propsToDelete = Collections.singletonMap("request_percentage", 50.0);
 
-        Set<ClientQuotaAlteration.Op> alterationOps = new HashSet<>(Arrays.asList(
+        Set<ClientQuotaAlteration.Op> alterationOps = Set.of(
             new ClientQuotaAlteration.Op("consumer_byte_rate", 20000d),
             new ClientQuotaAlteration.Op("producer_byte_rate", 10000d),
             new ClientQuotaAlteration.Op("request_percentage", null)
-        ));
+        );
 
         Entry<List<String>, Map<String, String>> userArgsAndEntity = argsAndExpectedEntity(Optional.ofNullable(user), ClientQuotaEntity.USER);
         Entry<List<String>, Map<String, String>> clientArgsAndEntry = argsAndExpectedEntity(Optional.ofNullable(client), ClientQuotaEntity.CLIENT_ID);
@@ -844,11 +844,11 @@ public class ConfigCommandTest {
                 assertEquals(ConfigResource.Type.TOPIC, entry.getKey().type());
                 assertEquals(3, alterConfigOps.size());
 
-                Set<AlterConfigOp> expectedConfigOps = new HashSet<>(Arrays.asList(
+                Set<AlterConfigOp> expectedConfigOps = Set.of(
                     new AlterConfigOp(newConfigEntry("delete.retention.ms", "1000000"), AlterConfigOp.OpType.SET),
                     new AlterConfigOp(newConfigEntry("min.insync.replicas", "2"), AlterConfigOp.OpType.SET),
                     new AlterConfigOp(newConfigEntry("unclean.leader.election.enable", ""), AlterConfigOp.OpType.DELETE)
-                ));
+                );
                 assertEquals(expectedConfigOps.size(), alterConfigOps.size());
                 expectedConfigOps.forEach(expectedOp -> {
                     Optional<AlterConfigOp> actual = alterConfigOps.stream()
