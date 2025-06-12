@@ -320,6 +320,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return remoteStorageReaderThreadPool.getCorePoolSize();
     }
 
+    // Visible for testing
+    int followerThreadPoolSize() {
+        return followerThreadPool.getCorePoolSize();
+    }
+
     /**
      * Returns the timeout for the RLM Tasks to wait for the quota to be available
      */
