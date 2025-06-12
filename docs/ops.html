@@ -4251,9 +4251,9 @@ listeners=CONTROLLER://:9093
               Deprovision the KRaft controller quorum.
             </li>
             <li>
-              Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
+              Using <code>zookeeper-shell.sh</code>, run <code>delete /controller</code> so that one
               of the brokers can become the new old-style controller. Additionally, run
-              <code>get /migration</code> followed by <code>rmr /migration</code> to clear the
+              <code>get /migration</code> followed by <code>delete /migration</code> to clear the
               migration state from ZooKeeper. This will allow you to re-attempt the migration
               in the future. The data read from "/migration" can be useful for debugging.
             </li>
@@ -4291,7 +4291,7 @@ listeners=CONTROLLER://:9093
               Deprovision the KRaft controller quorum.
             </li>
             <li>
-              Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
+              Using <code>zookeeper-shell.sh</code>, run <code>delete /controller</code> so that one
               of the brokers can become the new old-style controller.
             </li>
             <li>
