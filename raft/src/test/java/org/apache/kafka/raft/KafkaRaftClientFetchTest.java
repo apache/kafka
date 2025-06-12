@@ -258,7 +258,7 @@ public final class KafkaRaftClientFetchTest {
     }
 
     @Test
-    void testUnknownHwmDeferredWhenLeaderUnknowsHwm() throws Exception {
+    void testUnknownHwmDeferredWhenLeaderDoesNotKnowHwm() throws Exception {
         var epoch = 2;
         var local = KafkaRaftClientTest.replicaKey(
             KafkaRaftClientTest.randomReplicaId(),
