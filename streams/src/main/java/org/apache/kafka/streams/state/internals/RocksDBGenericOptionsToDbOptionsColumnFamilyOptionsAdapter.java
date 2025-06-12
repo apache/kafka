@@ -797,8 +797,11 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return this;
     }
 
+    @Deprecated(since = "4.2", forRemoval = true)
     @Override
     public Options setRateLimiter(final RateLimiter rateLimiter) {
+        log.warn("rate_limiter has been deprecated in RocksDB v7.6.0." +
+                " See https://github.com/facebook/rocksdb/pull/10378");
         dbOptions.setRateLimiter(rateLimiter);
         return this;
     }
