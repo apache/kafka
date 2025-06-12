@@ -19,11 +19,12 @@ package org.apache.kafka.clients.consumer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.ClientsTestUtils;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
+import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -369,17 +370,16 @@ public class ConsumerBounceTest {
     }
 
     private int findCoordinator(String group) throws Exception {
-        try (Admin admin = clusterInstance.admin()) {
-            TestUtils.waitForCondition(() -> {
-                try {
-                    DescribeConsumerGroupsResult result = admin.describeConsumerGroups(List.of(group));
-                    return result.all().get().containsKey(group);
-                } catch (Exception ignore) {
-                    return false;
-                }
-            }, 10000, "Failed to find coordinator for group " + group);
-            return admin.describeConsumerGroups(List.of(group)).all().get().get(group).coordinator().id();
-        }
+        FindCoordinatorRequest request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
+                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
+                .setCoordinatorKeys(List.of(group))).build();
+        AtomicInteger node = new AtomicInteger(-1);
+        TestUtils.waitForCondition(() -> {
+            FindCoordinatorResponse response = IntegrationTestUtils.connectAndReceive<FindCoordinatorResponse>(request);
+            node.set(response.node().id());
+            return true;
+        }, "Failed to find coordinator for group " + group);
+        return node.get();
     }
 
     @ClusterTest
