@@ -1461,15 +1461,18 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Class that handles options passed in case of {@code KafkaStreams} instance scale down
      */
+    @Deprecated(since = "4.2")
     public static class CloseOptions {
         private Duration timeout = Duration.ofMillis(Long.MAX_VALUE);
         private boolean leaveGroup = false;
 
+        @Deprecated(since = "4.2")
         public CloseOptions timeout(final Duration timeout) {
             this.timeout = timeout;
             return this;
         }
 
+        @Deprecated(since = "4.2")
         public CloseOptions leaveGroup(final boolean leaveGroup) {
             this.leaveGroup = leaveGroup;
             return this;
@@ -1481,10 +1484,14 @@ public class KafkaStreams implements AutoCloseable {
      * This will block until all threads have stopped.
      */
     public void close() {
-        close(Optional.empty(), false);
+        close(Optional.empty(), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
     }
 
-    private Thread shutdownHelper(final boolean error, final long timeoutMs, final boolean leaveGroup) {
+    private Thread shutdownHelper(
+            final boolean error, 
+            final long timeoutMs, 
+            final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation
+    ) {
         stateDirCleaner.shutdownNow();
         if (rocksDBMetricsRecordingService != null) {
             rocksDBMetricsRecordingService.shutdownNow();
@@ -1516,7 +1523,7 @@ public class KafkaStreams implements AutoCloseable {
                 }
             });
 
-            if (leaveGroup) {
+            if (operation == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP) {
                 processStreamThread(streamThreadLeaveConsumerGroup(timeoutMs));
             }
 
@@ -1560,7 +1567,7 @@ public class KafkaStreams implements AutoCloseable {
         }, clientId + "-CloseThread");
     }
 
-    private boolean close(final Optional<Long> timeout, final boolean leaveGroup) {
+    private boolean close(final Optional<Long> timeout, final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         final long timeoutMs;
         if (timeout.isPresent()) {
             timeoutMs = timeout.get();
@@ -1591,7 +1598,7 @@ public class KafkaStreams implements AutoCloseable {
                 + "PENDING_SHUTDOWN, PENDING_ERROR, ERROR, or NOT_RUNNING");
         }
 
-        final Thread shutdownThread = shutdownHelper(false, timeoutMs, leaveGroup);
+        final Thread shutdownThread = shutdownHelper(false, timeoutMs, operation);
 
         shutdownThread.setDaemon(true);
         shutdownThread.start();
@@ -1609,7 +1616,8 @@ public class KafkaStreams implements AutoCloseable {
         if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in {}", state());
         } else {
-            final Thread shutdownThread = shutdownHelper(true, -1, false);
+            final Thread shutdownThread = shutdownHelper(true, -1, 
+                    org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
@@ -1635,7 +1643,7 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
 
-        return close(Optional.of(timeoutMs), false);
+        return close(Optional.of(timeoutMs), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
     }
 
     /**
@@ -1648,6 +1656,7 @@ public class KafkaStreams implements AutoCloseable {
      * Note that this method must not be called in the {@link StateListener#onChange(KafkaStreams.State, KafkaStreams.State)} callback of {@link StateListener}.
      * @throws IllegalArgumentException if {@code timeout} can't be represented as {@code long milliseconds}
      */
+    @Deprecated(since = "4.2")
     public synchronized boolean close(final CloseOptions options) throws IllegalArgumentException {
         Objects.requireNonNull(options, "options cannot be null");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(options.timeout, "timeout");
@@ -1656,7 +1665,22 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
 
-        return close(Optional.of(timeoutMs), options.leaveGroup);
+        org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation = options.leaveGroup ?
+                org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP :
+                org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
+
+        return close(Optional.of(timeoutMs), operation);
+    }
+
+    public synchronized boolean close(final org.apache.kafka.streams.CloseOptions options) throws IllegalArgumentException {
+        Objects.requireNonNull(options, "options cannot be null");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(options.timeout, "timeout");
+        final long timeoutMs = validateMillisecondDuration(options.timeout.get(), msgPrefix);
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout can't be negative.");
+        }
+
+        return close(Optional.of(timeoutMs), options.operation);
     }
 
     private Consumer<StreamThread> streamThreadLeaveConsumerGroup(final long remainingTimeMs) {

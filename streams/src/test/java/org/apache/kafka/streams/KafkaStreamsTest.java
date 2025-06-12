@@ -1015,9 +1015,8 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.RUNNING,
                 "Streams never started.");
 
-            final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-            closeOptions.timeout(Duration.ZERO);
-            closeOptions.leaveGroup(true);
+            final CloseOptions closeOptions = CloseOptions.timeout(Duration.ZERO)
+                    .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
 
             streams.close(closeOptions);
             assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
@@ -1040,8 +1039,7 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.RUNNING,
                 "Streams never started.");
 
-            final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-            closeOptions.timeout(Duration.ZERO);
+            final CloseOptions closeOptions = CloseOptions.timeout(Duration.ZERO);
 
             streams.close(closeOptions);
             assertThat(streams.state() == State.PENDING_SHUTDOWN, equalTo(true));
@@ -1228,8 +1226,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-        closeOptions.timeout(Duration.ofMillis(10L));
+        final CloseOptions closeOptions = CloseOptions.timeout(Duration.ofMillis(10L));
         try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier)) {
             assertFalse(streams.close(closeOptions));
         }
@@ -1242,8 +1239,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-        closeOptions.timeout(Duration.ofMillis(-1L));
+        final CloseOptions closeOptions = CloseOptions.timeout(Duration.ofMillis(-1L));
         try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier, time)) {
             assertThrows(IllegalArgumentException.class, () -> streams.close(closeOptions));
         }
@@ -1256,8 +1252,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-        closeOptions.timeout(Duration.ZERO);
+        final CloseOptions closeOptions = CloseOptions.timeout(Duration.ZERO);
         try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, supplier)) {
             assertFalse(streams.close(closeOptions));
         }
@@ -1274,9 +1269,8 @@ public class KafkaStreamsTest {
 
         when(mockClientSupplier.getAdmin(any())).thenReturn(adminClient);
 
-        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-        closeOptions.timeout(Duration.ofMillis(10L));
-        closeOptions.leaveGroup(true);
+        final CloseOptions closeOptions = CloseOptions.timeout(Duration.ofMillis(10L))
+                .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
         try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, mockClientSupplier)) {
             assertFalse(streams.close(closeOptions));
         }
@@ -1292,9 +1286,8 @@ public class KafkaStreamsTest {
         final MockClientSupplier mockClientSupplier = spy(MockClientSupplier.class);
         when(mockClientSupplier.getAdmin(any())).thenReturn(adminClient);
 
-        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-        closeOptions.timeout(Duration.ofMillis(-1L));
-        closeOptions.leaveGroup(true);
+        final CloseOptions closeOptions = CloseOptions.timeout(Duration.ofMillis(-1L))
+                .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
         try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
             assertThrows(IllegalArgumentException.class, () -> streams.close(closeOptions));
         }
@@ -1311,9 +1304,8 @@ public class KafkaStreamsTest {
 
         when(mockClientSupplier.getAdmin(any())).thenReturn(adminClient);
 
-        final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-        closeOptions.timeout(Duration.ZERO);
-        closeOptions.leaveGroup(true);
+        final CloseOptions closeOptions = CloseOptions.timeout(Duration.ZERO)
+                .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
         try (final KafkaStreams streams = new KafkaStreamsWithTerminableThread(getBuilderWithSource().build(), props, mockClientSupplier)) {
             assertFalse(streams.close(closeOptions));
         }
