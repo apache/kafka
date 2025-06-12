@@ -60,9 +60,12 @@ class TxnPartitionEntry {
             .thenComparingInt(ProducerBatch::producerEpoch)
             .thenComparingInt(ProducerBatch::baseSequence);
 
+    private BatchesAwaitingCompletion batchesAwaitingCompletion;
+
     TxnPartitionEntry(TopicPartition topicPartition) {
         this.topicPartition = topicPartition;
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
+        this.batchesAwaitingCompletion = new BatchesAwaitingCompletion(5, this.producerIdAndEpoch);
         this.nextSequence = 0;
         this.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
         this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
@@ -103,6 +106,7 @@ class TxnPartitionEntry {
 
     void addInflightBatch(ProducerBatch batch) {
         inflightBatchesBySequence.add(batch);
+        batchesAwaitingCompletion.insert(batch);
     }
 
     void setLastAckedOffset(long lastAckedOffset) {
@@ -168,12 +172,12 @@ class TxnPartitionEntry {
         return true;
     }
 
-    private static class SequenceAwaitingCompletion {
-        private final int sequence;
+    private static class BatchAwaitingCompletion {
+        private final ProducerBatch batch;
         private boolean complete;
 
-        SequenceAwaitingCompletion(int sequence) {
-            this.sequence = sequence;
+        BatchAwaitingCompletion(ProducerBatch batch) {
+            this.batch = batch;
             this.complete = false;
         }
 
@@ -182,12 +186,12 @@ class TxnPartitionEntry {
         }
     }
 
-    private static class SequencesAwaitingCompletion {
-        private final Deque<SequenceAwaitingCompletion> queue = new ArrayDeque<>();
+    private static class BatchesAwaitingCompletion {
+        private final Deque<BatchAwaitingCompletion> queue = new ArrayDeque<>();
         private final ProducerIdAndEpoch producerIdAndEpoch;
         private final int capacity;
 
-        SequencesAwaitingCompletion(int capacity, ProducerIdAndEpoch producerIdAndEpoch) {
+        BatchesAwaitingCompletion(int capacity, ProducerIdAndEpoch producerIdAndEpoch) {
             this.capacity = capacity;
             this.producerIdAndEpoch = producerIdAndEpoch;
         }
@@ -202,7 +206,7 @@ class TxnPartitionEntry {
                 return false;
             }
 
-            if (queue.peekFirst().sequence == batch.baseSequence()) {
+            if (queue.peekFirst().batch.baseSequence() == batch.baseSequence()) {
                 queue.pollFirst();
 
                 while (!queue.isEmpty() && queue.peekFirst().complete) {
@@ -211,9 +215,9 @@ class TxnPartitionEntry {
                 return true;
             }
 
-            SequenceAwaitingCompletion correspondingEntry = null;
-            for (SequenceAwaitingCompletion entry : queue) {
-                if (batch.hasSequence() && entry.sequence == batch.baseSequence()) {
+            BatchAwaitingCompletion correspondingEntry = null;
+            for (BatchAwaitingCompletion entry : queue) {
+                if (batch.hasSequence() && entry.batch.baseSequence() == batch.baseSequence()) {
                     correspondingEntry = entry;
                     break;
                 }
@@ -236,8 +240,8 @@ class TxnPartitionEntry {
                 return true;
             }
 
-            for (SequenceAwaitingCompletion entry : queue) {
-                if (batch.hasSequence() && entry.sequence == batch.baseSequence()) {
+            for (BatchAwaitingCompletion entry : queue) {
+                if (batch.hasSequence() && entry.batch.baseSequence() == batch.baseSequence()) {
                     return true;
                 }
             }
@@ -245,13 +249,13 @@ class TxnPartitionEntry {
         }
 
         public boolean insert(ProducerBatch batch) {
-            for (SequenceAwaitingCompletion entry : queue) {
-                if (batch.hasSequence() && entry.sequence == batch.baseSequence()) {
+            for (BatchAwaitingCompletion entry : queue) {
+                if (batch.hasSequence() && entry.batch.baseSequence() == batch.baseSequence()) {
                     return true;
                 }
             }
 
-            this.queue.push(new SequenceAwaitingCompletion(batch.baseSequence()));
+            this.queue.push(new BatchAwaitingCompletion(batch));
             return true;
         }
     }
