@@ -237,7 +237,7 @@ public class KafkaStreams implements AutoCloseable {
      *   </li>
      *   <li>
      *     REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
-     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are are ready for processing.
+     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are ready for processing.
      *     Standby tasks are not considered.)
      *   </li>
      *   <li>
@@ -1678,7 +1678,7 @@ public class KafkaStreams implements AutoCloseable {
      * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
      * @param options  contains timeout to specify how long to wait for the threads to shut down, and a flag 
-     *                 {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP} to
+     *                 {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation#LEAVE_GROUP} to
      *                 trigger consumer leave call
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
