@@ -3767,8 +3767,8 @@ public class RemoteLogManagerTest {
         assertEquals(2, remoteLogManager.followerThreadPoolSize());
         remoteLogManager.resizeFollowerThreadPool(6);
         assertEquals(6, remoteLogManager.followerThreadPoolSize());
-        remoteLogManager.resizeFollowerThreadPool(12);
-        assertEquals(12, remoteLogManager.followerThreadPoolSize());
+        remoteLogManager.resizeFollowerThreadPool(4);
+        assertEquals(4, remoteLogManager.followerThreadPoolSize());
     }
 
     private void appendRecordsToFile(File file, int nRecords, int nRecordsPerBatch) throws IOException {
