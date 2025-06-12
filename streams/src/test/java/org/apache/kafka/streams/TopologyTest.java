@@ -68,7 +68,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -2275,7 +2274,7 @@ public class TopologyTest {
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final String... sourceTopic) {
         topology.addSource((AutoOffsetReset) null, sourceName, null, null, null, sourceTopic);
-        return new InternalTopologyBuilder.Source(sourceName, new HashSet<>(Arrays.asList(sourceTopic)), null);
+        return new InternalTopologyBuilder.Source(sourceName, Set.of(sourceTopic), null);
     }
 
     @SuppressWarnings("deprecation")
@@ -2325,7 +2324,7 @@ public class TopologyTest {
             topology.connectProcessorAndStateStores(processorName, storeNames);
         }
         final TopologyDescription.Processor expectedProcessorNode =
-            new InternalTopologyBuilder.Processor(processorName, new HashSet<>(Arrays.asList(storeNames)));
+            new InternalTopologyBuilder.Processor(processorName, Set.of(storeNames));
 
         for (final TopologyDescription.Node parent : parents) {
             ((InternalTopologyBuilder.AbstractNode) parent).addSuccessor(expectedProcessorNode);

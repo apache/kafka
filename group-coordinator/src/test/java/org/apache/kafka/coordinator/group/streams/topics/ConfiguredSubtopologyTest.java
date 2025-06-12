@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -100,8 +99,8 @@ public class ConfiguredSubtopologyTest {
     @Test
     public void testAsStreamsGroupDescribeSubtopology() {
         String subtopologyId = "subtopology1";
-        Set<String> sourceTopics = new HashSet<>(Set.of("sourceTopic1", "sourceTopic2"));
-        Set<String> repartitionSinkTopics = new HashSet<>(Set.of("repartitionSinkTopic1", "repartitionSinkTopic2"));
+        Set<String> sourceTopics = Set.of("sourceTopic1", "sourceTopic2");
+        Set<String> repartitionSinkTopics = Set.of("repartitionSinkTopic1", "repartitionSinkTopic2");
         ConfiguredInternalTopic internalTopicMock = mock(ConfiguredInternalTopic.class);
         StreamsGroupDescribeResponseData.TopicInfo topicInfo = new StreamsGroupDescribeResponseData.TopicInfo();
         when(internalTopicMock.asStreamsGroupDescribeTopicInfo()).thenReturn(topicInfo);

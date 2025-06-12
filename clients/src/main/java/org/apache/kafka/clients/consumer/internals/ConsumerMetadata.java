@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.utils.LogContext;
@@ -66,14 +67,34 @@ public class ConsumerMetadata extends Metadata {
         return allowAutoTopicCreation;
     }
 
+    /**
+     * Constructs a metadata request builder for fetching cluster metadata for the topics the consumer needs.
+     * This will include:
+     * <ul>
+     *     <li>topics the consumer is subscribed to using topic names (calls to subscribe with topic name list or client-side regex)</li>
+     *     <li>topics the consumer is subscribed to using topic IDs (calls to subscribe with broker-side regex RE2J)</li>
+     *     <li>topics involved in calls for fetching offsets (transient topics)</li>
+     * </ul>
+     * Note that this will generate a request for all topics in the cluster only when the consumer is subscribed to a client-side regex.
+     */
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
-        if (subscription.hasPatternSubscription() || subscription.hasRe2JPatternSubscription())
+        if (subscription.hasPatternSubscription()) {
+            // Consumer subscribed to client-side regex => request all topics to compute regex
             return MetadataRequest.Builder.allTopics();
+        }
+        if (subscription.hasRe2JPatternSubscription() && transientTopics.isEmpty()) {
+            // Consumer subscribed to broker-side regex and no need for transient topic names metadata => request topic IDs
+            return MetadataRequest.Builder.forTopicIds(subscription.assignedTopicIds());
+        }
+        // Subscription to explicit topic names or transient topics present.
+        // Note that in the case of RE2J broker-side regex subscription, we may end up in this path
+        // if there are transient topics. They are just needed temporarily (lifetime of offsets-related API calls),
+        // so we'll request them to unblock their APIs, then go back to requesting assigned topic IDs as needed
         List<String> topics = new ArrayList<>();
         topics.addAll(subscription.metadataTopics());
         topics.addAll(transientTopics);
-        return new MetadataRequest.Builder(topics, allowAutoTopicCreation);
+        return MetadataRequest.Builder.forTopicNames(topics, allowAutoTopicCreation);
     }
 
     synchronized void addTransientTopics(Set<String> topics) {
@@ -86,6 +107,15 @@ public class ConsumerMetadata extends Metadata {
         this.transientTopics.clear();
     }
 
+    /**
+     * Check if the metadata for the topic should be retained, based on the topic name.
+     * It will return true for:
+     * <ul>
+     *     <li>topic names the consumer subscribed to</li>
+     *     <li>topic names that match a client-side regex the consumer subscribed to</li>
+     *     <li>topics involved in fetching offsets</li>
+     * </ul>
+     */
     @Override
     protected synchronized boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         if (transientTopics.contains(topic) || subscription.needsMetadata(topic))
@@ -94,6 +124,21 @@ public class ConsumerMetadata extends Metadata {
         if (isInternal && !includeInternalTopics)
             return false;
 
-        return subscription.matchesSubscribedPattern(topic) || subscription.isAssignedFromRe2j(topic);
+        return subscription.matchesSubscribedPattern(topic);
+    }
+
+    /**
+     * Check if the metadata for the topic should be retained, based on topic name and topic ID.
+     * This will return true for:
+     * <ul>
+     *     <li>topic names the consumer subscribed to</li>
+     *     <li>topic names that match a client-side regex the consumer subscribed to</li>
+     *     <li>topic IDs that have been received in an assignment from the broker after the consumer subscribed to a broker-side regex</li>
+     *     <li>topics involved in fetching offsets</li>
+     * </ul>
+     */
+    @Override
+    protected synchronized boolean retainTopic(String topicName, Uuid topicId, boolean isInternal, long nowMs) {
+        return retainTopic(topicName, isInternal, nowMs) || subscription.isAssignedFromRe2j(topicId);
     }
 }
