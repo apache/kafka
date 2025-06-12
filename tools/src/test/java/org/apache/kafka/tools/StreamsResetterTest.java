@@ -49,7 +49,7 @@ public class StreamsResetterTest {
     private final StreamsResetter streamsResetter = new StreamsResetter();
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
     private final TopicPartition topicPartition = new TopicPartition(TOPIC, 0);
-    private final Set<TopicPartition> inputTopicPartitions = new HashSet<>(Collections.singletonList(topicPartition));
+    private final Set<TopicPartition> inputTopicPartitions = Set.of(topicPartition);
 
     @BeforeEach
     public void beforeEach() {
