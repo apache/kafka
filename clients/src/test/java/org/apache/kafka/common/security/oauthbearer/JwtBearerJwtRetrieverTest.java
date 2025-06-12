@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
@@ -95,7 +94,7 @@ public class JwtBearerJwtRetrieverTest extends OAuthBearerTest {
         List<AppConfigurationEntry> jaasConfigEntries = getJaasConfigEntries();
 
         try (JwtBearerJwtRetriever jwtRetriever = new JwtBearerJwtRetriever()) {
-            KafkaException e = assertThrows(KafkaException.class, () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, jaasConfigEntries));
+            JwtRetrieverException e = assertThrows(JwtRetrieverException.class, () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, jaasConfigEntries));
             assertNotNull(e.getCause());
             assertInstanceOf(GeneralSecurityException.class, e.getCause());
         }
@@ -144,7 +143,7 @@ public class JwtBearerJwtRetrieverTest extends OAuthBearerTest {
         List<AppConfigurationEntry> jaasConfigEntries = getJaasConfigEntries();
 
         try (JwtBearerJwtRetriever jwtRetriever = new JwtBearerJwtRetriever()) {
-            KafkaException e = assertThrows(KafkaException.class, () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, jaasConfigEntries));
+            JwtRetrieverException e = assertThrows(JwtRetrieverException.class, () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, jaasConfigEntries));
             assertNotNull(e.getCause());
             assertInstanceOf(IOException.class, e.getCause());
         }

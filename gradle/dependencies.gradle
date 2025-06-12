@@ -123,6 +123,7 @@ versions += [
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
   spotbugs: "4.8.6",
+  mockOAuth2Server: "2.2.1",
   zinc: "1.9.2",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
@@ -224,6 +225,7 @@ libs += [
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   spotbugs: "com.github.spotbugs:spotbugs-annotations:$versions.spotbugs",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
+  mockOAuth2Server: "no.nav.security:mock-oauth2-server:$versions.mockOAuth2Server",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
