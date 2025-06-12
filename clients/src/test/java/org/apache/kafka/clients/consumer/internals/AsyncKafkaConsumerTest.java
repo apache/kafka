@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.Metadata.LeaderAndEpoch;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -180,7 +181,7 @@ public class AsyncKafkaConsumerTest {
         backgroundEventQueue.clear();
         if (consumer != null) {
             try {
-                consumer.close(Duration.ZERO);
+                consumer.close(CloseOptions.timeout(Duration.ZERO));
             } catch (Exception e) {
                 // best effort to clean up after each test, but may throw (ex. if callbacks where
                 // throwing errors)
@@ -318,7 +319,7 @@ public class AsyncKafkaConsumerTest {
         // Clean-up. Close the consumer here as we know it will cause a TimeoutException to be thrown.
         // If we get an error *other* than the TimeoutException, we'll fail the test.
         try {
-            Exception e = assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
+            Exception e = assertThrows(KafkaException.class, () -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
             assertInstanceOf(TimeoutException.class, e.getCause());
         } finally {
             consumer = null;
@@ -337,7 +338,7 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
         forceCommitCallbackInvocation();
 
-        assertEquals(callback.invoked, 1);
+        assertEquals(1, callback.invoked);
         assertNull(callback.exception);
     }
 
@@ -355,6 +356,26 @@ public class AsyncKafkaConsumerTest {
         forceCommitCallbackInvocation();
 
         assertSame(exception.getClass(), callback.exception.getClass());
+    }
+
+    @Test
+    public void testCommitAsyncShouldCopyOffsets() {
+        consumer = newConsumer();
+
+        TopicPartition tp = new TopicPartition("t0", 2);
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp, new OffsetAndMetadata(10L));
+
+        markOffsetsReadyForCommitEvent();
+        consumer.commitAsync(offsets, null);
+
+        final ArgumentCaptor<AsyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
+        verify(applicationEventHandler).add(commitEventCaptor.capture());
+        final AsyncCommitEvent commitEvent = commitEventCaptor.getValue();
+        assertTrue(commitEvent.offsets().isPresent());
+        assertTrue(commitEvent.offsets().get().containsKey(tp));
+        offsets.remove(tp);
+        assertTrue(commitEvent.offsets().get().containsKey(tp));
     }
 
     private static Stream<Exception> commitExceptionSupplier() {
@@ -590,6 +611,26 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
     }
 
+    @Test
+    public void testCommitSyncShouldCopyOffsets() {
+        consumer = newConsumer();
+
+        TopicPartition tp = new TopicPartition("t0", 2);
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp, new OffsetAndMetadata(10L));
+
+        completeCommitSyncApplicationEventSuccessfully();
+        consumer.commitSync(offsets);
+
+        final ArgumentCaptor<SyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(SyncCommitEvent.class);
+        verify(applicationEventHandler).add(commitEventCaptor.capture());
+        final SyncCommitEvent commitEvent = commitEventCaptor.getValue();
+        assertTrue(commitEvent.offsets().isPresent());
+        assertTrue(commitEvent.offsets().get().containsKey(tp));
+        offsets.remove(tp);
+        assertTrue(commitEvent.offsets().get().containsKey(tp));
+    }
+
     private CompletableFuture<Void> setUpConsumerWithIncompleteAsyncCommit(TopicPartition tp) {
         time = new MockTime(1);
         consumer = newConsumer();
@@ -670,7 +711,7 @@ public class AsyncKafkaConsumerTest {
             "group-id",
             "client-id",
             false));
-        consumer.close(Duration.ofMillis(timeoutMs));
+        consumer.close(CloseOptions.timeout(Duration.ofMillis(timeoutMs)));
         verify(applicationEventHandler).addAndGet(any(LeaveGroupOnCloseEvent.class));
     }
 
@@ -695,7 +736,7 @@ public class AsyncKafkaConsumerTest {
             false));
         consumer.setGroupAssignmentSnapshot(partitions);
 
-        Throwable t = assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
+        Throwable t = assertThrows(KafkaException.class, () -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
         assertNotNull(t.getCause());
         assertEquals(rootError, t.getCause());
 
@@ -721,7 +762,7 @@ public class AsyncKafkaConsumerTest {
         Duration timeout = Duration.ofMillis(timeoutMs);
 
         try {
-            assertThrows(InterruptException.class, () -> consumer.close(timeout));
+            assertThrows(InterruptException.class, () -> consumer.close(CloseOptions.timeout(timeout)));
         } finally {
             Thread.interrupted();
         }
@@ -1040,7 +1081,7 @@ public class AsyncKafkaConsumerTest {
             return null;
         }).when(applicationEventHandler).add(any());
         completeUnsubscribeApplicationEventSuccessfully();
-        consumer.close(Duration.ZERO);
+        consumer.close(CloseOptions.timeout(Duration.ZERO));
 
         // A commit was triggered and not completed exceptionally by the wakeup
         assertNotNull(capturedEvent.get());
@@ -1063,7 +1104,7 @@ public class AsyncKafkaConsumerTest {
         markOffsetsReadyForCommitEvent();
         consumer.commitAsync();
 
-        Exception e = assertThrows(KafkaException.class, () -> consumer.close(Duration.ofMillis(10)));
+        Exception e = assertThrows(KafkaException.class, () -> consumer.close(CloseOptions.timeout(Duration.ofMillis(10))));
         assertInstanceOf(TimeoutException.class, e.getCause());
     }
 
@@ -1084,7 +1125,7 @@ public class AsyncKafkaConsumerTest {
         consumer.commitAsync(cb);
 
         completeUnsubscribeApplicationEventSuccessfully();
-        assertDoesNotThrow(() -> consumer.close(Duration.ofMillis(10)));
+        assertDoesNotThrow(() -> consumer.close(CloseOptions.timeout(Duration.ofMillis(10))));
         assertEquals(1, cb.invoked);
     }
 
@@ -1100,7 +1141,7 @@ public class AsyncKafkaConsumerTest {
         completeCommitSyncApplicationEventSuccessfully();
         completeUnsubscribeApplicationEventSuccessfully();
 
-        consumer.close(Duration.ZERO);
+        consumer.close(CloseOptions.timeout(Duration.ZERO));
 
         assertEquals(1, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
         assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
