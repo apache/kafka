@@ -1650,6 +1650,7 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
+     * This method is deprecated and replaced by {@link #close(org.apache.kafka.streams.CloseOptions)}.
      * @param options  contains timeout to specify how long to wait for the threads to shut down, and a flag leaveGroup to
      *                 trigger consumer leave call
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
@@ -1673,9 +1674,20 @@ public class KafkaStreams implements AutoCloseable {
         return close(Optional.of(timeoutMs), operation);
     }
 
+    /**
+     * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
+     * threads to join.
+     * @param options  contains timeout to specify how long to wait for the threads to shut down, and a flag 
+     *                 {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP} to
+     *                 trigger consumer leave call
+     * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
+     * before all threads stopped
+     * Note that this method must not be called in the {@link StateListener#onChange(KafkaStreams.State, KafkaStreams.State)} callback of {@link StateListener}.
+     * @throws IllegalArgumentException if {@code timeout} can't be represented as {@code long milliseconds}
+     */
     public synchronized boolean close(final org.apache.kafka.streams.CloseOptions options) throws IllegalArgumentException {
         Objects.requireNonNull(options, "options cannot be null");
-        CloseOptionsInternal optionsInternal = new CloseOptionsInternal(options);
+        final CloseOptionsInternal optionsInternal = new CloseOptionsInternal(options);
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(optionsInternal.timeout(), "timeout");
         final long timeoutMs = validateMillisecondDuration(optionsInternal.timeout().get(), msgPrefix);
         if (timeoutMs < 0) {
