@@ -23,6 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -38,11 +40,13 @@ import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.ShutdownableThread;
+import org.apache.kafka.server.IntegrationTestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -375,9 +379,14 @@ public class ConsumerBounceTest {
                 .setCoordinatorKeys(List.of(group))).build();
         AtomicInteger node = new AtomicInteger(-1);
         TestUtils.waitForCondition(() -> {
-            FindCoordinatorResponse response = IntegrationTestUtils.connectAndReceive<FindCoordinatorResponse>(request);
+            FindCoordinatorResponse response = null;
+            try {
+                response = IntegrationTestUtils.connectAndReceive(request, clusterInstance.anyBrokerSocketServer().boundPort(new ListenerName("EXTERNAL")));
+            } catch (IOException e) {
+                return false;
+            }
             node.set(response.node().id());
-            return true;
+            return response.error().equals(Errors.NONE);
         }, "Failed to find coordinator for group " + group);
         return node.get();
     }
