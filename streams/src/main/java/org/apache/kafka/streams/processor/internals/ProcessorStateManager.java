@@ -166,11 +166,11 @@ public class ProcessorStateManager implements StateManager {
 
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
-    private final String logPrefix;
+    private String logPrefix;
 
     private final TaskId taskId;
     private final boolean eosEnabled;
-    private final ChangelogRegister changelogReader;
+    private ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
     private final Map<String, String> storeToChangelogTopic;
 
@@ -222,7 +222,7 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Created state store manager for task {}", taskId);
     }
 
-    void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext processorContext) {
+    void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
             if (stores.containsKey(store.name())) {
