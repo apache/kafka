@@ -802,11 +802,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 }
 
               if (nextState == PrepareAbort && isEpochFence) {
-                // We should clear the pending state to make way for the transition to PrepareAbort and also bump
-                // the epoch in the transaction metadata we are about to append.
+                // We should clear the pending state to make way for the transition to PrepareAbort
                 txnMetadata.pendingState = None
-                txnMetadata.producerEpoch = producerEpoch
-                txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
+                // For TV2+, don't manually set the epoch - let prepareAbortOrCommit handle it naturally.
               }
 
               nextProducerIdOrErrors.flatMap {
