@@ -574,15 +574,19 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return dbOptions.compactionReadaheadSize();
     }
 
-    @Override
-    public Options setRandomAccessMaxBufferSize(final long randomAccessMaxBufferSize) {
-        dbOptions.setRandomAccessMaxBufferSize(randomAccessMaxBufferSize);
+    @Deprecated(since = "4.2.0")
+    public Options setRandomAccessMaxBufferSize(final long ignored) {
+        log.warn("random_access_max_buffer_size has been removed in RocksDB v9.11.1." +
+                " See https://github.com/facebook/rocksdb/pull/13288");
+
         return this;
     }
 
-    @Override
+    @Deprecated(since = "4.2.0")
     public long randomAccessMaxBufferSize() {
-        return dbOptions.randomAccessMaxBufferSize();
+        log.warn("random_access_max_buffer_size has been removed in RocksDB v9.11.1." +
+                " See https://github.com/facebook/rocksdb/pull/13288");
+        return 0;
     }
 
     @Override
