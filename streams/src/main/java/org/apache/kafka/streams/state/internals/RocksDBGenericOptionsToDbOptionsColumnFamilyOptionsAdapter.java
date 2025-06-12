@@ -578,7 +578,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     public Options setRandomAccessMaxBufferSize(final long ignored) {
         log.warn("random_access_max_buffer_size has been removed in RocksDB v9.11.1." +
                 " See https://github.com/facebook/rocksdb/pull/13288");
-
         return this;
     }
 
