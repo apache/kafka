@@ -1171,9 +1171,9 @@ class TransactionCoordinatorTest {
     // it should not cause an epoch overflow by incrementing twice.
     // The only true increment happens in prepareAbortOrCommit
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-      (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_2)
+      (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds(), TV_2)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -1199,17 +1199,15 @@ class TransactionCoordinatorTest {
     coordinator.handleInitProducerId(
       transactionalId,
       txnTimeoutMs,
-      enableTwoPCFlag = false,
-      keepPreparedTxn = false,
       None,
       initProducerIdMockCallback
     )
 
     // Verify that the epoch did not overflow (should be Short.MaxValue = 32767, not negative)
     assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
-    assertEquals(TransactionState.PREPARE_ABORT, txnMetadata.state)
+    assertEquals(PrepareAbort, txnMetadata.state)
     
-    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
+    verify(transactionManager).validateTransactionTimeoutMs(anyInt())
     verify(transactionManager, times(3)).getTransactionState(ArgumentMatchers.eq(transactionalId))
     verify(transactionManager).appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
@@ -1233,12 +1231,12 @@ class TransactionCoordinatorTest {
     val txnMetadata = new TransactionMetadata(
       transactionalId = transactionalId,
       producerId = producerId,
-      prevProducerId = RecordBatch.NO_PRODUCER_ID,
+      previousProducerId = RecordBatch.NO_PRODUCER_ID,
       nextProducerId = RecordBatch.NO_PRODUCER_ID,
       producerEpoch = epochAtMaxBoundary,
       lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
       txnTimeoutMs = txnTimeoutMs,
-      state = TransactionState.ONGOING,
+      state = Ongoing,
       topicPartitions = partitions,
       txnStartTimestamp = now,
       txnLastUpdateTimestamp = now,
