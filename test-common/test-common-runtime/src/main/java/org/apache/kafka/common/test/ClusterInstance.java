@@ -406,4 +406,11 @@ public interface ClusterInstance {
                     .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
     }
+
+    default Collection<Integer> boundPorts() {
+        return brokers().values().stream()
+                .map(KafkaBroker::socketServer)
+                .map(s -> s.boundPort(clientListener()))
+                .collect(Collectors.toList());
+    }
 }

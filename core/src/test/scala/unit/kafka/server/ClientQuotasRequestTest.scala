@@ -28,6 +28,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
 import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.server.IntegrationTestUtils
 import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Disabled
@@ -556,9 +557,11 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
   private def sendDescribeClientQuotasRequest(filter: ClientQuotaFilter): DescribeClientQuotasResponse = {
     val request = new DescribeClientQuotasRequest.Builder(filter).build()
-    IntegrationTestUtils.connectAndReceive[DescribeClientQuotasResponse](request,
-      destination = cluster.anyBrokerSocketServer(),
-      listenerName = cluster.clientListener())
+    val destination = cluster.anyBrokerSocketServer()
+    val listenerName = cluster.clientListener()
+    IntegrationTestUtils.connectAndReceive[DescribeClientQuotasResponse](
+      request,
+      destination.boundPort(listenerName))
   }
 
   private def alterEntityQuotas(entity: ClientQuotaEntity, alter: Map[String, Option[Double]], validateOnly: Boolean) =
@@ -584,9 +587,10 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
   private def sendAlterClientQuotasRequest(entries: Iterable[ClientQuotaAlteration], validateOnly: Boolean): AlterClientQuotasResponse = {
     val request = new AlterClientQuotasRequest.Builder(entries.asJavaCollection, validateOnly).build()
-    IntegrationTestUtils.connectAndReceive[AlterClientQuotasResponse](request,
-      destination = cluster.anyBrokerSocketServer(),
-      listenerName = cluster.clientListener())
+    val destination = cluster.anyBrokerSocketServer()
+    val listenerName = cluster.clientListener()
+    IntegrationTestUtils.connectAndReceive[AlterClientQuotasResponse](
+      request,
+      destination.boundPort(listenerName))
   }
-
 }
