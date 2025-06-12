@@ -59,7 +59,7 @@ public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
     }
 
     /*
-       The KafkaMetric object is a singleton shared by all StreamThread instances.
+       The StreamMetrics object is a singleton shared by all StreamThread instances.
        So we need to make sure we only pass metrics for the current StreamThread that contains this
        MetricsReporter instance, which will register metrics with the embedded KafkaConsumer to pass
        through the telemetry pipeline.
