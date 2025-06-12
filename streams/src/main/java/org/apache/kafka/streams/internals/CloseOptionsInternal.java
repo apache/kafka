@@ -23,7 +23,7 @@ import java.util.Optional;
 
 public class CloseOptionsInternal extends CloseOptions {
 
-    public CloseOptionsInternal(CloseOptions options) {
+    public CloseOptionsInternal(final CloseOptions options) {
         super(options);
     }
 

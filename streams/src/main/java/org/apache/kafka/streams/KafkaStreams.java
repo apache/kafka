@@ -52,6 +52,7 @@ import org.apache.kafka.streams.errors.StreamsStoppedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.internals.ClientInstanceIdsImpl;
+import org.apache.kafka.streams.internals.CloseOptionsInternal;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.internals.metrics.StreamsClientMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
@@ -1665,7 +1666,7 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
 
-        org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation = options.leaveGroup ?
+        final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation = options.leaveGroup ?
                 org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP :
                 org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 
@@ -1674,13 +1675,14 @@ public class KafkaStreams implements AutoCloseable {
 
     public synchronized boolean close(final org.apache.kafka.streams.CloseOptions options) throws IllegalArgumentException {
         Objects.requireNonNull(options, "options cannot be null");
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(options.timeout, "timeout");
-        final long timeoutMs = validateMillisecondDuration(options.timeout.get(), msgPrefix);
+        CloseOptionsInternal optionsInternal = new CloseOptionsInternal(options);
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(optionsInternal.timeout(), "timeout");
+        final long timeoutMs = validateMillisecondDuration(optionsInternal.timeout().get(), msgPrefix);
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
 
-        return close(Optional.of(timeoutMs), options.operation);
+        return close(Optional.of(timeoutMs), optionsInternal.operation());
     }
 
     private Consumer<StreamThread> streamThreadLeaveConsumerGroup(final long remainingTimeMs) {

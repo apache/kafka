@@ -49,9 +49,9 @@ public class CloseOptions {
     private CloseOptions() {
     }
 
-    protected CloseOptions(final CloseOptions CloseOptions) {
-        this.operation = CloseOptions.operation;
-        this.timeout = CloseOptions.timeout;
+    protected CloseOptions(final CloseOptions closeOptions) {
+        this.operation = closeOptions.operation;
+        this.timeout = closeOptions.timeout;
     }
 
     /**
