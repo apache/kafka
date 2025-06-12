@@ -17,7 +17,6 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.utils.ByteBufferUnmapper;
-import org.apache.kafka.common.utils.OperatingSystem;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -33,8 +32,10 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.util.Objects;
 import java.util.OptionalInt;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
+import static org.apache.kafka.server.util.LockUtils.inLock;
+import static org.apache.kafka.server.util.LockUtils.inLockThrows;
 
 /**
  * The abstract index class which holds entry format agnostic methods.
@@ -187,8 +188,7 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
-        lock.lock();
-        try {
+        return inLockThrows(lock, () -> {
             int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
             if (length == roundedNewSize) {
@@ -199,9 +199,7 @@ public abstract class AbstractIndex implements Closeable {
                 try {
                     int position = mmap.position();
 
-                    /* Windows or z/OS won't let us modify the file length while the file is mmapped :-( */
-                    if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
-                        safeForceUnmap();
+                    safeForceUnmap();
                     raf.setLength(roundedNewSize);
                     this.length = roundedNewSize;
                     mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
@@ -214,9 +212,7 @@ public abstract class AbstractIndex implements Closeable {
                     Utils.closeQuietly(raf, "index file " + file.getName());
                 }
             }
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -236,12 +232,9 @@ public abstract class AbstractIndex implements Closeable {
      * Flush the data in the index to disk
      */
     public void flush() {
-        lock.lock();
-        try {
+        inLock(lock, () -> {
             mmap.force();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -261,12 +254,9 @@ public abstract class AbstractIndex implements Closeable {
      * the file.
      */
     public void trimToValidSize() throws IOException {
-        lock.lock();
-        try {
+        inLockThrows(lock, () -> {
             resize(entrySize() * entries);
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -286,12 +276,9 @@ public abstract class AbstractIndex implements Closeable {
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-        lock.lock();
-        try {
+        inLockThrows(lock, () -> {
             safeForceUnmap();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -416,22 +403,6 @@ public abstract class AbstractIndex implements Closeable {
     protected void truncateToEntries0(int entries) {
         this.entries = entries;
         mmap.position(entries * entrySize());
-    }
-
-    /**
-     * Execute the given function in a lock only if we are running on windows or z/OS. We do this
-     * because Windows or z/OS won't let us resize a file while it is mmapped. As a result we have to force unmap it
-     * and this requires synchronizing reads.
-     */
-    protected final <T, E extends Exception> T maybeLock(Lock lock, StorageAction<T, E> action) throws E {
-        if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
-            lock.lock();
-        try {
-            return action.execute();
-        } finally {
-            if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
-                lock.unlock();
-        }
     }
 
     /**
