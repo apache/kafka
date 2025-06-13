@@ -49,6 +49,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveGroupOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.NetworkPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
@@ -2217,5 +2218,18 @@ public class AsyncKafkaConsumerTest {
             event.markReconcileAndAutoCommitComplete();
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(PollEvent.class));
+
+        doAnswer(invocation -> {
+            NetworkPollEvent event = invocation.getArgument(0);
+            CompletableFuture<Void> future = event.future();
+
+            if (future.isDone()) {
+                return ConsumerUtils.getResult(future);
+            } else if (Thread.interrupted()) {
+                throw new InterruptException("Test interrupt");
+            }
+
+            return null;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(NetworkPollEvent.class));
     }
 }

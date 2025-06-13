@@ -58,6 +58,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveGroupOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.NetworkPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.PausePartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
@@ -1799,13 +1800,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         log.trace("Polling for fetches with timeout {}", pollTimeout);
 
         Timer pollTimer = time.timer(pollTimeout);
-        wakeupTrigger.setFetchAction(fetchBuffer);
 
-        // Wait a bit for some fetched data to arrive, as there may not be anything immediately available. Note the
+        // Wait for the next NetworkClient poll to finish, as there may not be anything immediately available. Note the
         // use of a shorter, dedicated "pollTimer" here which updates "timer" so that calling method (poll) will
         // correctly handle the overall timeout.
+        NetworkPollEvent event = new NetworkPollEvent(calculateDeadlineMs(pollTimer));
+        wakeupTrigger.setActiveTask(event.future());
+
         try {
-            fetchBuffer.awaitNotEmpty(pollTimer);
+            applicationEventHandler.addAndGet(event);
         } catch (InterruptException e) {
             log.trace("Interrupt during fetch", e);
             throw e;
