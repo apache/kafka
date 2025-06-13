@@ -977,8 +977,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
                   case Some(epochAndMetadata) =>
                     if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
-                      // This was attempted epoch fence that failed, so mark this state on the metadata
-                      epochAndMetadata.transactionMetadata.hasFailedEpochFence = true
                       warn(s"The coordinator failed to write an epoch fence transition for producer $transactionalId to the transaction log " +
                         s"with error $error")
                     }
