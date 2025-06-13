@@ -769,7 +769,7 @@ public class KafkaStreams implements AutoCloseable {
 
         @Override
         public void onUpdateStart(final TopicPartition topicPartition,
-                          final String storeName, 
+                          final String storeName,
                           final long startingOffset) {
             if (userStandbyListener != null) {
                 try {
@@ -982,7 +982,7 @@ public class KafkaStreams implements AutoCloseable {
 
         // use client id instead of thread client id since this admin client may be shared among threads
         adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
-        
+
         metrics = createMetrics(applicationConfigs, time, clientId);
         final StreamsClientMetricsDelegatingReporter reporter = new StreamsClientMetricsDelegatingReporter(adminClient, clientId);
         metrics.addReporter(reporter);
@@ -1228,7 +1228,7 @@ public class KafkaStreams implements AutoCloseable {
                         if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
                             final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceID.get());
                             final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
-                            final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = 
+                            final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult =
                                 adminClient.removeMembersFromConsumerGroup(
                                     applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
                                     new RemoveMembersFromConsumerGroupOptions(membersToRemove)
@@ -1489,8 +1489,8 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private Thread shutdownHelper(
-            final boolean error, 
-            final long timeoutMs, 
+            final boolean error,
+            final long timeoutMs,
             final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation
     ) {
         stateDirCleaner.shutdownNow();
@@ -1617,7 +1617,7 @@ public class KafkaStreams implements AutoCloseable {
         if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in {}", state());
         } else {
-            final Thread shutdownThread = shutdownHelper(true, -1, 
+            final Thread shutdownThread = shutdownHelper(true, -1,
                     org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
 
             shutdownThread.setDaemon(true);
@@ -1660,7 +1660,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     @Deprecated(since = "4.2")
     public synchronized boolean close(final CloseOptions options) throws IllegalArgumentException {
-        org.apache.kafka.streams.CloseOptions closeOptions = org.apache.kafka.streams.CloseOptions.timeout(options.timeout)
+        final org.apache.kafka.streams.CloseOptions closeOptions = org.apache.kafka.streams.CloseOptions.timeout(options.timeout)
                 .withGroupMembershipOperation(options.leaveGroup ?
                         org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP :
                         org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
@@ -1670,7 +1670,7 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
-     * @param options  contains timeout to specify how long to wait for the threads to shut down, and a flag 
+     * @param options  contains timeout to specify how long to wait for the threads to shut down, and a flag
      *                 {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation#LEAVE_GROUP} to
      *                 trigger consumer leave call
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
