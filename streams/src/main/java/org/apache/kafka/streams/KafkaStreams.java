@@ -1660,18 +1660,11 @@ public class KafkaStreams implements AutoCloseable {
      */
     @Deprecated(since = "4.2")
     public synchronized boolean close(final CloseOptions options) throws IllegalArgumentException {
-        Objects.requireNonNull(options, "options cannot be null");
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(options.timeout, "timeout");
-        final long timeoutMs = validateMillisecondDuration(options.timeout, msgPrefix);
-        if (timeoutMs < 0) {
-            throw new IllegalArgumentException("Timeout can't be negative.");
-        }
-
-        final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation = options.leaveGroup ?
-                org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP :
-                org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
-
-        return close(Optional.of(timeoutMs), operation);
+        org.apache.kafka.streams.CloseOptions closeOptions = org.apache.kafka.streams.CloseOptions.timeout(options.timeout)
+                .withGroupMembershipOperation(options.leaveGroup ?
+                        org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP :
+                        org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        return close(closeOptions);
     }
 
     /**
