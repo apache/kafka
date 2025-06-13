@@ -386,6 +386,8 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         final List<Map.Entry<BufferKey, BufferValue>> entries = new ArrayList<>(sortedMap.entrySet());
         int evictions = 0;
 
+        final List<BufferKey> keysToDelete = new ArrayList<>();
+
         if (predicate.get()) {
             for (Iterator<Map.Entry<BufferKey, BufferValue>> entryIterator = entries.iterator(); entryIterator.hasNext(); ) {
                 final Map.Entry<BufferKey, BufferValue> next = entryIterator.next();
@@ -407,18 +409,20 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                     new Change<>(bufferValue.newValue(), bufferValue.oldValue())
                 );
                 callback.accept(new Eviction<K, Change<V>>(key, value, bufferValue.context()));
-
-                sortedMap.remove(next.getKey());
-                index.remove(next.getKey().key());
+                keysToDelete.add(next.getKey());
 
                 if (loggingEnabled) {
                     dirtyKeys.add(next.getKey().key());
                 }
-
                 memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
                 minTimestamp = entries.isEmpty() ? Long.MAX_VALUE : entries.get(0).getKey().time();
                 evictions++;
             }
+            for (BufferKey keyToDelete : keysToDelete) {
+                sortedMap.remove(keyToDelete);
+                index.remove(keyToDelete.key());
+            }
+            minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
         }
         if (evictions > 0) {
             updateBufferMetrics();
