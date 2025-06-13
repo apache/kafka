@@ -99,15 +99,6 @@ public class BrokerTopicStats implements AutoCloseable {
         }
     }
 
-    // This method only removes metrics only used for follower
-    public void removeOldFollowerMetrics(String topic) {
-        BrokerTopicMetrics topicMetrics = topicStats(topic);
-        if (topicMetrics != null) {
-            topicMetrics.closeMetric(BrokerTopicMetrics.REPLICATION_BYTES_IN_PER_SEC);
-            topicMetrics.closeMetric(BrokerTopicMetrics.REASSIGNMENT_BYTES_IN_PER_SEC);
-        }
-    }
-
     public void removeMetrics(String topic) {
         BrokerTopicMetrics metrics = stats.remove(topic);
         if (metrics != null) {
