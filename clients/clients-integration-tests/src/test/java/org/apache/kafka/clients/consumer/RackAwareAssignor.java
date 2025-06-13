@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 
@@ -36,7 +37,7 @@ import java.util.Set;
  * information of the members when assigning partitions to them.
  * It needs all brokers and members to have rack information available.
  */
-public class RackAwareAssignor implements ConsumerGroupPartitionAssignor {
+public class RackAwareAssignor implements ConsumerGroupPartitionAssignor, ShareGroupPartitionAssignor {
     @Override
     public String name() {
         return "rack-aware-assignor";

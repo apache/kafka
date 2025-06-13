@@ -255,7 +255,9 @@ public abstract class AbstractIndex implements Closeable {
      */
     public void trimToValidSize() throws IOException {
         inLockThrows(lock, () -> {
-            resize(entrySize() * entries);
+            if (mmap != null) {
+                resize(entrySize() * entries);
+            }
         });
     }
 
