@@ -26,7 +26,6 @@ public final class JaasUtils {
             "com.sun.security.auth.module.JndiLoginModule,com.sun.security.auth.module.LdapLoginModule";
     public static final String SERVICE_NAME = "serviceName";
 
-    private JaasUtils() {
-    }
+    private JaasUtils() {}
 
 }
