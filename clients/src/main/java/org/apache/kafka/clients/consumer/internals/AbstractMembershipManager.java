@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -373,6 +372,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             log.debug("Member {} updated its target assignment from {} to {}. Member will reconcile it on the next poll.",
                 memberId, currentTargetAssignment, updatedAssignment);
             currentTargetAssignment = updatedAssignment;
+            // Register the assigned topic IDs on the subscription state.
+            // This will be used to ensure they are included in metadata requests (even though they may not be reconciled yet).
+            subscriptions.setAssignedTopicIds(currentTargetAssignment.partitions.keySet());
         });
     }
 
@@ -830,8 +832,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
         if (reconciliationInProgress) {
-            log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment " +
-                currentTargetAssignment + " will be handled in the next reconciliation loop.");
+            log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. " +
+                 "Assignment {} will be handled in the next reconciliation loop.", currentTargetAssignment);
             return;
         }
 
@@ -1077,9 +1079,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             Optional<String> nameFromMetadata = findTopicNameInGlobalOrLocalCache(topicId);
             nameFromMetadata.ifPresent(resolvedTopicName -> {
                 // Name resolved, so assignment is ready for reconciliation.
-                topicPartitions.forEach(tp ->
-                    assignmentReadyToReconcile.add(new TopicIdPartition(topicId, tp, resolvedTopicName))
-                );
+                assignmentReadyToReconcile.addAll(topicId, resolvedTopicName, topicPartitions);
                 it.remove();
             });
         }
