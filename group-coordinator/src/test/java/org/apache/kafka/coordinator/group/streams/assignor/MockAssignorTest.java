@@ -57,7 +57,7 @@ public class MockAssignorTest {
         final AssignmentMemberSpec memberSpec1 = new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Map.of("test-subtopology", new HashSet<>(List.of(0))),
+            Map.of("test-subtopology", Set.of(0)),
             Map.of(),
             Map.of(),
             "test-process",
@@ -69,7 +69,7 @@ public class MockAssignorTest {
         final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Map.of("test-subtopology", new HashSet<>(List.of(0))),
+            Map.of("test-subtopology", Set.of(0)),
             Map.of(),
             Map.of(),
             "test-process",

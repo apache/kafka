@@ -134,8 +134,8 @@ public class ConsumerGroupServiceTest {
         endOffsets.put(testTopicPartition4, KafkaFuture.completedFuture(resultInfo));
         endOffsets.put(testTopicPartition5, KafkaFuture.completedFuture(resultInfo));
 
-        Set<TopicPartition> assignedTopicPartitions = new HashSet<>(Arrays.asList(testTopicPartition0, testTopicPartition1, testTopicPartition2));
-        Set<TopicPartition> unassignedTopicPartitions = new HashSet<>(Arrays.asList(testTopicPartition3, testTopicPartition4, testTopicPartition5));
+        Set<TopicPartition> assignedTopicPartitions = Set.of(testTopicPartition0, testTopicPartition1, testTopicPartition2);
+        Set<TopicPartition> unassignedTopicPartitions = Set.of(testTopicPartition3, testTopicPartition4, testTopicPartition5);
 
         ConsumerGroupDescription consumerGroupDescription = new ConsumerGroupDescription(GROUP,
                 true,

@@ -708,7 +708,7 @@ public class ConsumerGroupTest {
         // Initial assignment for member1
         Assignment initialAssignment = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(0))
+            Set.of(0)
         ));
         consumerGroup.updateTargetAssignment(memberId1, initialAssignment);
 
@@ -723,7 +723,7 @@ public class ConsumerGroupTest {
         // New assignment for member1
         Assignment newAssignment = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(1))
+            Set.of(1)
         ));
         consumerGroup.updateTargetAssignment(memberId1, newAssignment);
 
@@ -738,7 +738,7 @@ public class ConsumerGroupTest {
         // New assignment for member2 to add partition 1
         Assignment newAssignment2 = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(1))
+            Set.of(1)
         ));
         consumerGroup.updateTargetAssignment(memberId2, newAssignment2);
 
@@ -753,7 +753,7 @@ public class ConsumerGroupTest {
         // New assignment for member1 to revoke partition 1 and assign partition 0
         Assignment newAssignment1 = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(0))
+            Set.of(0)
         ));
         consumerGroup.updateTargetAssignment(memberId1, newAssignment1);
 
@@ -1119,8 +1119,8 @@ public class ConsumerGroupTest {
 
         assertEquals(2, consumerGroup.classicMembersSupportedProtocols().get("range"));
         assertEquals(1, consumerGroup.classicMembersSupportedProtocols().get("roundrobin"));
-        assertTrue(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("range", "sticky"))));
-        assertFalse(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
+        assertTrue(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, Set.of("range", "sticky")));
+        assertFalse(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, Set.of("sticky", "roundrobin")));
 
         member2 = new ConsumerGroupMember.Builder(member2)
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
@@ -1144,7 +1144,7 @@ public class ConsumerGroupTest {
 
         assertEquals(2, consumerGroup.classicMembersSupportedProtocols().get("range"));
         assertEquals(2, consumerGroup.classicMembersSupportedProtocols().get("roundrobin"));
-        assertTrue(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
+        assertTrue(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, Set.of("sticky", "roundrobin")));
     }
 
     @Test

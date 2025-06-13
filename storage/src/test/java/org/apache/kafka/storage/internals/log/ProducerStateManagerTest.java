@@ -44,7 +44,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -607,7 +606,7 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 2, 2L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(new HashSet<>(List.of(2L, 3L)), currentSnapshotOffsets());
+        assertEquals(Set.of(2L, 3L), currentSnapshotOffsets());
 
         stateManager.deleteSnapshotsBefore(3L);
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
@@ -629,7 +628,7 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 2, 2L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(new HashSet<>(List.of(2L, 3L)), currentSnapshotOffsets());
+        assertEquals(Set.of(2L, 3L), currentSnapshotOffsets());
 
         stateManager.truncateFullyAndStartAt(0L);
 
@@ -655,7 +654,7 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 4, 4L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(new HashSet<>(List.of(3L, 5L)), currentSnapshotOffsets());
+        assertEquals(Set.of(3L, 5L), currentSnapshotOffsets());
 
         // Truncate to the range (3, 5), this will delete the earlier snapshot until offset 3.
         stateManager.truncateAndReload(3, 5, time.milliseconds());
