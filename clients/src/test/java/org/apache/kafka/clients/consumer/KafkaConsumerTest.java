@@ -1977,7 +1977,7 @@ public class KafkaConsumerTest {
         try {
             newConsumer(groupProtocol, null, Optional.of(Boolean.TRUE));
             fail("Expected an InvalidConfigurationException");
-        } catch (InvalidConfigurationException e) {
+        } catch (InvalidConfigurationException swallow) {
             // OK, expected
         }
 
@@ -2142,7 +2142,7 @@ public class KafkaConsumerTest {
                 future.get(100, TimeUnit.MILLISECONDS);
                 if (closeTimeoutMs != 0)
                     fail("Close completed without waiting for commit or leave response");
-            } catch (TimeoutException e) {
+            } catch (TimeoutException swallow) {
                 // Expected exception
             }
 

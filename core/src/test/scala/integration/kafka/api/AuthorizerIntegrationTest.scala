@@ -3077,6 +3077,29 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @Test
+  def testConsumerGroupHeartbeatWithRegexWithTopicDescribeAclAddedAndRemoved(): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
+    addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
+
+    val memberId = Uuid.randomUuid.toString;
+    var response = sendAndReceiveFirstRegexHeartbeat(memberId, listenerName)
+    TestUtils.tryUntilNoAssertionError() {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(0), true)
+    }
+
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+    TestUtils.tryUntilNoAssertionError(waitTime = 25000) {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
+    }
+
+    removeAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+    TestUtils.tryUntilNoAssertionError(waitTime = 25000) {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(0))
+    }
+  }
+
+  @Test
   def testConsumerGroupHeartbeatWithRegexWithDifferentMemberAcls(): Unit = {
     createTopicWithBrokerPrincipal(topic, numPartitions = 2)
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
@@ -3093,7 +3116,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // member permissions while computing assignments.
     var member2Response = sendAndReceiveFirstRegexHeartbeat("memberWithLimitedAccess", listenerName)
     member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(1))
-    member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, None, fullRequest = true)
+    member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(1), fullRequest = true)
     member2Response = sendAndReceiveRegexHeartbeat(member2Response, listenerName, Some(1))
 
     // Create another topic and send heartbeats on member1 to trigger regex refresh
@@ -3624,6 +3647,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       data = data
         .setTopicPartitions(partitions.asJava)
         .setSubscribedTopicRegex("^top.*")
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
     }
     val request = new ConsumerGroupHeartbeatRequest.Builder(data).build()
     val resource = Set[ResourceType](GROUP, TOPIC)

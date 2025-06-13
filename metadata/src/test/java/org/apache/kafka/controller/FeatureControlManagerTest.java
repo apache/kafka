@@ -41,11 +41,11 @@ import org.junit.jupiter.api.Timeout;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -257,9 +257,8 @@ public class FeatureControlManagerTest {
         assertEquals(MetadataVersion.MINIMUM_VERSION, manager.metadataVersionOrThrow());
         assertEquals(Optional.of((short) 1), manager.finalizedFeatures(Long.MAX_VALUE).get(TestFeatureVersion.FEATURE_NAME));
         assertEquals(Optional.of((short) 2), manager.finalizedFeatures(Long.MAX_VALUE).get(TransactionVersion.FEATURE_NAME));
-        assertEquals(new HashSet<>(List.of(
-            MetadataVersion.FEATURE_NAME, TestFeatureVersion.FEATURE_NAME, TransactionVersion.FEATURE_NAME)),
-                manager.finalizedFeatures(Long.MAX_VALUE).featureNames());
+        assertEquals(Set.of(MetadataVersion.FEATURE_NAME, TestFeatureVersion.FEATURE_NAME, TransactionVersion.FEATURE_NAME),
+            manager.finalizedFeatures(Long.MAX_VALUE).featureNames());
     }
 
     private FeatureControlManager createTestManager() {
