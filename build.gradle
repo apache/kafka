@@ -1060,6 +1060,7 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation libs.caffeine
     testImplementation testLog4j2Libs
+    testImplementation libs.mockOAuth2Server
 
     testRuntimeOnly runtimeTestLibs
   }
