@@ -626,8 +626,8 @@ public class JsonConverterTest {
         Set<JsonNode> payloadEntries = new HashSet<>();
         for (JsonNode elem : payload)
             payloadEntries.add(elem);
-        assertEquals(new HashSet<>(Arrays.asList(JsonNodeFactory.instance.arrayNode().add(1).add(12),
-                        JsonNodeFactory.instance.arrayNode().add(2).add(15))),
+        assertEquals(Set.of(JsonNodeFactory.instance.arrayNode().add(1).add(12),
+                        JsonNodeFactory.instance.arrayNode().add(2).add(15)),
                 payloadEntries
         );
     }
@@ -805,9 +805,9 @@ public class JsonConverterTest {
         Set<JsonNode> payloadEntries = new HashSet<>();
         for (JsonNode elem : payload)
             payloadEntries.add(elem);
-        assertEquals(new HashSet<>(Arrays.asList(JsonNodeFactory.instance.arrayNode().add("string").add(12),
+        assertEquals(Set.of(JsonNodeFactory.instance.arrayNode().add("string").add(12),
                         JsonNodeFactory.instance.arrayNode().add(52).add("string"),
-                        JsonNodeFactory.instance.arrayNode().add(false).add(true))),
+                        JsonNodeFactory.instance.arrayNode().add(false).add(true)),
                 payloadEntries
         );
     }
