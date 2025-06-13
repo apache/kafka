@@ -37,7 +37,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -60,6 +59,23 @@ import joptsimple.OptionSet;
 
 import static org.apache.kafka.tools.TestRecordUtils.valuesIterator;
 
+/**
+ * This is a torture test that runs against an existing broker
+ * <p>
+ * Here is how it works:
+ * <p>
+ * It produces a series of specially formatted messages to one or more partitions. Each message it produces
+ * it logs out to a text file. The messages have a limited set of keys, so there is duplication in the key space.
+ * <p>
+ * The broker will clean its log as the test runs.
+ * <p>
+ * When the specified number of messages have been produced we create a consumer and consume all the messages in the topic
+ * and write that out to another text file.
+ * <p>
+ * Using a stable unix sort we sort both the producer log of what was sent and the consumer log of what was retrieved by the message key.
+ * Then we compare the final message in both logs for each key. If this final message is not the same for all keys we
+ * print an error and exit with exit code 1, otherwise we print the size reduction and exit with exit code 0.
+ */
 public class LogCompactionTester {
 
     public static void main(String[] args) throws Exception {
@@ -194,19 +210,28 @@ public class LogCompactionTester {
                 "--temporary-directory=" + tempDir.toString(), file.getAbsolutePath());
         Process process = builder.start();
 
+        // async read from the process's stderr to prevent blocking if the buffer fills up
+        CompletableFuture.runAsync(() -> {
+            try (BufferedReader errReader = new BufferedReader(
+                    new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = errReader.readLine()) != null) {
+                    System.err.println("[sort stderr] " + line);
+                }
+            } catch (IOException e) {
+                System.err.println("Failed to read sort stderr: " + e.getMessage());
+            }
+        });
+
+        // async wait for the process to complete and log a message if it exits abnormally
         CompletableFuture.runAsync(() -> {
             try {
                 int exitCode = process.waitFor();
                 if (exitCode != 0) {
-                    System.err.println("Process exited abnormally with code " + exitCode + ".");
-                    try (InputStream err = process.getErrorStream()) {
-                        err.transferTo(System.err);
-                    }
+                    System.err.println("Sort process exited abnormally with code " + exitCode + ".");
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-            } catch (IOException e) {
-                e.printStackTrace();
             }
         });
 
