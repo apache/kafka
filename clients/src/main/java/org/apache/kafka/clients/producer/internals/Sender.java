@@ -27,6 +27,7 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -565,7 +566,7 @@ public class Sender implements Runnable {
     /**
      * Handle a produce response
      */
-    private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
+    private void handleProduceResponse(ClientResponse response, Map<TopicIdPartition, ProducerBatch> batches, long now) {
         RequestHeader requestHeader = response.requestHeader();
         int correlationId = requestHeader.correlationId();
         if (response.wasTimedOut()) {
@@ -595,9 +596,6 @@ public class Sender implements Runnable {
                 // This will be set by completeBatch.
                 Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
                 produceResponse.data().responses().forEach(r -> r.partitionResponses().forEach(p -> {
-                    // Version 13 drop topic name and add support to topic id. However, metadata can be used to map topic id to topic name.
-                    String topicName = metadata.topicNames().getOrDefault(r.topicId(), r.name());
-                    TopicPartition tp = new TopicPartition(topicName, p.index());
                     ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(
                             Errors.forCode(p.errorCode()),
                             p.baseOffset(),
@@ -609,7 +607,22 @@ public class Sender implements Runnable {
                                 .collect(Collectors.toList()),
                             p.errorMessage(),
                             p.currentLeader());
-                    ProducerBatch batch = batches.get(tp);
+                    ProducerBatch batch = null;
+                    // Version 13 drop topic name and add support to topic id.
+                    // We need to find batch based on topic id and partition index only as
+                    // topic name in the response might be empty.
+                    List<ProducerBatch> matchedBatchesForTopicId = batches.entrySet().stream()
+                            .filter(entry -> entry.getKey().same(new TopicIdPartition(r.topicId(), p.index(), r.name())))
+                            .map(Map.Entry::getValue)
+                            .collect(Collectors.toList());
+
+                    if (matchedBatchesForTopicId.size() > 1) {
+                        matchedBatchesForTopicId.forEach(matchedBatch ->
+                                failBatch(matchedBatch, new RuntimeException("More than one batch with same topic id and partition."), false));
+                    } else {
+                        batch = matchedBatchesForTopicId.stream().findFirst().orElse(null);
+                    }
+
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
                 }));
 
@@ -855,7 +868,7 @@ public class Sender implements Runnable {
         if (batches.isEmpty())
             return;
 
-        final Map<TopicPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
+        final Map<TopicIdPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
         Map<String, Uuid> topicIds = topicIdsForBatches(batches);
 
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
@@ -874,7 +887,7 @@ public class Sender implements Runnable {
             tpData.partitionData().add(new ProduceRequestData.PartitionProduceData()
                     .setIndex(tp.partition())
                     .setRecords(records));
-            recordsByPartition.put(tp, batch);
+            recordsByPartition.put(new TopicIdPartition(topicId, tp), batch);
         }
 
         String transactionalId = null;
