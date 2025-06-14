@@ -33,6 +33,7 @@ import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt}
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.Mockito.doAnswer
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -1980,7 +1981,9 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def testReBumpAllowedOnFailedWriteForTV2(): Unit = {
+  def testHasFailedEpochFenceNotSetOnFailedWriteForTV2(): Unit = {
+    // Test that for TV2, hasFailedEpochFence is NOT set to true when epoch fence writes fail,
+    // allowing epoch re-bumping on retry (unlike TV1 behavior)
     val producerEpoch = 1.toShort
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_2)
@@ -2047,11 +2050,28 @@ class TransactionCoordinatorTest {
     )).thenAnswer(invocation => {
       val newMetadata = invocation.getArgument[TxnTransitMetadata](2)
       val callback = invocation.getArgument[Errors => Unit](3)
-
+      
       // Complete the transition and call the callback with success
       txnMetadata.completeTransitionTo(newMetadata)
       callback.apply(Errors.NONE)
     })
+
+    // Mock the transactionMarkerChannelManager to simulate the second write (PREPARE_ABORT -> COMPLETE_ABORT)
+    doAnswer(invocation => {
+      val newMetadata = invocation.getArgument[TxnTransitMetadata](3)
+      System.out.println("TEST: new metadata for invoking the complete abort thing: " + newMetadata)
+      // Simulate the completion of transaction markers and the second write
+      // This would normally happen asynchronously after markers are sent
+      txnMetadata.completeTransitionTo(newMetadata) // This transitions to COMPLETE_ABORT
+      txnMetadata.pendingState = None
+      
+      null
+    }).when(transactionMarkerChannelManager).addTxnMarkersToSend(
+      ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(TransactionResult.ABORT),
+      ArgumentMatchers.eq(txnMetadata),
+      any()
+    )
 
     coordinator.handleInitProducerId(
       transactionalId,
@@ -2061,5 +2081,9 @@ class TransactionCoordinatorTest {
       None,
       initProducerIdMockCallback
     )
+
+    // The transactionMarkerChannelManager mock should have completed the transition to COMPLETE_ABORT
+    // Verify that hasFailedEpochFence was never set to true for TV2, allowing future epoch bumps
+    assertFalse(txnMetadata.hasFailedEpochFence)
   }
 }

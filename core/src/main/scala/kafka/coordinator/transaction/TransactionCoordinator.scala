@@ -170,7 +170,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
         existingEpochAndMetadata =>
           val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
-
+          println("existing metadata before prepareInitProducerIdTransit is " + txnMetadata)
           txnMetadata.inLock {
             prepareInitProducerIdTransit(transactionalId, resolvedTxnTimeoutMs, coordinatorEpoch, txnMetadata,
               expectedProducerIdAndEpoch)
@@ -191,7 +191,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 System.out.println("existing metadata is " + txnManager.getTransactionState(transactionalId))
                 responseCallback(initTransactionError(error))
               } else {
-                System.out.println("send retribale error callback in handle init pid concurrent txn")
+                System.out.println("send retribale error callback in handle init pid concurrent txn with new metadata " + newMetadata)
                 responseCallback(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
               }
             }

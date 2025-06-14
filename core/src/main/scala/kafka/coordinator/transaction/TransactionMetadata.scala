@@ -98,7 +98,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     // If we've already failed to fence an epoch (because the write to the log failed), we don't increase it again.
     // This is safe because we never return the epoch to client if we fail to fence the epoch
     val bumpedEpoch = if (hasFailedEpochFence) producerEpoch else (producerEpoch + 1).toShort
-
+    System.out.println("Prepare transition to fence producer epoch for transaction state " + state)
     prepareTransitionTo(
       state = TransactionState.PREPARE_EPOCH_FENCE,
       producerEpoch = bumpedEpoch,
