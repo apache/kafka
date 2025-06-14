@@ -117,7 +117,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
                            responseCallback: InitProducerIdCallback,
                            requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
-
+    System.out.println("handle init pid called with transactionalId " + transactionalId)
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
@@ -186,12 +186,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             // abort the ongoing transaction and then return CONCURRENT_TRANSACTIONS to let client wait and retry
             def sendRetriableErrorCallback(error: Errors, newProducerId: Long, newProducerEpoch: Short): Unit = {
               if (error != Errors.NONE) {
+                System.out.println("send retribale error callback in handle init pid main error")
+                System.out.println("new metadata is " + newMetadata)
+                System.out.println("existing metadata is " + txnManager.getTransactionState(transactionalId))
                 responseCallback(initTransactionError(error))
               } else {
+                System.out.println("send retribale error callback in handle init pid concurrent txn")
                 responseCallback(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
               }
             }
-
+            System.out.println("we got to before end txn in handle init pid")
             endTransaction(transactionalId,
               newMetadata.producerId,
               newMetadata.producerEpoch,
@@ -684,7 +688,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                       // This was attempted epoch fence that failed, so mark this state on the metadata
                       epochAndMetadata.transactionMetadata.hasFailedEpochFence = true
                       warn(s"The coordinator failed to write an epoch fence transition for producer $transactionalId to the transaction log " +
-                        s"with error $error")
+                        s"with error $error. The epoch was increased to ${newMetadata.producerEpoch} but not returned to the client")
                     }
                 }
               }
@@ -757,6 +761,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       endTransactionWithTV1(transactionalId, producerId, producerEpoch, txnMarkerResult, isFromClient, responseCallback, requestLocal)
       return
     }
+    System.out.println("End transaction with producer epoch " + producerEpoch + " and producer id " + producerId)
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
@@ -977,6 +982,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
                   case Some(epochAndMetadata) =>
                     if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
+                      // For TV2, we allow re-bumping the epoch on retry, so don't set hasFailedEpochFence = true
+                      System.out.println("We reached send txn markers callback where we removed the setting")
                       warn(s"The coordinator failed to write an epoch fence transition for producer $transactionalId to the transaction log " +
                         s"with error $error")
                     }

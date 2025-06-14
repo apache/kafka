@@ -192,6 +192,8 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   def prepareAbortOrCommit(newState: TransactionState, clientTransactionVersion: TransactionVersion, nextProducerId: Long, updateTimestamp: Long, noPartitionAdded: Boolean): TxnTransitMetadata = {
     val (updatedProducerEpoch, updatedLastProducerEpoch) = if (clientTransactionVersion.supportsEpochBump()) {
       // We already ensured that we do not overflow here. MAX_SHORT is the highest possible value.
+      System.out.println("we reached here for prepare abort or commit for transaction state " + newState)
+      System.out.println("the current producer epoch is: "  + producerEpoch + " and it is bumped to x+1 ")
       ((producerEpoch + 1).toShort, producerEpoch)
     } else {
       (producerEpoch, lastProducerEpoch)
@@ -213,7 +215,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
   def prepareComplete(updateTimestamp: Long): TxnTransitMetadata = {
     val newState = if (state == TransactionState.PREPARE_COMMIT) TransactionState.COMPLETE_COMMIT else TransactionState.COMPLETE_ABORT
-
+    System.out.println("Inside prepare complete for transaction state " + newState)
     // Since the state change was successfully written to the log, unset the flag for a failed epoch fence
     hasFailedEpochFence = false
     val (updatedProducerId, updatedProducerEpoch) =
@@ -293,6 +295,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       val transitMetadata = new TxnTransitMetadata(producerId, this.producerId, nextProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, state,
         topicPartitions.asJava, txnStartTimestamp, txnLastUpdateTimestamp, clientTransactionVersion)
       debug(s"TransactionalId ${this.transactionalId} prepare transition from ${this.state} to $transitMetadata")
+      System.out.println("Prepare transaction state transition from " + this.state + " to: " + transitMetadata)
       pendingState = Some(state)
       transitMetadata
     } else {
@@ -358,6 +361,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
           if (!validProducerEpoch(transitMetadata) ||
             txnTimeoutMs != transitMetadata.txnTimeoutMs ||
             transitMetadata.txnStartTimestamp == -1) {
+            System.out.println("Are we here in complete transition to complete abort")
             throwStateTransitionFailure(transitMetadata)
           }
 
@@ -378,6 +382,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       }
 
       debug(s"TransactionalId $transactionalId complete transition from $state to $transitMetadata")
+      System.out.println("Transition complete from " + state + " to: " + transitMetadata)
       producerId = transitMetadata.producerId
       prevProducerId = transitMetadata.prevProducerId
       nextProducerId = transitMetadata.nextProducerId

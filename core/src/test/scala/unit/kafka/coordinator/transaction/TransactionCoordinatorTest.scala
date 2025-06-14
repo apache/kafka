@@ -1978,4 +1978,88 @@ class TransactionCoordinatorTest {
     else
       producerEpoch
   }
+
+  @Test
+  def testReBumpAllowedOnFailedWriteForTV2(): Unit = {
+    val producerEpoch = 1.toShort
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_2)
+
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.transactionVersionLevel()).thenReturn(TV_2)
+
+    // First attempt fails with COORDINATOR_NOT_AVAILABLE
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any(),
+      any(),
+      any(),
+      any()
+    )).thenAnswer(invocation => {
+      val callback = invocation.getArgument[Errors => Unit](3)
+
+      // Simulate the real TransactionStateManager behavior: reset pendingState on failure
+      // since handleInitProducerId doesn't provide a custom retryOnError function
+      txnMetadata.pendingState = None
+
+      // For TV2, hasFailedEpochFence is NOT set to true, allowing epoch bumps on retry
+      // The epoch remains at its original value (1) since completeTransitionTo was never called
+
+      callback.apply(Errors.COORDINATOR_NOT_AVAILABLE)
+    })
+
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
+    assertEquals(InitProducerIdResult(-1, -1, Errors.COORDINATOR_NOT_AVAILABLE), result)
+
+    // After the first failed attempt, the state should be:
+    // - hasFailedEpochFence = false (NOT set for TV2)
+    // - pendingState = None (reset by TransactionStateManager)
+    // - producerEpoch = 1 (unchanged since completeTransitionTo was never called)
+    // - transaction still ONGOING
+
+    // Second attempt: Should abort the ongoing transaction
+    reset(transactionManager)
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.transactionVersionLevel()).thenReturn(TV_2)
+
+    // Mock the appendTransactionToLog to succeed for the endTransaction call
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any(),
+      any(),
+      any(),
+      any()
+    )).thenAnswer(invocation => {
+      val newMetadata = invocation.getArgument[TxnTransitMetadata](2)
+      val callback = invocation.getArgument[Errors => Unit](3)
+
+      // Complete the transition and call the callback with success
+      txnMetadata.completeTransitionTo(newMetadata)
+      callback.apply(Errors.NONE)
+    })
+
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
+  }
 }
