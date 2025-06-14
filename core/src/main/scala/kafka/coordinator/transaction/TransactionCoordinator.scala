@@ -906,6 +906,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           if (err == Errors.NONE) {
             responseCallback(err, producerIdCopy, producerEpochCopy)
           } else {
+            System.out.println("Returning " + err + " error code to client for " + transactionalId + "'s EndTransaction request")
             debug(s"Aborting append of $txnMarkerResult to transaction log with coordinator and returning $err error to client for $transactionalId's EndTransaction request")
             responseCallback(err, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
           }
@@ -966,6 +967,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 case Right((txnMetadata, newPreSendMetadata)) =>
                   // we can respond to the client immediately and continue to write the txn markers if
                   // the log append was successful
+                  System.out.println("Responding to the client immediately with preSendMetadata " + newPreSendMetadata)
                   responseCallback(Errors.NONE, newPreSendMetadata.producerId, newPreSendMetadata.producerEpoch)
 
                   txnMarkerChannelManager.addTxnMarkersToSend(coordinatorEpoch, txnMarkerResult, txnMetadata, newPreSendMetadata)

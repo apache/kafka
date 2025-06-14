@@ -1981,9 +1981,9 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def testHasFailedEpochFenceNotSetOnFailedWriteForTV2(): Unit = {
-    // Test that for TV2, hasFailedEpochFence is NOT set to true when epoch fence writes fail,
-    // allowing epoch re-bumping on retry (unlike TV1 behavior)
+  def testTV2AllowsEpochReBumpingAfterFailedWrite(): Unit = {
+    // Test the complete TV2 flow: failed write → epoch fence → abort → retry with epoch bump
+    // This demonstrates that TV2 allows epoch re-bumping after failed writes (unlike TV1)
     val producerEpoch = 1.toShort
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_2)
@@ -2082,8 +2082,51 @@ class TransactionCoordinatorTest {
       initProducerIdMockCallback
     )
 
+    // The second attempt should return CONCURRENT_TRANSACTIONS (this is intentional)
+    assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
+
     // The transactionMarkerChannelManager mock should have completed the transition to COMPLETE_ABORT
     // Verify that hasFailedEpochFence was never set to true for TV2, allowing future epoch bumps
+    assertFalse(txnMetadata.hasFailedEpochFence)
+
+    // Third attempt: Client retries after CONCURRENT_TRANSACTIONS
+    reset(transactionManager)
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.transactionVersionLevel()).thenReturn(TV_2)
+
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any(),
+      any(),
+      any(),
+      any()
+    )).thenAnswer(invocation => {
+      val newMetadata = invocation.getArgument[TxnTransitMetadata](2)
+      val callback = invocation.getArgument[Errors => Unit](3)
+      
+      // Complete the transition and call the callback with success
+      txnMetadata.completeTransitionTo(newMetadata)
+      callback.apply(Errors.NONE)
+    })
+
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
+
+    // The third attempt should succeed with epoch 3 (2 + 1)
+    // This demonstrates that TV2 allows epoch re-bumping after failed writes
+    assertEquals(InitProducerIdResult(producerId, 3.toShort, Errors.NONE), result)
+    
+    // Final verification that hasFailedEpochFence was never set to true for TV2
     assertFalse(txnMetadata.hasFailedEpochFence)
   }
 }
