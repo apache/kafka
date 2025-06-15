@@ -57,6 +57,7 @@ versions += [
   caffeine: "3.2.0",
   bndlib: "7.1.0",
   checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "10.20.2",
+  commonsBeanutils: "1.11.0",
   commonsValidator: "1.9.0",
   classgraph: "4.8.179",
   gradle: "8.14.1",
@@ -113,7 +114,7 @@ versions += [
   protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.2",
   re2j: "1.8",
-  rocksDB: "9.7.3",
+  rocksDB: "10.1.3",
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
@@ -122,6 +123,7 @@ versions += [
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
   spotbugs: "4.8.6",
+  mockOAuth2Server: "2.2.1",
   zinc: "1.9.2",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
@@ -147,6 +149,7 @@ libs += [
   bndlib:"biz.aQute.bnd:biz.aQute.bndlib:$versions.bndlib",
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   classgraph: "io.github.classgraph:classgraph:$versions.classgraph",
+  commonsBeanutils: "commons-beanutils:commons-beanutils:$versions.commonsBeanutils",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
@@ -222,6 +225,7 @@ libs += [
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   spotbugs: "com.github.spotbugs:spotbugs-annotations:$versions.spotbugs",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
+  mockOAuth2Server: "no.nav.security:mock-oauth2-server:$versions.mockOAuth2Server",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",

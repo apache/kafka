@@ -170,7 +170,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     private void checkConfigured() {
-        if (verificationKeyResolver == null || jwtValidator == null)
+        if (jwtValidator == null)
             throw new IllegalStateException(String.format("To use %s, first call the configure method", getClass().getSimpleName()));
     }
 }

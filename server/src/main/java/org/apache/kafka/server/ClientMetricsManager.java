@@ -391,7 +391,7 @@ public class ClientMetricsManager implements AutoCloseable {
         ClientMetricsInstance clientInstance, long timestamp) {
 
         if (!clientInstance.maybeUpdateGetRequestTimestamp(timestamp) && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
-            || clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
+            && clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
             clientMetricsStats.recordThrottleCount(clientInstance.clientInstanceId());
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
