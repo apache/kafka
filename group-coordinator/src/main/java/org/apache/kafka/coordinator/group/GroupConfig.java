@@ -75,6 +75,12 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "streams.num.standby.replicas";
 
+    public static final String STREAMS_ASSIGNOR_NAME_CONFIG = "streams.assignor.name";
+
+    public static final String STREAMS_NUM_WARMUP_CONFIG = "streams.num.warmup.replicas";
+
+    public static final String STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG = "streams.acceptable.recovery.lag";
+
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;

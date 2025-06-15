@@ -150,6 +150,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.StreamsRebalanceConfigListener;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
@@ -197,6 +198,8 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -463,6 +466,11 @@ public class GroupMetadataManager {
     private final TimelineHashMap<String, Group> groups;
 
     /**
+     * The classic and consumer groups keyed by their name.
+     */
+    private final Map<String, List<GroupConfigListener>> groupConfigListeners;
+
+    /**
      * The group ids keyed by topic names.
      */
     private final TimelineHashMap<String, TimelineHashSet<String>> groupsByTopics;
@@ -548,6 +556,7 @@ public class GroupMetadataManager {
             .collect(Collectors.toMap(ConsumerGroupPartitionAssignor::name, Function.identity()));
         this.defaultConsumerGroupAssignor = config.consumerGroupAssignors().get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.groupConfigListeners = new ConcurrentHashMap<>();
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.shareGroupStatePartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
@@ -1019,6 +1028,7 @@ public class GroupMetadataManager {
         if (group == null) {
             StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
             groups.put(groupId, streamsGroup);
+            registerConfigListener(groupId);
             return streamsGroup;
         } else if (group.type() == STREAMS) {
             return (StreamsGroup) group;
@@ -1027,6 +1037,18 @@ public class GroupMetadataManager {
             // we throw an exception if a group exists with the wrong type.
             throw new IllegalStateException(String.format("Group %s is not a streams group.", groupId));
         }
+    }
+
+    private void registerConfigListener(String groupId) {
+        GroupConfigListener listener = new StreamsRebalanceConfigListener();
+        groupConfigListeners.compute(groupId, (key, value) -> {
+            if (value == null) {
+                value = new CopyOnWriteArrayList<>();
+            }
+            value.add(listener);
+            return value;
+        });
+        groupConfigManager.registerGroupConfigListener(groupId, listener);
     }
 
     /**
@@ -1912,6 +1934,13 @@ public class GroupMetadataManager {
         // If the member is new or has changed, a StreamsGroupMemberMetadataValue record is written to the __consumer_offsets partition
         // to persist the change, and bump the group epoch later.
         boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(groupId, member, updatedMember, records);
+
+        for (GroupConfigListener listener : groupConfigListeners.getOrDefault(groupId, Collections.emptyList())) {
+            if (listener.getUpdateEvent() == ConfigUpdateEvent.REBALANCE_REQUIRED) {
+                bumpGroupEpoch = true;
+                break;
+            }
+        }
 
         // 2. Initialize/Update the group topology.
         // If the topology is new or has changed, a StreamsGroupTopologyValue record is written to the __consumer_offsets partition to persist

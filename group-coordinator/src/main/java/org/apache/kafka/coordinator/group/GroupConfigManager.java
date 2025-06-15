@@ -21,11 +21,13 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * The group config manager is responsible for config modification and cleaning.
@@ -36,8 +38,11 @@ public class GroupConfigManager implements AutoCloseable {
 
     private final Map<String, GroupConfig> configMap;
 
+    private final Map<String, List<GroupConfigListener>> listenerMap;
+
     public GroupConfigManager(Map<?, ?> defaultConfig) {
         this.configMap = new ConcurrentHashMap<>();
+        this.listenerMap = new ConcurrentHashMap<>();
         this.defaultConfig = new GroupConfig(defaultConfig);
     }
 
@@ -57,6 +62,8 @@ public class GroupConfigManager implements AutoCloseable {
             newGroupConfig
         );
         configMap.put(groupId, newConfig);
+        listenerMap.getOrDefault(groupId, Collections.emptyList())
+                .forEach(listener -> listener.onConfigUpdated(groupId, newGroupConfig));
     }
 
     /**
@@ -89,6 +96,16 @@ public class GroupConfigManager implements AutoCloseable {
         combinedConfigs.putAll(groupCoordinatorConfig.extractConsumerGroupConfigMap());
         combinedConfigs.putAll(newGroupConfig);
         GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
+    }
+
+    public void registerGroupConfigListener(String groupId, GroupConfigListener listener) {
+        listenerMap.compute(groupId, (key, value) -> {
+            if (value == null) {
+                value = new CopyOnWriteArrayList<>();
+            }
+            value.add(listener);
+            return value;
+        });
     }
 
     /**
