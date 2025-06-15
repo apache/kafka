@@ -74,8 +74,8 @@ public class LoginManager {
         this.loginMetadata = loginMetadata;
         Login login = Utils.newInstance(loginMetadata.loginClass);
         LinkedHashMap<String, String> tags = new LinkedHashMap<>();
-        tags.put("name", threadName);
         if (connectionMode == ConnectionMode.SERVER) {
+            tags.put("name", threadName);
             tags.put("mechanism", saslMechanism);
         }
         this.loginPlugin = Plugin.wrapInstance(login, metrics, SaslConfigs.SASL_LOGIN_CLASS, tags);

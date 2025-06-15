@@ -235,6 +235,8 @@ class KafkaRaftManager[T](
     )
   }
 
+  val clientId = s"raft-client-${config.nodeId}"
+
   private def buildNetworkClient(): (ListenerName, NetworkClient) = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.get(0))
     val controllerSecurityProtocol = Option(config.effectiveListenerSecurityProtocolMap.get(controllerListenerName))
@@ -247,7 +249,8 @@ class KafkaRaftManager[T](
       config.saslMechanismControllerProtocol,
       time,
       logContext,
-      metrics
+      metrics,
+      clientId
     )
 
     val metricGroupPrefix = "raft-channel"
@@ -265,7 +268,6 @@ class KafkaRaftManager[T](
       logContext
     )
 
-    val clientId = s"raft-client-${config.nodeId}"
     val maxInflightRequestsPerConnection = 1
     val reconnectBackoffMs = 50
     val reconnectBackoffMsMs = 500

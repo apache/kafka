@@ -40,6 +40,8 @@ public class NetworkUtils {
                                                    Metrics metrics,
                                                    Time time,
                                                    LogContext logContext) {
+        String clientId = prefix + "-client-" + config.nodeId();
+        
         ChannelBuilder channelBuilder = ChannelBuilders.clientChannelBuilder(
             config.interBrokerSecurityProtocol(),
             JaasContext.Type.SERVER,
@@ -48,7 +50,8 @@ public class NetworkUtils {
             config.saslMechanismInterBrokerProtocol(),
             time,
             logContext,
-            metrics
+            metrics,
+            clientId
         );
 
         if (channelBuilder instanceof Reconfigurable) {
@@ -69,7 +72,6 @@ public class NetworkUtils {
             logContext
         );
 
-        String clientId = prefix + "-client-" + config.nodeId();
         return new NetworkClient(
             selector,
             new ManualMetadataUpdater(),

@@ -61,7 +61,8 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       brokerConfig.saslMechanismInterBrokerProtocol,
       time,
       logContext,
-      metrics
+      metrics,
+      s"broker-id-${sourceBroker.id}-fetcher-$fetcherId",
     )
     val reconfigurableChannelBuilder = channelBuilder match {
       case reconfigurable: Reconfigurable =>

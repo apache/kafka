@@ -71,7 +71,8 @@ public class ChannelBuilders {
         String clientSaslMechanism,
         Time time,
         LogContext logContext,
-        Metrics metrics
+        Metrics metrics,
+        String clientId
     ) {
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
             if (contextType == null)
@@ -80,7 +81,7 @@ public class ChannelBuilders {
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
         return create(securityProtocol, ConnectionMode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
-            null, null, time, logContext, null, metrics, null);
+            null, null, time, logContext, null, metrics, clientId);
     }
 
     /**

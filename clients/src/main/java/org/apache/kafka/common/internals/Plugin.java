@@ -104,7 +104,7 @@ public class Plugin<T> implements Supplier<T>, AutoCloseable {
         Supplier<Map<String, String>> tagsSupplier = () -> {
             Map<String, String> baseTags = tags(key, instance);
             baseTags.putAll(tags);
-            return tags;
+            return baseTags;
         };
         return wrapInstance(instance, metrics, tagsSupplier);
     }

@@ -672,7 +672,7 @@ public class ReplicaVerificationTool {
             this.socketTimeout = consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
 
             LogContext logContext = new LogContext();
-            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(consumerConfig, time, logContext, metrics);
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(consumerConfig, time, logContext, metrics, clientId);
             Selector selector = new Selector(
                 NetworkReceive.UNLIMITED,
                 consumerConfig.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),

@@ -106,6 +106,7 @@ class NodeToControllerChannelManagerImpl(
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val requestThread = newRequestThread
+  val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
 
   def start(): Unit = {
     requestThread.start()
@@ -126,7 +127,8 @@ class NodeToControllerChannelManagerImpl(
         controllerInfo.saslMechanism,
         time,
         logContext,
-        metrics
+        metrics,
+        threadName
       )
       channelBuilder match {
         case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)
@@ -162,7 +164,6 @@ class NodeToControllerChannelManagerImpl(
         MetadataRecoveryStrategy.NONE
       )
     }
-    val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
 
     val controllerInformation = controllerNodeProvider.getControllerInfo()
     new NodeToControllerRequestThread(

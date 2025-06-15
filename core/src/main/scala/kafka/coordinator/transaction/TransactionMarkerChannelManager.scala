@@ -66,7 +66,8 @@ object TransactionMarkerChannelManager {
       config.saslMechanismInterBrokerProtocol,
       time,
       logContext,
-      metrics
+      metrics,
+      s"txn-marker-${config.nodeId}"
     )
     channelBuilder match {
       case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)

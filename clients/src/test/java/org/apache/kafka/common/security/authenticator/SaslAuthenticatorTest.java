@@ -2167,7 +2167,7 @@ public class SaslAuthenticatorTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, new LogContext(), null);
+                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, new LogContext(), null, "test-client");
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 
