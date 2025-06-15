@@ -753,7 +753,6 @@ public class TransactionManager {
                 batch.topicPartition,
                 lastAckedSequence);
 
-        markComplete(batch);
         updateLastAckedOffset(response, batch);
         removeInFlightBatch(batch);
     }
@@ -791,7 +790,6 @@ public class TransactionManager {
     }
 
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
-        markComplete(batch);
         maybeTransitionToErrorState(exception);
         removeInFlightBatch(batch);
 
@@ -1090,15 +1088,6 @@ public class TransactionManager {
     synchronized boolean canAddBatch(ProducerBatch batch) {
         final TopicPartition topicPartition = batch.topicPartition;
         return txnPartitionMap.getOrCreate(topicPartition).canAddBatch(batch);
-    }
-
-    private boolean markComplete(ProducerBatch batch) {
-        final TopicPartition topicPartition = batch.topicPartition;
-        final TxnPartitionEntry entry = txnPartitionMap.get(topicPartition);
-        if (entry == null) {
-            return false;
-        }
-        return entry.markComplete(batch);
     }
 
     // visible for testing

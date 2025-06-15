@@ -106,7 +106,7 @@ class TxnPartitionEntry {
 
     void addInflightBatch(ProducerBatch batch) {
         inflightBatchesBySequence.add(batch);
-        batchesAwaitingCompletion.insert(batch);
+        batchesAwaitingCompletion.add(batch);
     }
 
     void setLastAckedOffset(long lastAckedOffset) {
@@ -134,6 +134,7 @@ class TxnPartitionEntry {
 
     void removeInFlightBatch(ProducerBatch batch) {
         inflightBatchesBySequence.remove(batch);
+        batchesAwaitingCompletion.complete(batch);
     }
 
     void adjustSequencesDueToFailedBatch(long baseSequence, int recordCount) {
@@ -173,11 +174,7 @@ class TxnPartitionEntry {
     }
 
     public boolean canAddBatch(ProducerBatch batch) {
-        return batchesAwaitingCompletion.canInsert(batch);
-    }
-
-    public boolean markComplete(ProducerBatch batch) {
-        return batchesAwaitingCompletion.markComplete(batch);
+        return batchesAwaitingCompletion.canAdd(batch);
     }
 
     private static class BatchAwaitingCompletion {
@@ -204,7 +201,28 @@ class TxnPartitionEntry {
             this.producerIdAndEpoch = producerIdAndEpoch;
         }
 
-        public boolean markComplete(ProducerBatch batch) {
+        public boolean remove(ProducerBatch batch) {
+            if (queue.isEmpty()) {
+                return false;
+            }
+            queue.removeIf(entry -> batch.hasSequence() && entry.batch.baseSequence() == batch.baseSequence());
+            return true;
+        }
+
+        private BatchAwaitingCompletion findEntry(ProducerBatch batch) {
+            if (queue.isEmpty()) {
+                return null;
+            }
+
+            for (BatchAwaitingCompletion entry : queue) {
+                if (batch.hasSequence() && entry.batch.baseSequence() == batch.baseSequence()) {
+                    return entry;
+                }
+            }
+            return null;
+        }
+
+        public boolean complete(ProducerBatch batch) {
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(batch.producerId(), batch.producerEpoch());
             if (!producerIdAndEpoch.equals(this.producerIdAndEpoch)) {
                 return false;
@@ -228,13 +246,7 @@ class TxnPartitionEntry {
                 return true;
             }
 
-            BatchAwaitingCompletion correspondingEntry = null;
-            for (BatchAwaitingCompletion entry : queue) {
-                if (batch.hasSequence() && entry.batch.baseSequence() == batch.baseSequence()) {
-                    correspondingEntry = entry;
-                    break;
-                }
-            }
+            BatchAwaitingCompletion correspondingEntry = findEntry(batch);
 
             if (correspondingEntry == null) {
                 return false;
@@ -244,7 +256,7 @@ class TxnPartitionEntry {
             return true;
         }
 
-        public boolean canInsert(ProducerBatch batch) {
+        public boolean canAdd(ProducerBatch batch) {
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(batch.producerId(), batch.producerEpoch());
             if (!producerIdAndEpoch.equals(this.producerIdAndEpoch)) {
                 return false;
@@ -253,15 +265,10 @@ class TxnPartitionEntry {
                 return true;
             }
 
-            for (BatchAwaitingCompletion entry : queue) {
-                if (batch.hasSequence() && entry.batch.baseSequence() == batch.baseSequence()) {
-                    return true;
-                }
-            }
-            return false;
+            return findEntry(batch) != null;
         }
 
-        public boolean insert(ProducerBatch batch) {
+        public boolean add(ProducerBatch batch) {
             for (BatchAwaitingCompletion entry : queue) {
                 if (batch.hasSequence() && entry.batch.baseSequence() == batch.baseSequence()) {
                     return true;
