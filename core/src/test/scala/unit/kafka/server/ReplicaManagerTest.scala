@@ -1098,6 +1098,52 @@ class ReplicaManagerTest {
     }
   }
 
+  @Test
+  def testFetchMessagesWithInconsistentTopicId(): Unit = {
+    val localId = 0
+    val maxFetchBytes = 1024 * 1024
+    val aliveBrokersIds = Seq(0, 1)
+    val leaderEpoch = 5
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      brokerId = 0, aliveBrokersIds)
+    try {
+      val tp = new TopicPartition(topic, 0)
+      val tidp = new TopicIdPartition(topicId, tp)
+
+      // Broker 0 becomes leader of the partition
+      val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, topicName = topic, topicId = topicIds(topic), leaderEpoch = leaderEpoch)
+      val leaderImage = imageFromTopics(leaderDelta.apply())
+      replicaManager.applyDelta(leaderDelta, leaderImage)
+
+      assertEquals(Some(topicId), replicaManager.getPartitionOrException(tp).topicId)
+
+      // We receive one valid request from the follower and replica state is updated
+      var successfulFetch: Seq[(TopicIdPartition, FetchPartitionData)] = Seq()
+
+      val validFetchPartitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, maxFetchBytes,
+        Optional.of(leaderEpoch))
+
+      // Fetch messages simulating a different ID than the one in the log.
+      val inconsistentTidp = new TopicIdPartition(Uuid.randomUuid(), tidp.topicPartition)
+      def callback(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        successfulFetch = response
+      }
+
+      fetchPartitions(
+        replicaManager,
+        replicaId = 1,
+        fetchInfos = Seq(inconsistentTidp -> validFetchPartitionData),
+        responseCallback = callback
+      )
+
+      val fetch1 = successfulFetch.headOption.filter(_._1 == inconsistentTidp).map(_._2)
+      assertTrue(fetch1.isDefined)
+      assertEquals(Errors.INCONSISTENT_TOPIC_ID, fetch1.get.error)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   /**
    * If a follower sends a fetch request for 2 partitions and it's no longer the follower for one of them, the other
    * partition should not be affected.
@@ -2926,9 +2972,9 @@ class ReplicaManagerTest {
     fetchInfos: Seq[(TopicIdPartition, PartitionData)],
     responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
     requestVersion: Short = ApiKeys.FETCH.latestVersion,
-    maxWaitMs: Long,
-    minBytes: Int,
-    maxBytes: Int,
+    maxWaitMs: Long = 0,
+    minBytes: Int = 1,
+    maxBytes: Int = 1024 * 1024,
     quota: ReplicaQuota = UNBOUNDED_QUOTA,
     isolation: FetchIsolation = FetchIsolation.LOG_END,
     clientMetadata: Option[ClientMetadata] = None
