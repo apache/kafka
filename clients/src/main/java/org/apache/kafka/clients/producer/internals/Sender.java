@@ -660,8 +660,10 @@ public class Sender implements Runnable {
                 batch.topicPartition,
                 this.retries - batch.attempts(),
                 formatErrMsg(response));
-            if (transactionManager != null)
+            if (transactionManager != null) {
                 transactionManager.removeInFlightBatch(batch);
+                transactionManager.removeBatchAwaitingCompletion(batch);
+            }
             this.accumulator.splitAndReenqueue(batch);
             maybeRemoveAndDeallocateBatch(batch);
             this.sensors.recordBatchSplit();

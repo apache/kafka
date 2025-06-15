@@ -177,6 +177,10 @@ class TxnPartitionEntry {
         return batchesAwaitingCompletion.canAdd(batch);
     }
 
+    public boolean removeBatchAwaitingCompletion(ProducerBatch batch) {
+        return batchesAwaitingCompletion.remove(batch);
+    }
+
     private static class BatchAwaitingCompletion {
         private final ProducerBatch batch;
         private boolean complete;
