@@ -23,7 +23,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Monitorable;
 import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.Configuration;
@@ -96,13 +97,20 @@ public class LoginTest {
             for (Metric metric : admin.metrics().values()) {
                 found += assertMetricName(
                     metric.metricName(), 
-                    expectedTags(Map.of("client-id", CLIENT_ID))
+                    expectedTags(Map.of(
+                        "client-id", CLIENT_ID,
+                        "processor-id", CLIENT_ID
+                    ))
                 );
             }
             assertEquals(1, found, "Expected to find 1 metric");
-
-            assertMetrics(cluster.controllers().get(0).metrics(), expectedTags(Map.of("mechanism", MECHANISMS)));
-            assertMetrics(cluster.brokers().get(0).metrics(), expectedTags(Map.of("mechanism", MECHANISMS)));
+            
+            Map<MetricName, KafkaMetric> allMetrics = Stream.of(
+                cluster.controllers().get(0).metrics().metrics(),
+                cluster.brokers().get(0).metrics().metrics()
+            ).collect(HashMap::new, Map::putAll, Map::putAll);
+            assertMetrics(allMetrics, expectedTags(Map.of("mechanism", MECHANISMS)), "processor-id");
+            assertMetrics(allMetrics, expectedTags(Map.of("processor-id", "raft-client-0")), "");
         }
     }
 
@@ -116,10 +124,24 @@ public class LoginTest {
         return 0;
     }
 
-    private void assertMetrics(Metrics metrics, Map<String, String> expectedTags) {
+    private int assertMetricName(MetricName metricName, Map<String, String> expectedTags, String fuzzyKey) {
+        Map<String, String> tags = new LinkedHashMap<>(metricName.tags());
+        if (!fuzzyKey.isBlank() && !tags.containsKey(fuzzyKey)) {
+            return 0;
+        }
+        tags.remove(fuzzyKey);
+        if (expectedTags.equals(tags)) {
+            assertEquals(CustomerLogin.METRIC_NAME, metricName.name());
+            assertEquals(CustomerLogin.METRIC_DESCRIPTION, metricName.description());
+            return 1;
+        }
+        return 0;
+    }
+
+    private void assertMetrics(Map<MetricName, KafkaMetric> metrics, Map<String, String> expectedTags, String fuzzyKey) {
         int found = 0;
-        for (MetricName metricName : metrics.metrics().keySet()) {
-            found += assertMetricName(metricName, expectedTags);
+        for (MetricName metricName : metrics.keySet()) {
+            found += assertMetricName(metricName, expectedTags, fuzzyKey);
         }
         assertEquals(1, found, "Expected to find 1 metric with the expected tags");
     }

@@ -130,6 +130,7 @@ class KafkaRaftManager[T](
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
   private val logContext = new LogContext(s"[RaftManager id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
+  val clientId = s"raft-client-${config.nodeId}"
 
   private val scheduler = new KafkaScheduler(1, true, threadNamePrefix + "-scheduler")
   scheduler.startup()
@@ -234,8 +235,6 @@ class KafkaRaftManager[T](
       config.nodeId
     )
   }
-
-  val clientId = s"raft-client-${config.nodeId}"
 
   private def buildNetworkClient(): (ListenerName, NetworkClient) = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.get(0))

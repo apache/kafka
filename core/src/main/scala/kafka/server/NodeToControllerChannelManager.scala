@@ -103,10 +103,10 @@ class NodeToControllerChannelManagerImpl(
   retryTimeoutMs: Long
 ) extends NodeToControllerChannelManager with Logging {
   private val logContext = new LogContext(s"[NodeToControllerChannelManager id=${config.nodeId} name=${channelName}] ")
+  val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val requestThread = newRequestThread
-  val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
 
   def start(): Unit = {
     requestThread.start()

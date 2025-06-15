@@ -130,7 +130,7 @@ public class ChannelBuilders {
         LogContext logContext,
         Function<Short, ApiVersionsResponse> apiVersionSupplier, 
         Metrics metrics,
-        String threadName
+        String metricsId
     ) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
@@ -191,7 +191,7 @@ public class ChannelBuilders {
                         logContext,
                         apiVersionSupplier,
                         metrics,
-                        threadName);
+                        metricsId);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder(listenerName);
