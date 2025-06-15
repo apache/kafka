@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -337,8 +336,7 @@ public class ConsumerBounceTest {
         Consumer<byte[], byte[]> dynamicConsumer = createConsumerAndReceive(dynamicGroup, false, numRecords);
         Consumer<byte[], byte[]> manualConsumer = createConsumerAndReceive(manualGroup, true, numRecords);
 
-        clusterInstance.shutdownBroker(findCoordinator(dynamicGroup));
-        clusterInstance.shutdownBroker(findCoordinator(manualGroup));
+        findCoordinators(List.of(dynamicGroup, manualGroup)).forEach(clusterInstance::shutdownBroker);
 
         submitCloseAndValidate(dynamicConsumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get();
         submitCloseAndValidate(manualConsumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get();
@@ -373,11 +371,11 @@ public class ConsumerBounceTest {
         submitCloseAndValidate(consumer2, Long.MAX_VALUE, Optional.empty(), Optional.of(requestTimeout)).get();
     }
 
-    private int findCoordinator(String group) throws Exception {
+    private Set<Integer> findCoordinators(List<String> groups) throws Exception {
         FindCoordinatorRequest request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-                .setCoordinatorKeys(List.of(group))).build();
-        AtomicInteger node = new AtomicInteger(-1);
+                .setCoordinatorKeys(groups)).build();
+        Set<Integer> nodes = new HashSet<>();
         TestUtils.waitForCondition(() -> {
             FindCoordinatorResponse response = null;
             try {
@@ -385,10 +383,17 @@ public class ConsumerBounceTest {
             } catch (IOException e) {
                 return false;
             }
-            node.set(response.node().id());
-            return response.error().equals(Errors.NONE);
-        }, "Failed to find coordinator for group " + group);
-        return node.get();
+
+            if (response.hasError())
+                return false;
+            for (String group : groups)
+                if (response.coordinatorByKey(group).isEmpty())
+                    return false;
+                else
+                    nodes.add(response.coordinatorByKey(group).get().nodeId());
+            return true;
+        }, "Failed to find coordinator for group " + groups);
+        return nodes;
     }
 
     @ClusterTest
