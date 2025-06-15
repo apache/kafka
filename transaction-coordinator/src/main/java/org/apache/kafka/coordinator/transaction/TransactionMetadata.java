@@ -143,7 +143,7 @@ public class TransactionMetadata {
         // This is safe because we never return the epoch to client if we fail to fence the epoch
         short bumpedEpoch = hasFailedEpochFence ? producerEpoch : (short) (producerEpoch + 1);
 
-        TransactionData data = new TransactionData(TransactionState.PREPARE_EPOCH_FENCE);
+        TransitionData data = new TransitionData(TransactionState.PREPARE_EPOCH_FENCE);
         data.producerEpoch = bumpedEpoch;
         return prepareTransitionTo(data);
     }
@@ -188,7 +188,7 @@ public class TransactionMetadata {
             }
         }
 
-        TransactionData data = new TransactionData(TransactionState.EMPTY);
+        TransitionData data = new TransitionData(TransactionState.EMPTY);
         data.producerEpoch = produceEpochResult;
         data.lastProducerEpoch = lastProducerEpochResult;
         data.txnTimeoutMs = newTxnTimeoutMs;
@@ -205,7 +205,7 @@ public class TransactionMetadata {
         if (hasPendingTransaction())
             throw new IllegalStateException("Cannot rotate producer ids while a transaction is still pending");
 
-        TransactionData data = new TransactionData(TransactionState.EMPTY);
+        TransitionData data = new TransitionData(TransactionState.EMPTY);
         data.producerId = newProducerId;
         data.producerEpoch = 0;
         data.lastProducerEpoch = recordLastEpoch ? producerEpoch : RecordBatch.NO_PRODUCER_EPOCH;
@@ -229,7 +229,7 @@ public class TransactionMetadata {
         Set<TopicPartition> newTopicPartitions = new HashSet<>(topicPartitions);
         newTopicPartitions.addAll(addedTopicPartitions);
 
-        TransactionData data = new TransactionData(TransactionState.ONGOING);
+        TransitionData data = new TransitionData(TransactionState.ONGOING);
         data.topicPartitions = newTopicPartitions;
         data.txnStartTimestamp = newTxnStartTimestamp;
         data.txnLastUpdateTimestamp = updateTimestamp;
@@ -258,7 +258,7 @@ public class TransactionMetadata {
         // start time is uncertain but it is still required. So we can use the update time as the transaction start time.
         long newTxnStartTimestamp = noPartitionAdded ? updateTimestamp : txnStartTimestamp;
 
-        TransactionData data = new TransactionData(newState);
+        TransitionData data = new TransitionData(newState);
         data.nextProducerId = nextProducerId;
         data.producerEpoch = updatedProducerEpoch;
         data.lastProducerEpoch = updatedLastProducerEpoch;
@@ -292,7 +292,7 @@ public class TransactionMetadata {
             updatedProducerEpoch = producerEpoch;
         }
 
-        TransactionData data = new TransactionData(newState);
+        TransitionData data = new TransitionData(newState);
         data.producerId = updatedProducerId;
         data.nextProducerId = RecordBatch.NO_PRODUCER_ID;
         data.producerEpoch = updatedProducerEpoch;
@@ -302,7 +302,7 @@ public class TransactionMetadata {
     }
 
     public TxnTransitMetadata prepareDead() {
-        TransactionData data = new TransactionData(TransactionState.DEAD);
+        TransitionData data = new TransitionData(TransactionState.DEAD);
         data.topicPartitions = Set.of();
         return prepareTransitionTo(data);
     }
@@ -329,7 +329,7 @@ public class TransactionMetadata {
             state == TransactionState.PREPARE_COMMIT;
     }
 
-    private TxnTransitMetadata prepareTransitionTo(TransactionData data) {
+    private TxnTransitMetadata prepareTransitionTo(TransitionData data) {
         if (pendingState.isPresent())
             throw new IllegalStateException("Preparing transaction state transition to " + state +
                 " while it already a pending state " + pendingState.get());
@@ -670,7 +670,7 @@ public class TransactionMetadata {
         );
     }
 
-    private class TransactionData {
+    private class TransitionData {
         final TransactionState state;
         long producerId = TransactionMetadata.this.producerId;
         long nextProducerId = TransactionMetadata.this.nextProducerId;
@@ -682,7 +682,7 @@ public class TransactionMetadata {
         long txnLastUpdateTimestamp = TransactionMetadata.this.txnLastUpdateTimestamp;
         TransactionVersion clientTransactionVersion = TransactionMetadata.this.clientTransactionVersion;
 
-        private TransactionData(TransactionState state) {
+        private TransitionData(TransactionState state) {
             this.state = state;
         }
     }
