@@ -116,6 +116,7 @@ public class ChannelBuilders {
                 apiVersionSupplier, metrics, threadName);
     }
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     private static ChannelBuilder create(
         SecurityProtocol securityProtocol,
         ConnectionMode connectionMode,

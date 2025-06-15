@@ -104,6 +104,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private Map<String, ?> configs;
     private KerberosShortNamer kerberosShortNamer;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public SaslChannelBuilder(ConnectionMode connectionMode,
                               Map<String, JaasContext> jaasContexts,
                               SecurityProtocol securityProtocol,
