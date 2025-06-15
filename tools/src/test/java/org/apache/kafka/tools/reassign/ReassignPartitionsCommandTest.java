@@ -749,7 +749,7 @@ public class ReassignPartitionsCommandTest {
             waitForVerifyAssignment(admin, assignment, true,
                     new VerifyAssignmentResult(partStates, true, Collections.emptyMap(), false));
             // Cancel the reassignment.
-            assertEquals(new AbstractMap.SimpleImmutableEntry<>(new HashSet<>(asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(assignment, true, useBootstrapServer));
+            assertEquals(new AbstractMap.SimpleImmutableEntry<>(Set.of(foo0, baz1), Collections.emptySet()), runCancelAssignment(assignment, true, useBootstrapServer));
             // Broker throttles are still active because we passed --preserve-throttles
             waitForInterBrokerThrottle(admin, asList(0, 1, 2, 3), interBrokerThrottle);
             // Cancelling the reassignment again should reveal nothing to cancel.
