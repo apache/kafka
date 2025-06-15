@@ -833,6 +833,10 @@ public class RecordAccumulator {
                     return true;
             }
 
+            if (!transactionManager.canAddBatch(first)) {
+                return true;
+            }
+
             int firstInFlightSequence = transactionManager.firstInFlightSequence(first.topicPartition);
             // If the queued batch already has an assigned sequence, then it is being retried.
             // In this case, we wait until the next immediate batch is ready and drain that.

@@ -1085,6 +1085,11 @@ public class TransactionManager {
         return error.exception() instanceof RetriableException;
     }
 
+    synchronized boolean canAddBatch(ProducerBatch batch) {
+        TopicPartition topicPartition = batch.topicPartition;
+        return txnPartitionMap.getOrCreate(topicPartition).canAddBatch(batch);
+    }
+
     // visible for testing
     synchronized boolean isReady() {
         return isTransactional() && currentState == State.READY;

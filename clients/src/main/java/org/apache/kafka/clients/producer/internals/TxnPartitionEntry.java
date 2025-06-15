@@ -172,6 +172,10 @@ class TxnPartitionEntry {
         return true;
     }
 
+    public boolean canAddBatch(ProducerBatch batch) {
+        return batchesAwaitingCompletion.canInsert(batch);
+    }
+
     private static class BatchAwaitingCompletion {
         private final ProducerBatch batch;
         private boolean complete;
@@ -207,7 +211,12 @@ class TxnPartitionEntry {
             }
 
             if (queue.peekFirst().batch.baseSequence() == batch.baseSequence()) {
-                queue.pollFirst();
+                final BatchAwaitingCompletion firstBatch = queue.pollFirst();
+                if (firstBatch == null) {
+                    return false;
+                }
+
+                firstBatch.markComplete();
 
                 while (!queue.isEmpty() && queue.peekFirst().complete) {
                     queue.pollFirst();
