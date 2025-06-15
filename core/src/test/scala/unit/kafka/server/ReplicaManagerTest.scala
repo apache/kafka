@@ -964,18 +964,28 @@ class ReplicaManagerTest {
 
   @Test
   def testFetchBeyondHighWatermark(): Unit = {
-    val localId = 0
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2))
     try {
+      val brokerList = Seq[Integer](0, 1, 2).asJava
 
       val partition = rm.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader.
-      val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, topicName = topic, topicId = topicIds(topic))
-      val leaderImage = imageFromTopics(leaderDelta.apply())
-      rm.applyDelta(leaderDelta, leaderImage)
+      val leaderDelta = new TopicsDelta(TopicsImage.EMPTY)
+      leaderDelta.replay(new TopicRecord().setName(topic).setTopicId(topicId))
+      leaderDelta.replay(new PartitionRecord()
+        .setPartitionId(0)
+        .setTopicId(topicId)
+        .setReplicas(brokerList)
+        .setIsr(brokerList)
+        .setRemovingReplicas(Collections.emptyList())
+        .setAddingReplicas(Collections.emptyList())
+        .setLeader(0)
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0))
+      rm.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
 
       rm.getPartitionOrException(new TopicPartition(topic, 0))
         .localLogOrException
