@@ -1086,8 +1086,17 @@ public class TransactionManager {
     }
 
     synchronized boolean canAddBatch(ProducerBatch batch) {
-        TopicPartition topicPartition = batch.topicPartition;
+        final TopicPartition topicPartition = batch.topicPartition;
         return txnPartitionMap.getOrCreate(topicPartition).canAddBatch(batch);
+    }
+
+    synchronized boolean markComplete(ProducerBatch batch) {
+        final TopicPartition topicPartition = batch.topicPartition;
+        final TxnPartitionEntry entry = txnPartitionMap.get(topicPartition);
+        if (entry == null) {
+            return false;
+        }
+        return entry.markComplete(batch);
     }
 
     // visible for testing

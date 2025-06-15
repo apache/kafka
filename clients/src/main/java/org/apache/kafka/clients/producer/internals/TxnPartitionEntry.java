@@ -176,6 +176,10 @@ class TxnPartitionEntry {
         return batchesAwaitingCompletion.canInsert(batch);
     }
 
+    public boolean markComplete(ProducerBatch batch) {
+        return batchesAwaitingCompletion.markComplete(batch);
+    }
+
     private static class BatchAwaitingCompletion {
         private final ProducerBatch batch;
         private boolean complete;
