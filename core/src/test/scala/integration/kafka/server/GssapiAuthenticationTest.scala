@@ -265,7 +265,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     val jaasContexts = java.util.Map.of("GSSAPI", JaasContext.loadClientContext(config.values()))
     val channelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol,
       null, false, kafkaClientSaslMechanism, null, null, null, time, new LogContext(),
-      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.BROKER), new Metrics) {
+      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.BROKER), new Metrics, "test-thread-name") {
       override protected def defaultLoginClass(): Class[_ <: Login] = classOf[TestableKerberosLogin]
     }
     channelBuilder.configure(config.values())

@@ -92,6 +92,23 @@ public class Plugin<T> implements Supplier<T>, AutoCloseable {
         return wrapInstance(instance, metrics, tagsSupplier);
     }
 
+    /**
+     * Wrap an instance into a Plugin.
+     * @param instance the instance to wrap
+     * @param metrics the metrics
+     * @param key the value for the <code>config</code> tag
+     * @param tags the extra tags to add
+     * @return the plugin
+     */
+    public static <T> Plugin<T> wrapInstance(T instance, Metrics metrics, String key, LinkedHashMap<String, String> tags) {
+        Supplier<Map<String, String>> tagsSupplier = () -> {
+            Map<String, String> baseTags = tags(key, instance);
+            baseTags.putAll(tags);
+            return tags;
+        };
+        return wrapInstance(instance, metrics, tagsSupplier);
+    }
+
     private static <T> Map<String, String> tags(String key, T instance) {
         Map<String, String> tags = new LinkedHashMap<>();
         tags.put("config", key);

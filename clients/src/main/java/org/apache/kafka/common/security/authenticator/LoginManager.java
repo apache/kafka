@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -67,14 +68,17 @@ public class LoginManager {
         Map<String, ?> configs,
         LoginMetadata<?> loginMetadata,
         ConnectionMode connectionMode,
-        Metrics metrics
+        Metrics metrics,
+        String threadName
     ) throws LoginException {
         this.loginMetadata = loginMetadata;
         Login login = Utils.newInstance(loginMetadata.loginClass);
-        if (connectionMode == ConnectionMode.SERVER)  
-            this.loginPlugin = Plugin.wrapInstance(login, metrics, SaslConfigs.SASL_LOGIN_CLASS, "mechanism", saslMechanism);
-        else
-            this.loginPlugin = Plugin.wrapInstance(login, metrics, SaslConfigs.SASL_LOGIN_CLASS);
+        LinkedHashMap<String, String> tags = new LinkedHashMap<>();
+        tags.put("name", threadName);
+        if (connectionMode == ConnectionMode.SERVER) {
+            tags.put("mechanism", saslMechanism);
+        }
+        this.loginPlugin = Plugin.wrapInstance(login, metrics, SaslConfigs.SASL_LOGIN_CLASS, tags);
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
         try {
             loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
@@ -116,7 +120,8 @@ public class LoginManager {
         Class<? extends Login> defaultLoginClass,
         Map<String, ?> configs,
         ConnectionMode connectionMode,
-        Metrics metrics
+        Metrics metrics,
+        String threadName
     ) throws LoginException {
         Class<? extends Login> loginClass = configuredClassOrDefault(configs, jaasContext,
                 saslMechanism, SaslConfigs.SASL_LOGIN_CLASS, defaultLoginClass);
@@ -132,14 +137,14 @@ public class LoginManager {
                 LoginMetadata<Password> loginMetadata = new LoginMetadata<>(jaasConfigValue, loginClass, loginCallbackClass, configs);
                 loginManager = DYNAMIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics, threadName);
                     DYNAMIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             } else {
                 LoginMetadata<String> loginMetadata = new LoginMetadata<>(jaasContext.name(), loginClass, loginCallbackClass, configs);
                 loginManager = STATIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics, threadName);
                     STATIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             }

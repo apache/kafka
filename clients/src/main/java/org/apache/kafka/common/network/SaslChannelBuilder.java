@@ -98,6 +98,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final LogContext logContext;
     private final Logger log;
     private final Metrics metrics;
+    private String threadName;
 
     private SslFactory sslFactory;
     private Map<String, ?> configs;
@@ -115,7 +116,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               Time time,
                               LogContext logContext,
                               Function<Short, ApiVersionsResponse> apiVersionSupplier,
-                              Metrics metrics) {
+                              Metrics metrics,
+                              String threadName) {
         this.connectionMode = connectionMode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());
@@ -134,6 +136,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.log = logContext.logger(getClass());
         this.apiVersionSupplier = apiVersionSupplier;
         this.metrics = metrics;
+        this.threadName = threadName;
 
         if (connectionMode == ConnectionMode.SERVER && apiVersionSupplier == null) {
             throw new IllegalArgumentException("Server channel builder must provide an ApiVersionResponse supplier");
@@ -171,7 +174,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 String mechanism = entry.getKey();
                 // With static JAAS configuration, use KerberosLogin if Kerberos is enabled. With dynamic JAAS configuration,
                 // use KerberosLogin only for the LoginContext corresponding to GSSAPI
-                LoginManager loginManager = LoginManager.acquireLoginManager(entry.getValue(), mechanism, defaultLoginClass, configs, connectionMode, metrics);
+                LoginManager loginManager = LoginManager.acquireLoginManager(entry.getValue(), mechanism, defaultLoginClass, configs, connectionMode, metrics, threadName);
                 loginManagers.put(mechanism, loginManager);
                 Subject subject = loginManager.subject();
                 subjects.put(mechanism, subject);

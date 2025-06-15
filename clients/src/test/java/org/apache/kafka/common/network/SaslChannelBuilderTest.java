@@ -167,7 +167,7 @@ public class SaslChannelBuilderTest {
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {
         SaslChannelBuilder channelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
             SecurityProtocol.SASL_PLAINTEXT, new ListenerName("GSSAPI"), false, "GSSAPI",
-            null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), new Metrics()) {
+            null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), new Metrics(), "test-thread-name") {
 
             @Override
             protected GSSManager gssManager() {
@@ -207,7 +207,7 @@ public class SaslChannelBuilderTest {
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
         return new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
                 false, saslMechanism, null,
-                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), new Metrics());
+                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), new Metrics(), "test-thread-name");
     }
 
     public static final class TestGssapiLoginModule implements LoginModule {

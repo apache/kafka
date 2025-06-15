@@ -874,7 +874,8 @@ private[kafka] class Processor(
       time,
       logContext,
       version => apiVersionManager.apiVersionResponse(0, version < 4),
-      metrics
+      metrics,
+      threadName
     )
   )
 

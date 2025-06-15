@@ -1959,7 +1959,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, null);
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, null, "test-thread-name");
 
         serverChannelBuilder.configure(saslServerConfigs);
         server = new NioEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs),
@@ -2000,7 +2000,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, null) {
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, null, "test-thread-name") {
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
                                                                        Map<String, AuthenticateCallbackHandler> callbackHandlers,
@@ -2035,7 +2035,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                null, null, null, time, new LogContext(), null, null) {
+                null, null, null, time, new LogContext(), null, null, "test-thread-name") {
 
             @Override
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
@@ -2575,7 +2575,7 @@ public class SaslAuthenticatorTest {
                 DelegationTokenCache tokenCache, Time time) {
             super(connectionMode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
                 credentialCache, tokenCache, null, time, new LogContext(),
-                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER), null);
+                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER), null, "test-thread-name");
         }
 
         @Override

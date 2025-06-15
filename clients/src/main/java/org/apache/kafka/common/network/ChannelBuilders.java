@@ -80,7 +80,7 @@ public class ChannelBuilders {
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
         return create(securityProtocol, ConnectionMode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
-            null, null, time, logContext, null, metrics);
+            null, null, time, logContext, null, metrics, null);
     }
 
     /**
@@ -107,11 +107,12 @@ public class ChannelBuilders {
         Time time,
         LogContext logContext,
         Function<Short, ApiVersionsResponse> apiVersionSupplier,
-        Metrics metrics
+        Metrics metrics,
+        String threadName
     ) {
         return create(securityProtocol, ConnectionMode.SERVER, JaasContext.Type.SERVER, config, listenerName,
                 isInterBrokerListener, null, credentialCache, tokenCache, time, logContext,
-                apiVersionSupplier, metrics);
+                apiVersionSupplier, metrics, threadName);
     }
 
     private static ChannelBuilder create(
@@ -127,7 +128,8 @@ public class ChannelBuilders {
         Time time,
         LogContext logContext,
         Function<Short, ApiVersionsResponse> apiVersionSupplier, 
-        Metrics metrics
+        Metrics metrics,
+        String threadName
     ) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
@@ -187,7 +189,8 @@ public class ChannelBuilders {
                         time,
                         logContext,
                         apiVersionSupplier,
-                        metrics);
+                        metrics,
+                        threadName);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder(listenerName);

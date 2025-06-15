@@ -1020,7 +1020,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
             true, securityProtocol, config, null, null, TIME, new LogContext(),
-            defaultApiVersionsSupplier(), new Metrics());
+            defaultApiVersionsSupplier(), new Metrics(), "test-thread-name");
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, TIME);
         server.start();
@@ -1044,7 +1044,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         assertThrows(KafkaException.class, () -> ChannelBuilders.serverChannelBuilder(
             listenerName, true, securityProtocol, config,
-            null, null, TIME, new LogContext(), defaultApiVersionsSupplier(), new Metrics()));
+            null, null, TIME, new LogContext(), defaultApiVersionsSupplier(), new Metrics(), "test-thread-name"));
     }
 
     /**
@@ -1059,7 +1059,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
             false, securityProtocol, config, null, null, TIME, new LogContext(),
-            defaultApiVersionsSupplier(), new Metrics());
+            defaultApiVersionsSupplier(), new Metrics(), "test-thread-name");
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, TIME);
         server.start();
@@ -1120,7 +1120,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
             false, securityProtocol, config, null, null, TIME, new LogContext(),
-            defaultApiVersionsSupplier(), new Metrics());
+            defaultApiVersionsSupplier(), new Metrics(), "test-thread-name");
         server = new NioEchoServer(listenerName, securityProtocol, config,
             "localhost", serverChannelBuilder, null, TIME);
         server.start();
@@ -1186,7 +1186,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
             false, securityProtocol, config, null, null, TIME, new LogContext(),
-            defaultApiVersionsSupplier(), new Metrics());
+            defaultApiVersionsSupplier(), new Metrics(), "test-thread-name");
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, TIME);
         server.start();
