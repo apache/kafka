@@ -81,10 +81,8 @@ public class ConsumerRebalanceListenerInvoker {
 
     public Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
         log.info("Revoke previously assigned partitions {}", revokedPartitions);
-
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
-
         if (!revokePausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
 
@@ -113,10 +111,8 @@ public class ConsumerRebalanceListenerInvoker {
 
     public Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
         log.info("Lost previously assigned partitions {}", lostPartitions);
-
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
-
         if (!lostPausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to partition lost.", lostPartitions);
 
