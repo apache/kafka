@@ -1140,6 +1140,20 @@ class ReplicaManagerTest {
       val fetch1 = successfulFetch.headOption.filter(_._1 == inconsistentTidp).map(_._2)
       assertTrue(fetch1.isDefined)
       assertEquals(Errors.INCONSISTENT_TOPIC_ID, fetch1.get.error)
+
+      // Simulate where the fetch request did not use topic IDs
+      // Fetch messages simulating an ID in the log.
+      // We should not see topic ID errors.
+      val zeroTidp = new TopicIdPartition(Uuid.ZERO_UUID, tidp.topicPartition)
+      fetchPartitions(
+        replicaManager,
+        replicaId = 1,
+        fetchInfos = Seq(zeroTidp -> validFetchPartitionData),
+        responseCallback = callback
+      )
+      val fetch2 = successfulFetch.headOption.filter(_._1 == zeroTidp).map(_._2)
+      assertTrue(fetch2.isDefined)
+      assertEquals(Errors.NONE, fetch2.get.error)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
