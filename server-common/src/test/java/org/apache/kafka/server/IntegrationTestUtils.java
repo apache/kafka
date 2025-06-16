@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class IntegrationTestUtils {
 
-    private static final AtomicInteger correlationId = new AtomicInteger(0);
+    private static AtomicInteger correlationId = new AtomicInteger(0);
 
     public static void sendRequest(Socket socket, byte[] request) throws IOException {
         DataOutputStream outgoing = new DataOutputStream(socket.getOutputStream());
