@@ -236,7 +236,7 @@ public class ProducerSendWhileDeletionTest {
             ), "Failed to hard-delete the delete directory");
     }
 
-    private static boolean partitionNotInCheckpoint(KafkaBroker broker, TopicPartition tp) {
+    private boolean partitionNotInCheckpoint(KafkaBroker broker, TopicPartition tp) {
         List<File> liveLogDirs = new ArrayList<>();
         broker.logManager().liveLogDirs().foreach(liveLogDirs::add);
         var checkpoints = liveLogDirs.stream().map(logDir -> {
@@ -250,7 +250,7 @@ public class ProducerSendWhileDeletionTest {
                 checkpointsPerLogDir.containsKey(tp));
     }
 
-    private static boolean deletionDirectoriesAbsent(String logDir, List<TopicPartition> topicPartitions) {
+    private boolean deletionDirectoriesAbsent(String logDir, List<TopicPartition> topicPartitions) {
         var directoryNames = new File(logDir).list();
         if (directoryNames == null) {
             return true;
