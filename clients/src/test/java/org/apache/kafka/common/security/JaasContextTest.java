@@ -226,7 +226,7 @@ public class JaasContextTest {
                 "SOME-MECHANISM", Collections.emptyMap()));
 
 
-        // add allowed login modules
+        //  clear disallowed login modules
         System.setProperty(DISALLOWED_LOGIN_MODULES_CONFIG, "");
 
         checkConfiguration("com.sun.security.auth.module.JndiLoginModule", LoginModuleControlFlag.REQUIRED, new HashMap<>());
