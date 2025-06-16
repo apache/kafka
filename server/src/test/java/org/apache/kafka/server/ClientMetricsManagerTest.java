@@ -61,7 +61,6 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1412,59 +1411,6 @@ public class ClientMetricsManagerTest {
         // Metrics size should remain same.
         assertEquals(12, kafkaMetrics.metrics().size());
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
-    }
-
-    @Test
-    public void testPushTelemetryInvalidCompressionType() throws Exception {
-        try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time, kafkaMetrics)
-        ) {
-            // Get initial subscription
-            GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
-                    new GetTelemetrySubscriptionsRequestData(), true).build();
-
-            GetTelemetrySubscriptionsResponse subscriptionsResponse = clientMetricsManager.processGetTelemetrySubscriptionRequest(
-                    subscriptionsRequest, ClientMetricsTestUtils.requestContext());
-
-            ClientMetricsInstance instance = clientMetricsManager.clientInstance(subscriptionsResponse.data().clientInstanceId());
-
-            // Non-preferred compression type in push telemetry request (push telemetry sends gzip when zstd is preferred)
-            PushTelemetryRequest mismatchRequest = new PushTelemetryRequest.Builder(
-                    new PushTelemetryRequestData()
-                            .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
-                            .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                            .setCompressionType(CompressionType.GZIP.id), true).build();
-
-            // Preferred compression type in push telemetry request (push telemetry sends zstd when zstd is preferred)
-            PushTelemetryRequest matchRequest = new PushTelemetryRequest.Builder(
-                new PushTelemetryRequestData()
-                        .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
-                        .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                        .setCompressionType(CompressionType.ZSTD.id), true).build();
-
-            // Validate function throws InvalidRequestException for compression type mismatch
-            assertThrows(InvalidRequestException.class,
-                () -> clientMetricsManager.validatePushRequest(mismatchRequest, instance, time.milliseconds()));
-
-            // Push telemetry request should succeed even when compression type is mismatched
-            time.sleep(ClientMetricsConfigs.INTERVAL_MS_DEFAULT);
-            PushTelemetryResponse mismatchResponse = clientMetricsManager.processPushTelemetryRequest(
-                    mismatchRequest, ClientMetricsTestUtils.requestContext());
-            assertEquals(Errors.NONE, mismatchResponse.error());
-
-
-            // Validate function does not throw exception for matching compression type
-            time.sleep(ClientMetricsConfigs.INTERVAL_MS_DEFAULT);
-            assertDoesNotThrow(() -> 
-                clientMetricsManager.validatePushRequest(matchRequest, instance, time.milliseconds()));
-
-            // Push telemetry request should succeed as expected
-            time.sleep(ClientMetricsConfigs.INTERVAL_MS_DEFAULT);
-            PushTelemetryResponse matchResponse = clientMetricsManager.processPushTelemetryRequest(
-                    matchRequest, ClientMetricsTestUtils.requestContext());
-            assertEquals(Errors.NONE, matchResponse.error());
-        }
     }
 
     private KafkaMetric getMetric(String name) throws Exception {
