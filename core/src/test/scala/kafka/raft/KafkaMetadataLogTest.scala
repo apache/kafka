@@ -1011,6 +1011,13 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testSegmentMsConfigIsSetInMetadataLog(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    assertEquals(DefaultMetadataLogConfig.logSegmentMillis, log.log.config().segmentMs)
+  }
+
+  @Test
   def testSegmentsLessThanLatestSnapshot(): Unit = {
     val config = createMetadataLogConfig(
       10240,

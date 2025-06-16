@@ -893,8 +893,8 @@ public class StreamsPartitionAssignorTest {
         // then metadata gets populated
         assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
         // check assigned partitions
-        assertEquals(Set.of(new HashSet<>(List.of(t1p0, t2p0, t1p0, t2p0, t1p1, t2p1, t1p2, t2p2))),
-                     Set.of(new HashSet<>(assignments.get("consumer10").partitions())));
+        assertEquals(Set.of(t1p0, t2p0, t1p1, t2p1, t1p2, t2p2),
+                     new HashSet<>(assignments.get("consumer10").partitions()));
 
         // the first consumer
         info10 = checkAssignment(allTopics, assignments.get("consumer10"));
