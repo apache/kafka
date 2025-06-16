@@ -41,53 +41,22 @@ public class IntegrationTestUtils {
         outgoing.flush();
     }
 
-    private static void sendWithHeader(AbstractRequest request, RequestHeader header, Socket socket) throws IOException {
-        byte[] serializedBytes = Utils.toArray(request.serializeWithHeader(header));
-        sendRequest(socket, serializedBytes);
-    }
-
-    public static RequestHeader nextRequestHeader(ApiKeys apiKey, short apiVersion, String clientId, Integer correlationIdOpt) {
-        correlationId = (correlationIdOpt != null) ? correlationIdOpt : ++correlationId;
-        return new RequestHeader(apiKey, apiVersion, clientId, correlationId);
-    }
-
     public static RequestHeader nextRequestHeader(ApiKeys apiKey, short apiVersion) {
         return new RequestHeader(apiKey, apiVersion, "client-id", 1);
     }
 
-    public static void send(AbstractRequest request, Socket socket, String clientId, Integer correlationId) throws IOException {
-        RequestHeader header = nextRequestHeader(request.apiKey(), request.version(), clientId, correlationId);
-        sendWithHeader(request, header, socket);
-    }
-
     @SuppressWarnings("unchecked")
     public static <T extends AbstractResponse> T receive(Socket socket, ApiKeys apiKey, short version) throws IOException, ClassCastException {
-        DataInputStream incoming = new DataInputStream(socket.getInputStream());
+        var incoming = new DataInputStream(socket.getInputStream());
         int len = incoming.readInt();
 
-        byte[] responseBytes = new byte[len];
+        var responseBytes = new byte[len];
         incoming.readFully(responseBytes);
 
-        ByteBuffer responseBuffer = ByteBuffer.wrap(responseBytes);
+        var responseBuffer = ByteBuffer.wrap(responseBytes);
         ResponseHeader.parse(responseBuffer, apiKey.responseHeaderVersion(version));
 
-        AbstractResponse response = AbstractResponse.parseResponse(apiKey, new ByteBufferAccessor(responseBuffer), version);
-        if (response instanceof AbstractResponse) {
-            return (T) response;
-        } else {
-            throw new ClassCastException("Expected response with type " + AbstractResponse.class + ", but found " + response.getClass());
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <T extends AbstractResponse> T sendAndReceive(
-        AbstractRequest request,
-        Socket socket,
-        String clientId,
-        Integer correlationId
-    ) throws IOException {
-        send(request, socket, clientId, correlationId);
-        return (T) receive(socket, request.apiKey(), request.version());
+        return (T) AbstractResponse.parseResponse(apiKey, new ByteBufferAccessor(responseBuffer), version);
     }
 
     @SuppressWarnings("unchecked")
@@ -95,7 +64,11 @@ public class IntegrationTestUtils {
         AbstractRequest request,
         Socket socket
     ) throws IOException {
-        return (T) sendAndReceive(request, socket, "client-id", 0);
+        correlationId += 1;
+        RequestHeader header = new RequestHeader(request.apiKey(), request.version(), "client-id", correlationId);
+        byte[] serializedBytes = Utils.toArray(request.serializeWithHeader(header));
+        sendRequest(socket, serializedBytes);
+        return receive(socket, request.apiKey(), request.version());
     }
 
     @SuppressWarnings("unchecked")

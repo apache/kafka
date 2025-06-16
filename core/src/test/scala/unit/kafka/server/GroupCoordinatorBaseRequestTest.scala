@@ -907,7 +907,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def connect(destination: Int): Socket = {
-    val socket: Socket = IntegrationTestUtils.connect(cluster.boundPorts().asScala.head)
+    val socket = IntegrationTestUtils.connect(brokerSocketServer(destination).boundPort(cluster.clientListener()))
     openSockets += socket
     socket
   }
