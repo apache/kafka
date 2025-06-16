@@ -28,6 +28,7 @@ import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.server.network.BrokerEndPoint
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
@@ -51,6 +52,12 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
+  private[kafka] val metricTags: util.LinkedHashMap[String, String] = {
+    val map = new util.LinkedHashMap[String, String]()
+    map.put("component", s"fetcher-$fetcherId")
+    map.put("client-id", s"BrokerBlockingSender-${sourceBroker.id}")
+    map
+  }
 
   private val (networkClient, reconfigurableChannelBuilder) = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
@@ -62,7 +69,7 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       time,
       logContext,
       metrics,
-      s"broker-id-${sourceBroker.id}-fetcher-$fetcherId",
+      metricTags,
     )
     val reconfigurableChannelBuilder = channelBuilder match {
       case reconfigurable: Reconfigurable =>

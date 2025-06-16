@@ -180,7 +180,7 @@ public class BrokerApiVersionsCommand {
                     metrics,
                     time,
                     "admin",
-                    ClientUtils.createChannelBuilder(config, time, logContext, metrics, clientId),
+                    ClientUtils.createChannelBuilder(config, time, logContext, metrics),
                     logContext);
             NetworkClient networkClient = new NetworkClient(
                     selector,

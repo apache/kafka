@@ -116,6 +116,7 @@ import java.util.Base64;
 import java.util.Base64.Encoder;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -1959,7 +1960,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, null, "test-thread-name");
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, null, new LinkedHashMap<>());
 
         serverChannelBuilder.configure(saslServerConfigs);
         server = new NioEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs),
@@ -2000,7 +2001,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, null, "test-thread-name") {
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, null, new LinkedHashMap<>()) {
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
                                                                        Map<String, AuthenticateCallbackHandler> callbackHandlers,
@@ -2035,7 +2036,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                null, null, null, time, new LogContext(), null, null, "test-thread-name") {
+                null, null, null, time, new LogContext(), null, null, new LinkedHashMap<>()) {
 
             @Override
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
@@ -2167,7 +2168,7 @@ public class SaslAuthenticatorTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, new LogContext(), null, "test-client");
+                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, new LogContext(), null, new LinkedHashMap<>());
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 
@@ -2575,7 +2576,7 @@ public class SaslAuthenticatorTest {
                 DelegationTokenCache tokenCache, Time time) {
             super(connectionMode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
                 credentialCache, tokenCache, null, time, new LogContext(),
-                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER), null, "test-thread-name");
+                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER), null, new LinkedHashMap<>());
         }
 
         @Override

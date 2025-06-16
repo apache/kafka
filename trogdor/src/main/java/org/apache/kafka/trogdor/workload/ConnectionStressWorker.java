@@ -165,7 +165,7 @@ public class ConnectionStressWorker implements TaskWorker {
                 Node targetNode = nodes.get(ThreadLocalRandom.current().nextInt(nodes.size()));
                 // channelBuilder will be closed as part of Selector.close()
                 try (Metrics metrics = new Metrics()) {
-                    ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(conf, Time.SYSTEM, logContext, metrics, clientId);
+                    ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(conf, Time.SYSTEM, logContext, metrics);
                     try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                         metrics, Time.SYSTEM, "", channelBuilder, logContext)) {
                         try (NetworkClient client = new NetworkClient(selector,

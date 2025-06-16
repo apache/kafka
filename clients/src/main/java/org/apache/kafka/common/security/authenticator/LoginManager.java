@@ -69,16 +69,14 @@ public class LoginManager {
         LoginMetadata<?> loginMetadata,
         ConnectionMode connectionMode,
         Metrics metrics,
-        String metricsId
+        LinkedHashMap<String, String> extraMetricsTags
     ) throws LoginException {
         this.loginMetadata = loginMetadata;
         Login login = Utils.newInstance(loginMetadata.loginClass);
-        LinkedHashMap<String, String> tags = new LinkedHashMap<>();
-        tags.put("processor-id", metricsId);
         if (connectionMode == ConnectionMode.SERVER) {
-            tags.put("mechanism", saslMechanism);
+            extraMetricsTags.put("mechanism", saslMechanism);
         }
-        this.loginPlugin = Plugin.wrapInstance(login, metrics, SaslConfigs.SASL_LOGIN_CLASS, tags);
+        this.loginPlugin = Plugin.wrapInstance(login, metrics, SaslConfigs.SASL_LOGIN_CLASS, extraMetricsTags);
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
         try {
             loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
@@ -112,6 +110,8 @@ public class LoginManager {
      * @param defaultLoginClass Default login class to use if an override is not specified in `configs`
      * @param configs Config options used to configure `Login` if a new login manager is created.
      * @param connectionMode Connection mode for SSL and SASL connections.
+     * @param metrics the metrics instance 
+     * @param extraMetricsTags the metrics extra tags               
      *
      */
     public static LoginManager acquireLoginManager(
@@ -121,7 +121,7 @@ public class LoginManager {
         Map<String, ?> configs,
         ConnectionMode connectionMode,
         Metrics metrics,
-        String metricsId
+        LinkedHashMap<String, String> extraMetricsTags
     ) throws LoginException {
         Class<? extends Login> loginClass = configuredClassOrDefault(configs, jaasContext,
                 saslMechanism, SaslConfigs.SASL_LOGIN_CLASS, defaultLoginClass);
@@ -137,14 +137,14 @@ public class LoginManager {
                 LoginMetadata<Password> loginMetadata = new LoginMetadata<>(jaasConfigValue, loginClass, loginCallbackClass, configs);
                 loginManager = DYNAMIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics, metricsId);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics, extraMetricsTags);
                     DYNAMIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             } else {
                 LoginMetadata<String> loginMetadata = new LoginMetadata<>(jaasContext.name(), loginClass, loginCallbackClass, configs);
                 loginManager = STATIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics, metricsId);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics, extraMetricsTags);
                     STATIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             }

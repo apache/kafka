@@ -107,6 +107,12 @@ class NodeToControllerChannelManagerImpl(
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val requestThread = newRequestThread
+  private[kafka] val metricTags: util.LinkedHashMap[String, String] = {
+    val map = new util.LinkedHashMap[String, String]()
+    map.put("component", threadName)
+    map.put("node-id", config.nodeId.toString)
+    map
+  }
 
   def start(): Unit = {
     requestThread.start()
@@ -128,7 +134,7 @@ class NodeToControllerChannelManagerImpl(
         time,
         logContext,
         metrics,
-        threadName
+        metricTags
       )
       channelBuilder match {
         case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)

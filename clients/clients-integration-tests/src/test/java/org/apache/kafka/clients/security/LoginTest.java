@@ -97,10 +97,7 @@ public class LoginTest {
             for (Metric metric : admin.metrics().values()) {
                 found += assertMetricName(
                     metric.metricName(), 
-                    expectedTags(Map.of(
-                        "client-id", CLIENT_ID,
-                        "processor-id", CLIENT_ID
-                    ))
+                    expectedTags(Map.of("client-id", CLIENT_ID))
                 );
             }
             assertEquals(1, found, "Expected to find 1 metric");
@@ -109,8 +106,21 @@ public class LoginTest {
                 cluster.controllers().get(0).metrics().metrics(),
                 cluster.brokers().get(0).metrics().metrics()
             ).collect(HashMap::new, Map::putAll, Map::putAll);
-            assertMetrics(allMetrics, expectedTags(Map.of("mechanism", MECHANISMS)), "processor-id");
-            assertMetrics(allMetrics, expectedTags(Map.of("processor-id", "raft-client-0")), "");
+            assertMetrics(
+                allMetrics, 
+                expectedTags(Map.of(
+                    "mechanism", MECHANISMS, 
+                    "listener", "EXTERNAL", 
+                    "networkProcessor", "0"
+                ))
+            );
+            assertMetrics(
+                allMetrics, 
+                expectedTags(Map.of(
+                    "node-id", "0", 
+                    "component", "raft-client"
+                ))
+            );
         }
     }
 
@@ -124,24 +134,10 @@ public class LoginTest {
         return 0;
     }
 
-    private int assertMetricName(MetricName metricName, Map<String, String> expectedTags, String fuzzyKey) {
-        Map<String, String> tags = new LinkedHashMap<>(metricName.tags());
-        if (!fuzzyKey.isBlank() && !tags.containsKey(fuzzyKey)) {
-            return 0;
-        }
-        tags.remove(fuzzyKey);
-        if (expectedTags.equals(tags)) {
-            assertEquals(CustomerLogin.METRIC_NAME, metricName.name());
-            assertEquals(CustomerLogin.METRIC_DESCRIPTION, metricName.description());
-            return 1;
-        }
-        return 0;
-    }
-
-    private void assertMetrics(Map<MetricName, KafkaMetric> metrics, Map<String, String> expectedTags, String fuzzyKey) {
+    private void assertMetrics(Map<MetricName, KafkaMetric> metrics, Map<String, String> expectedTags) {
         int found = 0;
         for (MetricName metricName : metrics.keySet()) {
-            found += assertMetricName(metricName, expectedTags, fuzzyKey);
+            found += assertMetricName(metricName, expectedTags);
         }
         assertEquals(1, found, "Expected to find 1 metric with the expected tags");
     }

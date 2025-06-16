@@ -49,6 +49,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -130,7 +131,7 @@ public final class NioEchoServer extends Thread {
             if (channelBuilder == null)
                 channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
                         securityProtocol, config, credentialCache, tokenCache, time, logContext,
-                        version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER), metrics, "test-thread-name");
+                        version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER), metrics, new LinkedHashMap<>());
             this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
                     "MetricGroup", channelBuilder, logContext);
             acceptorThread = new AcceptorThread();

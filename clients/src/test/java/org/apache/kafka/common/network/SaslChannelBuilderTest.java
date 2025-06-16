@@ -48,6 +48,7 @@ import org.mockito.Mockito;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -167,7 +168,7 @@ public class SaslChannelBuilderTest {
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {
         SaslChannelBuilder channelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
             SecurityProtocol.SASL_PLAINTEXT, new ListenerName("GSSAPI"), false, "GSSAPI",
-            null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), new Metrics(), "test-thread-name") {
+            null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), new Metrics(), new LinkedHashMap<>()) {
 
             @Override
             protected GSSManager gssManager() {
@@ -207,7 +208,7 @@ public class SaslChannelBuilderTest {
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
         return new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
                 false, saslMechanism, null,
-                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), new Metrics(), "test-thread-name");
+                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), new Metrics(), new LinkedHashMap<>());
     }
 
     public static final class TestGssapiLoginModule implements LoginModule {

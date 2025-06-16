@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -59,6 +60,7 @@ public class ChannelBuilders {
      * @param time the time instance
      * @param logContext the log context instance
      * @param metrics the metrics instance
+     * @param extraMetricsTags additional tags to be added to metrics
      *
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
@@ -72,7 +74,7 @@ public class ChannelBuilders {
         Time time,
         LogContext logContext,
         Metrics metrics,
-        String clientId
+        LinkedHashMap<String, String> extraMetricsTags
     ) {
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
             if (contextType == null)
@@ -81,7 +83,7 @@ public class ChannelBuilders {
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
         return create(securityProtocol, ConnectionMode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
-            null, null, time, logContext, null, metrics, clientId);
+            null, null, time, logContext, null, metrics, extraMetricsTags);
     }
 
     /**
@@ -95,6 +97,7 @@ public class ChannelBuilders {
      * @param logContext the log context instance
      * @param apiVersionSupplier supplier for ApiVersions responses sent prior to authentication
      * @param metrics the metrics instance
+     * @param extraMetricsTags additional tags to be added to metrics
      *
      * @return the configured `ChannelBuilder`
      */
@@ -109,11 +112,11 @@ public class ChannelBuilders {
         LogContext logContext,
         Function<Short, ApiVersionsResponse> apiVersionSupplier,
         Metrics metrics,
-        String threadName
+        LinkedHashMap<String, String> extraMetricsTags
     ) {
         return create(securityProtocol, ConnectionMode.SERVER, JaasContext.Type.SERVER, config, listenerName,
                 isInterBrokerListener, null, credentialCache, tokenCache, time, logContext,
-                apiVersionSupplier, metrics, threadName);
+                apiVersionSupplier, metrics, extraMetricsTags);
     }
 
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -131,7 +134,7 @@ public class ChannelBuilders {
         LogContext logContext,
         Function<Short, ApiVersionsResponse> apiVersionSupplier, 
         Metrics metrics,
-        String metricsId
+        LinkedHashMap<String, String> extraMetricsTags
     ) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
@@ -192,7 +195,7 @@ public class ChannelBuilders {
                         logContext,
                         apiVersionSupplier,
                         metrics,
-                        metricsId);
+                        extraMetricsTags);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder(listenerName);

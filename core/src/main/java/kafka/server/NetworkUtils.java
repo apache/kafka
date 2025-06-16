@@ -31,6 +31,7 @@ import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class NetworkUtils {
@@ -40,8 +41,10 @@ public class NetworkUtils {
                                                    Metrics metrics,
                                                    Time time,
                                                    LogContext logContext) {
-        String clientId = prefix + "-client-" + config.nodeId();
-        
+        LinkedHashMap<String, String> extraTags = new LinkedHashMap<>();
+        extraTags.put("component", prefix + "-client");
+        extraTags.put("node-id", String.valueOf(config.nodeId()));
+
         ChannelBuilder channelBuilder = ChannelBuilders.clientChannelBuilder(
             config.interBrokerSecurityProtocol(),
             JaasContext.Type.SERVER,
@@ -51,7 +54,7 @@ public class NetworkUtils {
             time,
             logContext,
             metrics,
-            clientId
+            extraTags
         );
 
         if (channelBuilder instanceof Reconfigurable) {
@@ -75,7 +78,7 @@ public class NetworkUtils {
         return new NetworkClient(
             selector,
             new ManualMetadataUpdater(),
-            clientId,
+            prefix + "-client-" + config.nodeId(),
             1,
             50,
             50,

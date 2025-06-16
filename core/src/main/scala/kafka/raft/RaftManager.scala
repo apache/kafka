@@ -49,6 +49,7 @@ import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
 
+import java.util
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
 
@@ -131,6 +132,12 @@ class KafkaRaftManager[T](
   private val logContext = new LogContext(s"[RaftManager id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
   val clientId = s"raft-client-${config.nodeId}"
+  private[kafka] val metricTags: util.LinkedHashMap[String, String] = {
+    val map = new util.LinkedHashMap[String, String]()
+    map.put("component", "raft-client")
+    map.put("node-id", config.nodeId.toString)
+    map
+  }
 
   private val scheduler = new KafkaScheduler(1, true, threadNamePrefix + "-scheduler")
   scheduler.startup()
@@ -249,7 +256,7 @@ class KafkaRaftManager[T](
       time,
       logContext,
       metrics,
-      clientId
+      metricTags
     )
 
     val metricGroupPrefix = "raft-channel"

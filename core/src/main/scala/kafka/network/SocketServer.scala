@@ -863,21 +863,25 @@ private[kafka] class Processor(
   private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", MetricsGroup, metricTags)
   metrics.addMetric(expiredConnectionsKilledCountMetricName, expiredConnectionsKilledCount)
 
-  private[network] val selector = createSelector(
-    ChannelBuilders.serverChannelBuilder(
-      listenerName,
-      listenerName == config.interBrokerListenerName,
-      securityProtocol,
-      config,
-      credentialProvider.credentialCache,
-      credentialProvider.tokenCache,
-      time,
-      logContext,
-      version => apiVersionManager.apiVersionResponse(0, version < 4),
-      metrics,
-      threadName
+  private[network] val selector = {
+    val extraTags = new util.LinkedHashMap[String, String]()
+    extraTags.putAll(metricTags)
+    createSelector(
+      ChannelBuilders.serverChannelBuilder(
+        listenerName,
+        listenerName == config.interBrokerListenerName,
+        securityProtocol,
+        config,
+        credentialProvider.credentialCache,
+        credentialProvider.tokenCache,
+        time,
+        logContext,
+        version => apiVersionManager.apiVersionResponse(0, version < 4),
+        metrics,
+        extraTags
+      )
     )
-  )
+  }
 
   // Visible to override for testing
   protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = {

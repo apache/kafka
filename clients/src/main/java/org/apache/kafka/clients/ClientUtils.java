@@ -40,6 +40,7 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -118,12 +119,11 @@ public final class ClientUtils {
     public static ChannelBuilder createChannelBuilder(AbstractConfig config, 
                                                       Time time, 
                                                       LogContext logContext,
-                                                      Metrics metrics,
-                                                      String clientId) {
+                                                      Metrics metrics) {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
-                clientSaslMechanism, time, logContext, metrics, clientId);
+                clientSaslMechanism, time, logContext, metrics, new LinkedHashMap<>());
     }
 
     static List<InetAddress> resolve(String host, HostResolver hostResolver) throws UnknownHostException {
@@ -226,7 +226,7 @@ public final class ClientUtils {
         Selector selector = null;
 
         try {
-            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext, metrics, clientId);
+            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext, metrics);
             selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                     metrics,
                     time,
