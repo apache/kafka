@@ -512,14 +512,9 @@ class ReplicaManagerTest {
     }
   }
 
-  @Test
-  def testFencedErrorCausedByBecomeLeader(): Unit = {
-    testFencedErrorCausedByBecomeLeader(0)
-    testFencedErrorCausedByBecomeLeader(1)
-    testFencedErrorCausedByBecomeLeader(10)
-  }
-
-  private[this] def testFencedErrorCausedByBecomeLeader(loopEpochChange: Int): Unit = {
+  @ParameterizedTest
+  @ValueSource(ints = Array(0, 1, 10))
+  def testFencedErrorCausedByBecomeLeader(loopEpochChange: Int): Unit = {
     val localId = 0
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
