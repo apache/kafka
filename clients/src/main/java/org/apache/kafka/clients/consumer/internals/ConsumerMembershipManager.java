@@ -413,8 +413,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private void logPausedPartitionsBeingRevoked(Set<TopicPartition> partitionsToRevoke) {
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(partitionsToRevoke);
-        if (!revokePausedPartitions.isEmpty() && log.isInfoEnabled()) {
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.topicPartitionString(revokePausedPartitions));
+        if (!revokePausedPartitions.isEmpty()) {
+            log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
         }
     }
 

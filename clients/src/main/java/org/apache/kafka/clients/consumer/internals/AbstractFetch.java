@@ -481,11 +481,8 @@ public abstract class AbstractFetch implements Closeable {
     private Map<Node, FetchSessionHandler.FetchRequestData> convert(Map<Node, FetchSessionHandler.Builder> fetchable) {
         Map<Node, FetchSessionHandler.FetchRequestData> map = new HashMap<>(fetchable.size());
 
-        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
-            Node node = entry.getKey();
-            FetchSessionHandler.FetchRequestData fetchRequestData = entry.getValue().build();
-            map.put(node, fetchRequestData);
-        }
+        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet())
+            map.put(entry.getKey(), entry.getValue().build());
 
         return map;
     }

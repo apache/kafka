@@ -20,50 +20,11 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Serializable;
-import java.util.Collection;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 public final class Utils {
-
-    private static class TopicPartitionIterable implements Iterable<String> {
-
-        private final Collection<TopicPartition> partitions;
-
-        public TopicPartitionIterable(Collection<TopicPartition> partitions) {
-            this.partitions = partitions;
-        }
-
-        @Override
-        public Iterator<String> iterator() {
-            return new TopicPartitionIterator(partitions);
-        }
-    }
-
-    private static class TopicPartitionIterator implements Iterator<String> {
-
-        private final Iterator<TopicPartition> partitionIterator;
-
-        private TopicPartitionIterator(Collection<TopicPartition> partitions) {
-            this.partitionIterator = partitions.iterator();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return partitionIterator.hasNext();
-        }
-
-        @Override
-        public String next() {
-            return partitionIterator.next().toString();
-        }
-    }
-
-    public static String topicPartitionString(Collection<TopicPartition> partitions) {
-        return String.join(", ", new TopicPartitionIterable(partitions));
-    }
 
     static final class PartitionComparator implements Comparator<TopicPartition>, Serializable {
         private static final long serialVersionUID = 1L;

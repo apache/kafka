@@ -1134,9 +1134,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         // Ensure the set of partitions to revoke are still assigned
         Set<TopicPartition> revokedPartitions = new HashSet<>(partitionsToRevoke);
         revokedPartitions.retainAll(subscriptions.assignedPartitions());
-
-        if (log.isInfoEnabled())
-            log.info("Revoking previously assigned partitions {}", Utils.topicPartitionString(revokedPartitions));
+        log.info("Revoking previously assigned partitions {}", revokedPartitions);
 
         signalPartitionsBeingRevoked(revokedPartitions);
 
