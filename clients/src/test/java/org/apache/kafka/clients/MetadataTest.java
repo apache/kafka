@@ -957,9 +957,9 @@ public class MetadataTest {
         Cluster cluster = metadata.fetch();
         assertEquals(cluster.clusterResource().clusterId(), oldClusterId);
         assertEquals(cluster.nodes().size(), oldNodes);
-        assertEquals(cluster.invalidTopics(), new HashSet<>(Arrays.asList("oldInvalidTopic", "keepInvalidTopic")));
-        assertEquals(cluster.unauthorizedTopics(), new HashSet<>(Arrays.asList("oldUnauthorizedTopic", "keepUnauthorizedTopic")));
-        assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("oldValidTopic", "keepValidTopic")));
+        assertEquals(cluster.invalidTopics(), Set.of("oldInvalidTopic", "keepInvalidTopic"));
+        assertEquals(cluster.unauthorizedTopics(), Set.of("oldUnauthorizedTopic", "keepUnauthorizedTopic"));
+        assertEquals(cluster.topics(), Set.of("oldValidTopic", "keepValidTopic"));
         assertEquals(cluster.partitionsForTopic("oldValidTopic").size(), 2);
         assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 3);
         assertEquals(new HashSet<>(cluster.topicIds()), new HashSet<>(topicIds.values()));
@@ -992,9 +992,9 @@ public class MetadataTest {
         cluster = metadata.fetch();
         assertEquals(cluster.clusterResource().clusterId(), newClusterId);
         assertEquals(cluster.nodes().size(), newNodes);
-        assertEquals(cluster.invalidTopics(), new HashSet<>(Arrays.asList("keepInvalidTopic", "newInvalidTopic")));
-        assertEquals(cluster.unauthorizedTopics(), new HashSet<>(Arrays.asList("keepUnauthorizedTopic", "newUnauthorizedTopic")));
-        assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("keepValidTopic", "newValidTopic")));
+        assertEquals(cluster.invalidTopics(), Set.of("keepInvalidTopic", "newInvalidTopic"));
+        assertEquals(cluster.unauthorizedTopics(), Set.of("keepUnauthorizedTopic", "newUnauthorizedTopic"));
+        assertEquals(cluster.topics(), Set.of("keepValidTopic", "newValidTopic"));
         assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 2);
         assertEquals(cluster.partitionsForTopic("newValidTopic").size(), 4);
         assertEquals(new HashSet<>(cluster.topicIds()), new HashSet<>(topicIds.values()));

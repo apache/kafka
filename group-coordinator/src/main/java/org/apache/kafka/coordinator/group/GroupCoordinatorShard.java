@@ -268,6 +268,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withConfig(config)
                 .withGroupConfigManager(groupConfigManager)
                 .withGroupCoordinatorMetricsShard(metricsShard)
+                .withShareGroupAssignor(config.shareGroupAssignors().get(0))
                 .withAuthorizerPlugin(authorizerPlugin)
                 .build();
 

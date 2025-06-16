@@ -617,9 +617,9 @@ public class SharePartitionManagerTest {
         ShareFetchResponse resp2 = context2.updateAndGenerateResponseData(groupId, reqMetadata1.memberId(), respData2);
         assertEquals(Errors.NONE, resp2.error());
         assertEquals(1, resp2.data().responses().size());
-        assertEquals(barId, resp2.data().responses().get(0).topicId());
-        assertEquals(1, resp2.data().responses().get(0).partitions().size());
-        assertEquals(0, resp2.data().responses().get(0).partitions().get(0).partitionIndex());
+        assertEquals(barId, resp2.data().responses().stream().findFirst().get().topicId());
+        assertEquals(1, resp2.data().responses().stream().findFirst().get().partitions().size());
+        assertEquals(0, resp2.data().responses().stream().findFirst().get().partitions().get(0).partitionIndex());
         assertEquals(1, resp2.responseData(topicNames).size());
     }
 
@@ -1013,7 +1013,7 @@ public class SharePartitionManagerTest {
         ShareFetchResponse resp1 = context1.updateAndGenerateResponseData(groupId, reqMetadata1.memberId(), respData1);
         assertEquals(Errors.NONE, resp1.error());
 
-        assertEquals(new HashSet<>(List.of(tp0, tp1)),
+        assertEquals(Set.of(tp0, tp1),
                 new HashSet<>(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, memberId1)));
 
         // Create a new share session with an initial share fetch request.
@@ -1047,7 +1047,7 @@ public class SharePartitionManagerTest {
         ShareFetchResponse resp3 = context3.updateAndGenerateResponseData(groupId, reqMetadata1.memberId(), respData3);
         assertEquals(Errors.NONE, resp3.error());
 
-        assertEquals(new HashSet<>(List.of(tp0, tp1, tp2)),
+        assertEquals(Set.of(tp0, tp1, tp2),
                 new HashSet<>(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, memberId1)));
 
         // Continue the second session we created.
