@@ -192,8 +192,13 @@ public class LogSegment implements Closeable {
      * the time index).
      */
     public TimestampOffset readMaxTimestampAndOffsetSoFar() throws IOException {
-        if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN)
-            maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
+        if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
+            synchronized (this) {
+                if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
+                    maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
+                }
+            }
+        }
         return maxTimestampAndOffsetSoFar;
     }
 
