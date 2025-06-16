@@ -184,6 +184,8 @@ public class AclControlManager {
                 validateFilter(filter);
                 AclDeleteResult result = deleteAclsForFilter(filter, records);
                 results.add(result);
+            } catch (BoundedListTooLongException e) {
+                results.add(new AclDeleteResult(new InvalidRequestException(e.getMessage(), e)));
             } catch (Throwable e) {
                 results.add(new AclDeleteResult(ApiError.fromThrowable(e).exception()));
             }
@@ -199,13 +201,14 @@ public class AclControlManager {
             StandardAcl acl = entry.getValue();
             AclBinding binding = acl.toBinding();
             if (filter.matches(binding)) {
-                deleted.add(new AclBindingDeleteResult(binding));
-                records.add(new ApiMessageAndVersion(
-                    new RemoveAccessControlEntryRecord().setId(id), (short) 0));
+                // check size limitation first before adding additional records
                 if (records.size() > MAX_RECORDS_PER_USER_OP) {
                     throw new BoundedListTooLongException("Cannot remove more than " +
                         MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.");
                 }
+                deleted.add(new AclBindingDeleteResult(binding));
+                records.add(new ApiMessageAndVersion(
+                    new RemoveAccessControlEntryRecord().setId(id), (short) 0));
             }
         }
         return new AclDeleteResult(deleted);
