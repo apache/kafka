@@ -200,6 +200,8 @@ public class ClientMetricsManager implements AutoCloseable {
         try {
             // Validate the push request parameters for the client instance.
             validatePushRequest(request, clientInstance, now);
+        } catch (InvalidRequestException exception) {
+            log.info("Invalid request for client instance id: [{}] . Continuing with the request.", clientInstanceId, exception);
         } catch (ApiException exception) {
             log.debug("Error validating push telemetry request from client [{}]", clientInstanceId, exception);
             clientInstance.lastKnownError(Errors.forException(exception));
@@ -399,7 +401,8 @@ public class ClientMetricsManager implements AutoCloseable {
         }
     }
 
-    private void validatePushRequest(PushTelemetryRequest request, ClientMetricsInstance clientInstance, long timestamp) {
+    // Visible for testing
+    void validatePushRequest(PushTelemetryRequest request, ClientMetricsInstance clientInstance, long timestamp) {
 
         if (clientInstance.terminating()) {
             String msg = String.format(
@@ -432,6 +435,15 @@ public class ClientMetricsManager implements AutoCloseable {
             String msg = String.format("Telemetry request from [%s] is larger than the maximum allowed size [%s]",
                 request.data().clientInstanceId(), clientTelemetryMaxBytes);
             throw new TelemetryTooLargeException(msg);
+        }
+
+        // Client library picks the first compression type from the list of supported compression types send by the broker.
+        // If compression type send in push telemetry request is different from the preferred compression type by broker, 
+        // it means that client has ignored the preferred compression type and sent the invalid request
+        if (request.data().compressionType() != SUPPORTED_COMPRESSION_TYPES.get(0)) {
+            String msg = String.format("Compression type [%s] is received in push telemetry is different from the preferred compression type [%s] for client instance id: [%s]",
+                    CompressionType.forId(request.data().compressionType()), CompressionType.forId(SUPPORTED_COMPRESSION_TYPES.get(0)), request.data().clientInstanceId());
+            throw new InvalidRequestException(msg);
         }
     }
 
