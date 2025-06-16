@@ -106,8 +106,6 @@ import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDir
  */
 public final class LocalTieredStorage implements RemoteStorageManager {
 
-    public static final String STORAGE_CONFIG_PREFIX = "remote.log.storage.local.";
-
     /**
      * The root directory of this storage.
      */
