@@ -29,10 +29,11 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class IntegrationTestUtils {
 
-    private static int correlationId = 0;
+    private static final AtomicInteger correlationId = new AtomicInteger(0);
 
     public static void sendRequest(Socket socket, byte[] request) throws IOException {
         DataOutputStream outgoing = new DataOutputStream(socket.getOutputStream());
@@ -42,7 +43,7 @@ public class IntegrationTestUtils {
     }
 
     public static RequestHeader nextRequestHeader(ApiKeys apiKey, short apiVersion) {
-        return new RequestHeader(apiKey, apiVersion, "client-id", 1);
+        return new RequestHeader(apiKey, apiVersion, "client-id", correlationId.getAndIncrement());
     }
 
     @SuppressWarnings("unchecked")
@@ -59,25 +60,23 @@ public class IntegrationTestUtils {
         return (T) AbstractResponse.parseResponse(apiKey, new ByteBufferAccessor(responseBuffer), version);
     }
 
-    @SuppressWarnings("unchecked")
     public static <T extends AbstractResponse> T sendAndReceive(
         AbstractRequest request,
         Socket socket
     ) throws IOException {
-        correlationId += 1;
-        RequestHeader header = new RequestHeader(request.apiKey(), request.version(), "client-id", correlationId);
+        correlationId.getAndIncrement();
+        RequestHeader header = new RequestHeader(request.apiKey(), request.version(), "client-id", correlationId.get());
         byte[] serializedBytes = Utils.toArray(request.serializeWithHeader(header));
         sendRequest(socket, serializedBytes);
         return receive(socket, request.apiKey(), request.version());
     }
 
-    @SuppressWarnings("unchecked")
     public static <T extends AbstractResponse> T connectAndReceive(
         AbstractRequest request,
         int port
     ) throws IOException {
         try (Socket socket = connect(port)) {
-            return (T) sendAndReceive(request, socket);
+            return sendAndReceive(request, socket);
         }
     }
 
