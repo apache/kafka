@@ -174,7 +174,7 @@ public class TopicConfig {
         "case, every in-sync replica must acknowledge a write for it to be considered successful. E.g., if a topic has " +
         "<code>replication.factor</code> of 3 and the ISR set includes all three replicas, then all three replicas must acknowledge an " +
         "<code>acks=all</code> write for it to succeed, even if <code>min.insync.replicas</code> happens to be less than 3. " +
-        "If <code>acks=all</code> and the number of in-sync replicas is less than <code>min.insync.replicas</code>, then the producer " +
+        "If <code>acks=all</code> and the current ISR set contains fewer than <code>min.insync.replicas</code> members, then the producer " +
         "will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
         "Regardless of the <code>acks</code> setting, the messages will not be visible to the consumers until " +
         "they are replicated to all in-sync replicas and the <code>min.insync.replicas</code> condition is met.<br> " +
