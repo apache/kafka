@@ -404,11 +404,10 @@ public class AclControlManagerTest {
                     AclOperation.READ,
                     AclPermissionType.ALLOW));
 
+            // split acl creations between two create requests
             if (i % 2 == 0) {
-                // add to first create list
                 firstCreate.add(acl.toBinding());
             } else {
-                // add to second create list
                 secondCreate.add(acl.toBinding());
             }
         }
@@ -440,12 +439,14 @@ public class AclControlManagerTest {
 
         assertEquals(MAX_RECORDS_PER_USER_OP + 2, deleteResult.response().size());
         for (AclDeleteResult.AclBindingDeleteResult result :
-            deleteResult.response().get(0).aclBindingDeleteResults()) {
+            deleteResult.response().get(MAX_RECORDS_PER_USER_OP - 1).aclBindingDeleteResults()) {
             assertEquals(Optional.empty(), result.exception());
         }
-        Exception exception = deleteResult.response().get(MAX_RECORDS_PER_USER_OP + 1).exception().get();
-        assertEquals(InvalidRequestException.class, exception.getClass());
-        assertEquals(BoundedListTooLongException.class, exception.getCause().getClass());
-        assertEquals("Cannot remove more than " + MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.", exception.getCause().getMessage());
+        for (int i = MAX_RECORDS_PER_USER_OP; i < MAX_RECORDS_PER_USER_OP + 2; i++) {
+            Exception exception = deleteResult.response().get(i).exception().get();
+            assertEquals(InvalidRequestException.class, exception.getClass());
+            assertEquals(BoundedListTooLongException.class, exception.getCause().getClass());
+            assertEquals("Cannot remove more than " + MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.", exception.getCause().getMessage());
+        }
     }
 }

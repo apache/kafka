@@ -202,7 +202,7 @@ public class AclControlManager {
             AclBinding binding = acl.toBinding();
             if (filter.matches(binding)) {
                 // check size limitation first before adding additional records
-                if (records.size() > MAX_RECORDS_PER_USER_OP) {
+                if (records.size() == MAX_RECORDS_PER_USER_OP) {
                     throw new BoundedListTooLongException("Cannot remove more than " +
                         MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.");
                 }
