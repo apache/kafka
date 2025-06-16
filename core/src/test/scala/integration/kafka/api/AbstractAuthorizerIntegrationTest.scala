@@ -80,11 +80,13 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
   val tp = new TopicPartition(topic, part)
   val logDir = "logDir"
   val group = "my-group"
+  val shareGroup = "share-group"
   val protocolType = "consumer"
   val protocolName = "consumer-range"
   val clusterResource = new ResourcePattern(CLUSTER, Resource.CLUSTER_NAME, LITERAL)
   val topicResource = new ResourcePattern(TOPIC, topic, LITERAL)
   val groupResource = new ResourcePattern(GROUP, group, LITERAL)
+  val shareGroupResource = new ResourcePattern(GROUP, shareGroup, LITERAL)
   val transactionalIdResource = new ResourcePattern(TRANSACTIONAL_ID, transactionalId, LITERAL)
 
   producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")
@@ -109,6 +111,7 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
 
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    properties.put(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, "10000")
     properties.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
     properties.put(TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, "1")

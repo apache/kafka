@@ -82,7 +82,7 @@
     You can also set this to false, but you will then need to manually restore leadership to the restored replicas by running the command:
   <pre><code class="language-bash">$ bin/kafka-leader-election.sh --bootstrap-server localhost:9092 --election-type preferred --all-topic-partitions</code></pre>
 
-  <h4 class="anchor-heading"><a id="basic_ops_racks" class="anchor-link"></a><a href="#basic_ops_racks">Balancing Replicas Across Racks</a></h4>
+  <h4 class="anchor-heading"><a id="basic_ops_racks" class="anchor-link"></a><a href="#basic_ops_racks">Balancing replicas across racks</a></h4>
   The rack awareness feature spreads replicas of the same partition across different racks. This extends the guarantees Kafka provides for broker-failure to cover rack-failure, limiting the risk of data loss should all the brokers on a rack fail at once. The feature can also be applied to other broker groupings such as availability zones in EC2.
   <p></p>
   You can specify that a broker belongs to a particular rack by adding a property to the broker config:
@@ -107,7 +107,18 @@ my-topic                       0          2               4               2     
 my-topic                       1          2               3               1          consumer-1-029af89c-873c-4751-a720-cefd41a669d6   /127.0.0.1                     consumer-1
 my-topic                       2          2               3               1          consumer-2-42c1abd4-e3b2-425d-a8bb-e1ea49b29bb2   /127.0.0.1                     consumer-2</code></pre>
 
-  <h4 class="anchor-heading"><a id="basic_ops_consumer_group" class="anchor-link"></a><a href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
+  <h4 class="anchor-heading"><a id="basic_ops_groups" class="anchor-link"></a><a href="#basic_ops_groups">Managing groups</a></h4>
+
+  With the GroupCommand tool, we can list groups of all types, including consumer groups, share groups and streams groups. Each type of group has its own tool for administering groups of that type.
+
+  For example, to list all groups in the cluster:
+
+  <pre><code class="language-bash">$ bin/kafka-groups.sh --bootstrap-server localhost:9092 --list
+GROUP                    TYPE                     PROTOCOL
+my-consumer-group        Consumer                 consumer
+my-share-group           Share                    share</code></pre>
+
+  <h4 class="anchor-heading"><a id="basic_ops_consumer_group" class="anchor-link"></a><a href="#basic_ops_consumer_group">Managing consumer groups</a></h4>
 
   With the ConsumerGroupCommand tool, we can list, describe, or delete the consumer groups. The consumer group can be deleted manually, or automatically when the last committed offset for that group expires. Manual deletion works only if the group does not have any active members.
 
@@ -213,11 +224,58 @@ Deletion of requested consumer groups ('my-group', 'my-other-group') was success
   <p>
   For example, to reset offsets of a consumer group to the latest offset:
 
-  <pre><code class="language-bash">$ bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group consumergroup1 --topic topic1 --to-latest
+  <pre><code class="language-bash">$ bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group my-group --topic topic1 --to-latest
 TOPIC                          PARTITION  NEW-OFFSET
 topic1                         0          0</code></pre>
 
+  <h4 class="anchor-heading"><a id="basic_ops_share_group" class="anchor-link"></a><a href="#basic_ops_share_group">Managing share groups</a></h4>
+
+  NOTE: Apache Kafka 4.1 ships with a preview of share groups which is not enabled by default. To enable share groups, use the <code>kafka-features.sh</code> tool to upgrade to <code>share.version=1</code>.
+  For more information, please read the <a href="https://cwiki.apache.org/confluence/x/CIq3FQ"> release notes</a>.
+
   <p>
+  Use the ShareGroupCommand tool to list, describe, or delete the share groups. Only share groups without any active members can be deleted.
+
+  For example, to list all share groups in a cluster:
+
+  <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --list
+my-share-group</code></pre>
+
+  To view the current start offset, use the "--describe" option:
+
+  <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group
+GROUP           TOPIC           PARTITION  START-OFFSET
+my-share-group  topic1          0          4</code></pre>
+
+  NOTE: The admin client needs DESCRIBE access to all the topics used in the group.
+
+  There are many --describe options that provide more detailed information about a share group:
+  <ul>
+    <li>--members: Describes active members in the share group.
+      <pre><code class="language-bash">bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group --members
+GROUP           CONSUMER-ID            HOST            CLIENT-ID              #PARTITIONS  ASSIGNMENT
+my-share-group  94wrSQNmRda9Q6sk6jMO6Q /127.0.0.1      console-share-consumer 1            topic1:0
+my-share-group  EfI0sha8QSKSrL_-I_zaTA /127.0.0.1      console-share-consumer 1            topic1:0</code></pre>
+      You can see that both members have been assigned the same partition which they are sharing.
+    </li>
+    <li>--offsets: The default describe option. This provides the same output as the "--describe" option.</li>
+    <li>--state: Describes a summary of the state of the share group.
+      <pre><code class="language-bash">bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group --state
+GROUP           COORDINATOR (ID)          STATE           #MEMBERS
+my-share-group  localhost:9092  (1)       Stable          2</code></pre>
+    </li>
+  </ul>
+
+  <p>To delete the offsets of individual topics in the share group, use the "--delete-offsets" option:
+
+  <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --delete-offsets --group my-share-group --topic topic1
+TOPIC           STATUS
+topic1          Successful</code></pre>
+
+  <p>To delete one or more share groups, use "--delete" option:
+
+  <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --delete --group my-share-group
+Deletion of requested share groups ('my-share-group') was successful.</code></pre>
 
   <h4 class="anchor-heading"><a id="basic_ops_cluster_expansion" class="anchor-link"></a><a href="#basic_ops_cluster_expansion">Expanding your cluster</a></h4>
 
@@ -352,7 +410,7 @@ Reassignment of partition [foo,0] is completed</code></pre>
 Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
   Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7</code></pre>
 
-  <h4 class="anchor-heading"><a id="rep-throttle" class="anchor-link"></a><a href="#rep-throttle">Limiting Bandwidth Usage during Data Migration</a></h4>
+  <h4 class="anchor-heading"><a id="rep-throttle" class="anchor-link"></a><a href="#rep-throttle">Limiting bandwidth usage during data migration</a></h4>
   Kafka lets you apply a throttle to replication traffic, setting an upper bound on the bandwidth used to move replicas from machine to machine and from disk to disk. This is useful when rebalancing a cluster, adding or removing brokers or adding or removing disks, as it limits the impact these data-intensive operations will have on users.
   <p></p>
   There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
@@ -1529,6 +1587,11 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
         <td>0</td>
       </tr>
       <tr>
+        <td>Election from Eligible leader replicas rate</td>
+        <td>kafka.controller:type=ControllerStats,name=ElectionFromEligibleLeaderReplicasPerSec</td>
+        <td>0</td>
+      </tr>
+      <tr>
         <td>Is controller active on broker</td>
         <td>kafka.controller:type=KafkaController,name=ActiveControllerCount</td>
         <td>only one broker in the cluster should have 1</td>
@@ -1789,7 +1852,7 @@ The following set of metrics are available for monitoring the group coordinator:
   <tbody>
     <tr>
       <td>The Partition Count, per State</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=partition-count,state={loading|active|failed}</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=num-partitions,state={loading|active|failed}</td>
       <td>The number of <code>__consumer_offsets</code> partitions hosted by the broker, broken down by state</td>
     </tr>
     <tr>
@@ -1814,22 +1877,22 @@ The following set of metrics are available for monitoring the group coordinator:
     </tr>
     <tr>
       <td>Event Queue Time (Ms)</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=event-queue-time-ms-[max|p50|p99|p999]</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-queue-time-ms-[max|p50|p95|p99|p999]</td>
       <td>The time that an event spent waiting in the queue to be processed</td>
     </tr>
     <tr>
       <td>Event Processing Time (Ms)</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=event-processing-time-ms-[max|p50|p99|p999]</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-processing-time-ms-[max|p50|p95|p99|p999]</td>
       <td>The time that an event took to be processed</td>
     </tr>
     <tr>
       <td>Event Purgatory Time (Ms)</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=event-purgatory-time-ms-[max|p50|p99|p999]</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-purgatory-time-ms-[max|p50|p95|p99|p999]</td>
       <td>The time that an event waited in the purgatory before being completed</td>
     </tr>
     <tr>
       <td>Batch Flush Time (Ms)</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-time-ms-[max|p50|p99|p999]</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-time-ms-[max|p50|p95|p99|p999]</td>
       <td>The time that a batch took to be flushed to the local partition</td>
     </tr>
     <tr>
@@ -3007,6 +3070,11 @@ All the following metrics have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>commit-ratio</td>
+        <td>The fraction of time the thread spent on committing all tasks</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>commit-rate</td>
         <td>The average number of commits per sec.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
@@ -3015,6 +3083,11 @@ All the following metrics have a recording level of <code>info</code>:
         <td>commit-total</td>
         <td>The total number of commit calls.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>poll-ratio</td>
+        <td>The fraction of time the thread spent on polling records from consumer</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>poll-rate</td>
@@ -3027,6 +3100,21 @@ All the following metrics have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>poll-records-avg</td>
+        <td>The average number of records polled from consumer within an iteration.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>poll-records-max</td>
+        <td>The maximum number of records polled from consumer within an iteration.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-ratio</td>
+        <td>The fraction of time the thread spent on processing active tasks</td>
+        <td>kafka.streams:type=type=stream-thread-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>process-rate</td>
         <td>The average number of processed records per sec.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
@@ -3034,6 +3122,21 @@ All the following metrics have a recording level of <code>info</code>:
       <tr>
         <td>process-total</td>
         <td>The total number of processed records.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-records-avg</td>
+        <td>The average number of records processed within an iteration (total count of processed records over total number of iterations).</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-records-max</td>
+        <td>The maximum number of records processed within an iteration.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-ratio</td>
+        <td>The fraction of time the thread spends performing punctuating actions on active tasks</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -3110,6 +3213,26 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>punctuate-latency-avg</td>
+        <td>The average amount of time taken to execute periodic tasks per call to punctuate</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-latency-max</td>
+        <td>The maximum amount of time taken for any single call to punctuate to complete.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-total</td>
+        <td>The total number of times the punctuate method was called to trigger periodic actions during task processing.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-rate</td>
+        <td>The average number of calls to punctuate per second.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>record-lateness-avg</td>
         <td>The average observed lateness in ms of records (stream time - record timestamp).</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
@@ -3145,6 +3268,11 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>active-buffer-count</td>
+        <td>The count of buffered records that are polled from consumer and not yet processed for this active task.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>input-buffer-bytes-total</td>
         <td>The total number of bytes accumulated by this task,</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
@@ -3152,6 +3280,26 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>cache-size-bytes-total</td>
         <td>The cache size in bytes accumulated by this task.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-rate</td>
+        <td>The average number of records restored per second.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-total</td>
+        <td>The total number of records restored</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>update-rate</td>
+        <td>The average number of records updated per second.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>update-total</td>
+        <td>The total number of records updated</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
  </tbody>
@@ -3245,6 +3393,16 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>records-produced-total</td>
         <td>The total number of records produced by a sink processor node.</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Idempotent-update-skip-rate</td>
+        <td>The average number of skipped idempotent updates per second.</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Idempotent-update-skip-total</td>
+        <td>The total number of skipped updates.</td>
         <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
       </tr>
       </tbody>
@@ -4004,7 +4162,7 @@ foo
   <p>In order to migrate from ZooKeeper to KRaft you need to use a bridge release. The last bridge release is Kafka 3.9.
     See the <a href="/39/documentation/#kraft_zk_migration">ZooKeeper to KRaft Migration steps</a> in the 3.9 documentation.</p>
 
-<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.9 Tiered Storage</a></h3>
+<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#tiered_storage">6.9 Tiered Storage</a></h3>
 
 <h4 class="anchor-heading"><a id="tiered_storage_overview" class="anchor-link"></a><a href="#tiered_storage_overview">Tiered Storage Overview</a></h4>
 
@@ -4021,12 +4179,12 @@ foo
 
 <h5 class="anchor-heading"><a id="tiered_storage_config_broker" class="anchor-link"></a><a href="#tiered_storage_config_broker">Broker Configurations</a></h5>
 
-<p>By default, Kafka server will not enable tiered storage feature. <code>remote.log.storage.system.enable</code>
+<p>By default, the Kafka server will not enable the tiered storage feature. <code>remote.log.storage.system.enable</code>
   is the property to control whether to enable tiered storage functionality in a broker or not. Setting it to "true" enables this feature.
 </p>
 
 <p><code>RemoteStorageManager</code> is an interface to provide the lifecycle of remote log segments and indexes. Kafka server
-  doesn't provide out-of-the-box implementation of RemoteStorageManager. Configuring <code>remote.log.storage.manager.class.name</code>
+  doesn't provide out-of-the-box implementation of RemoteStorageManager. Users must configure <code>remote.log.storage.manager.class.name</code>
   and <code>remote.log.storage.manager.class.path</code> to specify the implementation of RemoteStorageManager.
 </p>
 
@@ -4161,9 +4319,10 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 <p>While the Tiered Storage works for most use cases, it is still important to be aware of the following limitations:
 <ul>
   <li>No support for compacted topics</li>
-  <li>Deleting tiered storage enabled topics is required before disabling tiered storage at the broker level</li>
+  <li>Disabling tiered storage on all topics where it is enabled is required before disabling tiered storage at the broker level</li>
   <li>Admin actions related to tiered storage feature are only supported on clients from version 3.0 onwards</li>
   <li>No support for log segments missing producer snapshot file. It can happen when topic is created before v2.8.0.</li>
+  <li>Only one partition per fetch request is served from the remote store. This limitation can become a bottleneck for consumer client throughput - consider configuring <code>max.partition.fetch.bytes</code> appropriately.</li>
 </ul>
 
 <p>For more information, please check <a href="https://cwiki.apache.org/confluence/x/9xDOEg">Kafka Tiered Storage GA Release Notes</a>.
@@ -4287,10 +4446,10 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <h4 class="anchor-heading"><a id="eligible_leader_replicas_overview" class="anchor-link"></a><a href="#eligible_leader_replicas_overview">Overview</a></h4>
 
   <p>Starting from Apache Kafka 4.0, Eligible Leader Replicas (<a href="https://cwiki.apache.org/confluence/x/mpOzDw">KIP-966 Part 1</a>)
-    is available for the users to an improvement to Kafka replication. As the "strict min ISR" rule has been generally applied, which means the high watermark for the data partition can't advance
-    if the size of the ISR is smaller than the min ISR(<code>min.insync.replicas</code>), it makes some replicas that are not in the ISR safe to become the leader. The KRaft controller
-    stores such replicas in the PartitionRecord field called <code>Eligible Leader Replicas</code>. During the leader election, the controller will select the leaders
-    with the following order:</p>
+    is available for the users to an improvement to Kafka replication (ELR is enabled by default on new clusters starting 4.1). As the "strict min ISR" rule has been generally applied,
+    which means the high watermark for the data partition can't advance if the size of the ISR is smaller than the min ISR(<code>min.insync.replicas</code>), it makes some replicas
+    that are not in the ISR safe to become the leader. The KRaft controller stores such replicas in the PartitionRecord field called <code>Eligible Leader Replicas</code>. During the
+    leader election, the controller will select the leaders with the following order:</p>
   <ul>
     <li>If ISR is not empty, select one of them.</li>
     <li>If ELR is not empty, select one that is not fenced.</li>

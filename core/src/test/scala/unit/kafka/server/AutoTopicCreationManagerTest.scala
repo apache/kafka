@@ -19,6 +19,7 @@ package kafka.server
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Collections, Optional, Properties}
 import kafka.coordinator.transaction.TransactionCoordinator
@@ -30,12 +31,13 @@ import org.apache.kafka.common.message.{ApiVersionsResponseData, CreateTopicsReq
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicConfig, CreatableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig}
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
@@ -75,7 +77,7 @@ class AutoTopicCreationManagerTest {
     props.setProperty(ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
 
     config = KafkaConfig.fromProps(props)
-    val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
+    val aliveBrokers = util.List.of(new Node(0, "host0", 0), new Node(1, "host1", 1))
 
     Mockito.when(metadataCache.getAliveBrokerNodes(any(classOf[ListenerName]))).thenReturn(aliveBrokers)
   }
@@ -112,7 +114,7 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
     topicsCollection.add(getNewTopic(topicName, numPartitions, replicationFactor))
@@ -215,7 +217,7 @@ class AutoTopicCreationManagerTest {
   @Test
   def testCreateStreamsInternalTopics(): Unit = {
     val topicConfig = new CreatableTopicConfigCollection()
-    topicConfig.add(new CreatableTopicConfig().setName("cleanup.policy").setValue("compact"));
+    topicConfig.add(new CreatableTopicConfig().setName("cleanup.policy").setValue("compact"))
 
     val topics = Map(
       "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(3).setReplicationFactor(2).setConfigs(topicConfig),
@@ -228,7 +230,7 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
     autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
 
@@ -249,8 +251,9 @@ class AutoTopicCreationManagerTest {
       .build(ApiKeys.CREATE_TOPICS.latestVersion())
 
     val forwardedRequestBuffer = capturedRequest.requestData().duplicate()
-    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer));
-    assertEquals(requestBody.data(), CreateTopicsRequest.parse(forwardedRequestBuffer, ApiKeys.CREATE_TOPICS.latestVersion()).data())
+    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer))
+    assertEquals(requestBody.data(), CreateTopicsRequest.parse(new ByteBufferAccessor(forwardedRequestBuffer),
+      ApiKeys.CREATE_TOPICS.latestVersion()).data())
   }
 
   @Test
@@ -263,7 +266,7 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
     autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
 
@@ -284,9 +287,9 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
@@ -304,8 +307,9 @@ class AutoTopicCreationManagerTest {
         .setTimeoutMs(requestTimeout))
       .build(ApiKeys.CREATE_TOPICS.latestVersion())
     val forwardedRequestBuffer = capturedRequest.requestData().duplicate()
-    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer));
-    assertEquals(requestBody.data(), CreateTopicsRequest.parse(forwardedRequestBuffer, ApiKeys.CREATE_TOPICS.latestVersion()).data())
+    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer))
+    assertEquals(requestBody.data(), CreateTopicsRequest.parse(new ByteBufferAccessor(forwardedRequestBuffer),
+      ApiKeys.CREATE_TOPICS.latestVersion()).data())
   }
 
   @Test
@@ -320,9 +324,9 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
@@ -351,7 +355,7 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
     val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
       .setApiKey(ApiKeys.CREATE_TOPICS.id)

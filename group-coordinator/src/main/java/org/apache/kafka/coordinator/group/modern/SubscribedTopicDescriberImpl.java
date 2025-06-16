@@ -19,8 +19,13 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.PartitionRegistration;
 
-import java.util.Map;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
@@ -30,22 +35,12 @@ import java.util.Set;
  */
 public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     /**
-     * The topic Ids mapped to their corresponding {@link TopicMetadata}
-     * object, which contains topic and partition metadata.
+     * The metadata image that contains the latest metadata information.
      */
-    private final Map<Uuid, TopicMetadata> topicMetadata;
+    private final MetadataImage metadataImage;
 
-    public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata) {
-        this.topicMetadata = Objects.requireNonNull(topicMetadata);
-    }
-
-    /**
-     * Map of topic Ids to topic metadata.
-     *
-     * @return The map of topic Ids to topic metadata.
-     */
-    public Map<Uuid, TopicMetadata> topicMetadata() {
-        return this.topicMetadata;
+    public SubscribedTopicDescriberImpl(MetadataImage metadataImage) {
+        this.metadataImage = Objects.requireNonNull(metadataImage);
     }
 
     /**
@@ -57,8 +52,8 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public int numPartitions(Uuid topicId) {
-        TopicMetadata topic = this.topicMetadata.get(topicId);
-        return topic == null ? -1 : topic.numPartitions();
+        TopicImage topicImage = this.metadataImage.topics().getTopic(topicId);
+        return topicImage == null ? -1 : topicImage.partitions().size();
     }
 
     /**
@@ -71,6 +66,21 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
+        TopicImage topic = metadataImage.topics().getTopic(topicId);
+        if (topic != null) {
+            PartitionRegistration partitionRegistration = topic.partitions().get(partition);
+            if (partitionRegistration != null) {
+                Set<String> racks = new HashSet<>();
+                for (int replica : partitionRegistration.replicas) {
+                    // Only add the rack if it is available for the broker/replica.
+                    BrokerRegistration brokerRegistration = metadataImage.cluster().broker(replica);
+                    if (brokerRegistration != null) {
+                        brokerRegistration.rack().ifPresent(racks::add);
+                    }
+                }
+                return Collections.unmodifiableSet(racks);
+            }
+        }
         return Set.of();
     }
 
@@ -79,18 +89,18 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         SubscribedTopicDescriberImpl that = (SubscribedTopicDescriberImpl) o;
-        return topicMetadata.equals(that.topicMetadata);
+        return metadataImage.equals(that.metadataImage);
     }
 
     @Override
     public int hashCode() {
-        return topicMetadata.hashCode();
+        return Objects.hashCode(metadataImage);
     }
 
     @Override
     public String toString() {
         return "SubscribedTopicMetadata(" +
-            "topicMetadata=" + topicMetadata +
+            "metadataImage=" + metadataImage +
             ')';
     }
 }

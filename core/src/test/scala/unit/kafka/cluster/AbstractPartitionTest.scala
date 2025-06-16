@@ -17,14 +17,13 @@
 package kafka.cluster
 
 import kafka.log.LogManager
-import kafka.server.MetadataCache
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.MockAlterPartitionManager
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.MockConfigRepository
+import org.apache.kafka.metadata.{MetadataCache, MockConfigRepository}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
@@ -101,7 +100,7 @@ class AbstractPartitionTest {
 
   def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000: java.lang.Integer)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, 999: java.lang.Integer)
     overrides.foreach { case (k, v) => logProps.put(k, v) }

@@ -18,19 +18,21 @@ package kafka.server
 
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.message.OffsetFetchRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 
-import scala.jdk.CollectionConverters.IterableHasAsScala
+import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(types = Array(Type.KRAFT), serverProperties = Array(
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     new ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
@@ -40,30 +42,16 @@ import scala.jdk.CollectionConverters.IterableHasAsScala
 class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest
-  def testTxnOffsetCommitWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  def testTxnOffsetCommitWithNewConsumerGroupProtocol(): Unit = {
     testTxnOffsetCommit(true)
   }
 
   @ClusterTest
-  def testTxnOffsetCommitWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testTxnOffsetCommit(false)
-  }
-
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    )
-  )
-  def testTxnOffsetCommitWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+  def testTxnOffsetCommitWithOldConsumerGroupProtocol(): Unit = {
     testTxnOffsetCommit(false)
   }
 
   private def testTxnOffsetCommit(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
-      fail("Cannot use the new protocol with the old group coordinator.")
-    }
-
     val topic = "topic"
     val partition = 0
     val transactionalId = "txn"
@@ -231,12 +219,17 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
      partition: Int,
      groupId: String
   ): Long = {
-    val fetchOffsetsResp = fetchOffsets(
-      groups = Map(groupId -> List(new TopicPartition(topic, partition))),
+    val groupIdRecord = fetchOffsets(
+      group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId(groupId)
+        .setTopics(List(
+          new OffsetFetchRequestData.OffsetFetchRequestTopics()
+            .setName(topic)
+            .setPartitionIndexes(List[Integer](partition).asJava)
+        ).asJava),
       requireStable = true,
-      version = ApiKeys.OFFSET_FETCH.latestVersion
+      version = 9
     )
-    val groupIdRecord = fetchOffsetsResp.find(_.groupId == groupId).head
     val topicRecord = groupIdRecord.topics.asScala.find(_.name == topic).head
     val partitionRecord = topicRecord.partitions.asScala.find(_.partitionIndex == partition).head
     partitionRecord.committedOffset

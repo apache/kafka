@@ -58,9 +58,10 @@ public class TopicConfig {
     public static final String FLUSH_MS_CONFIG = "flush.ms";
     public static final String FLUSH_MS_DOC = "This setting allows specifying a time interval at which we will " +
         "force an fsync of data written to the log. For example if this was set to 1000 " +
-        "we would fsync after 1000 ms had passed. In general we recommend you not set " +
-        "this and use replication for durability and allow the operating system's background " +
-        "flush capabilities as it is more efficient.";
+        "we would fsync after 1000 ms had passed. Note that this setting depends on the broker-level " +
+        "configuration <code>log.flush.scheduler.interval.ms</code>, which controls how frequently the flush check occurs. " +
+        "In general we recommend you not set this and use replication for durability and allow the operating system's " +
+        "background flush capabilities as it is more efficient.";
 
     public static final String RETENTION_BYTES_CONFIG = "retention.bytes";
     public static final String RETENTION_BYTES_DOC = "This configuration controls the maximum size a partition " +
@@ -80,8 +81,9 @@ public class TopicConfig {
         "Moreover, it triggers the rolling of new segment if the retention.ms condition is satisfied.";
 
     public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
-    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tiered storage for a topic, set this configuration as true. " +
-            "You can not disable this config once it is enabled. It will be provided in future versions.";
+    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tiered storage for a topic, set this configuration to true. " +
+            "To disable tiered storage for a topic that has it enabled, set this configuration to false. " +
+            "When disabling, you must also set <code>remote.log.delete.on.disable</code> to true.";
 
     public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
     public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segment before it gets deleted. " +
@@ -106,18 +108,15 @@ public class TopicConfig {
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
-        "The largest record batch size allowed by Kafka (after compression if compression is enabled). " +
-        "If this is increased and there are consumers older than 0.10.2, the consumers' fetch " +
-        "size must also be increased so that they can fetch record batches this large. " +
-        "In the latest message format version, records are always grouped into batches for efficiency. " +
-        "In previous message format versions, uncompressed records are not grouped into batches and this " +
-        "limit only applies to a single record in that case.";
+        "The largest record batch size allowed by Kafka (after compression if compression is enabled).";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
-    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently " +
-        "Kafka adds an index entry to its offset index. The default setting ensures that we index a " +
-        "message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
-        "position in the log but makes the index larger. You probably don't need to change this.";
+    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently Kafka " +
+            "adds entries to its offset index and, conditionally, to its time index. " +
+            "The default setting ensures that we index a message roughly every 4096 bytes. " +
+            "More frequent indexing allows reads to jump closer to the exact position in the log " +
+            "but results in larger index files. You probably don't need to change this." +
+            "<p> Note: the time index will be inserted only when the timestamp is greater than the last indexed timestamp.</p>";
 
     public static final String FILE_DELETE_DELAY_MS_CONFIG = "file.delete.delay.ms";
     public static final String FILE_DELETE_DELAY_MS_DOC = "The time to wait before deleting a file from the " +

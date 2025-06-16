@@ -18,20 +18,20 @@
 package kafka.server
 
 import kafka.log.LogManager
-import kafka.log.remote.RemoteLogManager
 import kafka.network.SocketServer
 import kafka.utils.Logging
 import org.apache.kafka.common.ClusterResource
-import org.apache.kafka.common.internals.ClusterResourceListeners
+import org.apache.kafka.common.internals.{ClusterResourceListeners, Plugin}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinator
-import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.metadata.{BrokerState, MetadataCache}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.NodeToControllerChannelManager
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
@@ -78,7 +78,7 @@ trait KafkaBroker extends Logging {
   // acquire lock while handling Fetch requests.
   val NumFetchSessionCacheShards: Int = 8
 
-  def authorizer: Option[Authorizer]
+  def authorizerPlugin: Option[Plugin[Authorizer]]
   def brokerState: BrokerState
   def clusterId: String
   def config: KafkaConfig

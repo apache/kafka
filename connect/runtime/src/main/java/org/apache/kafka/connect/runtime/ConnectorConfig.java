@@ -372,9 +372,9 @@ public class ConnectorConfig extends AbstractConfig {
             try {
                 final String typeConfig = prefix + "type";
                 final String versionConfig = prefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
-                @SuppressWarnings("unchecked") final Transformation<R> transformation = getTransformationOrPredicate(plugins, typeConfig, versionConfig);
+                final Transformation<R> transformation = getTransformationOrPredicate(plugins, typeConfig, versionConfig);
                 Map<String, Object> configs = originalsWithPrefix(prefix);
-                Object predicateAlias = configs.remove(TransformationStage.PREDICATE_CONFIG);
+                String predicateAlias = (String) configs.remove(TransformationStage.PREDICATE_CONFIG);
                 Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
                 transformation.configure(configs);
                 Plugin<Transformation<R>> transformationPlugin = metrics.wrap(transformation, connectorTaskId, alias);
@@ -382,13 +382,26 @@ public class ConnectorConfig extends AbstractConfig {
                     String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
                     final String predicateTypeConfig = predicatePrefix + "type";
                     final String predicateVersionConfig = predicatePrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
-                    @SuppressWarnings("unchecked")
                     Predicate<R> predicate = getTransformationOrPredicate(plugins, predicateTypeConfig, predicateVersionConfig);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
-                    Plugin<Predicate<R>> predicatePlugin = metrics.wrap(predicate, connectorTaskId, (String) predicateAlias);
-                    transformations.add(new TransformationStage<>(predicatePlugin, negate != null && Boolean.parseBoolean(negate.toString()), transformationPlugin, plugins.safeLoaderSwapper()));
+                    Plugin<Predicate<R>> predicatePlugin = metrics.wrap(predicate, connectorTaskId, predicateAlias);
+                    transformations.add(new TransformationStage<>(
+                        predicatePlugin,
+                        predicateAlias,
+                        plugins.pluginVersion(predicate.getClass().getName(), predicate.getClass().getClassLoader(), PluginType.PREDICATE),
+                        negate != null && Boolean.parseBoolean(negate.toString()),
+                        transformationPlugin,
+                        alias,
+                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                        plugins.safeLoaderSwapper())
+                    );
                 } else {
-                    transformations.add(new TransformationStage<>(transformationPlugin, plugins.safeLoaderSwapper()));
+                    transformations.add(new TransformationStage<>(
+                        transformationPlugin,
+                        alias,
+                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                        plugins.safeLoaderSwapper())
+                    );
                 }
             } catch (Exception e) {
                 throw new ConnectException(e);
@@ -781,22 +794,7 @@ public class ConnectorConfig extends AbstractConfig {
         }
     }
 
-    private static class ConverterDefaults {
-        private final String type;
-        private final String version;
-
-        public ConverterDefaults(String type, String version) {
-            this.type = type;
-            this.version = version;
-        }
-
-        public String type() {
-            return type;
-        }
-
-        public String version() {
-            return version;
-        }
+    private record ConverterDefaults(String type, String version) {
     }
 
     public static class PluginVersionValidator implements ConfigDef.Validator {

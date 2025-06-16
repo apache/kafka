@@ -18,13 +18,13 @@ package org.apache.kafka.common.test;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.network.EndPoint;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 import java.util.function.BiFunction;
@@ -106,10 +106,10 @@ public class TestUtils {
     /**
      * Convert EndPoint to String
      */
-    public static String endpointToString(EndPoint endPoint) {
+    public static String endpointToString(Endpoint endPoint) {
         String host = endPoint.host();
         int port = endPoint.port();
-        ListenerName listenerName = endPoint.listenerName();
+        ListenerName listenerName = ListenerName.normalised(endPoint.listener());
 
         String hostport = (host == null) ? (":" + port) : Utils.formatAddress(host, port);
         return listenerName.value() + "://" + hostport;
@@ -119,7 +119,7 @@ public class TestUtils {
      * uses default value of 15 seconds for timeout
      */
     public static void waitForCondition(final Supplier<Boolean> testCondition, final String conditionDetails) throws InterruptedException {
-        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, conditionDetails);
+        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, () -> conditionDetails);
     }
 
     /**
@@ -128,9 +128,9 @@ public class TestUtils {
      * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
      * avoid transient failures due to slow or overloaded machines.
      */
-    public static void waitForCondition(final Supplier<Boolean> testCondition, 
-                                        final long maxWaitMs, 
-                                        String conditionDetails) throws InterruptedException {
+    public static void waitForCondition(final Supplier<Boolean> testCondition,
+                                        final long maxWaitMs,
+                                        final Supplier<String> conditionDetails) throws InterruptedException {
         final long expectedEnd = System.currentTimeMillis() + maxWaitMs;
 
         while (true) {
@@ -138,7 +138,7 @@ public class TestUtils {
                 if (testCondition.get()) {
                     return;
                 }
-                String conditionDetail = conditionDetails == null ? "" : conditionDetails;
+                String conditionDetail = conditionDetails.get() == null ? "" : conditionDetails.get();
                 throw new TimeoutException("Condition not met: " + conditionDetail);
             } catch (final AssertionError t) {
                 if (expectedEnd <= System.currentTimeMillis()) {
@@ -151,6 +151,18 @@ public class TestUtils {
             }
             Thread.sleep(Math.min(DEFAULT_POLL_INTERVAL_MS, maxWaitMs));
         }
+    }
+
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
+    public static void waitForCondition(final Supplier<Boolean> testCondition,
+                                        final long maxWaitMs,
+                                        String conditionDetails) throws InterruptedException {
+        waitForCondition(testCondition, maxWaitMs, () -> conditionDetails);
     }
 
     public static int waitUntilLeaderIsElectedOrChangedWithAdmin(Admin admin,
@@ -168,7 +180,7 @@ public class TestUtils {
     }
 
     private static Integer getLeaderFromAdmin(Admin admin, String topic, int partition) throws Exception {
-        TopicDescription topicDescription = admin.describeTopics(Collections.singletonList(topic)).allTopicNames().get().get(topic);
+        TopicDescription topicDescription = admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic);
         return topicDescription.partitions().stream()
             .filter(partitionInfo -> partitionInfo.partition() == partition)
             .findFirst()

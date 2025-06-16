@@ -52,13 +52,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -236,14 +234,9 @@ public class MirrorMaker {
     private void addHerder(SourceAndTarget sourceAndTarget) {
         log.info("creating herder for " + sourceAndTarget.toString());
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
-        List<String> restNamespace;
-        try {
-            String encodedSource = encodePath(sourceAndTarget.source());
-            String encodedTarget = encodePath(sourceAndTarget.target());
-            restNamespace = Arrays.asList(encodedSource, encodedTarget);
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("Unable to create encoded URL paths for source and target using UTF-8", e);
-        }
+        String encodedSource = encodePath(sourceAndTarget.source());
+        String encodedTarget = encodePath(sourceAndTarget.target());
+        List<String> restNamespace = List.of(encodedSource, encodedTarget);
         String workerId = generateWorkerId(sourceAndTarget);
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
@@ -282,8 +275,8 @@ public class MirrorMaker {
         herders.put(sourceAndTarget, herder);
     }
 
-    private static String encodePath(String rawPath) throws UnsupportedEncodingException {
-        return URLEncoder.encode(rawPath, StandardCharsets.UTF_8.name())
+    private static String encodePath(String rawPath) {
+        return URLEncoder.encode(rawPath, StandardCharsets.UTF_8)
                 // Java's out-of-the-box URL encoder encodes spaces (' ') as pluses ('+'),
                 // and pluses as '%2B'
                 // But Jetty doesn't decode pluses at all and leaves them as-are in decoded

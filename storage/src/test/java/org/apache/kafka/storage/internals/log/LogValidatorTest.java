@@ -59,7 +59,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
@@ -123,7 +122,7 @@ public class LogValidatorTest {
                 ValidationResult result = validateMessages(invalidRecords, version.value, CompressionType.GZIP, compression);
                 List<Long> recordsResult = new ArrayList<>();
                 result.validatedRecords.records().forEach(s -> recordsResult.add(s.offset()));
-                assertEquals(LongStream.range(0, numRecords).boxed().collect(Collectors.toList()), recordsResult);
+                assertEquals(LongStream.range(0, numRecords).boxed().toList(), recordsResult);
             }
         });
     }
@@ -296,7 +295,7 @@ public class LogValidatorTest {
     public void checkRecompression(byte magic) {
         long now = System.currentTimeMillis();
         // Set the timestamp of seq(1) (i.e. offset 1) as the max timestamp
-        List<Long> timestampSeq = Arrays.asList(now - 1, now + 1, now);
+        List<Long> timestampSeq = List.of(now - 1, now + 1, now);
 
         long producerId;
         short producerEpoch;
@@ -416,7 +415,7 @@ public class LogValidatorTest {
     private MemoryRecords recordsWithNonSequentialInnerOffsets(Byte magicValue, Compression compression, int numRecords) {
         List<SimpleRecord> records = IntStream.range(0, numRecords)
                 .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
-                .collect(Collectors.toList());
+                .toList();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magicValue, compression, TimestampType.CREATE_TIME, 0L);
@@ -475,7 +474,7 @@ public class LogValidatorTest {
     private MemoryRecords createRecords(byte magicValue,
                                         long timestamp,
                                         Compression codec) {
-        List<byte[]> records = Arrays.asList("hello".getBytes(), "there".getBytes(), "beautiful".getBytes());
+        List<byte[]> records = List.of("hello".getBytes(), "there".getBytes(), "beautiful".getBytes());
         return createRecords(records, magicValue, timestamp, codec);
     }
 
@@ -484,7 +483,7 @@ public class LogValidatorTest {
     public void checkCompressed(byte magic) {
         long now = System.currentTimeMillis();
         // set the timestamp of seq(1) (i.e. offset 1) as the max timestamp
-        List<Long> timestampSeq = Arrays.asList(now - 1, now + 1, now);
+        List<Long> timestampSeq = List.of(now - 1, now + 1, now);
 
         long producerId;
         short producerEpoch;
@@ -506,7 +505,7 @@ public class LogValidatorTest {
             partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH;
         }
 
-        List<SimpleRecord> recordList = Arrays.asList(
+        List<SimpleRecord> recordList = List.of(
                 new SimpleRecord(timestampSeq.get(0), "hello".getBytes()),
                 new SimpleRecord(timestampSeq.get(1), "there".getBytes()),
                 new SimpleRecord(timestampSeq.get(2), "beautiful".getBytes())
@@ -1668,7 +1667,7 @@ public class LogValidatorTest {
 
     @Test
     public void testDifferentLevelDoesNotCauseRecompression() {
-        List<byte[]> records = Arrays.asList(
+        List<byte[]> records = List.of(
                 String.join("", Collections.nCopies(256, "some")).getBytes(),
                 String.join("", Collections.nCopies(256, "data")).getBytes()
         );
@@ -1709,7 +1708,7 @@ public class LogValidatorTest {
 
     @Test
     public void testDifferentCodecCausesRecompression() {
-        List<byte[]> records = Arrays.asList(
+        List<byte[]> records = List.of(
                 "somedata".getBytes(),
                 "moredata".getBytes()
         );

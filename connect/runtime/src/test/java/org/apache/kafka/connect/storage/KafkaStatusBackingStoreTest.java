@@ -43,11 +43,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
@@ -388,8 +388,8 @@ public class KafkaStatusBackingStoreTest {
         verify(kafkaBasedLog).send(eq("status-connector-" + CONNECTOR), eq(value), any(Callback.class));
         verify(kafkaBasedLog).send(eq("status-task-conn-0"), eq(value), any(Callback.class));
 
-        assertEquals(new HashSet<>(Collections.singletonList(CONNECTOR)), store.connectors());
-        assertEquals(new HashSet<>(Collections.singletonList(taskStatus)), new HashSet<>(store.getAll(CONNECTOR)));
+        assertEquals(Set.of(CONNECTOR), store.connectors());
+        assertEquals(Set.of(taskStatus), new HashSet<>(store.getAll(CONNECTOR)));
         store.read(consumerRecord(0, "status-connector-conn", null));
         assertTrue(store.connectors().isEmpty());
         assertTrue(store.getAll(CONNECTOR).isEmpty());
@@ -412,7 +412,7 @@ public class KafkaStatusBackingStoreTest {
 
         verify(kafkaBasedLog).send(eq("status-task-conn-0"), eq(value), any(Callback.class));
 
-        assertEquals(new HashSet<>(Collections.singletonList(taskStatus)), new HashSet<>(store.getAll(CONNECTOR)));
+        assertEquals(Set.of(taskStatus), new HashSet<>(store.getAll(CONNECTOR)));
         store.read(consumerRecord(0, "status-task-conn-0", null));
         assertTrue(store.getAll(CONNECTOR).isEmpty());
     }

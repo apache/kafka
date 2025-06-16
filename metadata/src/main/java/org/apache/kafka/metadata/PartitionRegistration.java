@@ -33,7 +33,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
 
@@ -165,8 +164,8 @@ public class PartitionRegistration {
     public final int leaderEpoch;
     public final int partitionEpoch;
 
-    public static boolean electionWasClean(int newLeader, int[] isr, int[] elr) {
-        return newLeader == NO_LEADER || Replicas.contains(isr, newLeader) || Replicas.contains(elr, newLeader);
+    public static boolean electionWasUnclean(byte leaderRecoveryState) {
+        return leaderRecoveryState == LeaderRecoveryState.RECOVERING.value();
     }
 
     private static List<Uuid> checkDirectories(PartitionRecord record) {
@@ -347,7 +346,7 @@ public class PartitionRegistration {
     }
 
     public void maybeLogPartitionChange(Logger log, String description, PartitionRegistration prev) {
-        if (!electionWasClean(leader, prev.isr, prev.elr)) {
+        if (electionWasUnclean(this.leaderRecoveryState.value())) {
             log.info("UNCLEAN partition change for {}: {}", description, diff(prev));
         } else if (log.isDebugEnabled()) {
             log.debug("partition change for {}: {}", description, diff(prev));
@@ -465,12 +464,5 @@ public class PartitionRegistration {
                 ", leaderEpoch=" + leaderEpoch +
                 ", partitionEpoch=" + partitionEpoch +
                 ")";
-    }
-
-    public boolean hasSameAssignment(PartitionRegistration registration) {
-        return Arrays.equals(this.replicas, registration.replicas) &&
-            Arrays.equals(this.directories, registration.directories) &&
-            Arrays.equals(this.addingReplicas, registration.addingReplicas) &&
-            Arrays.equals(this.removingReplicas, registration.removingReplicas);
     }
 }

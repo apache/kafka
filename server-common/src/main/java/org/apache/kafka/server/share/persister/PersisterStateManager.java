@@ -67,7 +67,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -1276,7 +1275,7 @@ public class PersisterStateManager {
                         // fatal failure, cannot retry or progress
                         // fail the RPC
                         handler.findCoordinatorErrorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Errors.COORDINATOR_NOT_AVAILABLE.exception());
-                        return Collections.emptyList();
+                        return List.of();
                     }
                     log.debug("Sending find coordinator RPC");
                     return List.of(new RequestAndCompletionHandler(
@@ -1476,8 +1475,7 @@ public class PersisterStateManager {
                     .map(entry -> new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .collect(Collectors.toList())),
-                true
+                    .collect(Collectors.toList()))
             );
         }
 

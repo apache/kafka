@@ -60,7 +60,6 @@ public class CompletedFetch {
 
     final TopicPartition partition;
     final FetchResponseData.PartitionData partitionData;
-    final short requestVersion;
 
     private final Logger log;
     private final SubscriptionState subscriptions;
@@ -88,8 +87,7 @@ public class CompletedFetch {
                    TopicPartition partition,
                    FetchResponseData.PartitionData partitionData,
                    FetchMetricsAggregator metricAggregator,
-                   Long fetchOffset,
-                   short requestVersion) {
+                   Long fetchOffset) {
         this.log = log;
         this.subscriptions = subscriptions;
         this.decompressionBufferSupplier = decompressionBufferSupplier;
@@ -98,7 +96,6 @@ public class CompletedFetch {
         this.metricAggregator = metricAggregator;
         this.batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
         this.nextFetchOffset = fetchOffset;
-        this.requestVersion = requestVersion;
         this.lastEpoch = Optional.empty();
         this.abortedProducerIds = new HashSet<>();
         this.abortedTransactions = abortedTransactions(partitionData);

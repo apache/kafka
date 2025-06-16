@@ -49,9 +49,7 @@ import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.fail
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -126,9 +124,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     waitUserQuota(ThrottledPrincipal.getName, ControllerMutationRate)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSetUnsetQuota(quorum: String): Unit = {
+  @Test
+  def testSetUnsetQuota(): Unit = {
     val rate = 1.5
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "User")
     // Default Value
@@ -143,9 +140,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     waitUserQuota(principal.getName, Long.MaxValue)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testQuotaMetric(quorum: String): Unit = {
+  @Test
+  def testQuotaMetric(): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Metric is lazily created
       assertTrue(quotaMetric(principal.getName).isEmpty)
@@ -166,9 +162,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testStrictCreateTopicsRequest(quorum: String): Unit = {
+  @Test
+  def testStrictCreateTopicsRequest(): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a strict quota, we
       // expect one to be created and one to be rejected.
@@ -190,9 +185,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testPermissiveCreateTopicsRequest(quorum: String): Unit = {
+  @Test
+  def testPermissiveCreateTopicsRequest(): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.
@@ -204,9 +198,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUnboundedCreateTopicsRequest(quorum: String): Unit = {
+  @Test
+  def testUnboundedCreateTopicsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       // Create two topics worth of 30 partitions each. As we use an user without quota, we
       // expect both topics to be created. The throttle time should be equal to 0.
@@ -216,9 +209,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testStrictDeleteTopicsRequest(quorum: String): Unit = {
+  @Test
+  def testStrictDeleteTopicsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
     }
@@ -244,9 +236,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testPermissiveDeleteTopicsRequest(quorum: String): Unit = {
+  @Test
+  def testPermissiveDeleteTopicsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
     }
@@ -262,9 +253,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUnboundedDeleteTopicsRequest(quorum: String): Unit = {
+  @Test
+  def testUnboundedDeleteTopicsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
 
@@ -276,9 +266,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testStrictCreatePartitionsRequest(quorum: String): Unit = {
+  @Test
+  def testStrictCreatePartitionsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
     }
@@ -304,9 +293,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testPermissiveCreatePartitionsRequest(quorum: String): Unit = {
+  @Test
+  def testPermissiveCreatePartitionsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
     }
@@ -322,9 +310,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUnboundedCreatePartitionsRequest(quorum: String): Unit = {
+  @Test
+  def testUnboundedCreatePartitionsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
 

@@ -20,7 +20,6 @@
   "name": "InitializeShareGroupStateRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+",
       "about": "The group identifier." },
@@ -29,7 +28,7 @@
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The topic identifier." },
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
-        "about":  "The data for the partitions.", "fields": [
+        "about": "The data for the partitions.", "fields": [
         { "name": "Partition", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "StateEpoch", "type": "int32", "versions": "0+",

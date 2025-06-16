@@ -39,7 +39,6 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -154,18 +153,18 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         lastPollTimeMs = currentTimeMs;
 
         final long pollWaitTimeMs = requestManagers.entries().stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
                 .map(rm -> rm.poll(currentTimeMs))
-                .map(networkClientDelegate::addAll)
-                .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
+                .mapToLong(networkClientDelegate::addAll)
+                .filter(ms -> ms <= MAX_POLL_TIMEOUT_MS)
+                .min()
+                .orElse(MAX_POLL_TIMEOUT_MS);
+
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
 
         cachedMaximumTimeToWait = requestManagers.entries().stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
-                .reduce(Long.MAX_VALUE, Math::min);
+                .mapToLong(rm -> rm.maximumTimeToWait(currentTimeMs))
+                .min()
+                .orElse(Long.MAX_VALUE);
 
         reapExpiredApplicationEvents(currentTimeMs);
         List<CompletableEvent<?>> uncompletedEvents = applicationEventReaper.uncompletedEvents();
@@ -233,13 +232,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     // Visible for testing
-    static void runAtClose(final Collection<Optional<? extends RequestManager>> requestManagers,
+    static void runAtClose(final Collection<RequestManager> requestManagers,
                            final NetworkClientDelegate networkClientDelegate,
                            final long currentTimeMs) {
         // These are the optional outgoing requests at the
         requestManagers.stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
                 .map(rm -> rm.pollOnClose(currentTimeMs))
                 .forEach(networkClientDelegate::addAll);
     }
@@ -339,11 +336,20 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
         try {
-            runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
+            // If an error was thrown from initializeResources(), it's possible that the list of request managers
+            // is null, so check before using. If the request manager list is null, there wasn't any real work
+            // performed, so not being able to close the request managers isn't so bad.
+            if (requestManagers != null && networkClientDelegate != null)
+                runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
         } catch (Exception e) {
             log.error("Unexpected error during shutdown. Proceed with closing.", e);
         } finally {
-            sendUnsentRequests(timer);
+            // Likewise, if an error was thrown from initializeResources(), it's possible for the network client
+            // to be null, so check before using. If the network client is null, things have failed catastrophically
+            // enough that there aren't any outstanding requests to be sent anyway.
+            if (networkClientDelegate != null)
+                sendUnsentRequests(timer);
+
             asyncConsumerMetrics.recordApplicationEventExpiredSize(applicationEventReaper.reap(applicationEventQueue));
 
             closeQuietly(requestManagers, "request managers");

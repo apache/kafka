@@ -26,27 +26,16 @@ import org.junit.jupiter.api.Assertions.assertEquals
 
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(types = Array(Type.KRAFT))
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+  )
+)
 class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testDescribeGroupsWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testDescribeGroups()
-  }
-
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testDescribeGroupsWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
-    testDescribeGroups()
-  }
-
-  private def testDescribeGroups(): Unit = {
+  @ClusterTest
+  def testDescribeGroupsWithOldConsumerGroupProtocol(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()

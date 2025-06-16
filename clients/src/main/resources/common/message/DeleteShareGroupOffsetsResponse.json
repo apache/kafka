@@ -30,6 +30,7 @@
   // - KAFKA_STORAGE_ERROR (version 0+)
   // - INVALID_REQUEST (version 0+)
   // - UNKNOWN_SERVER_ERROR (version 0+)
+  // - UNKNOWN_TOPIC_OR_PARTITION (version 0+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -43,14 +44,10 @@
         "about": "The topic name." },
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The unique topic ID." },
-      { "name": "Partitions", "type": "[]DeleteShareGroupOffsetsResponsePartition", "versions": "0+", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
-          "about": "The partition index." },
-        { "name": "ErrorCode", "type": "int16", "versions": "0+",
-          "about": "The partition-level error code, or 0 if there was no error." },
-        { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
-          "about": "The partition-level error message, or null if there was no error." }
-      ]}
+      { "name": "ErrorCode", "type": "int16", "versions": "0+",
+        "about": "The topic-level error code, or 0 if there was no error." },
+      { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "The topic-level error message, or null if there was no error." }
     ]}
   ]
 }

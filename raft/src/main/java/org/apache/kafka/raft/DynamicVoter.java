@@ -22,7 +22,7 @@ import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -153,7 +153,7 @@ public final class DynamicVoter {
 
     public VoterSet.VoterNode toVoterNode(String controllerListenerName) {
         ReplicaKey voterKey = ReplicaKey.of(nodeId, directoryId);
-        Endpoints listeners = Endpoints.fromInetSocketAddresses(Collections.singletonMap(
+        Endpoints listeners = Endpoints.fromInetSocketAddresses(Map.of(
                 ListenerName.normalised(controllerListenerName),
                 new InetSocketAddress(host, port)));
         SupportedVersionRange supportedKRaftVersion =

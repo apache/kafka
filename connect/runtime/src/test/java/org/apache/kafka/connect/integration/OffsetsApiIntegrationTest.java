@@ -18,7 +18,8 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
@@ -184,7 +185,7 @@ public class OffsetsApiIntegrationTest {
 
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
-            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            Collection<GroupListing> consumerGroups = admin.listGroups(ListGroupsOptions.forConsumerGroups()).all().get();
             assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }
@@ -343,7 +344,7 @@ public class OffsetsApiIntegrationTest {
         alterAndVerifySinkConnectorOffsets(connectorConfigs, connect.kafka());
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
-            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            Collection<GroupListing> consumerGroups = admin.listGroups(ListGroupsOptions.forConsumerGroups()).all().get();
             assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }
@@ -724,7 +725,7 @@ public class OffsetsApiIntegrationTest {
         resetAndVerifySinkConnectorOffsets(connectorConfigs, connect.kafka());
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
-            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            Collection<GroupListing> consumerGroups = admin.listGroups(ListGroupsOptions.forConsumerGroups()).all().get();
             assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }

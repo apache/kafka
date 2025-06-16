@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class ShareGroupHeartbeatRequest extends AbstractRequest {
     /**
@@ -39,11 +37,7 @@ public class ShareGroupHeartbeatRequest extends AbstractRequest {
         private final ShareGroupHeartbeatRequestData data;
 
         public Builder(ShareGroupHeartbeatRequestData data) {
-            this(data, true);
-        }
-
-        public Builder(ShareGroupHeartbeatRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.SHARE_GROUP_HEARTBEAT, enableUnstableLastVersion);
+            super(ApiKeys.SHARE_GROUP_HEARTBEAT);
             this.data = data;
         }
 
@@ -79,8 +73,8 @@ public class ShareGroupHeartbeatRequest extends AbstractRequest {
         return data;
     }
 
-    public static ShareGroupHeartbeatRequest parse(ByteBuffer buffer, short version) {
+    public static ShareGroupHeartbeatRequest parse(Readable readable, short version) {
         return new ShareGroupHeartbeatRequest(new ShareGroupHeartbeatRequestData(
-                new ByteBufferAccessor(buffer), version), version);
+                readable, version), version);
     }
 }

@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -270,7 +269,7 @@ public class SnapshottableHashTableTest {
 
         registry.reset();
 
-        assertEquals(Collections.emptyList(), registry.epochsList());
+        assertEquals(List.of(), registry.epochsList());
         // Check that the table is empty
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE));
     }

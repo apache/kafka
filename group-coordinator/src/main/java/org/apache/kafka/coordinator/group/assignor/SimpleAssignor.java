@@ -90,7 +90,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
         // Subscribed topic partitions for the share group.
         List<TopicIdPartition> targetPartitions = computeTargetPartitions(
-            subscribedTopicIds, subscribedTopicDescriber);
+            groupSpec, subscribedTopicIds, subscribedTopicDescriber);
 
         // The current assignment from topic partition to members.
         Map<TopicIdPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
@@ -109,7 +109,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
             // Subscribed topic partitions for the share group member.
             List<TopicIdPartition> targetPartitions = computeTargetPartitions(
-                spec.subscribedTopicIds(), subscribedTopicDescriber);
+                groupSpec, spec.subscribedTopicIds(), subscribedTopicDescriber);
             memberToPartitionsSubscription.put(memberId, targetPartitions);
         }
 
@@ -282,10 +282,10 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
     /**
      * This functions assigns topic partitions to members by a round-robin approach and updates the existing assignment.
-     * @param memberIds              The member ids to which the topic partitions need to be assigned, should be non-empty.
-     * @param partitionsToAssign     The subscribed topic partitions which needs assignment.
-     * @param assignment             The existing assignment by topic partition. We need to pass it as a parameter because this
-     *                               method can be called multiple times for heterogeneous assignment.
+     * @param memberIds                 The member ids to which the topic partitions need to be assigned, should be non-empty.
+     * @param partitionsToAssign        The subscribed topic partitions which needs assignment.
+     * @param assignment                The existing assignment by topic partition. We need to pass it as a parameter because this
+     *                                  method can be called multiple times for heterogeneous assignment.
      */
     // Visible for testing
     void roundRobinAssignment(
@@ -307,13 +307,13 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
     /**
      * This functions assigns topic partitions to members by a round-robin approach and updates the existing assignment.
-     * @param memberIds              The member ids to which the topic partitions need to be assigned, should be non-empty.
-     * @param partitionsToAssign     The subscribed topic partitions which need assignment.
-     * @param assignment             The existing assignment by topic partition. We need to pass it as a parameter because this
-     *                               method can be called multiple times for heterogeneous assignment.
-     * @param desiredAssignmentCount The number of partitions which can be assigned to each member to give even balance.
-     *                               Note that this number can be exceeded by one to allow for situations
-     *                               in which we have hashing collisions.
+     * @param memberIds                 The member ids to which the topic partitions need to be assigned, should be non-empty.
+     * @param partitionsToAssign        The subscribed topic partitions which need assignment.
+     * @param assignment                The existing assignment by topic partition. We need to pass it as a parameter because this
+     *                                  method can be called multiple times for heterogeneous assignment.
+     * @param desiredAssignmentCount    The number of partitions which can be assigned to each member to give even balance.
+     *                                  Note that this number can be exceeded by one to allow for situations
+     *                                  in which we have hashing collisions.
      */
     void roundRobinAssignmentWithCount(
         Collection<String> memberIds,
@@ -349,6 +349,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
     }
 
     private List<TopicIdPartition> computeTargetPartitions(
+        GroupSpec groupSpec,
         Set<Uuid> subscribedTopicIds,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) {
@@ -362,8 +363,10 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
                 );
             }
 
-            for (int i = 0; i < numPartitions; i++) {
-                targetPartitions.add(new TopicIdPartition(topicId, i));
+            for (int partition = 0; partition < numPartitions; partition++) {
+                if (groupSpec.isPartitionAssignable(topicId, partition)) {
+                    targetPartitions.add(new TopicIdPartition(topicId, partition));
+                }
             }
         });
         return targetPartitions;

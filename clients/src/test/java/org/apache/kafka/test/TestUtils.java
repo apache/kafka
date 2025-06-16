@@ -505,7 +505,7 @@ public class TestUtils {
         assertNotNull(clusterId);
 
         // Base 64 encoded value is 22 characters
-        assertEquals(clusterId.length(), 22);
+        assertEquals(22, clusterId.length());
 
         Pattern clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+");
         Matcher matcher = clusterIdPattern.matcher(clusterId);
@@ -516,7 +516,7 @@ public class TestUtils {
         byte[] decodedUuid = Base64.getDecoder().decode(originalClusterId);
 
         // We expect 16 bytes, same as the input UUID.
-        assertEquals(decodedUuid.length, 16);
+        assertEquals(16, decodedUuid.length);
 
         //Check if it can be converted back to a UUID.
         try {
@@ -568,17 +568,6 @@ public class TestUtils {
 
     public static ByteBuffer toBuffer(UnalignedRecords records) {
         return toBuffer(records.toSend());
-    }
-
-    public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
-        Set<TopicPartition> tps = new HashSet<>();
-        for (int i = 0; i < numTopic; i++) {
-            String topic = randomString(32);
-            for (int j = 0; j < numPartitionPerTopic; j++) {
-                tps.add(new TopicPartition(topic, j));
-            }
-        }
-        return tps;
     }
 
     /**

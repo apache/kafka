@@ -27,10 +27,12 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
@@ -40,7 +42,6 @@ import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -83,10 +84,10 @@ public class ShareFetchUtils {
 
             if (fetchPartitionData.error.code() != Errors.NONE.code()) {
                 partitionData
-                    .setRecords(null)
+                    .setRecords(MemoryRecords.EMPTY)
                     .setErrorCode(fetchPartitionData.error.code())
                     .setErrorMessage(fetchPartitionData.error.message())
-                    .setAcquiredRecords(Collections.emptyList());
+                    .setAcquiredRecords(List.of());
 
                 // In case we get OFFSET_OUT_OF_RANGE error, that's because the Log Start Offset is later than the fetch offset.
                 // So, we would update the start and end offset of the share partition and still return an empty
@@ -114,7 +115,8 @@ public class ShareFetchUtils {
                     shareFetch.batchSize(),
                     shareFetch.maxFetchRecords() - acquiredRecordsCount,
                     shareFetchPartitionData.fetchOffset(),
-                    fetchPartitionData
+                    fetchPartitionData,
+                    shareFetch.fetchParams().isolation
                 );
                 log.trace("Acquired records: {} for topicIdPartition: {}", shareAcquiredRecords, topicIdPartition);
                 // Maybe, in the future, check if no records are acquired, and we want to retry
@@ -122,8 +124,8 @@ public class ShareFetchUtils {
                 // if we want parallel requests for the same share partition or not.
                 if (shareAcquiredRecords.acquiredRecords().isEmpty()) {
                     partitionData
-                        .setRecords(null)
-                        .setAcquiredRecords(Collections.emptyList());
+                        .setRecords(MemoryRecords.EMPTY)
+                        .setAcquiredRecords(List.of());
                 } else {
                     partitionData
                         .setRecords(maybeSliceFetchRecords(fetchPartitionData.records, shareAcquiredRecords))
@@ -203,20 +205,17 @@ public class ShareFetchUtils {
      *
      * @param records The records to be sliced.
      * @param shareAcquiredRecords The share acquired records containing the non-empty acquired records.
-     * @return The sliced records, if the records are of type FileRecords and the acquired records are a subset
-     *        of the fetched records. Otherwise, the original records are returned.
+     * @return The sliced records, if the acquired records are a subset of the fetched records. Otherwise,
+     *         the original records are returned.
      */
     static Records maybeSliceFetchRecords(Records records, ShareAcquiredRecords shareAcquiredRecords) {
-        if (!(records instanceof FileRecords fileRecords)) {
-            return records;
-        }
         // The acquired records should be non-empty, do not check as the method is called only when the
         // acquired records are non-empty.
         List<AcquiredRecords> acquiredRecords = shareAcquiredRecords.acquiredRecords();
         try {
-            final Iterator<FileChannelRecordBatch> iterator = fileRecords.batchIterator();
+            final Iterator<? extends RecordBatch> iterator = records.batchIterator();
             // Track the first overlapping batch with the first acquired offset.
-            FileChannelRecordBatch firstOverlapBatch = iterator.next();
+            RecordBatch firstOverlapBatch = iterator.next();
             // If there exists single fetch batch, then return the original records.
             if (!iterator.hasNext()) {
                 return records;
@@ -228,7 +227,7 @@ public class ShareFetchUtils {
             int size = 0;
             // Start iterating from the second batch.
             while (iterator.hasNext()) {
-                FileChannelRecordBatch batch = iterator.next();
+                RecordBatch batch = iterator.next();
                 // Iterate until finds the first overlap batch with the first acquired offset. All the
                 // batches before this first overlap batch should be sliced hence increment the start
                 // position.
@@ -247,15 +246,31 @@ public class ShareFetchUtils {
             // acquired offset.
             size += firstOverlapBatch.sizeInBytes();
             // Check if we do not need slicing i.e. neither start position nor size changed.
-            if (startPosition == 0 && size == fileRecords.sizeInBytes()) {
+            if (startPosition == 0 && size == records.sizeInBytes()) {
                 return records;
             }
-            return fileRecords.slice(startPosition, size);
+            return records.slice(startPosition, size);
         } catch (Exception e) {
             log.error("Error while checking batches for acquired records: {}, skipping slicing.", acquiredRecords, e);
             // If there is an exception while slicing, return the original records so that the fetch
             // can continue with the original records.
             return records;
         }
+    }
+
+    /**
+     * The method is used to get the record lock duration for the group. If the group config is present,
+     * then the record lock duration is returned. Otherwise, the default value is returned.
+     *
+     * @param groupConfigManager The group config manager.
+     * @param groupId The group id for which the record lock duration is to be fetched.
+     * @param defaultValue The default value to be returned if the group config is not present.
+     * @return The record lock duration for the group.
+     */
+    public static int recordLockDurationMsOrDefault(GroupConfigManager groupConfigManager, String groupId, int defaultValue) {
+        if (groupConfigManager.groupConfig(groupId).isPresent()) {
+            return groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
+        }
+        return defaultValue;
     }
 }

@@ -35,7 +35,6 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -515,7 +514,7 @@ public class BatchAccumulator<T> implements Closeable {
             drainStatus = DrainStatus.NONE;
             return drainCompleted(drainOffset);
         } else {
-            return Collections.emptyList();
+            return List.of();
         }
     }
 

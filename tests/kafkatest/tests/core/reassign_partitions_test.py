@@ -142,16 +142,9 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         bounce_brokers=[True, False],
         reassign_from_offset_zero=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        bounce_brokers=[True, False],
-        reassign_from_offset_zero=[True, False],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero, metadata_quorum, group_protocol=None):
         """Reassign partitions tests.
         Setup: 1 controller, 4 kafka nodes, 1 topic with partitions=20, replication-factor=3,
         and min.insync.replicas=3
@@ -170,7 +163,8 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.producer = VerifiableProducer(self.test_context, self.num_producers,
                                            self.kafka, self.topic,
                                            throughput=self.producer_throughput,
-                                           enable_idempotence=True,
+                                           # Once KAFKA-18905 is fixed, the idempotent producer should be enabled.
+                                           enable_idempotence=False,
                                            # This test aims to verify the reassignment without failure, assuming that all partitions have data.
                                            # To avoid the reassignment behavior being affected by the `BuiltInPartitioner` (due to the key not being set),
                                            # we set a key for the message to ensure both even data distribution across all partitions.
@@ -181,5 +175,6 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
                                         message_validator=is_int,
                                         consumer_properties=consumer_group.maybe_set_group_protocol(group_protocol))
 
-        self.enable_idempotence=True
+        # Once KAFKA-18905 is fixed, the idempotent producer should be enabled.
+        self.enable_idempotence = False
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))

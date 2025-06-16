@@ -218,8 +218,7 @@ public abstract class AbstractFetch implements Closeable {
                         partition,
                         partitionData,
                         metricAggregator,
-                        fetchOffset,
-                        requestVersion);
+                        fetchOffset);
                 fetchBuffer.add(completedFetch);
             }
 

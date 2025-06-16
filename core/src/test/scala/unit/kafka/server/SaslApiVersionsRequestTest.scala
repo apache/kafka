@@ -22,15 +22,12 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.test.api.{ClusterTest, Type}
 import org.apache.kafka.common.test.ClusterInstance
-import org.apache.kafka.common.test.junit.ClusterTestExtensions
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.net.Socket
 import java.util.Collections
 import scala.jdk.CollectionConverters._
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @ClusterTest(types = Array(Type.KRAFT),

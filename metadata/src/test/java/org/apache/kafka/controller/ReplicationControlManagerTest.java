@@ -1566,7 +1566,7 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1, 3);
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
-            createTopics(requestContext, request, new HashSet<>(List.of("foo", "bar", "quux", "foo2")));
+            createTopics(requestContext, request, Set.of("foo", "bar", "quux", "foo2"));
         ctx.replay(createTopicResult.records());
         List<CreatePartitionsTopic> topics = new ArrayList<>();
         topics.add(new CreatePartitionsTopic().
@@ -1690,7 +1690,7 @@ public class ReplicationControlManagerTest {
         ControllerRequestContext requestContext =
                 anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
-            createTopics(requestContext, request, new HashSet<>(List.of("foo")));
+            createTopics(requestContext, request, Set.of("foo"));
         ctx.replay(createTopicResult.records());
 
         ctx.registerBrokers(0, 1);
@@ -2961,12 +2961,12 @@ public class ReplicationControlManagerTest {
         KRaftClusterDescriber describer = replication.clusterDescriber;
         HashSet<UsableBroker> brokers = new HashSet<>();
         describer.usableBrokers().forEachRemaining(broker -> brokers.add(broker));
-        assertEquals(new HashSet<>(List.of(
+        assertEquals(Set.of(
             new UsableBroker(0, Optional.empty(), true),
             new UsableBroker(1, Optional.empty(), true),
             new UsableBroker(2, Optional.empty(), false),
             new UsableBroker(3, Optional.empty(), false),
-            new UsableBroker(4, Optional.empty(), false))), brokers);
+            new UsableBroker(4, Optional.empty(), false)), brokers);
         assertEquals(DirectoryId.MIGRATING, describer.defaultDir(1));
         assertEquals(Uuid.fromString("ozwqsVMFSNiYQUPSJA3j0w"), describer.defaultDir(2));
         assertEquals(DirectoryId.UNASSIGNED, describer.defaultDir(3));
@@ -3241,7 +3241,7 @@ public class ReplicationControlManagerTest {
         Uuid topicB = ctx.createTestTopic("b", new int[][]{new int[]{1, 2}, new int[]{1, 2}}).topicId();
         Uuid topicC = ctx.createTestTopic("c", new int[][]{new int[]{2}}).topicId();
 
-        ControllerResult<AssignReplicasToDirsResponseData> controllerResult = ctx.assignReplicasToDirs(1, new HashMap<TopicIdPartition, Uuid>() {{
+        ControllerResult<AssignReplicasToDirsResponseData> controllerResult = ctx.assignReplicasToDirs(1, new HashMap<>() {{
                 put(new TopicIdPartition(topicA, 0), dir1b1);
                 put(new TopicIdPartition(topicA, 1), dir2b1);
                 put(new TopicIdPartition(topicA, 2), offlineDir); // unknown/offline dir
@@ -3252,21 +3252,21 @@ public class ReplicationControlManagerTest {
                 put(new TopicIdPartition(topicC, 0), dir1b1); // expect NOT_LEADER_OR_FOLLOWER
             }});
 
-        assertEquals(AssignmentsHelper.normalize(AssignmentsHelper.buildResponseData((short) 0, 0, new HashMap<Uuid, Map<TopicIdPartition, Errors>>() {{
-                put(dir1b1, new HashMap<TopicIdPartition, Errors>() {{
+        assertEquals(AssignmentsHelper.normalize(AssignmentsHelper.buildResponseData((short) 0, 0, new HashMap<>() {{
+                put(dir1b1, new HashMap<>() {{
                         put(new TopicIdPartition(topicA, 0), NONE);
                         put(new TopicIdPartition(topicA, 137), UNKNOWN_TOPIC_OR_PARTITION);
                         put(new TopicIdPartition(topicB, 0), NONE);
                         put(new TopicIdPartition(topicC, 0), NOT_LEADER_OR_FOLLOWER);
                     }});
-                put(dir2b1, new HashMap<TopicIdPartition, Errors>() {{
+                put(dir2b1, new HashMap<>() {{
                         put(new TopicIdPartition(topicA, 1), NONE);
                         put(new TopicIdPartition(Uuid.fromString("nLU9hKNXSZuMe5PO2A4dVQ"), 1), UNKNOWN_TOPIC_ID);
                     }});
-                put(offlineDir, new HashMap<TopicIdPartition, Errors>() {{
+                put(offlineDir, new HashMap<>() {{
                         put(new TopicIdPartition(topicA, 2), NONE);
                     }});
-                put(DirectoryId.LOST, new HashMap<TopicIdPartition, Errors>() {{
+                put(DirectoryId.LOST, new HashMap<>() {{
                         put(new TopicIdPartition(topicB, 1), NONE);
                     }});
             }})), AssignmentsHelper.normalize(controllerResult.response()));
@@ -3326,13 +3326,13 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(b1, b2);
         Uuid topicA = ctx.createTestTopic("a", new int[][]{new int[]{b1, b2}, new int[]{b1, b2}}).topicId();
         Uuid topicB = ctx.createTestTopic("b", new int[][]{new int[]{b1, b2}, new int[]{b1, b2}}).topicId();
-        ctx.assignReplicasToDirs(b1, new HashMap<TopicIdPartition, Uuid>() {{
+        ctx.assignReplicasToDirs(b1, new HashMap<>() {{
                 put(new TopicIdPartition(topicA, 0), dir1b1);
                 put(new TopicIdPartition(topicA, 1), dir2b1);
                 put(new TopicIdPartition(topicB, 0), dir1b1);
                 put(new TopicIdPartition(topicB, 1), dir2b1);
             }});
-        ctx.assignReplicasToDirs(b2, new HashMap<TopicIdPartition, Uuid>() {{
+        ctx.assignReplicasToDirs(b2, new HashMap<>() {{
                 put(new TopicIdPartition(topicA, 0), dir1b2);
                 put(new TopicIdPartition(topicA, 1), dir2b2);
                 put(new TopicIdPartition(topicB, 0), dir1b2);

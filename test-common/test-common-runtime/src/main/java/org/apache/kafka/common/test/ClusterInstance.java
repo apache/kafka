@@ -57,7 +57,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -115,9 +114,7 @@ public interface ClusterInstance {
     /**
      * The listener for the kraft cluster controller configured by controller.listener.names.
      */
-    default Optional<ListenerName> controllerListenerName() {
-        return Optional.empty();
-    }
+    ListenerName controllerListenerName();
 
     /**
      * The broker connect string which can be used by clients for bootstrapping
@@ -244,7 +241,7 @@ public interface ClusterInstance {
         if (brokers().values().stream().allMatch(b -> b.dataPlaneRequestProcessor().isConsumerGroupProtocolEnabled())) {
             return Set.of(CLASSIC, CONSUMER);
         } else {
-            return Collections.singleton(CLASSIC);
+            return Set.of(CLASSIC);
         }
     }
 
@@ -278,11 +275,28 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
     }
-    
+
     default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
+        createTopic(topicName, partitions, replicas, Map.of());
+    }
+
+    default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
-            admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));
+            admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
             waitForTopic(topicName, partitions);
+        }
+    }
+
+    /**
+     * Deletes a topic and waits for the deletion to complete.
+     *
+     * @param topicName The name of the topic to delete
+     * @throws InterruptedException If the operation is interrupted
+     */
+    default void deleteTopic(String topicName) throws InterruptedException {
+        try (Admin admin = admin()) {
+            admin.deleteTopics(List.of(topicName));
+            waitTopicDeletion(topicName);
         }
     }
 
@@ -294,7 +308,7 @@ public interface ClusterInstance {
         TestUtils.waitForCondition(
             () -> brokers.stream().allMatch(broker -> partitions == 0 ?
                 broker.metadataCache().numPartitions(topic).isEmpty() :
-                broker.metadataCache().numPartitions(topic).contains(partitions)
+                broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()
         ), 60000L, topic + " metadata not propagated after 60000 ms");
 
         for (ControllerServer controller : controllers().values()) {
@@ -307,7 +321,7 @@ public interface ClusterInstance {
         if (partitions == 0) {
             List<TopicPartition> topicPartitions = IntStream.range(0, 1)
                 .mapToObj(partition -> new TopicPartition(topic, partition))
-                .collect(Collectors.toList());
+                .toList();
 
             // Ensure that the topic-partition has been deleted from all brokers' replica managers
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
@@ -337,14 +351,14 @@ public interface ClusterInstance {
 
             // Ensure that the topic directories are soft-deleted
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                    CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                    broker.config().logDirs().stream().allMatch(logDir ->
                         topicPartitions.stream().noneMatch(tp ->
                             new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
                 "Failed to soft-delete the data to a delete directory");
 
             // Ensure that the topic directories are hard-deleted
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                broker.config().logDirs().stream().allMatch(logDir ->
                     topicPartitions.stream().allMatch(tp ->
                         Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
                             partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
@@ -357,11 +371,11 @@ public interface ClusterInstance {
     default List<Authorizer> authorizers() {
         List<Authorizer> authorizers = new ArrayList<>();
         authorizers.addAll(brokers().values().stream()
-                .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .filter(server -> server.authorizerPlugin().isDefined())
+                .map(server -> server.authorizerPlugin().get().get()).toList());
         authorizers.addAll(controllers().values().stream()
-                .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .filter(server -> server.authorizerPlugin().isDefined())
+                .map(server -> server.authorizerPlugin().get().get()).toList());
         return authorizers;
     }
 
