@@ -179,7 +179,7 @@ public class CompletableEventReaper {
      *               {@link BackgroundEvent}, but will only perform completion for any
      *               unfinished {@link CompletableEvent}s
      *
-     *  @return Number of events closed
+     * @return Number of events closed
      */
     private long completeEventsExceptionallyOnClose(Collection<?> events) {
         long count = 0;
