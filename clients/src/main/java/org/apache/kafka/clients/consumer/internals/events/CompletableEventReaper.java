@@ -161,6 +161,8 @@ public class CompletableEventReaper {
     }
 
     public List<CompletableEvent<?>> uncompletedEvents() {
+        // The following code does not use the Java Collections Streams API to reduce overhead in the critical
+        // path of the ConsumerNetworkThread loop.
         List<CompletableEvent<?>> events = new ArrayList<>();
 
         for (CompletableEvent<?> event : tracked) {
@@ -193,11 +195,12 @@ public class CompletableEventReaper {
             if (event.future().isDone())
                 continue;
 
+            count++;
+
             TimeoutException error = new TimeoutException(String.format("%s could not be completed before the consumer closed", event.getClass().getSimpleName()));
 
             if (event.future().completeExceptionally(error)) {
                 log.debug("Event {} completed exceptionally since the consumer is closing", event);
-                count++;
             } else {
                 log.trace("Event {} not completed exceptionally since it was completed prior to the consumer closing", event);
             }

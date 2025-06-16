@@ -311,7 +311,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         log.info("Assigned to partition(s): {}", event.partitions());
-
         try {
             if (subscriptions.assignFromUser(new HashSet<>(event.partitions())))
                 metadata.requestUpdateForNewTopics();

@@ -144,6 +144,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
+        // The following code avoids use of the Java Collections Streams API to reduce overhead in this loop.
         processApplicationEvents();
 
         final long currentTimeMs = time.milliseconds();

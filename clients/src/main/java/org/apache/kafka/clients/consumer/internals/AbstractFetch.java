@@ -478,6 +478,11 @@ public abstract class AbstractFetch implements Closeable {
         return convert(fetchable);
     }
 
+    /**
+     * This method converts {@link FetchSessionHandler.Builder} instances to
+     * {@link FetchSessionHandler.FetchRequestData} instances. It intentionally forgoes use of the Java Collections
+     * Streams API to reduce overhead in the critical network path.
+     */
     private Map<Node, FetchSessionHandler.FetchRequestData> convert(Map<Node, FetchSessionHandler.Builder> fetchable) {
         Map<Node, FetchSessionHandler.FetchRequestData> map = new HashMap<>(fetchable.size());
 
