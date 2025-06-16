@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -220,7 +219,7 @@ public class ShareGroupTest {
         // Initial assignment for member1
         Assignment initialAssignment = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(0))
+            Set.of(0)
         ));
         shareGroup.updateTargetAssignment(memberId1, initialAssignment);
 
@@ -235,7 +234,7 @@ public class ShareGroupTest {
         // New assignment for member1
         Assignment newAssignment = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(1))
+            Set.of(1)
         ));
         shareGroup.updateTargetAssignment(memberId1, newAssignment);
 
@@ -250,7 +249,7 @@ public class ShareGroupTest {
         // New assignment for member2 to add partition 1
         Assignment newAssignment2 = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(1))
+            Set.of(1)
         ));
         shareGroup.updateTargetAssignment(memberId2, newAssignment2);
 
@@ -265,7 +264,7 @@ public class ShareGroupTest {
         // New assignment for member1 to revoke partition 1 and assign partition 0
         Assignment newAssignment1 = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(0))
+            Set.of(0)
         ));
         shareGroup.updateTargetAssignment(memberId1, newAssignment1);
 

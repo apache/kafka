@@ -1447,10 +1447,10 @@ public class RequestResponseTest {
         ShareFetchRequestData data = new ShareFetchRequestData()
                 .setGroupId("group")
                 .setMemberId(Uuid.randomUuid().toString())
-                .setTopics(singletonList(new ShareFetchRequestData.FetchTopic()
+                .setTopics(new ShareFetchRequestData.FetchTopicCollection(List.of(new ShareFetchRequestData.FetchTopic()
                         .setTopicId(Uuid.randomUuid())
-                        .setPartitions(singletonList(new ShareFetchRequestData.FetchPartition()
-                                .setPartitionIndex(0)))));
+                        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(List.of(new ShareFetchRequestData.FetchPartition()
+                                .setPartitionIndex(0)).iterator()))).iterator()));
         return new ShareFetchRequest.Builder(data).build(version);
     }
 
@@ -1473,24 +1473,24 @@ public class RequestResponseTest {
     private ShareAcknowledgeRequest createShareAcknowledgeRequest(short version) {
         ShareAcknowledgeRequestData data = new ShareAcknowledgeRequestData()
                 .setMemberId(Uuid.randomUuid().toString())
-                .setTopics(singletonList(new ShareAcknowledgeRequestData.AcknowledgeTopic()
+                .setTopics(new ShareAcknowledgeRequestData.AcknowledgeTopicCollection(List.of(new ShareAcknowledgeRequestData.AcknowledgeTopic()
                         .setTopicId(Uuid.randomUuid())
-                        .setPartitions(singletonList(new ShareAcknowledgeRequestData.AcknowledgePartition()
+                        .setPartitions(new ShareAcknowledgeRequestData.AcknowledgePartitionCollection(List.of(new ShareAcknowledgeRequestData.AcknowledgePartition()
                                 .setPartitionIndex(0)
                                 .setAcknowledgementBatches(singletonList(new ShareAcknowledgeRequestData.AcknowledgementBatch()
                                         .setFirstOffset(0)
                                         .setLastOffset(0)
-                                        .setAcknowledgeTypes(Collections.singletonList((byte) 0))))))));
+                                        .setAcknowledgeTypes(Collections.singletonList((byte) 0))))).iterator()))).iterator()));
         return new ShareAcknowledgeRequest.Builder(data).build(version);
     }
 
     private ShareAcknowledgeResponse createShareAcknowledgeResponse() {
         ShareAcknowledgeResponseData data = new ShareAcknowledgeResponseData();
-        data.setResponses(singletonList(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse()
+        data.setResponses(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection(List.of(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse()
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(new ShareAcknowledgeResponseData.PartitionData()
                         .setPartitionIndex(0)
-                        .setErrorCode(Errors.NONE.code())))));
+                        .setErrorCode(Errors.NONE.code())))).iterator()));
         data.setThrottleTimeMs(345);
         data.setErrorCode(Errors.NONE.code());
         return new ShareAcknowledgeResponse(data);
@@ -3817,12 +3817,13 @@ public class RequestResponseTest {
 
     private AlterShareGroupOffsetsResponse createAlterShareGroupOffsetsResponse() {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData()
-            .setResponses(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                    .setPartitionIndex(0)
-                    .setErrorCode(Errors.NONE.code())))
-                .setTopicName("topic")
-                .setTopicId(Uuid.randomUuid())));
+            .setResponses(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(List.of(
+                new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                    .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                        .setPartitionIndex(0)
+                        .setErrorCode(Errors.NONE.code())))
+                    .setTopicName("topic")
+                    .setTopicId(Uuid.randomUuid())).iterator()));
         return new AlterShareGroupOffsetsResponse(data);
     }
 
