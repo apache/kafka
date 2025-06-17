@@ -1974,7 +1974,9 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testOperationsBySubscribingConsumerWithDefaultGroupId(GroupProtocol groupProtocol) {
-        assertThrows(InvalidConfigurationException.class, () -> newConsumer(groupProtocol, null, Optional.of(Boolean.TRUE)));
+        assertThrows(InvalidConfigurationException.class,
+            () -> newConsumer(groupProtocol, null, Optional.of(Boolean.TRUE)),
+            "Expected an InvalidConfigurationException");
 
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null)) {
             assertThrows(InvalidGroupIdException.class, () -> consumer.subscribe(Set.of(topic)));

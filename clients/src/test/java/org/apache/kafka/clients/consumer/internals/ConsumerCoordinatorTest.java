@@ -3269,7 +3269,9 @@ public abstract class ConsumerCoordinatorTest {
     public void testAuthenticationFailureInEnsureActiveGroup() {
         client.createPendingAuthenticationError(node, 300);
 
-        assertThrows(AuthenticationException.class, () -> coordinator.ensureActiveGroup());
+        assertThrows(AuthenticationException.class,
+            () -> coordinator.ensureActiveGroup(),
+            "Expected an authentication error.");
     }
 
     @Test

@@ -133,20 +133,27 @@ public class RecordHeadersTest {
         headers.add(new RecordHeader("key", "value".getBytes()));
         Iterator<Header> headerIteratorBeforeClose = headers.iterator();
         headers.setReadOnly();
-        // IllegalStateException expected as headers are closed.
-        assertThrows(IllegalStateException.class, () -> headers.add(new RecordHeader("key", "value".getBytes())));
 
-        // IllegalStateException expected as headers are closed.
-        assertThrows(IllegalStateException.class, () -> headers.remove("key"));
+        assertThrows(IllegalStateException.class,
+            () -> headers.add(new RecordHeader("key", "value".getBytes())),
+            "IllegalStateException expected as headers are closed.");
+
+        assertThrows(IllegalStateException.class,
+            () -> headers.remove("key"),
+            "IllegalStateException expected as headers are closed.");
 
         Iterator<Header> headerIterator = headers.iterator();
         headerIterator.next();
-        // IllegalStateException expected as headers are closed.
-        assertThrows(IllegalStateException.class, headerIterator::remove);
+
+        assertThrows(IllegalStateException.class,
+            headerIterator::remove,
+            "IllegalStateException expected as headers are closed.");
 
         headerIteratorBeforeClose.next();
-        // IllegalStateException expected as headers are closed.
-        assertThrows(IllegalStateException.class, headerIterator::remove);
+
+        assertThrows(IllegalStateException.class,
+            headerIterator::remove,
+            "IllegalStateException expected as headers are closed.");
     }
 
     @Test

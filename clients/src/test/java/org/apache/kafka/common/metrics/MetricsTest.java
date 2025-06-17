@@ -415,10 +415,14 @@ public class MetricsTest {
         sensor.add(metrics.metricName("test1.total", "grp1"), new CumulativeSum(), new MetricConfig().quota(Quota.upperBound(5.0)));
         sensor.add(metrics.metricName("test2.total", "grp1"), new CumulativeSum(), new MetricConfig().quota(Quota.lowerBound(0.0)));
         sensor.record(5.0);
-        assertThrows(QuotaViolationException.class, () -> sensor.record(1.0));
+        assertThrows(QuotaViolationException.class,
+            () -> sensor.record(1.0),
+            "Should have gotten a quota violation.");
         assertEquals(6.0, (Double) metrics.metrics().get(metrics.metricName("test1.total", "grp1")).metricValue(), EPS);
         sensor.record(-6.0);
-        assertThrows(QuotaViolationException.class, () -> sensor.record(-1.0));
+        assertThrows(QuotaViolationException.class,
+            () -> sensor.record(-1.0),
+            "Should have gotten a quota violation.");
     }
 
     @Test
@@ -666,8 +670,9 @@ public class MetricsTest {
         MetricName n2 = metrics.metricInstance(SampleMetrics.METRIC2, tags);
         assertEquals(n1, n2, "metric names created in two different ways should be equal");
 
-        // Creating MetricName with an odd number of keyValue should fail, IllegalArgumentException expected.
-        assertThrows(IllegalArgumentException.class, () -> metrics.metricInstance(SampleMetrics.METRIC1, "key1"));
+        assertThrows(IllegalArgumentException.class,
+            () -> metrics.metricInstance(SampleMetrics.METRIC1, "key1"),
+            "Creating MetricName with an odd number of keyValue should fail, IllegalArgumentException expected.");
 
         Map<String, String> parentTagsWithValues = new HashMap<>();
         parentTagsWithValues.put("parent-tag", "parent-tag-value");

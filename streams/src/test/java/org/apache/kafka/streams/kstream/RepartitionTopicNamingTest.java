@@ -92,7 +92,7 @@ public class RepartitionTopicNamingTest {
             .groupByKey(Grouped.as("grouping"))
             .count().toStream();
 
-        assertThrows(TopologyException.class, builder::build);
+        assertThrows(TopologyException.class, builder::build, "Should not build re-using repartition topic name");
     }
 
     @Test
@@ -210,7 +210,7 @@ public class RepartitionTopicNamingTest {
         joined.join(stream3, (v1, v2) -> v1 + v2, JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(30L)),
             StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
 
-        assertThrows(TopologyException.class, builder::build);
+        assertThrows(TopologyException.class, builder::build, "Should not build re-using repartition topic name");
     }
 
     @Test

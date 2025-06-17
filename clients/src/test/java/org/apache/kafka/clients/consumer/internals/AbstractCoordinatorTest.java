@@ -1603,7 +1603,8 @@ public class AbstractCoordinatorTest {
         mockClient.createPendingAuthenticationError(node, 300);
 
         assertThrows(AuthenticationException.class,
-            () -> coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE)));
+            () -> coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE)),
+            "Expected an authentication error.");
     }
 
     @Test
