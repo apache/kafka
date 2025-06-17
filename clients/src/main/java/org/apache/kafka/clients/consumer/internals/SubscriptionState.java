@@ -487,12 +487,25 @@ public class SubscriptionState {
         List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
-            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || topicPartitionState.isFetchable())
+            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || isFetchableAndSubscribed(topicPartition, topicPartitionState))
                     && isAvailable.test(topicPartition)) {
                 result.add(topicPartition);
             }
         });
         return result;
+    }
+
+    /**
+     * Check if the partition is fetchable.
+     * If the consumer has explicitly subscribed to a list of topic names,
+     * this will also check that the partition is contained in the subscription.
+     */
+    private synchronized boolean isFetchableAndSubscribed(TopicPartition topicPartition, TopicPartitionState topicPartitionState) {
+        if (subscriptionType.equals(SubscriptionType.AUTO_TOPICS) && !subscription.contains(topicPartition.topic())) {
+            log.debug("Assigned partition {} is not in the subscription {} so will be considered not fetchable.", topicPartition, subscription);
+            return false;
+        }
+        return topicPartitionState.isFetchable();
     }
 
     public synchronized boolean hasAutoAssignedPartitions() {
@@ -880,7 +893,7 @@ public class SubscriptionState {
 
     synchronized boolean isFetchable(TopicPartition tp) {
         TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
-        return assignedOrNull != null && assignedOrNull.isFetchable();
+        return assignedOrNull != null && isFetchableAndSubscribed(tp, assignedOrNull);
     }
 
     public synchronized boolean hasValidPosition(TopicPartition tp) {
