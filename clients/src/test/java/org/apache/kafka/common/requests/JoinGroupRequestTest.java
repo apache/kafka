@@ -46,6 +46,7 @@ public class JoinGroupRequestTest {
         String[] invalidGroupInstanceIds = {"", "foo bar", "..", "foo:bar", "foo=bar", ".", new String(longString)};
 
         for (String instanceId : invalidGroupInstanceIds) {
+            // InvalidConfigurationException expected as instance id is invalid.
             assertThrows(InvalidConfigurationException.class, () -> JoinGroupRequest.validateGroupInstanceId(instanceId));
         }
     }

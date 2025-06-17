@@ -210,8 +210,6 @@ public class RepartitionTopicNamingTest {
         joined.join(stream3, (v1, v2) -> v1 + v2, JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(30L)),
             StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
 
-        builder.build();
-
         assertThrows(TopologyException.class, builder::build);
     }
 
