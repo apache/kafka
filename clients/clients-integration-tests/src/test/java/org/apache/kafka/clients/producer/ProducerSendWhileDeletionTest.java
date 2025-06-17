@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
+import org.apache.kafka.test.MockProducerInterceptor;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -45,6 +47,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -56,6 +61,7 @@ import static org.apache.kafka.server.config.ReplicationConfigs.DEFAULT_REPLICAT
 import static org.apache.kafka.server.config.ServerLogConfigs.NUM_PARTITIONS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
@@ -155,6 +161,42 @@ public class ProducerSendWhileDeletionTest {
             assertEquals(topic, recordMetadata.topic());
             assertEquals(0, recordMetadata.offset());
         }
+    }
+
+    @ClusterTest
+    public void testSendWhileTopicGetRecreated() {
+        int maxNumRecreatTopicAttempts = 20;
+        List<Uuid> topicIds = new CopyOnWriteArrayList<>();
+        var f = CompletableFuture.runAsync(() -> {
+            for (int i = 1; i <= maxNumRecreatTopicAttempts; i++) {
+                Uuid topicId = recreateTopic();
+                if (topicId != Uuid.ZERO_UUID) {
+                    topicIds.add(topicId);
+                }
+            }
+        });
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName());
+        configs.put(MockProducerInterceptor.APPEND_STRING_PROP, "");
+        configs.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        configs.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        var fs = IntStream.range(0, 3).mapToObj(ignored -> CompletableFuture.runAsync(() -> {
+            try (var producer = cluster.producer(configs)) {
+                for (int i = 1; i <= numRecords; i++) {
+                    producer.send(new ProducerRecord<>(topic, "value"));
+                }
+            }
+        })).toList();
+        f.join();
+        fs.forEach(CompletableFuture::join);
+        // Test will recreate topic successfully multiple times, however few recreation might fail.
+        assertTrue(Math.abs(maxNumRecreatTopicAttempts - topicIds.size()) <= 3);
+        assertEquals(30, MockProducerInterceptor.ON_ACKNOWLEDGEMENT_COUNT.intValue());
+        // Producer will encounter some metadata errors during topic recreation as the topic id wouldn't be accurate
+        assertTrue(MockProducerInterceptor.ON_ERROR_COUNT.intValue() != 0);
+        // Producer succeed to send data with some records without crashing
+        assertTrue(MockProducerInterceptor.ON_SUCCESS_COUNT.intValue() != 0);
     }
 
     @ClusterTest
@@ -271,6 +313,17 @@ public class ProducerSendWhileDeletionTest {
         }
     }
 
+    private Uuid recreateTopic() {
+        try (var admin = cluster.admin()) {
+            if (admin.listTopics().names().get().contains(topic)) {
+                admin.deleteTopics(List.of(topic)).all().get();
+            }
+            return admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).topicId(topic).get();
+        } catch (Exception e) {
+            // ignore
+            return Uuid.ZERO_UUID;
+        }
+    }
     private void assertLeader(TopicPartition topicPartition, Integer expectedLeaderOpt) throws InterruptedException {
         try (var admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
