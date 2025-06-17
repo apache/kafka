@@ -79,14 +79,17 @@ public class TopicIdPartition {
     }
 
     /**
+     * Checking if TopicIdPartition meant to be the same reference to same this object but doesn't have all the data.
+     * If topic name is empty and topic id is persisted then the method will relay on topic id only
+     * otherwise the method will relay on topic name.
      * @return true if topic has same topicId and partition index as topic names some time might be empty.
     */
     public boolean same(TopicIdPartition tpId) {
-        if (tpId.topic().isEmpty()) {
+        if (tpId.topic().isEmpty() && !tpId.topicId.equals(Uuid.ZERO_UUID)) {
             return topicId.equals(tpId.topicId) &&
                     topicPartition.partition() == tpId.partition();
         } else {
-            return this.equals(tpId);
+            return topicPartition.equals(tpId.topicPartition());
         }
     }
 

@@ -607,21 +607,13 @@ public class Sender implements Runnable {
                                 .collect(Collectors.toList()),
                             p.errorMessage(),
                             p.currentLeader());
-                    ProducerBatch batch = null;
                     // Version 13 drop topic name and add support to topic id.
                     // We need to find batch based on topic id and partition index only as
                     // topic name in the response might be empty.
-                    List<ProducerBatch> matchedBatchesForTopicId = batches.entrySet().stream()
-                            .filter(entry -> entry.getKey().same(new TopicIdPartition(r.topicId(), p.index(), r.name())))
-                            .map(Map.Entry::getValue)
-                            .collect(Collectors.toList());
-
-                    if (matchedBatchesForTopicId.size() > 1) {
-                        matchedBatchesForTopicId.forEach(matchedBatch ->
-                                failBatch(matchedBatch, new RuntimeException("More than one batch with same topic id and partition."), false));
-                    } else {
-                        batch = matchedBatchesForTopicId.stream().findFirst().orElse(null);
-                    }
+                    ProducerBatch batch = batches.entrySet().stream()
+                            .filter(entry ->
+                                    entry.getKey().same(new TopicIdPartition(r.topicId(), p.index(), r.name()))
+                            ).map(Map.Entry::getValue).findFirst().orElse(null);
 
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
                 }));
