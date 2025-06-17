@@ -66,7 +66,7 @@ public final class JsonConverterConfig extends ConverterConfig {
                       orderInGroup++, Width.MEDIUM, SCHEMAS_ENABLE_DISPLAY);
         CONFIG.define(SCHEMAS_CACHE_SIZE_CONFIG, Type.INT, SCHEMAS_CACHE_SIZE_DEFAULT, Importance.HIGH, SCHEMAS_CACHE_SIZE_DOC, group,
                       orderInGroup++, Width.MEDIUM, SCHEMAS_CACHE_SIZE_DISPLAY);
-        CONFIG.define(SCHEMA_CONTENT_CONFIG, Type.STRING, SCHEMA_CONTENT_DEFAULT, Importance.HIGH, SCHEMA_CONTENT_DOC, group, 
+        CONFIG.define(SCHEMA_CONTENT_CONFIG, Type.STRING, SCHEMA_CONTENT_DEFAULT, Importance.HIGH, SCHEMA_CONTENT_DOC, group,
                       orderInGroup++, Width.MEDIUM, SCHEMA_CONTENT_DISPLAY);
 
         group = "Serialization";
@@ -151,6 +151,4 @@ public final class JsonConverterConfig extends ConverterConfig {
     public byte[] schemaContent() {
         return schemaContent;
     }
-
-
 }
