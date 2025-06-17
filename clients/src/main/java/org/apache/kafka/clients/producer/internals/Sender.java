@@ -616,8 +616,8 @@ public class Sender implements Runnable {
                             .map(Map.Entry::getValue).findFirst().orElse(null);
 
                     if (batch == null) {
-                        failBatch(batch, new IllegalStateException("batch created for " + tpId + " can't be found, " +
-                                "topic might be recreated after the batch creation."), false);
+                        throw new IllegalStateException("batch created for " + tpId + " can't be found, " +
+                                "topic might be recreated after the batch creation.");
                     }
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
                 }));
