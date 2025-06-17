@@ -2059,7 +2059,6 @@ class TransactionCoordinatorTest {
     // Mock the transactionMarkerChannelManager to simulate the second write (PREPARE_ABORT -> COMPLETE_ABORT)
     doAnswer(invocation => {
       val newMetadata = invocation.getArgument[TxnTransitMetadata](3)
-      System.out.println("TEST: new metadata for invoking the complete abort thing: " + newMetadata)
       // Simulate the completion of transaction markers and the second write
       // This would normally happen asynchronously after markers are sent
       txnMetadata.completeTransitionTo(newMetadata) // This transitions to COMPLETE_ABORT
