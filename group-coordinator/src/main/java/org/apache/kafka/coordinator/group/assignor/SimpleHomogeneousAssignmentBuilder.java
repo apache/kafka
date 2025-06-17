@@ -134,7 +134,7 @@ public class SimpleHomogeneousAssignmentBuilder {
         if (numTargetPartitions == 0) {
             this.desiredSharing = 0;
         } else {
-            this.desiredSharing =(numGroupMembers + numTargetPartitions - 1) / numTargetPartitions;
+            this.desiredSharing = (numGroupMembers + numTargetPartitions - 1) / numTargetPartitions;
         }
         this.desiredAssignmentCount = newHashMap(numGroupMembers);
         this.oldGroupAssignment = newHashMap(numGroupMembers);
