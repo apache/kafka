@@ -64,7 +64,6 @@ public class IntegrationTestUtils {
         AbstractRequest request,
         Socket socket
     ) throws IOException {
-        CORRELATION_ID.getAndIncrement();
         var header = nextRequestHeader(request.apiKey(), request.version());
         sendRequest(socket, Utils.toArray(request.serializeWithHeader(header)));
         return receive(socket, request.apiKey(), request.version());
