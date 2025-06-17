@@ -92,10 +92,19 @@ public final class RemoteLogManagerConfig {
             "from remote storage in the local storage.";
     public static final long DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES = 1024 * 1024 * 1024L;
 
-    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP = "remote.log.manager.thread.pool.size";
-    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling follower tasks to read " +
+    public static final String REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP = "remote.log.manager.follower.thread.pool.size";
+    public static final String REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling follower tasks to read " +
             "the highest-uploaded remote-offset for follower partitions.";
-    public static final int DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE = 2;
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE = 2;
+
+    @Deprecated(since = "4.2", forRemoval = true)
+    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP = "remote.log.manager.thread.pool.size";
+    @Deprecated(since = "4.2", forRemoval = true)
+    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling follower tasks to read " +
+            "the highest-uploaded remote-offset for follower partitions. This config is deprecated since 4.2, please use <code>" +
+            REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP + "</code> instead.";
+    @Deprecated(since = "4.2", forRemoval = true)
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE = DEFAULT_REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE;
 
     public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP = "remote.log.manager.copier.thread.pool.size";
     public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling tasks " +
@@ -106,7 +115,7 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling tasks " +
             "to clean up the expired remote log segments.";
     public static final int DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE = 10;
-    
+
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP = "remote.log.manager.task.interval.ms";
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_DOC = "Interval at which remote log manager runs the scheduled tasks like copy " +
             "segments, and clean up remote log segments.";
@@ -270,6 +279,12 @@ public final class RemoteLogManagerConfig {
                         atLeast(1),
                         MEDIUM,
                         REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC)
+                .define(REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
+                        INT,
+                        DEFAULT_REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE,
+                        atLeast(1),
+                        MEDIUM,
+                        REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_DOC)
                 .define(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
                         LONG,
                         DEFAULT_REMOTE_LOG_MANAGER_TASK_INTERVAL_MS,
@@ -391,8 +406,14 @@ public final class RemoteLogManagerConfig {
         return config.getString(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP);
     }
 
+
+    /**
+     * @deprecated since 4.2, please use {@link #remoteLogManagerFollowerThreadPoolSize()} instead.
+     * @return the value of the remote log manager follower thread pool size.
+     */
+    @Deprecated(since = "4.2", forRemoval = true)
     public int remoteLogManagerThreadPoolSize() {
-        return config.getInt(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP);
+        return remoteLogManagerFollowerThreadPoolSize();
     }
 
     public int remoteLogManagerCopierThreadPoolSize() {
@@ -401,6 +422,14 @@ public final class RemoteLogManagerConfig {
 
     public int remoteLogManagerExpirationThreadPoolSize() {
         return config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP);
+    }
+
+    public int remoteLogManagerFollowerThreadPoolSize() {
+        if (config.originals().containsKey(REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP)) {
+            return config.getInt(REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP);
+        } else {
+            return config.getInt(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP);
+        }
     }
 
     public long remoteLogManagerTaskIntervalMs() {
