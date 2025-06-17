@@ -1975,7 +1975,7 @@ public class KafkaConsumerTest {
     @EnumSource(GroupProtocol.class)
     public void testOperationsBySubscribingConsumerWithDefaultGroupId(GroupProtocol groupProtocol) {
         assertThrows(InvalidConfigurationException.class,
-            () -> newConsumer(groupProtocol, null, Optional.of(Boolean.TRUE)),
+            () -> newConsumer(groupProtocol, null, Optional.of(true)),
             "Expected an InvalidConfigurationException");
 
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null)) {
