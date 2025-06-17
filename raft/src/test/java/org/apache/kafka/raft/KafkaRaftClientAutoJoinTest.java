@@ -180,7 +180,7 @@ public class KafkaRaftClientAutoJoinTest {
 
         // When canBecomeVoter == false, the replica should not send an add voter request
         final var fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
     @Test
@@ -209,7 +209,7 @@ public class KafkaRaftClientAutoJoinTest {
 
         // When autoJoin == false, the replica should not send an add voter request
         final var fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
     @Test
@@ -239,7 +239,7 @@ public class KafkaRaftClientAutoJoinTest {
         // When kraft.version == 0, the replica should not send an add voter request
         final var fetchRequest = context.assertSentFetchRequest();
 
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
     private void pollAndDeliverRemoveVoter(
@@ -277,7 +277,8 @@ public class KafkaRaftClientAutoJoinTest {
             fetchRequest,
             epoch,
             context.log.endOffset().offset(),
-            context.log.lastFetchedEpoch()
+            context.log.lastFetchedEpoch(),
+            context.client.highWatermark()
         );
         // deliver the fetch response with the updated voter set
         context.deliverResponse(
