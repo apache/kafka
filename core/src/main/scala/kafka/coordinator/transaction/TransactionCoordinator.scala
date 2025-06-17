@@ -117,6 +117,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
                            responseCallback: InitProducerIdCallback,
                            requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
+
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
@@ -190,6 +191,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 responseCallback(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
               }
             }
+
             endTransaction(transactionalId,
               newMetadata.producerId,
               newMetadata.producerEpoch,

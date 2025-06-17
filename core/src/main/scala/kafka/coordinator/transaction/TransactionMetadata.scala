@@ -98,6 +98,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     // If we've already failed to fence an epoch (because the write to the log failed), we don't increase it again.
     // This is safe because we never return the epoch to client if we fail to fence the epoch
     val bumpedEpoch = if (hasFailedEpochFence) producerEpoch else (producerEpoch + 1).toShort
+
     prepareTransitionTo(
       state = TransactionState.PREPARE_EPOCH_FENCE,
       producerEpoch = bumpedEpoch,
@@ -212,6 +213,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
   def prepareComplete(updateTimestamp: Long): TxnTransitMetadata = {
     val newState = if (state == TransactionState.PREPARE_COMMIT) TransactionState.COMPLETE_COMMIT else TransactionState.COMPLETE_ABORT
+
     // Since the state change was successfully written to the log, unset the flag for a failed epoch fence
     hasFailedEpochFence = false
     val (updatedProducerId, updatedProducerEpoch) =
