@@ -243,10 +243,13 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
                     Collectors.toMap(Function.identity(), tp -> Errors.COORDINATOR_NOT_AVAILABLE)));
         } else {
             AddPartitionsToTxnTopicCollection topicCollection = new AddPartitionsToTxnTopicCollection();
-            topicPartitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, tps) -> {
-                topicCollection.add(new AddPartitionsToTxnTopic()
-                        .setName(topic)
-                        .setPartitions(tps.stream().map(TopicPartition::partition).collect(Collectors.toList())));
+            topicPartitions.forEach(tp -> {
+                var toTxnTopic = topicCollection.find(tp.topic());
+                if (toTxnTopic == null) {
+                    toTxnTopic = new AddPartitionsToTxnTopic().setName(tp.topic());
+                    topicCollection.add(toTxnTopic);
+                }
+                toTxnTopic.partitions().add(tp.partition());
             });
 
             AddPartitionsToTxnTransaction transactionData = new AddPartitionsToTxnTransaction()

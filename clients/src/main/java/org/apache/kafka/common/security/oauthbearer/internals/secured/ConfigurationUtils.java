@@ -22,6 +22,9 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
@@ -46,6 +49,8 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
  */
 
 public class ConfigurationUtils {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ConfigurationUtils.class);
 
     private final Map<String, ?> configs;
 
@@ -344,6 +349,13 @@ public class ConfigurationUtils {
                 ((OAuthBearerConfigurable) o).configure(configs, saslMechanism, jaasConfigEntries);
             } catch (Exception e) {
                 Utils.maybeCloseQuietly(o, "Instance of class " + o.getClass().getName() + " failed call to configure()");
+                LOG.warn(
+                    "The class {} defined in the {} configuration encountered an error on configure(): {}",
+                    o.getClass().getName(),
+                    configName,
+                    e.getMessage(),
+                    e
+                );
                 throw new ConfigException(
                     String.format(
                         "The class %s defined in the %s configuration encountered an error on configure(): %s",

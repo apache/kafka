@@ -230,7 +230,7 @@ public class KafkaRaftClientReconfigTest {
         // check that follower will send fetch request to leader
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // check if leader response were to contain bootstrap snapshot id, follower would not send fetch snapshot request
         context.deliverResponse(
@@ -240,7 +240,7 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
     @Test
@@ -260,7 +260,7 @@ public class KafkaRaftClientReconfigTest {
         // check that follower will send fetch request to leader
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // check that before receiving bootstrap records from leader, follower is not in the voter set
         assertFalse(context.client.quorum().isVoter(follower));
@@ -2274,7 +2274,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2311,7 +2311,7 @@ public class KafkaRaftClientReconfigTest {
         // after sending an update voter the next request should be a fetch
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
     @ParameterizedTest
@@ -2347,7 +2347,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2387,7 +2387,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2438,7 +2438,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2474,7 +2474,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // Election a new leader causes the replica to resend update voter request
         int newEpoch = epoch + 1;
@@ -2486,7 +2486,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, newEpoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, newEpoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2522,7 +2522,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, newEpoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, newEpoch, 0L, 0, context.client.highWatermark());
     }
 
     @Test
@@ -2772,7 +2772,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2793,7 +2793,7 @@ public class KafkaRaftClientReconfigTest {
         context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // after more than 3 fetch timeouts the update voter period timer should have expired.
         // check that the update voter period timer doesn't remain at zero (0) and cause the message queue to get
@@ -2833,7 +2833,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2853,7 +2853,7 @@ public class KafkaRaftClientReconfigTest {
         // expect one last FETCH request
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // don't send a response but increase the time
         context.time.sleep(context.requestTimeoutMs() - 1);
@@ -2913,7 +2913,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2950,7 +2950,7 @@ public class KafkaRaftClientReconfigTest {
         // check that there is a fetch to the new leader
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0, context.client.highWatermark());
         assertEquals(voter2.id(), fetchRequest.destination().id());
     }
 
@@ -2969,7 +2969,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
         assertEquals(-2, fetchRequest.destination().id());
     }
 
