@@ -610,11 +610,15 @@ public class Sender implements Runnable {
                     // Version 13 drop topic name and add support to topic id.
                     // We need to find batch based on topic id and partition index only as
                     // topic name in the response might be empty.
+                    TopicIdPartition tpId = new TopicIdPartition(r.topicId(), p.index(), r.name());
                     ProducerBatch batch = batches.entrySet().stream()
-                            .filter(entry ->
-                                    entry.getKey().same(new TopicIdPartition(r.topicId(), p.index(), r.name()))
-                            ).map(Map.Entry::getValue).findFirst().orElse(null);
+                            .filter(entry -> entry.getKey().same(tpId))
+                            .map(Map.Entry::getValue).findFirst().orElse(null);
 
+                    if (batch == null) {
+                        failBatch(batch, new IllegalStateException("batch created for " + tpId + " can't be found, " +
+                                "topic might be recreated after the batch creation."), false);
+                    }
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
                 }));
 
