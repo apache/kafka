@@ -324,7 +324,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 // This class performs tests requests and responses for all API keys
 public class RequestResponseTest {
@@ -496,12 +495,9 @@ public class RequestResponseTest {
         assertFalse(request.toString(true).contains("numPartitions"));
 
         request.clearPartitionRecords();
-        try {
-            request.data();
-            fail("dataOrException should fail after clearPartitionRecords()");
-        } catch (IllegalStateException e) {
-            // OK
-        }
+        assertThrows(IllegalStateException.class,
+            request::data,
+            "DataOrException should fail after clearPartitionRecords()");
 
         // `toString` should behave the same after `clearPartitionRecords`
         assertFalse(request.toString(false).contains("partitionSizes"));

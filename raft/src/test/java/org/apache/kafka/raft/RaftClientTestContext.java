@@ -980,7 +980,8 @@ public final class RaftClientTestContext {
                 fetchRequest,
                 epoch,
                 log.endOffset().offset(),
-                log.lastFetchedEpoch()
+                log.lastFetchedEpoch(),
+                client.highWatermark()
             );
 
             deliverResponse(
@@ -1010,7 +1011,7 @@ public final class RaftClientTestContext {
         return requests;
     }
 
-    private List<RaftResponse.Outbound> drainSentResponses(
+    List<RaftResponse.Outbound> drainSentResponses(
         ApiKeys apiKey
     ) {
         List<RaftResponse.Outbound> res = new ArrayList<>();
@@ -1167,23 +1168,20 @@ public final class RaftClientTestContext {
     RaftRequest.Outbound assertSentFetchRequest(
         int epoch,
         long fetchOffset,
-        int lastFetchedEpoch
+        int lastFetchedEpoch,
+        OptionalLong highWatermark
     ) {
         List<RaftRequest.Outbound> sentMessages = channel.drainSendQueue();
         assertEquals(1, sentMessages.size());
 
         RaftRequest.Outbound raftRequest = sentMessages.get(0);
-        assertFetchRequestData(raftRequest, epoch, fetchOffset, lastFetchedEpoch);
+        assertFetchRequestData(raftRequest, epoch, fetchOffset, lastFetchedEpoch, highWatermark);
         return raftRequest;
     }
 
-    FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
-        List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
-        assertEquals(
-            1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
-        RaftResponse.Outbound raftMessage = sentMessages.get(0);
-        assertEquals(ApiKeys.FETCH.id, raftMessage.data().apiKey());
-        FetchResponseData response = (FetchResponseData) raftMessage.data();
+    FetchResponseData.PartitionData assertFetchResponseData(RaftResponse.Outbound message) {
+        assertEquals(ApiKeys.FETCH.id, message.data().apiKey());
+        FetchResponseData response = (FetchResponseData) message.data();
         assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
 
         assertEquals(1, response.responses().size());
@@ -1205,16 +1203,29 @@ public final class RaftClientTestContext {
         return partitionResponse;
     }
 
+    FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
+        List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
+        assertEquals(
+            1,
+            sentMessages.size(),
+            "Found unexpected sent messages " + sentMessages
+        );
+
+        return assertFetchResponseData(sentMessages.get(0));
+    }
+
     void assertSentFetchPartitionResponse(Errors topLevelError) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
         assertEquals(
-            1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
+            1,
+            sentMessages.size(),
+            "Found unexpected sent messages " + sentMessages
+        );
         RaftResponse.Outbound raftMessage = sentMessages.get(0);
         assertEquals(ApiKeys.FETCH.id, raftMessage.data().apiKey());
         FetchResponseData response = (FetchResponseData) raftMessage.data();
         assertEquals(topLevelError, Errors.forCode(response.errorCode()));
     }
-
 
     MemoryRecords assertSentFetchPartitionResponse(
         Errors error,
@@ -1464,7 +1475,8 @@ public final class RaftClientTestContext {
 
     void discoverLeaderAsObserver(
         int leaderId,
-        int epoch
+        int epoch,
+        OptionalLong highWatermark
     ) throws Exception {
         pollUntilRequest();
         RaftRequest.Outbound fetchRequest = assertSentFetchRequest();
@@ -1473,7 +1485,7 @@ public final class RaftClientTestContext {
             startingVoters.voterIds().contains(destinationId) || bootstrapIds.contains(destinationId),
             String.format("id %d is not in sets %s or %s", destinationId, startingVoters, bootstrapIds)
         );
-        assertFetchRequestData(fetchRequest, 0, 0L, 0);
+        assertFetchRequestData(fetchRequest, 0, 0L, 0, highWatermark);
 
         deliverResponse(
             fetchRequest.correlationId(),
@@ -1761,7 +1773,8 @@ public final class RaftClientTestContext {
         RaftRequest.Outbound message,
         int epoch,
         long fetchOffset,
-        int lastFetchedEpoch
+        int lastFetchedEpoch,
+        OptionalLong highWatermark
     ) {
         assertInstanceOf(
             FetchRequestData.class,
@@ -1780,6 +1793,7 @@ public final class RaftClientTestContext {
         assertEquals(fetchOffset, fetchPartition.fetchOffset());
         assertEquals(lastFetchedEpoch, fetchPartition.lastFetchedEpoch());
         assertEquals(localId.orElse(-1), request.replicaState().replicaId());
+        assertEquals(highWatermark.orElse(-1), fetchPartition.highWatermark());
 
         // Assert that voters have flushed up to the fetch offset
         if ((localId.isPresent() && startingVoters.voterIds().contains(localId.getAsInt())) ||
@@ -1808,10 +1822,29 @@ public final class RaftClientTestContext {
     ) {
         return fetchRequest(
             epoch,
+            replicaKey,
+            fetchOffset,
+            lastFetchedEpoch,
+            OptionalLong.of(Long.MAX_VALUE),
+            maxWaitTimeMs
+        );
+    }
+
+    FetchRequestData fetchRequest(
+        int epoch,
+        ReplicaKey replicaKey,
+        long fetchOffset,
+        int lastFetchedEpoch,
+        OptionalLong highWatermark,
+        int maxWaitTimeMs
+    ) {
+        return fetchRequest(
+            epoch,
             clusterId,
             replicaKey,
             fetchOffset,
             lastFetchedEpoch,
+            highWatermark,
             maxWaitTimeMs
         );
     }
@@ -1822,6 +1855,7 @@ public final class RaftClientTestContext {
         ReplicaKey replicaKey,
         long fetchOffset,
         int lastFetchedEpoch,
+        OptionalLong highWatermark,
         int maxWaitTimeMs
     ) {
         FetchRequestData request = RaftUtil.singletonFetchRequest(
@@ -1831,7 +1865,8 @@ public final class RaftClientTestContext {
                 fetchPartition
                     .setCurrentLeaderEpoch(epoch)
                     .setLastFetchedEpoch(lastFetchedEpoch)
-                    .setFetchOffset(fetchOffset);
+                    .setFetchOffset(fetchOffset)
+                    .setHighWatermark(highWatermark.orElse(-1));
                 if (raftProtocol.isReconfigSupported()) {
                     fetchPartition
                         .setReplicaDirectoryId(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
@@ -2021,7 +2056,9 @@ public final class RaftClientTestContext {
     }
 
     private short fetchRpcVersion() {
-        if (raftProtocol.isReconfigSupported()) {
+        if (raftProtocol.isHwmInFetchSupported()) {
+            return 18;
+        } else if (raftProtocol.isReconfigSupported()) {
             return 17;
         } else {
             return 16;
@@ -2325,7 +2362,9 @@ public final class RaftClientTestContext {
         // dynamic quorum reconfiguration support
         KIP_853_PROTOCOL,
         // preVote support
-        KIP_996_PROTOCOL;
+        KIP_996_PROTOCOL,
+        // HWM in FETCH request support
+        KIP_1166_PROTOCOL;
 
         boolean isKRaftSupported() {
             return isAtLeast(KIP_595_PROTOCOL);
@@ -2337,6 +2376,10 @@ public final class RaftClientTestContext {
 
         boolean isPreVoteSupported() {
             return isAtLeast(KIP_996_PROTOCOL);
+        }
+
+        boolean isHwmInFetchSupported() {
+            return isAtLeast(KIP_1166_PROTOCOL);
         }
 
         private boolean isAtLeast(RaftProtocol otherRpc) {
