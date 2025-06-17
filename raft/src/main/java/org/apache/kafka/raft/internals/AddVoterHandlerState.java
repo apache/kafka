@@ -29,6 +29,7 @@ public final class AddVoterHandlerState {
     private final ReplicaKey voterKey;
     private final Endpoints voterEndpoints;
     private final Timer timeout;
+    private final boolean ackWhenCommitted;
     private final CompletableFuture<AddRaftVoterResponseData> future = new CompletableFuture<>();
 
     private OptionalLong lastOffset = OptionalLong.empty();
@@ -36,11 +37,13 @@ public final class AddVoterHandlerState {
     AddVoterHandlerState(
         ReplicaKey voterKey,
         Endpoints voterEndpoints,
-        Timer timeout
+        Timer timeout,
+        boolean ackWhenCommitted
     ) {
         this.voterKey = voterKey;
         this.voterEndpoints = voterEndpoints;
         this.timeout = timeout;
+        this.ackWhenCommitted = ackWhenCommitted;
     }
 
     public long timeUntilOperationExpiration(long currentTimeMs) {
@@ -74,6 +77,10 @@ public final class AddVoterHandlerState {
 
     public Endpoints voterEndpoints() {
         return voterEndpoints;
+    }
+
+    public boolean ackWhenCommitted() {
+        return ackWhenCommitted;
     }
 
     public OptionalLong lastOffset() {

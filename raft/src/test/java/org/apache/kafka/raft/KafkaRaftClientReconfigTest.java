@@ -20,6 +20,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
@@ -339,27 +340,80 @@ public class KafkaRaftClientReconfigTest {
             Map.of(context.channel.listenerName(), newAddress)
         );
 
-        // Show that the new voter is not currently a voter
-        assertFalse(context.client.quorum().isVoter(newVoter));
-
-        // Establish a HWM and fence previous leaders
-        context.deliverRequest(
-            context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
-        );
-        context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
-
-        // Catch up the new voter to the leader's LEO, the new voter is still an observer at this point
-        context.deliverRequest(
-            context.fetchRequest(epoch, newVoter, context.log.endOffset().offset(), epoch, 0)
-        );
-        context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
-        checkLeaderMetricValues(2, 1, 0, context);
+        prepareToSendAddVoter(context, epoch, local, follower, newVoter);
 
         // Attempt to add new voter to the quorum
         context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
 
+        completeApiVersions(context, newVoter, newAddress);
+
+        // Handle the API_VERSIONS response
+        context.client.poll();
+        // Append new VotersRecord to log
+        context.client.poll();
+
+        commitAddVoter(context, local, follower, newVoter, epoch);
+
+        // Expect reply for AddVoter request
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.NONE);
+    }
+
+    @Test
+    void testAddVoterCompletesEarlyWithAckWhenCommittedFalse() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_1186_PROTOCOL)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        checkLeaderMetricValues(2, 0, 0, context);
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + newVoter.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Map.of(context.channel.listenerName(), newAddress)
+        );
+
+        prepareToSendAddVoter(context, epoch, local, follower, newVoter);
+
+        // Attempt to add new voter to the quorum
+        context.deliverRequest(
+            context.addVoterRequest(
+                Integer.MAX_VALUE,
+                newVoter,
+                newListeners
+            ).setAckWhenCommitted(false)
+        );
+
+        completeApiVersions(context, newVoter, newAddress);
+
+        // Handle the API_VERSIONS response
+        context.client.poll();
+        // Append new VotersRecord to log
+        // Expect a response for AddVoter request before committing the new voter
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.NONE);
+
+        commitAddVoter(context, local, follower, newVoter, epoch);
+    }
+
+    private void completeApiVersions(
+        RaftClientTestContext context,
+        ReplicaKey newVoter,
+        InetSocketAddress newAddress
+    ) throws Exception {
         // Leader should send an API_VERSIONS request to the new voter's endpoint
         context.pollUntilRequest();
         RaftRequest.Outbound apiVersionRequest = context.assertSentApiVersionsRequest();
@@ -374,26 +428,104 @@ public class KafkaRaftClientReconfigTest {
             apiVersionRequest.destination(),
             apiVersionsResponse(Errors.NONE)
         );
+    }
 
-        // Handle the API_VERSIONS response
-        context.client.poll();
-        // Append new VotersRecord to log
-        context.client.poll();
+    private void commitAddVoter(
+        RaftClientTestContext context,
+        ReplicaKey leader,
+        ReplicaKey follower,
+        ReplicaKey newVoter,
+        int epoch
+    ) throws Exception {
         // The new voter is now a voter after writing the VotersRecord to the log
         assertTrue(context.client.quorum().isVoter(newVoter));
         checkLeaderMetricValues(3, 0, 1, context);
 
         // Send a FETCH to increase the HWM and commit the new voter set
         context.deliverRequest(
+            context.fetchRequest(
+                epoch,
+                follower,
+                context.log.endOffset().offset(),
+                epoch,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()));
+        checkLeaderMetricValues(3, 0, 0, context);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RaftProtocol.class, names = {
+        "KIP_853_PROTOCOL",
+        "KIP_996_PROTOCOL"
+    })
+    void testAddVoterCompatibility(RaftProtocol protocol) throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(protocol)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + newVoter.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Map.of(context.channel.listenerName(), newAddress)
+        );
+
+        prepareToSendAddVoter(context, epoch, local, follower, newVoter);
+
+        // Attempt to add new voter to the quorum
+        assertThrows(
+            UnsupportedVersionException.class,
+            () -> context.deliverRequest(
+                context.addVoterRequest(
+                    Integer.MAX_VALUE,
+                    newVoter,
+                    newListeners
+                ).setAckWhenCommitted(false)
+            )
+        );
+    }
+
+    // This method sets up the context so a test can send an AddVoter request after
+    // exiting this method
+    private void prepareToSendAddVoter(
+        RaftClientTestContext context,
+        int epoch,
+        ReplicaKey leader,
+        ReplicaKey follower,
+        ReplicaKey observer
+    ) throws Exception {
+        // Show that the observer is not currently a voter
+        assertFalse(context.client.quorum().isVoter(observer));
+
+        // Establish a HWM and fence previous leaders
+        context.deliverRequest(
             context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
         );
         context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
-        checkLeaderMetricValues(3, 0, 0, context);
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()));
 
-        // Expect reply for AddVoter request
+        // Catch up the new voter to the leader's LEO, the new voter is still an observer at this point
+        context.deliverRequest(
+            context.fetchRequest(epoch, observer, context.log.endOffset().offset(), epoch, 0)
+        );
         context.pollUntilResponse();
-        context.assertSentAddVoterResponse(Errors.NONE);
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()));
+        checkLeaderMetricValues(2, 1, 0, context);
     }
 
     @Test

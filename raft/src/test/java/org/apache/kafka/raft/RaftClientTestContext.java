@@ -1982,7 +1982,9 @@ public final class RaftClientTestContext {
     }
 
     private short addVoterRpcVersion() {
-        if (raftProtocol.isReconfigSupported()) {
+        if (raftProtocol.isAutoJoinSupported()) {
+            return 1;
+        } else if (raftProtocol.isReconfigSupported()) {
             return 0;
         } else {
             throw new IllegalStateException("Reconfiguration must be enabled by calling withRaftProtocol(KIP_853_PROTOCOL)");
@@ -2228,7 +2230,7 @@ public final class RaftClientTestContext {
 
     /**
      * Determines what versions of RPCs are in use. Note, these are ordered from oldest to newest, and are
-     * cumulative. E.g. KIP_996_PROTOCOL includes KIP_853_PROTOCOL and KIP_595_PROTOCOL changes
+     * cumulative. E.g. KIP_1186_PROTOCOL includes KIP_996_PROTOCOL, KIP_853_PROTOCOL, and KIP_595_PROTOCOL changes
      */
     enum RaftProtocol {
         // kraft support
@@ -2236,7 +2238,9 @@ public final class RaftClientTestContext {
         // dynamic quorum reconfiguration support
         KIP_853_PROTOCOL,
         // preVote support
-        KIP_996_PROTOCOL;
+        KIP_996_PROTOCOL,
+        // autoJoin support
+        KIP_1186_PROTOCOL;
 
         boolean isKRaftSupported() {
             return isAtLeast(KIP_595_PROTOCOL);
@@ -2248,6 +2252,10 @@ public final class RaftClientTestContext {
 
         boolean isPreVoteSupported() {
             return isAtLeast(KIP_996_PROTOCOL);
+        }
+
+        boolean isAutoJoinSupported() {
+            return isAtLeast(KIP_1186_PROTOCOL);
         }
 
         private boolean isAtLeast(RaftProtocol otherRpc) {
