@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class IntegrationTestUtils {
 
-    private static AtomicInteger correlationId = new AtomicInteger(0);
+    private static final AtomicInteger CORRELATION_ID = new AtomicInteger(0);
 
     public static void sendRequest(Socket socket, byte[] request) throws IOException {
         DataOutputStream outgoing = new DataOutputStream(socket.getOutputStream());
@@ -43,7 +43,7 @@ public class IntegrationTestUtils {
     }
 
     public static RequestHeader nextRequestHeader(ApiKeys apiKey, short apiVersion) {
-        return new RequestHeader(apiKey, apiVersion, "client-id", correlationId.getAndIncrement());
+        return new RequestHeader(apiKey, apiVersion, "client-id", CORRELATION_ID.getAndIncrement());
     }
 
     @SuppressWarnings("unchecked")
@@ -64,10 +64,9 @@ public class IntegrationTestUtils {
         AbstractRequest request,
         Socket socket
     ) throws IOException {
-        correlationId.getAndIncrement();
-        RequestHeader header = new RequestHeader(request.apiKey(), request.version(), "client-id", correlationId.get());
-        byte[] serializedBytes = Utils.toArray(request.serializeWithHeader(header));
-        sendRequest(socket, serializedBytes);
+        CORRELATION_ID.getAndIncrement();
+        var header = nextRequestHeader(request.apiKey(), request.version());
+        sendRequest(socket, Utils.toArray(request.serializeWithHeader(header)));
         return receive(socket, request.apiKey(), request.version());
     }
 
