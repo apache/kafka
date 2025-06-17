@@ -85,13 +85,13 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
         val stream = configs match {
           case c: AbstractConfig =>
-            val nonInternalStream = c.nonInternalValues.entrySet.stream()
+            val nonInternalValues = c.nonInternalValues
             val originalsFiltered = c.originals.entrySet.stream()
               .filter(e =>
                 e.getValue != null &&
                   !c.nonInternalValues.containsKey(e.getKey) // exclude keys already in nonInternalValues
               )
-            java.util.stream.Stream.concat(nonInternalStream, originalsFiltered)
+            java.util.stream.Stream.concat(nonInternalValues.entrySet().stream(), originalsFiltered)
           case m: java.util.Map[_, _] =>
             m.asInstanceOf[java.util.Map[String, String]].entrySet().stream()
           case _ => throw new IllegalArgumentException("Unsupported configs type")
