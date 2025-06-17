@@ -49,6 +49,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -75,41 +76,34 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     private static final long DEFAULT_MAX_WAIT_MS = 15_000;
 
     /**
-     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * Wait for condition to be met for at most 15 seconds and throw assertion failure otherwise.
      * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
      * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
      * avoid transient failures due to slow or overloaded machines.
      */
-    static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
-                                         final long maxWaitMs,
-                                         final java.util.function.Supplier<String> conditionDetails) throws InterruptedException {
-        final long expectedEnd = System.currentTimeMillis() + maxWaitMs;
+    public static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
+                                        final String conditionDetails) throws InterruptedException {
+        var maxWaitMs = 15_000L;
+        long endTime = System.currentTimeMillis() + maxWaitMs;
 
-        while (true) {
+        while (System.currentTimeMillis() < endTime) {
             try {
                 if (testCondition.get()) {
                     return;
                 }
-                String conditionDetail = conditionDetails.get() == null ? "" : conditionDetails.get();
-                throw new org.apache.kafka.common.errors.TimeoutException("Condition not met: " + conditionDetail);
-            } catch (final AssertionError t) {
-                if (expectedEnd <= System.currentTimeMillis()) {
-                    throw t;
-                }
-            } catch (final Exception e) {
-                if (expectedEnd <= System.currentTimeMillis()) {
+            } catch (Exception e) {
+                if (System.currentTimeMillis() >= endTime) {
                     throw new AssertionError(String.format("Assertion failed with an exception after %s ms", maxWaitMs), e);
                 }
             }
-            Thread.sleep(Math.min(DEFAULT_POLL_INTERVAL_MS, maxWaitMs));
-        }
-    }
 
-    /**
-     * uses default value of 15 seconds for timeout
-     */
-    static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition, final String conditionDetails) throws InterruptedException {
-        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, () -> conditionDetails);
+            if (System.currentTimeMillis() < endTime) {
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+        }
+
+        String details = conditionDetails != null ? conditionDetails : "";
+        throw new AssertionError("Condition not met: " + details);
     }
 
     public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
