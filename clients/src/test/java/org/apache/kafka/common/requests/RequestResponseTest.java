@@ -496,12 +496,7 @@ public class RequestResponseTest {
         assertFalse(request.toString(true).contains("numPartitions"));
 
         request.clearPartitionRecords();
-        try {
-            request.data();
-            fail("dataOrException should fail after clearPartitionRecords()");
-        } catch (IllegalStateException e) {
-            // OK
-        }
+        assertThrows(IllegalStateException.class, request::data);
 
         // `toString` should behave the same after `clearPartitionRecords`
         assertFalse(request.toString(false).contains("partitionSizes"));

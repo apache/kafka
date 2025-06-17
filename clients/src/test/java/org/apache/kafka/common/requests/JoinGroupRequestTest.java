@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class JoinGroupRequestTest {
 
@@ -47,12 +46,7 @@ public class JoinGroupRequestTest {
         String[] invalidGroupInstanceIds = {"", "foo bar", "..", "foo:bar", "foo=bar", ".", new String(longString)};
 
         for (String instanceId : invalidGroupInstanceIds) {
-            try {
-                JoinGroupRequest.validateGroupInstanceId(instanceId);
-                fail("No exception was thrown for invalid instance id: " + instanceId);
-            } catch (InvalidConfigurationException e) {
-                // Good
-            }
+            assertThrows(InvalidConfigurationException.class, () -> JoinGroupRequest.validateGroupInstanceId(instanceId));
         }
     }
     @Test
