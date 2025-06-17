@@ -108,7 +108,7 @@
           "about": "The directory id of the follower fetching." },
         { "name": "HighWatermark", "type": "int64", "versions": "18+", "default": "9223372036854775807", "taggedVersions": "18+",
           "tag": 1, "ignorable": true,
-          "about": "The high-watermark known by the replica. -1 if the high-watermark is not known." }
+          "about": "The high-watermark known by the replica. -1 if the high-watermark is not known and 9223372036854775807 if the feature is not supported." }
       ]}
     ]},
     { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,
