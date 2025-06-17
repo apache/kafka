@@ -150,8 +150,9 @@ public class GlobalStreamThreadTest {
         // should throw as the MockConsumer hasn't been configured and there are no
         // partitions available
         final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
-        // Should have thrown StreamsException if start up failed.
-        assertThrows(StreamsException.class, () -> globalStreamThread.start());
+        assertThrows(StreamsException.class,
+            () -> globalStreamThread.start(),
+            "Should have thrown StreamsException if start up failed.");
 
         globalStreamThread.join();
         assertThat(globalStore.isOpen(), is(false));

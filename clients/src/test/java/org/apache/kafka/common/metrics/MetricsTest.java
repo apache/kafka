@@ -97,8 +97,9 @@ public class MetricsTest {
         MetricName n2 = metrics.metricName("name", "group", "description", tags);
         assertEquals(n1, n2, "metric names created in two different ways should be equal");
 
-        // Creating MetricName with an odd number of keyValue should fail, IllegalArgumentException expected.
-        assertThrows(IllegalArgumentException.class, () -> metrics.metricName("name", "group", "description", "key1"));
+        assertThrows(IllegalArgumentException.class,
+            () -> metrics.metricName("name", "group", "description", "key1"),
+            "Creating MetricName with an odd number of keyValue should fail, IllegalArgumentException expected.");
     }
 
     @Test
@@ -681,15 +682,17 @@ public class MetricsTest {
             assertEquals(filledOutTags.get("parent-tag"), "parent-tag-value", "parent-tag should be set properly");
             assertEquals(filledOutTags.get("child-tag"), "child-tag-value", "child-tag should be set properly");
 
-            // Creating MetricName should throw IllegalArgumentException if the child metrics are not defined at runtime.
-            assertThrows(IllegalArgumentException.class, () -> inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, parentTagsWithValues));
+            assertThrows(IllegalArgumentException.class,
+                () -> inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, parentTagsWithValues),
+                "Creating MetricName should throw IllegalArgumentException if the child metrics are not defined at runtime.");
 
             Map<String, String> runtimeTags = new HashMap<>();
             runtimeTags.put("child-tag", "child-tag-value");
             runtimeTags.put("tag-not-in-template", "unexpected-value");
 
-            // Creating MetricName should throw IllegalArgumentException if there is a tag at runtime that is not in the template.
-            assertThrows(IllegalArgumentException.class, () -> inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, runtimeTags));
+            assertThrows(IllegalArgumentException.class,
+                () -> inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, runtimeTags),
+                "Creating MetricName should throw IllegalArgumentException if there is a tag at runtime that is not in the template.");
         }
     }
 
