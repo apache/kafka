@@ -185,7 +185,9 @@ public class AclControlManager {
                 AclDeleteResult result = deleteAclsForFilter(filter, records);
                 results.add(result);
             } catch (BoundedListTooLongException e) {
-                results.add(new AclDeleteResult(new InvalidRequestException(e.getMessage(), e)));
+                // we do not return partial results here because the fact that only a portion of the deletions
+                // succeeded can be easily missed due to response size. instead fail the entire response
+                throw new InvalidRequestException(e.getMessage(), e);
             } catch (Throwable e) {
                 results.add(new AclDeleteResult(ApiError.fromThrowable(e).exception()));
             }

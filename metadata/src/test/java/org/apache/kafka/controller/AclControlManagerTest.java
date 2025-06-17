@@ -434,19 +434,8 @@ public class AclControlManagerTest {
                 AccessControlEntryFilter.ANY));
         }
 
-        ControllerResult<List<AclDeleteResult>> deleteResult =
-            manager.deleteAcls(filters);
-
-        assertEquals(MAX_RECORDS_PER_USER_OP + 2, deleteResult.response().size());
-        for (AclDeleteResult.AclBindingDeleteResult result :
-            deleteResult.response().get(MAX_RECORDS_PER_USER_OP - 1).aclBindingDeleteResults()) {
-            assertEquals(Optional.empty(), result.exception());
-        }
-        for (int i = MAX_RECORDS_PER_USER_OP; i < MAX_RECORDS_PER_USER_OP + 2; i++) {
-            Exception exception = deleteResult.response().get(i).exception().get();
-            assertEquals(InvalidRequestException.class, exception.getClass());
-            assertEquals(BoundedListTooLongException.class, exception.getCause().getClass());
-            assertEquals("Cannot remove more than " + MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.", exception.getCause().getMessage());
-        }
+        Exception exception = assertThrows(InvalidRequestException.class, () -> manager.deleteAcls(filters));
+        assertEquals(BoundedListTooLongException.class, exception.getCause().getClass());
+        assertEquals("Cannot remove more than " + MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.", exception.getCause().getMessage());
     }
 }
