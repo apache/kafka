@@ -74,6 +74,7 @@ class BrokerMetadataPublisher(
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
   shareCoordinator: ShareCoordinator,
+  sharePartitionManager: SharePartitionManager,
   var dynamicConfigPublisher: DynamicConfigPublisher,
   dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
   dynamicTopicClusterQuotaPublisher: DynamicTopicClusterQuotaPublisher,
@@ -81,8 +82,7 @@ class BrokerMetadataPublisher(
   delegationTokenPublisher: DelegationTokenPublisher,
   aclPublisher: AclPublisher,
   fatalFaultHandler: FaultHandler,
-  metadataPublishingFaultHandler: FaultHandler,
-  sharePartitionManager: SharePartitionManager
+  metadataPublishingFaultHandler: FaultHandler
 ) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${config.nodeId}] "
 
@@ -254,16 +254,17 @@ class BrokerMetadataPublisher(
       if (delta.featuresDelta != null) {
         try {
           val newFinalizedFeatures = new FinalizedFeatures(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
+          val newFinalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
           // Share version feature has been toggled.
-          if (newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort) != finalizedShareVersion) {
-            finalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
+          if (newFinalizedShareVersion != finalizedShareVersion) {
+            finalizedShareVersion = newFinalizedShareVersion
             val shareVersion: ShareVersion = ShareVersion.fromFeatureLevel(finalizedShareVersion)
             info(s"Feature share.version has been updated to version $finalizedShareVersion")
-            sharePartitionManager.onShareVersionToggle(shareVersion)
+            sharePartitionManager.onShareVersionToggle(shareVersion, config.shareGroupConfig.isShareGroupEnabled)
           }
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share partition manager " +
-            s" with share version feature change in $delta", t)
+            s" with share version feature change in $deltaName", t)
         }
       }
 
@@ -286,6 +287,11 @@ class BrokerMetadataPublisher(
   /**
    * Update the coordinator of local replica changes: election and resignation.
    *
+   * When the topic is deleted or a partition of the topic is deleted, {@param resignation}
+   * callback must be called with {@code None}. The coordinator expects the leader epoch to be
+   * incremented when the {@param resignation} callback is called but the leader epoch
+   * is not incremented when a topic is deleted.
+   *
    * @param image latest metadata image
    * @param delta metadata delta from the previous image and the latest image
    * @param topicName name of the topic associated with the coordinator
@@ -306,7 +312,7 @@ class BrokerMetadataPublisher(
       if (topicsDelta.topicWasDeleted(topicName)) {
         topicsDelta.image.getTopic(topicName).partitions.entrySet.forEach { entry =>
           if (entry.getValue.leader == brokerId) {
-            resignation(entry.getKey, Some(entry.getValue.leaderEpoch))
+            resignation(entry.getKey, None)
           }
         }
       }

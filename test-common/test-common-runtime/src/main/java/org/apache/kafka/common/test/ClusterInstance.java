@@ -57,7 +57,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -115,9 +114,7 @@ public interface ClusterInstance {
     /**
      * The listener for the kraft cluster controller configured by controller.listener.names.
      */
-    default Optional<ListenerName> controllerListenerName() {
-        return Optional.empty();
-    }
+    ListenerName controllerListenerName();
 
     /**
      * The broker connect string which can be used by clients for bootstrapping
@@ -244,7 +241,7 @@ public interface ClusterInstance {
         if (brokers().values().stream().allMatch(b -> b.dataPlaneRequestProcessor().isConsumerGroupProtocolEnabled())) {
             return Set.of(CLASSIC, CONSUMER);
         } else {
-            return Collections.singleton(CLASSIC);
+            return Set.of(CLASSIC);
         }
     }
 
@@ -354,14 +351,14 @@ public interface ClusterInstance {
 
             // Ensure that the topic directories are soft-deleted
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                    CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                    broker.config().logDirs().stream().allMatch(logDir ->
                         topicPartitions.stream().noneMatch(tp ->
                             new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
                 "Failed to soft-delete the data to a delete directory");
 
             // Ensure that the topic directories are hard-deleted
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                broker.config().logDirs().stream().allMatch(logDir ->
                     topicPartitions.stream().allMatch(tp ->
                         Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
                             partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&

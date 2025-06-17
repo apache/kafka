@@ -208,7 +208,7 @@ public abstract class ConsumerCoordinatorTest {
         this.rebalanceListener = new MockRebalanceListener();
         this.mockOffsetCommitCallback = new MockCommitCallback();
         this.partitionAssignor.clear();
-        this.rebalanceConfig = buildRebalanceConfig(Optional.empty());
+        this.rebalanceConfig = buildRebalanceConfig(Optional.empty(), null);
         this.coordinator = buildCoordinator(rebalanceConfig,
                                             metrics,
                                             assignors,
@@ -216,12 +216,13 @@ public abstract class ConsumerCoordinatorTest {
                                             subscriptions);
     }
 
-    private GroupRebalanceConfig buildRebalanceConfig(Optional<String> groupInstanceId) {
+    private GroupRebalanceConfig buildRebalanceConfig(Optional<String> groupInstanceId, String rackId) {
         return new GroupRebalanceConfig(sessionTimeoutMs,
                                         rebalanceTimeoutMs,
                                         heartbeatIntervalMs,
                                         groupId,
                                         groupInstanceId,
+                                        rackId,
                                         retryBackoffMs,
                                         retryBackoffMaxMs,
                                         groupInstanceId.isEmpty());
@@ -332,7 +333,7 @@ public abstract class ConsumerCoordinatorTest {
             List<Collection<String>> capturedTopics = topicsCaptor.getAllValues();
 
             // expected the final group subscribed topics to be updated to "topic1" and "topic2"
-            Set<String> expectedTopicsGotCalled = new HashSet<>(Arrays.asList(topic1, topic2));
+            Set<String> expectedTopicsGotCalled = Set.of(topic1, topic2);
             assertEquals(expectedTopicsGotCalled, capturedTopics.get(1));
         }
     }
@@ -1278,7 +1279,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         // Make sure that the metadata was refreshed during the rebalance and thus subscriptions now contain two topics.
-        final Set<String> updatedSubscriptionSet = new HashSet<>(Arrays.asList(topic1, topic2));
+        final Set<String> updatedSubscriptionSet = Set.of(topic1, topic2);
         assertEquals(updatedSubscriptionSet, subscriptions.subscription());
 
         // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
@@ -1299,7 +1300,7 @@ public abstract class ConsumerCoordinatorTest {
                 }
             }));
             coordinator.maybeUpdateSubscriptionMetadata();
-            assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), subscriptions.subscription());
+            assertEquals(Set.of(topic1, topic2), subscriptions.subscription());
 
             client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
             coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -2071,7 +2072,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(new HashSet<>(Arrays.asList(tp1, tp2)), subscriptions.assignedPartitions());
+        assertEquals(Set.of(tp1, tp2), subscriptions.assignedPartitions());
     }
 
     /**
@@ -2263,7 +2264,7 @@ public abstract class ConsumerCoordinatorTest {
         // and join the group again
         rebalanceListener.revoked = null;
         rebalanceListener.assigned = null;
-        subscriptions.subscribe(new HashSet<>(Arrays.asList(topic1, otherTopic)), Optional.of(rebalanceListener));
+        subscriptions.subscribe(Set.of(topic1, otherTopic), Optional.of(rebalanceListener));
         client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(assigned, Errors.NONE));
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
@@ -2974,7 +2975,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testCommitOffsetShouldNotSetInstanceIdIfMemberIdIsUnknown() {
-        rebalanceConfig = buildRebalanceConfig(groupInstanceId);
+        rebalanceConfig = buildRebalanceConfig(groupInstanceId, null);
         ConsumerCoordinator coordinator = buildCoordinator(
             rebalanceConfig,
             new Metrics(),
@@ -3699,7 +3700,6 @@ public abstract class ConsumerCoordinatorTest {
             autoCommitIntervalMs,
             null,
             true,
-            null,
             Optional.empty());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -3750,7 +3750,7 @@ public abstract class ConsumerCoordinatorTest {
                                                                final boolean autoCommit,
                                                                final Optional<String> groupInstanceId,
                                                                final boolean shouldPoll) {
-        rebalanceConfig = buildRebalanceConfig(groupInstanceId);
+        rebalanceConfig = buildRebalanceConfig(groupInstanceId, null);
         ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
                                                            new Metrics(),
                                                            assignors,
@@ -3868,7 +3868,6 @@ public abstract class ConsumerCoordinatorTest {
                 autoCommitIntervalMs,
                 null,
                 false,
-                null,
                 Optional.empty());
     }
 
@@ -4112,9 +4111,10 @@ public abstract class ConsumerCoordinatorTest {
 
         metrics = new Metrics(time);
 
+        rebalanceConfig = buildRebalanceConfig(rebalanceConfig.groupInstanceId, rackId);
         coordinator = new ConsumerCoordinator(rebalanceConfig, new LogContext(), consumerClient,
                 Collections.singletonList(assignor), metadata, subscriptions,
-                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, rackId, Optional.empty());
+                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, Optional.empty());
     }
 
     private static MetadataResponse rackAwareMetadata(int numNodes,
@@ -4193,7 +4193,6 @@ public abstract class ConsumerCoordinatorTest {
             autoCommitIntervalMs,
             null,
             false,
-            null,
             Optional.empty(),
             Optional.of(() -> Mockito.mock(BaseHeartbeatThread.class)));
     }

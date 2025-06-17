@@ -122,7 +122,7 @@ public class ReconfigurableQuorumIntegrationTest {
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(List.of(3000, 3001, 3002)), voters.keySet());
+                    assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001, 3002}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
@@ -147,7 +147,7 @@ public class ReconfigurableQuorumIntegrationTest {
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(List.of(3000, 3001, 3002, 3003)), voters.keySet());
+                    assertEquals(Set.of(3000, 3001, 3002, 3003), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001, 3002, 3003}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
@@ -156,7 +156,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 admin.removeRaftVoter(3000, dirId).all().get();
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(List.of(3001, 3002, 3003)), voters.keySet());
+                    assertEquals(Set.of(3001, 3002, 3003), voters.keySet());
                     for (int replicaId : new int[] {3001, 3002, 3003}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }

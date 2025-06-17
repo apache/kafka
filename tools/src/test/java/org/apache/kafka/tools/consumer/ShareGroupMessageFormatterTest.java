@@ -24,8 +24,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
@@ -39,16 +37,6 @@ import java.util.List;
 import java.util.stream.Stream;
 
 public class ShareGroupMessageFormatterTest extends CoordinatorRecordMessageFormatterTest {
-
-    private static final ShareGroupPartitionMetadataKey SHARE_GROUP_PARTITION_METADATA_KEY = new ShareGroupPartitionMetadataKey()
-        .setGroupId("group-id");
-    private static final ShareGroupPartitionMetadataValue SHARE_GROUP_PARTITION_METADATA_VALUE = new ShareGroupPartitionMetadataValue()
-        .setTopics(List.of(new ShareGroupPartitionMetadataValue.TopicMetadata()
-            .setTopicId(Uuid.ONE_UUID)
-            .setTopicName("topic")
-            .setNumPartitions(1)
-            .setPartitionMetadata(List.of()))
-        );
     private static final ShareGroupMemberMetadataKey SHARE_GROUP_MEMBER_METADATA_KEY = new ShareGroupMemberMetadataKey()
         .setGroupId("group-id")
         .setMemberId("member-id");
@@ -111,25 +99,6 @@ public class ShareGroupMessageFormatterTest extends CoordinatorRecordMessageForm
     @Override
     protected Stream<Arguments> parameters() {
         return Stream.of(
-            Arguments.of(
-                MessageUtil.toVersionPrefixedByteBuffer((short) 9, SHARE_GROUP_PARTITION_METADATA_KEY).array(),
-                MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_GROUP_PARTITION_METADATA_VALUE).array(),
-                """
-                    {"key":{"type":9,"data":{"groupId":"group-id"}},
-                     "value":{"version":0,
-                              "data":{"topics":[{"topicId":"AAAAAAAAAAAAAAAAAAAAAQ",
-                                                 "topicName":"topic",
-                                                 "numPartitions":1,
-                                                 "partitionMetadata":[]}]}}}
-                """
-            ),
-            Arguments.of(
-                MessageUtil.toVersionPrefixedByteBuffer((short) 9, SHARE_GROUP_PARTITION_METADATA_KEY).array(),
-                null,
-                """
-                    {"key":{"type":9,"data":{"groupId":"group-id"}},"value":null}
-                """
-            ),
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 10, SHARE_GROUP_MEMBER_METADATA_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_GROUP_MEMBER_METADATA_VALUE).array(),

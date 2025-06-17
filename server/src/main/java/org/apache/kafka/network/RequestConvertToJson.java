@@ -130,8 +130,8 @@ import org.apache.kafka.common.message.JoinGroupRequestDataJsonConverter;
 import org.apache.kafka.common.message.JoinGroupResponseDataJsonConverter;
 import org.apache.kafka.common.message.LeaveGroupRequestDataJsonConverter;
 import org.apache.kafka.common.message.LeaveGroupResponseDataJsonConverter;
-import org.apache.kafka.common.message.ListClientMetricsResourcesRequestDataJsonConverter;
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseDataJsonConverter;
+import org.apache.kafka.common.message.ListConfigResourcesRequestDataJsonConverter;
+import org.apache.kafka.common.message.ListConfigResourcesResponseDataJsonConverter;
 import org.apache.kafka.common.message.ListGroupsRequestDataJsonConverter;
 import org.apache.kafka.common.message.ListGroupsResponseDataJsonConverter;
 import org.apache.kafka.common.message.ListOffsetsRequestDataJsonConverter;
@@ -312,8 +312,8 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
-import org.apache.kafka.common.requests.ListClientMetricsResourcesRequest;
-import org.apache.kafka.common.requests.ListClientMetricsResourcesResponse;
+import org.apache.kafka.common.requests.ListConfigResourcesRequest;
+import org.apache.kafka.common.requests.ListConfigResourcesResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -507,8 +507,8 @@ public class RequestConvertToJson {
                 return JoinGroupRequestDataJsonConverter.write(((JoinGroupRequest) request).data(), request.version());
             case LEAVE_GROUP:
                 return LeaveGroupRequestDataJsonConverter.write(((LeaveGroupRequest) request).data(), request.version());
-            case LIST_CLIENT_METRICS_RESOURCES:
-                return ListClientMetricsResourcesRequestDataJsonConverter.write(((ListClientMetricsResourcesRequest) request).data(), request.version());
+            case LIST_CONFIG_RESOURCES:
+                return ListConfigResourcesRequestDataJsonConverter.write(((ListConfigResourcesRequest) request).data(), request.version());
             case LIST_GROUPS:
                 return ListGroupsRequestDataJsonConverter.write(((ListGroupsRequest) request).data(), request.version());
             case LIST_OFFSETS:
@@ -693,8 +693,8 @@ public class RequestConvertToJson {
                 return JoinGroupResponseDataJsonConverter.write(((JoinGroupResponse) response).data(), version);
             case LEAVE_GROUP:
                 return LeaveGroupResponseDataJsonConverter.write(((LeaveGroupResponse) response).data(), version);
-            case LIST_CLIENT_METRICS_RESOURCES:
-                return ListClientMetricsResourcesResponseDataJsonConverter.write(((ListClientMetricsResourcesResponse) response).data(), version);
+            case LIST_CONFIG_RESOURCES:
+                return ListConfigResourcesResponseDataJsonConverter.write(((ListConfigResourcesResponse) response).data(), version);
             case LIST_GROUPS:
                 return ListGroupsResponseDataJsonConverter.write(((ListGroupsResponse) response).data(), version);
             case LIST_OFFSETS:

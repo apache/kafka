@@ -85,8 +85,10 @@ public class ChangelogTopics {
             }
         }
 
-        log.debug("Expecting state changelog topic partitions {} for the requested topology.",
-            changelogTopicPartitions.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")));
+        if (!changelogTopicPartitions.isEmpty()) {
+            log.debug("Expecting state changelog topic partitions {} for the requested topology.",
+                changelogTopicPartitions.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")));
+        }
 
         return changelogTopicPartitions;
     }

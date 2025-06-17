@@ -93,7 +93,6 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import scala.Option;
 import scala.jdk.javaapi.CollectionConverters;
@@ -129,7 +128,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(config.logDirs().size());
-        List<File> logDirs = CollectionConverters.asJava(config.logDirs()).stream().map(File::new).collect(Collectors.toList());
+        List<File> logDirs = config.logDirs().stream().map(File::new).toList();
         logManager = new LogManagerBuilder().
             setLogDirs(logDirs).
             setInitialOfflineDirs(Collections.emptyList()).
@@ -221,7 +220,7 @@ public class ReplicaFetcherThreadBenchmark {
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        ((RemoteLeaderEndPoint) fetcher.leader()).fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched), ApiKeys.FETCH.latestVersion());
+        ((RemoteLeaderEndPoint) fetcher.leader()).fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched, List.of()), ApiKeys.FETCH.latestVersion());
     }
 
     @TearDown(Level.Trial)

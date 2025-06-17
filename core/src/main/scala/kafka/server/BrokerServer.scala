@@ -45,8 +45,7 @@ import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
 import org.apache.kafka.metadata.publisher.AclPublisher
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
-import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, FinalizedFeatures, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
@@ -56,6 +55,7 @@ import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, DelegationTokenManager, ProcessRole}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
@@ -261,10 +261,7 @@ class BrokerServer(
       )
 
       val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
-        config.shareGroupConfig.shareGroupMaxShareSessions(),
-        ShareVersion.fromFeatureLevel(
-          FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION).finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
-        ).supportsShareGroups()
+        config.shareGroupConfig.shareGroupMaxShareSessions()
       )
 
       val connectionDisconnectListeners = Seq(
@@ -445,6 +442,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
+        config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong,
         persister,
         groupConfigManager,
         brokerTopicStats
@@ -487,6 +485,7 @@ class BrokerServer(
         groupCoordinator,
         transactionCoordinator,
         shareCoordinator,
+        sharePartitionManager,
         new DynamicConfigPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
@@ -522,8 +521,7 @@ class BrokerServer(
           authorizerPlugin.toJava
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
-        sharedServer.metadataPublishingFaultHandler,
-        sharePartitionManager
+        sharedServer.metadataPublishingFaultHandler
       )
       // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
       // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
@@ -664,6 +662,7 @@ class BrokerServer(
       .withWriter(writer)
       .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
       .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
+      .withShareGroupEnabledConfigSupplier(() => config.shareGroupConfig.isShareGroupEnabled)
       .build()
   }
 
@@ -703,10 +702,7 @@ class BrokerServer(
       val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
       val endpoint = if (listenerName != null) {
         Some(listenerInfo.listeners().values().stream
-          .filter(e =>
-            e.listenerName().isPresent &&
-              ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
-          )
+          .filter(e => ListenerName.normalised(e.listener()).equals(ListenerName.normalised(listenerName)))
           .findFirst()
           .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
             listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values())))
@@ -714,7 +710,7 @@ class BrokerServer(
         None
       }
 
-      val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
+      val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.get(0), clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).toJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>

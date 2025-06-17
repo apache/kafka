@@ -96,7 +96,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final String key, final Void value, final int numPartitions) {
-            return Optional.of(new HashSet<>(Arrays.asList(0, 1, 2)));
+            return Optional.of(Set.of(0, 1, 2));
         }
     }
 

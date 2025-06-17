@@ -62,7 +62,6 @@ import java.nio.file.Paths;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -270,7 +269,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     socketFactoryManager.getOrCreatePortForListener(node.id(), brokerListenerName);
                 }
                 for (TestKitNode node : nodes.controllerNodes().values()) {
-                    setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
+                    setupNodeDirectories(baseDirectory, node.metadataDirectory(), List.of());
                     KafkaConfig config = createNodeConfig(node);
                     SharedServer sharedServer = new SharedServer(
                         config,
@@ -278,7 +277,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Time.SYSTEM,
                         new Metrics(),
                         CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                        Collections.emptyList(),
+                        List.of(),
                         faultHandlerFactory,
                         socketFactoryManager.getOrCreateSocketFactory(node.id())
                     );
@@ -306,7 +305,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             Time.SYSTEM,
                             new Metrics(),
                             CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                            Collections.emptyList(),
+                            List.of(),
                             faultHandlerFactory,
                             socketFactoryManager.getOrCreateSocketFactory(node.id())
                         );
@@ -620,7 +619,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
             int brokerId = entry.getKey();
             BrokerServer broker = entry.getValue();
             ListenerName listenerName = nodes.brokerListenerName();
-            int port = broker.boundPort(listenerName);
+            // The KafkaConfig#listeners method normalizes the listener name.
+            // The result from TestKitNodes#brokerListenerName method should be normalized as well,
+            // so that it matches the listener name in the KafkaConfig.
+            int port = broker.boundPort(ListenerName.normalised(listenerName.value()));
             if (port <= 0) {
                 throw new RuntimeException("Broker " + brokerId + " does not yet " +
                     "have a bound port for " + listenerName + ".  Did you start " +
@@ -639,6 +641,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
             int id = entry.getKey();
             ControllerServer controller = entry.getValue();
             ListenerName listenerName = nodes.controllerListenerName();
+            // Although the KafkaConfig#listeners method normalizes the listener name,
+            // the controller.listener.names configuration does not allow lowercase input,
+            // so there is no lowercase controller listener name, and we don't need to normalize it.
             int port = controller.socketServer().boundPort(listenerName);
             if (port <= 0) {
                 throw new RuntimeException("Controller " + id + " does not yet " +

@@ -175,8 +175,8 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
-import org.apache.kafka.common.message.ListClientMetricsResourcesRequestData;
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
+import org.apache.kafka.common.message.ListConfigResourcesRequestData;
+import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
@@ -545,7 +545,7 @@ public class RequestResponseTest {
                         .setHighWatermark(1000000)
                         .setLogStartOffset(-1)
                         .setRecords(records));
-        FetchResponse idTestResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, idResponseData);
+        FetchResponse idTestResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, idResponseData, List.of());
         FetchResponse v12Deserialized = FetchResponse.parse(idTestResponse.serialize((short) 12), (short) 12);
         FetchResponse newestDeserialized = FetchResponse.parse(idTestResponse.serialize(FETCH.latestVersion()), FETCH.latestVersion());
         assertTrue(v12Deserialized.topicIds().isEmpty());
@@ -586,7 +586,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(6)
                         .setRecords(records));
 
-        FetchResponse response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
+        FetchResponse response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData, List.of());
         FetchResponse deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
         assertEquals(responseData.entrySet().stream().collect(Collectors.toMap(e -> e.getKey().topicPartition(), Map.Entry::getValue)),
                 deserialized.responseData(topicNames, (short) 4));
@@ -613,7 +613,7 @@ public class RequestResponseTest {
 
         TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> tpToData = new LinkedHashMap<>(Map.of(topicIdPartition, partitionData));
-        fetchResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpToData);
+        fetchResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpToData, List.of());
         validateNoNullRecords(fetchResponse);
     }
 
@@ -1052,7 +1052,7 @@ public class RequestResponseTest {
             case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsRequest(version);
             case PUSH_TELEMETRY: return createPushTelemetryRequest(version);
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsRequest(version);
-            case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesRequest(version);
+            case LIST_CONFIG_RESOURCES: return createListConfigResourcesRequest(version);
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsRequest(version);
             case SHARE_GROUP_HEARTBEAT: return createShareGroupHeartbeatRequest(version);
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeRequest(version);
@@ -1147,7 +1147,7 @@ public class RequestResponseTest {
             case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
             case PUSH_TELEMETRY: return createPushTelemetryResponse();
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
-            case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
+            case LIST_CONFIG_RESOURCES: return createListConfigResourcesResponse();
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsResponse();
             case SHARE_GROUP_HEARTBEAT: return createShareGroupHeartbeatResponse();
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeResponse();
@@ -1447,10 +1447,10 @@ public class RequestResponseTest {
         ShareFetchRequestData data = new ShareFetchRequestData()
                 .setGroupId("group")
                 .setMemberId(Uuid.randomUuid().toString())
-                .setTopics(singletonList(new ShareFetchRequestData.FetchTopic()
+                .setTopics(new ShareFetchRequestData.FetchTopicCollection(List.of(new ShareFetchRequestData.FetchTopic()
                         .setTopicId(Uuid.randomUuid())
-                        .setPartitions(singletonList(new ShareFetchRequestData.FetchPartition()
-                                .setPartitionIndex(0)))));
+                        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(List.of(new ShareFetchRequestData.FetchPartition()
+                                .setPartitionIndex(0)).iterator()))).iterator()));
         return new ShareFetchRequest.Builder(data).build(version);
     }
 
@@ -1473,24 +1473,24 @@ public class RequestResponseTest {
     private ShareAcknowledgeRequest createShareAcknowledgeRequest(short version) {
         ShareAcknowledgeRequestData data = new ShareAcknowledgeRequestData()
                 .setMemberId(Uuid.randomUuid().toString())
-                .setTopics(singletonList(new ShareAcknowledgeRequestData.AcknowledgeTopic()
+                .setTopics(new ShareAcknowledgeRequestData.AcknowledgeTopicCollection(List.of(new ShareAcknowledgeRequestData.AcknowledgeTopic()
                         .setTopicId(Uuid.randomUuid())
-                        .setPartitions(singletonList(new ShareAcknowledgeRequestData.AcknowledgePartition()
+                        .setPartitions(new ShareAcknowledgeRequestData.AcknowledgePartitionCollection(List.of(new ShareAcknowledgeRequestData.AcknowledgePartition()
                                 .setPartitionIndex(0)
                                 .setAcknowledgementBatches(singletonList(new ShareAcknowledgeRequestData.AcknowledgementBatch()
                                         .setFirstOffset(0)
                                         .setLastOffset(0)
-                                        .setAcknowledgeTypes(Collections.singletonList((byte) 0))))))));
+                                        .setAcknowledgeTypes(Collections.singletonList((byte) 0))))).iterator()))).iterator()));
         return new ShareAcknowledgeRequest.Builder(data).build(version);
     }
 
     private ShareAcknowledgeResponse createShareAcknowledgeResponse() {
         ShareAcknowledgeResponseData data = new ShareAcknowledgeResponseData();
-        data.setResponses(singletonList(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse()
+        data.setResponses(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection(List.of(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse()
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(new ShareAcknowledgeResponseData.PartitionData()
                         .setPartitionIndex(0)
-                        .setErrorCode(Errors.NONE.code())))));
+                        .setErrorCode(Errors.NONE.code())))).iterator()));
         data.setThrottleTimeMs(345);
         data.setErrorCode(Errors.NONE.code());
         return new ShareAcknowledgeResponse(data);
@@ -2025,7 +2025,7 @@ public class RequestResponseTest {
 
     private FetchResponse createFetchResponse(Errors error, int sessionId) {
         return FetchResponse.parse(
-            FetchResponse.of(error, 25, sessionId, new LinkedHashMap<>()).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+            FetchResponse.of(error, 25, sessionId, new LinkedHashMap<>(), List.of()).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse createFetchResponse(int sessionId) {
@@ -2047,7 +2047,7 @@ public class RequestResponseTest {
                         .setAbortedTransactions(abortedTransactions)
                         .setRecords(MemoryRecords.EMPTY));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, sessionId,
-            responseData).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+            responseData, List.of()).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse createFetchResponse(boolean includeAborted) {
@@ -2072,7 +2072,7 @@ public class RequestResponseTest {
                         .setAbortedTransactions(abortedTransactions)
                         .setRecords(MemoryRecords.EMPTY));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, INVALID_SESSION_ID,
-            responseData).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+            responseData, List.of()).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse createFetchResponse(short version) {
@@ -3636,15 +3636,18 @@ public class RequestResponseTest {
         return new PushTelemetryResponse(response);
     }
 
-    private ListClientMetricsResourcesRequest createListClientMetricsResourcesRequest(short version) {
-        return new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build(version);
+    private ListConfigResourcesRequest createListConfigResourcesRequest(short version) {
+        return version == 0 ?
+            new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()
+                .setResourceTypes(List.of(ConfigResource.Type.CLIENT_METRICS.id()))).build(version) :
+            new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()).build(version);
     }
 
-    private ListClientMetricsResourcesResponse createListClientMetricsResourcesResponse() {
-        ListClientMetricsResourcesResponseData response = new ListClientMetricsResourcesResponseData();
+    private ListConfigResourcesResponse createListConfigResourcesResponse() {
+        ListConfigResourcesResponseData response = new ListConfigResourcesResponseData();
         response.setErrorCode(Errors.NONE.code());
         response.setThrottleTimeMs(10);
-        return new ListClientMetricsResourcesResponse(response);
+        return new ListConfigResourcesResponse(response);
     }
 
     private InitializeShareGroupStateRequest createInitializeShareGroupStateRequest(short version) {
@@ -3814,12 +3817,13 @@ public class RequestResponseTest {
 
     private AlterShareGroupOffsetsResponse createAlterShareGroupOffsetsResponse() {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData()
-            .setResponses(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                    .setPartitionIndex(0)
-                    .setErrorCode(Errors.NONE.code())))
-                .setTopicName("topic")
-                .setTopicId(Uuid.randomUuid())));
+            .setResponses(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(List.of(
+                new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                    .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                        .setPartitionIndex(0)
+                        .setErrorCode(Errors.NONE.code())))
+                    .setTopicName("topic")
+                    .setTopicId(Uuid.randomUuid())).iterator()));
         return new AlterShareGroupOffsetsResponse(data);
     }
 
@@ -3950,5 +3954,26 @@ public class RequestResponseTest {
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
                 parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor)).getMessage();
         assertEquals("Error reading byte array of 32767 byte(s): only 3 byte(s) available", msg);
+    }
+
+    @Test
+    public void testListConfigResourcesRequestV0FailsWithConfigResourceTypeOtherThanClientMetrics() {
+        // One type which is not CLIENT_METRICS
+        Arrays.stream(ConfigResource.Type.values())
+            .filter(t -> t != ConfigResource.Type.CLIENT_METRICS)
+            .forEach(t -> {
+                ListConfigResourcesRequestData data = new ListConfigResourcesRequestData()
+                    .setResourceTypes(List.of(t.id()));
+                assertThrows(UnsupportedVersionException.class, () -> new ListConfigResourcesRequest.Builder(data).build((short) 0));
+            });
+
+        // Multiple types with CLIENT_METRICS
+        Arrays.stream(ConfigResource.Type.values())
+            .filter(t -> t != ConfigResource.Type.CLIENT_METRICS)
+            .forEach(t -> {
+                ListConfigResourcesRequestData data = new ListConfigResourcesRequestData()
+                    .setResourceTypes(List.of(t.id(), ConfigResource.Type.CLIENT_METRICS.id()));
+                assertThrows(UnsupportedVersionException.class, () -> new ListConfigResourcesRequest.Builder(data).build((short) 0));
+            });
     }
 }
