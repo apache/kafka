@@ -405,17 +405,11 @@ public class ClientQuotaManager {
      * This is used for deciding the maximum bytes that can be fetched at once
      */
     public double maxValueInQuotaWindow(Session session, String clientId) {
-        if (quotasEnabled()) {
-            var clientSensors = getOrCreateQuotaSensors(session, clientId);
-            var limit = quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags());
-            if (limit != null) {
-                return limit * (config.numQuotaSamples - 1) * config.quotaWindowSizeSeconds;
-            } else {
-                return Double.MAX_VALUE;
-            }
-        } else {
-            return Double.MAX_VALUE;
-        }
+        if (!quotasEnabled()) return Double.MAX_VALUE;
+        var clientSensors = getOrCreateQuotaSensors(session, clientId);
+        var limit = quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags());
+        if (limit != null) return limit * (config.numQuotaSamples - 1) * config.quotaWindowSizeSeconds;
+        return Double.MAX_VALUE;
     }
 
     /**
