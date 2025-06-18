@@ -1196,6 +1196,9 @@ public class ShareConsumerTest {
             shareConsumer1.subscribe(Set.of(tp.topic()));
             shareConsumer2.subscribe(Set.of(tp.topic()));
 
+            // Wait for assignment to complete on initial poll.
+            waitedPoll(shareConsumer1, 2500L, 0, true, "group1", List.of(tp));
+
             int totalMessages = 1500;
             for (int i = 0; i < totalMessages; i++) {
                 producer.send(record);
