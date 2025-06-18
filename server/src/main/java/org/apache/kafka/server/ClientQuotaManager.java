@@ -19,7 +19,6 @@ package org.apache.kafka.server;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.internals.Plugin;
-import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
@@ -118,7 +117,6 @@ public class ClientQuotaManager {
         }
     }
 
-    // Keep as a class-uses a singleton pattern which doesn't work well with records
     public static class DefaultUserEntity implements ClientQuotaEntity.ConfigEntity {
         public static final DefaultUserEntity INSTANCE = new DefaultUserEntity();
 
@@ -363,12 +361,12 @@ public class ClientQuotaManager {
      *         rate gets back to the defined quota
      */
     public int recordAndGetThrottleTimeMs(Session session, String clientId, double value, long timeMs) {
-        ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
+        var clientSensors = getOrCreateQuotaSensors(session, clientId);
         try {
             clientSensors.quotaSensor().record(value, timeMs, true);
             return 0;
         } catch (QuotaViolationException e) {
-            int throttleTimeMs = (int) throttleTime(e, timeMs);
+            var throttleTimeMs = (int) throttleTime(e, timeMs);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Quota violated for sensor ({}). Delay time: ({})",
                         clientSensors.quotaSensor().name(), throttleTimeMs);
@@ -383,7 +381,7 @@ public class ClientQuotaManager {
      * next request is processed.
      */
     public void recordNoThrottle(Session session, String clientId, double value) {
-        ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
+        var clientSensors = getOrCreateQuotaSensors(session, clientId);
         clientSensors.quotaSensor().record(value, time.milliseconds(), false);
     }
 
@@ -397,7 +395,7 @@ public class ClientQuotaManager {
      * overall sum back to the previous value.
      */
     public void unrecordQuotaSensor(Session session, String clientId, double value, long timeMs) {
-        ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
+        var clientSensors = getOrCreateQuotaSensors(session, clientId);
         clientSensors.quotaSensor().record(value * -1, timeMs, false);
     }
 
@@ -408,8 +406,8 @@ public class ClientQuotaManager {
      */
     public double getMaxValueInQuotaWindow(Session session, String clientId) {
         if (quotasEnabled()) {
-            ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
-            Double limit = quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags());
+            var clientSensors = getOrCreateQuotaSensors(session, clientId);
+            var limit = quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags());
             if (limit != null) {
                 return limit * (config.numQuotaSamples - 1) * config.quotaWindowSizeSeconds;
             } else {
@@ -434,9 +432,9 @@ public class ClientQuotaManager {
             int throttleTimeMs
     ) {
         if (throttleTimeMs > 0) {
-            ClientSensors clientSensors = getOrCreateQuotaSensors(session, clientId);
+            var clientSensors = getOrCreateQuotaSensors(session, clientId);
             clientSensors.throttleTimeSensor().record(throttleTimeMs);
-            ThrottledChannel throttledChannel = new ThrottledChannel(time, throttleTimeMs, throttleCallback);
+            var throttledChannel = new ThrottledChannel(time, throttleTimeMs, throttleCallback);
             delayQueue.add(throttledChannel);
             delayQueueSensor.record();
             if (LOG.isDebugEnabled()) {
@@ -482,10 +480,10 @@ public class ClientQuotaManager {
      * This function either returns the sensors for a given client id or creates them if they don't exist
      */
     public ClientSensors getOrCreateQuotaSensors(Session session, String clientId) {
-        Map<String, String> metricTags = quotaCallback instanceof DefaultQuotaCallback defaultCallback
+        var metricTags = quotaCallback instanceof DefaultQuotaCallback defaultCallback
                         ? defaultCallback.quotaMetricTags(session.sanitizedUser, clientId)
                         : quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId);
-        ClientSensors sensors = new ClientSensors(
+        var sensors = new ClientSensors(
                 metricTags,
                 sensorAccessor.getOrCreate(
                         getQuotaSensorName(metricTags),
@@ -566,10 +564,10 @@ public class ClientQuotaManager {
          */
         lock.writeLock().lock();
         try {
-            KafkaQuotaEntity quotaEntity = new KafkaQuotaEntity(userEntity.orElse(null), clientEntity.orElse(null));
+            var quotaEntity = new KafkaQuotaEntity(userEntity.orElse(null), clientEntity.orElse(null));
 
             // Update quota types enabled flags atomically
-            int currentQuotaTypes = quotaTypesEnabled;
+            var currentQuotaTypes = quotaTypesEnabled;
 
             if (userEntity.isPresent()) {
                 if (clientEntity.isPresent()) {
@@ -625,7 +623,7 @@ public class ClientQuotaManager {
         // If using custom quota callbacks or if multiple-levels of quotas are defined or
         // if this is a default quota update, traverse metrics to find all affected values.
         // Otherwise, update just the single matching one.
-        boolean singleUpdate = switch (quotaTypesEnabled) {
+        var singleUpdate = switch (quotaTypesEnabled) {
             case QuotaTypes.NO_QUOTAS,
                  QuotaTypes.CLIENT_ID_QUOTA_ENABLED,
                  QuotaTypes.USER_QUOTA_ENABLED,
@@ -634,28 +632,28 @@ public class ClientQuotaManager {
         };
 
         if (singleUpdate) {
-            KafkaQuotaEntity quotaEntity = updatedQuotaEntity.orElseThrow(
+            var quotaEntity = updatedQuotaEntity.orElseThrow(
                     () -> new IllegalStateException("Quota entity not specified"));
-            String user = quotaEntity.sanitizedUser();
-            String clientId = quotaEntity.clientId();
-            Map<String, String> metricTags = Map.of(DefaultTags.USER, user, DefaultTags.CLIENT_ID, clientId);
+            var user = quotaEntity.sanitizedUser();
+            var clientId = quotaEntity.clientId();
+            var metricTags = Map.of(DefaultTags.USER, user, DefaultTags.CLIENT_ID, clientId);
 
-            MetricName quotaMetricName = clientQuotaMetricName(metricTags);
+            var quotaMetricName = clientQuotaMetricName(metricTags);
             // Change the underlying metric config if the sensor has been created
-            KafkaMetric metric = allMetrics.get(quotaMetricName);
+            var metric = allMetrics.get(quotaMetricName);
             if (metric != null) {
-                double newQuota = quotaLimit(metricTags);
+                var newQuota = quotaLimit(metricTags);
                 LOG.info("Sensor for {} already exists. Changing quota to {} in MetricConfig",
                         quotaEntity, newQuota);
                 metric.config(getQuotaMetricConfig(newQuota));
             }
         } else {
-            MetricName quotaMetricName = clientQuotaMetricName(Collections.emptyMap());
+            var quotaMetricName = clientQuotaMetricName(Collections.emptyMap());
             allMetrics.forEach((metricName, metric) -> {
                 if (metricName.name().equals(quotaMetricName.name()) &&
                         metricName.group().equals(quotaMetricName.group())) {
-                    Map<String, String> metricTags = metricName.tags();
-                    double newQuota = quotaLimit(metricTags);
+                    var metricTags = metricName.tags();
+                    var newQuota = quotaLimit(metricTags);
                     if (Double.compare(newQuota, metric.config().quota().bound()) != 0) {
                         LOG.info("Sensor for quota-id {} already exists. Setting quota to {} in MetricConfig",
                                 metricTags, newQuota);
@@ -751,7 +749,7 @@ public class ClientQuotaManager {
 
         private Quota findUserClientQuota(UserEntity userEntity, ClientIdEntity clientIdEntity) {
             // /config/users/<user>/clients/<client-id>
-            Quota quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, clientIdEntity));
+            var quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, clientIdEntity));
             if (quota != null) return quota;
 
             // /config/users/<user>/clients/<default>
@@ -768,7 +766,7 @@ public class ClientQuotaManager {
 
         private Quota findUserQuota(UserEntity userEntity) {
             // /config/users/<user>
-            Quota quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, null));
+            var quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, null));
             if (quota != null) return quota;
 
             // /config/users/<default>
@@ -777,7 +775,7 @@ public class ClientQuotaManager {
 
         private Quota findClientQuota(ClientIdEntity clientIdEntity) {
             // /config/clients/<client-id>
-            Quota quota = overriddenQuotas.get(new KafkaQuotaEntity(null, clientIdEntity));
+            var quota = overriddenQuotas.get(new KafkaQuotaEntity(null, clientIdEntity));
             if (quota != null) return quota;
 
             // /config/clients/<default>
@@ -871,7 +869,7 @@ public class ClientQuotaManager {
                     break;
             }
 
-            Map<String, String> result = new LinkedHashMap<>();
+            var result = new LinkedHashMap<String, String>();
             result.put(DefaultTags.USER, userTag);
             result.put(DefaultTags.CLIENT_ID, clientIdTag);
             return result;
