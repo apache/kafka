@@ -81,7 +81,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
      * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
      * avoid transient failures due to slow or overloaded machines.
      */
-    public static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
+    static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
                                         final String conditionDetails) throws InterruptedException {
         var maxWaitMs = 15_000L;
         long endTime = System.currentTimeMillis() + maxWaitMs;
@@ -101,9 +101,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 TimeUnit.MILLISECONDS.sleep(100);
             }
         }
-
-        String details = conditionDetails != null ? conditionDetails : "";
-        throw new AssertionError("Condition not met: " + details);
+        throw new AssertionError("Condition not met: " + conditionDetails);
     }
 
     public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
