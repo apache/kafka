@@ -268,7 +268,7 @@ public class ClientQuotaManager {
         this.quotaTypesEnabled = clientQuotaCallbackPlugin.isPresent() ?
                 QuotaTypes.CUSTOM_QUOTAS : QuotaTypes.NO_QUOTAS;
 
-        this.delayQueueSensor = metrics.sensor(quotaType.toString() + "-delayQueue");
+        this.delayQueueSensor = metrics.sensor(quotaType + "-delayQueue");
         this.delayQueueSensor.add(metrics.metricName("queue-size", quotaType.toString(),
                 "Tracks the size of the delay queue"), new CumulativeSum());
         this.throttledChannelReaper = new ThrottledChannelReaper(delayQueue, threadNamePrefix);
