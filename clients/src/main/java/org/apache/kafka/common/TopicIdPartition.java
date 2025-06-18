@@ -80,8 +80,8 @@ public class TopicIdPartition {
 
     /**
      * Checking if TopicIdPartition meant to be the same reference to same this object but doesn't have all the data.
-     * If topic name is empty and topic id is persisted then the method will relay on topic id only
-     * otherwise the method will relay on topic name.
+     * If topic name is empty and topic id is persisted then the method will rely on topic id only
+     * otherwise the method will rely on topic name.
      * @return true if topic has same topicId and partition index as topic names some time might be empty.
     */
     public boolean same(TopicIdPartition tpId) {
