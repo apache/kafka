@@ -79,6 +79,7 @@ import java.util.function.Consumer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
+import scala.util.Random
 
 /*
  * Result metadata of a log append operation on the log
@@ -1849,7 +1850,7 @@ class ReplicaManager(val config: KafkaConfig,
     var limitBytes = params.maxBytes
     val result = new mutable.ArrayBuffer[(TopicIdPartition, LogReadResult)]
     var minOneMessage = true
-    readPartitionInfo.foreach { case (tp, fetchInfo) =>
+    Random.shuffle(readPartitionInfo).foreach { case (tp, fetchInfo) =>
       val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
       val recordBatchSize = readResult.info.records.sizeInBytes
       // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
