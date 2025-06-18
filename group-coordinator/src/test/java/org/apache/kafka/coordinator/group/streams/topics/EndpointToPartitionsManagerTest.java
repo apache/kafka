@@ -19,10 +19,11 @@ package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
-import org.apache.kafka.coordinator.group.streams.TopicMetadata;
+import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,9 +65,9 @@ class EndpointToPartitionsManagerTest {
         streamsGroup = mock(StreamsGroup.class);
         streamsGroupMember = mock(StreamsGroupMember.class);
         configuredTopology = mock(ConfiguredTopology.class);
-        configuredSubtopologyOne = new ConfiguredSubtopology(Set.of("Topic-A"), new HashMap<>(), new HashSet<>(), new HashMap<>());
+        configuredSubtopologyOne = new ConfiguredSubtopology(1, Set.of("Topic-A"), new HashMap<>(), new HashSet<>(), new HashMap<>());
         Map<String, ConfiguredInternalTopic> repartitionSourceTopics = Map.of("Topic-B",  new ConfiguredInternalTopic("Topic-B", 1, Optional.of((short) 1), Collections.emptyMap()));
-        configuredSubtopologyTwo = new ConfiguredSubtopology(new HashSet<>(), repartitionSourceTopics, new HashSet<>(), new HashMap<>());
+        configuredSubtopologyTwo = new ConfiguredSubtopology(1, new HashSet<>(), repartitionSourceTopics, new HashSet<>(), new HashMap<>());
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyOneMap = new TreeMap<>();
         configuredSubtopologyOneMap.put("0", configuredSubtopologyOne);
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyTwoMap = new TreeMap<>();
@@ -79,16 +80,16 @@ class EndpointToPartitionsManagerTest {
 
     @Test
     void testEndpointToPartitionsWithStandbyTaskAssignments() {
-        Map<String, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put("Topic-A", new TopicMetadata(Uuid.randomUuid(), "Topic-A", 3));
-        topicMetadata.put("Topic-B", new TopicMetadata(Uuid.randomUuid(), "Topic-B", 3));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "Topic-A", 3)
+            .addTopic(Uuid.randomUuid(), "Topic-B", 3)
+            .build();
 
         activeTasks.put("0", Set.of(0, 1, 2));
         standbyTasks.put("1", Set.of(0, 1, 2));
         tasksTuple = new TasksTuple(activeTasks, standbyTasks, Collections.emptyMap());
         when(streamsGroupMember.assignedTasks()).thenReturn(tasksTuple);
         //when(streamsGroupMember.assignedTasks().standbyTasks()).thenReturn(tasksTuple.standbyTasks());
-        when((streamsGroup.partitionMetadata())).thenReturn(topicMetadata);
         when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyMap = new TreeMap<>();
         configuredSubtopologyMap.put("0", configuredSubtopologyOne);
@@ -96,7 +97,7 @@ class EndpointToPartitionsManagerTest {
         when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyMap));
 
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
-                EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup);
+                EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, metadataImage);
 
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(1, result.activePartitions().size());
@@ -123,20 +124,20 @@ class EndpointToPartitionsManagerTest {
                                                                      List<Integer> topicBExpectedPartitions,
                                                                      String testName
                                                                      ) {
-        Map<String, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put("Topic-A", new TopicMetadata(Uuid.randomUuid(), "Topic-A", topicAPartitions));
-        topicMetadata.put("Topic-B", new TopicMetadata(Uuid.randomUuid(), "Topic-B", topicBPartitions));
-        configuredSubtopologyOne = new ConfiguredSubtopology(Set.of("Topic-A", "Topic-B"), new HashMap<>(), new HashSet<>(), new HashMap<>());
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "Topic-A", topicAPartitions)
+            .addTopic(Uuid.randomUuid(), "Topic-B", topicBPartitions)
+            .build();
+        configuredSubtopologyOne = new ConfiguredSubtopology(Math.max(topicAPartitions, topicBPartitions), Set.of("Topic-A", "Topic-B"), new HashMap<>(), new HashSet<>(), new HashMap<>());
 
         activeTasks.put("0", Set.of(0, 1, 2, 3, 4));
         when(streamsGroupMember.assignedTasks()).thenReturn(new TasksTuple(activeTasks, Collections.emptyMap(), Collections.emptyMap()));
-        when(streamsGroup.partitionMetadata()).thenReturn(topicMetadata);
         when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyOneMap = new TreeMap<>();
         configuredSubtopologyOneMap.put("0", configuredSubtopologyOne);
         when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyOneMap));
 
-        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup);
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, metadataImage);
 
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(2, result.activePartitions().size());

@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,7 +103,7 @@ public class DeleteShareGroupStateResponse extends AbstractResponse {
 
     public static DeleteShareGroupStateResponseData toErrorResponseData(Uuid topicId, int partitionId, Errors error, String errorMessage) {
         return new DeleteShareGroupStateResponseData().setResults(
-            Collections.singletonList(new DeleteShareGroupStateResponseData.DeleteStateResult()
+            List.of(new DeleteShareGroupStateResponseData.DeleteStateResult()
                 .setTopicId(topicId)
                 .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partitionId)

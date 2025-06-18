@@ -26,8 +26,6 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -53,7 +51,7 @@ public class ControllerMetadataMetricsTest {
                     brokerRegistration(false, false)
                 );
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
-                    new HashSet<>(List.of(
+                    Set.of(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
                         "kafka.controller:type=KafkaController,name=FencedBrokerCount",
                         "kafka.controller:type=KafkaController,name=ControlledShutdownBrokerCount",
@@ -67,7 +65,7 @@ public class ControllerMetadataMetricsTest {
                         "kafka.controller:type=KafkaController,name=IgnoredStaticVoters",
                         "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec",
                         "kafka.controller:type=ControllerStats,name=ElectionFromEligibleLeaderReplicasPerSec"
-                    )));
+                    ));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "KafkaController",
                     Set.of());
