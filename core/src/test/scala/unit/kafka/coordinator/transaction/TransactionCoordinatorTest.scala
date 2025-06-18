@@ -1813,9 +1813,9 @@ class TransactionCoordinatorTest {
     // This demonstrates that TV2 allows epoch re-bumping after failed writes (unlike TV1)
     val producerEpoch = 1.toShort
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-      producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_2)
+      producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds(), TV_2)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -1845,8 +1845,6 @@ class TransactionCoordinatorTest {
     coordinator.handleInitProducerId(
       transactionalId,
       txnTimeoutMs,
-      enableTwoPCFlag = false,
-      keepPreparedTxn = false,
       None,
       initProducerIdMockCallback
     )
@@ -1860,7 +1858,7 @@ class TransactionCoordinatorTest {
 
     // Second attempt: Should abort the ongoing transaction
     reset(transactionManager)
-    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -1902,8 +1900,6 @@ class TransactionCoordinatorTest {
     coordinator.handleInitProducerId(
       transactionalId,
       txnTimeoutMs,
-      enableTwoPCFlag = false,
-      keepPreparedTxn = false,
       None,
       initProducerIdMockCallback
     )
@@ -1917,7 +1913,7 @@ class TransactionCoordinatorTest {
 
     // Third attempt: Client retries after CONCURRENT_TRANSACTIONS
     reset(transactionManager)
-    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -1942,8 +1938,6 @@ class TransactionCoordinatorTest {
     coordinator.handleInitProducerId(
       transactionalId,
       txnTimeoutMs,
-      enableTwoPCFlag = false,
-      keepPreparedTxn = false,
       None,
       initProducerIdMockCallback
     )
