@@ -107,14 +107,14 @@ public class SimpleHomogeneousAssignmentBuilder {
     private final Map<Integer, Map<Uuid, Set<Integer>>> newGroupAssignment;
 
     /**
-     * The final assignment keyed by topic-partition.
+     * The final assignment keyed by topic-partition mapping to member.
      * <p>
      * Members are stored as integer indices into the memberIds array.
      */
     private final Map<TopicIdPartition, Set<Integer>> finalAssignmentByPartition;
 
     /**
-     * The final assignment keyed by member ID.
+     * The final assignment keyed by member ID mapping to topic-partitions.
      * <p>
      * Members are stored as integer indices into the memberIds array.
      */
