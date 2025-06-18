@@ -340,19 +340,19 @@ public class KafkaRaftClientReconfigTest {
             Map.of(context.channel.listenerName(), newAddress)
         );
 
-        prepareToSendAddVoter(context, epoch, local, follower, newVoter);
+        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
 
         // Attempt to add new voter to the quorum
         context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
 
-        completeApiVersions(context, newVoter, newAddress);
+        completeApiVersionsForAddVoter(context, newVoter, newAddress);
 
         // Handle the API_VERSIONS response
         context.client.poll();
         // Append new VotersRecord to log
         context.client.poll();
 
-        commitAddVoter(context, local, follower, newVoter, epoch);
+        commitNewVoterSetForAddVoter(context, local, follower, newVoter, epoch);
 
         // Expect reply for AddVoter request
         context.pollUntilResponse();
@@ -386,7 +386,7 @@ public class KafkaRaftClientReconfigTest {
             Map.of(context.channel.listenerName(), newAddress)
         );
 
-        prepareToSendAddVoter(context, epoch, local, follower, newVoter);
+        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
 
         // Attempt to add new voter to the quorum
         context.deliverRequest(
@@ -397,7 +397,7 @@ public class KafkaRaftClientReconfigTest {
             ).setAckWhenCommitted(false)
         );
 
-        completeApiVersions(context, newVoter, newAddress);
+        completeApiVersionsForAddVoter(context, newVoter, newAddress);
 
         // Handle the API_VERSIONS response
         context.client.poll();
@@ -406,10 +406,10 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilResponse();
         context.assertSentAddVoterResponse(Errors.NONE);
 
-        commitAddVoter(context, local, follower, newVoter, epoch);
+        commitNewVoterSetForAddVoter(context, local, follower, newVoter, epoch);
     }
 
-    private void completeApiVersions(
+    private void completeApiVersionsForAddVoter(
         RaftClientTestContext context,
         ReplicaKey newVoter,
         InetSocketAddress newAddress
@@ -430,7 +430,7 @@ public class KafkaRaftClientReconfigTest {
         );
     }
 
-    private void commitAddVoter(
+    private void commitNewVoterSetForAddVoter(
         RaftClientTestContext context,
         ReplicaKey leader,
         ReplicaKey follower,
@@ -459,9 +459,10 @@ public class KafkaRaftClientReconfigTest {
     @ParameterizedTest
     @EnumSource(value = RaftProtocol.class, names = {
         "KIP_853_PROTOCOL",
-        "KIP_996_PROTOCOL"
+        "KIP_996_PROTOCOL",
+        "KIP_1166_PROTOCOL"
     })
-    void testAddVoterCompatibility(RaftProtocol protocol) throws Exception {
+    void testAddVoterAckWhenCommittedUnsupported(RaftProtocol protocol) throws Exception {
         ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
 
@@ -485,7 +486,7 @@ public class KafkaRaftClientReconfigTest {
             Map.of(context.channel.listenerName(), newAddress)
         );
 
-        prepareToSendAddVoter(context, epoch, local, follower, newVoter);
+        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
 
         // Attempt to add new voter to the quorum
         assertThrows(
@@ -502,7 +503,7 @@ public class KafkaRaftClientReconfigTest {
 
     // This method sets up the context so a test can send an AddVoter request after
     // exiting this method
-    private void prepareToSendAddVoter(
+    private void prepareLeaderToReceiveAddVoter(
         RaftClientTestContext context,
         int epoch,
         ReplicaKey leader,

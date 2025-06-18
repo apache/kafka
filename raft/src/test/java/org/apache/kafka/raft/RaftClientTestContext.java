@@ -2276,7 +2276,7 @@ public final class RaftClientTestContext {
         // preVote support
         KIP_996_PROTOCOL,
         // HWM in FETCH request support
-        KIP_1166_PROTOCOL;
+        KIP_1166_PROTOCOL,
         // autoJoin support
         KIP_1186_PROTOCOL;
 
