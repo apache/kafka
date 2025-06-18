@@ -147,15 +147,15 @@ public class SubscriptionStateTest {
     @Test
     public void testIsFetchableConsidersExplicitTopicSubscription() {
         state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
-        state.assignFromSubscribed(singleton(t1p0));
+        state.assignFromSubscribed(Set.of(t1p0));
         state.seek(t1p0, 1);
 
         assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertTrue(state.isFetchable(t1p0));
 
         // Change subscription. Assigned partitions should remain unchanged but not fetchable.
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
-        assertEquals(singleton(t1p0), state.assignedPartitions());
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertFalse(state.isFetchable(t1p0), "Assigned partitions not in the subscription should not be fetchable");
 
         // Unsubscribe. Assigned partitions should be cleared and not fetchable.
@@ -1129,7 +1129,7 @@ public class SubscriptionStateTest {
     @Test
     public void testFetchablePartitionsPerformsCheapChecksFirst() {
         // Setup fetchable partition and pause it
-        state.assignFromUser(singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         state.seek(tp0, 100);
         assertTrue(state.isFetchable(tp0));
         state.pause(tp0);

@@ -502,7 +502,7 @@ public class SubscriptionState {
      */
     private synchronized boolean isFetchableAndSubscribed(TopicPartition topicPartition, TopicPartitionState topicPartitionState) {
         if (subscriptionType.equals(SubscriptionType.AUTO_TOPICS) && !subscription.contains(topicPartition.topic())) {
-            log.debug("Assigned partition {} is not in the subscription {} so will be considered not fetchable.", topicPartition, subscription);
+            log.trace("Assigned partition {} is not in the subscription {} so will be considered not fetchable.", topicPartition, subscription);
             return false;
         }
         return topicPartitionState.isFetchable();
@@ -892,8 +892,8 @@ public class SubscriptionState {
     }
 
     synchronized boolean isFetchable(TopicPartition tp) {
-        TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
-        return assignedOrNull != null && isFetchableAndSubscribed(tp, assignedOrNull);
+        TopicPartitionState tps = assignedStateOrNull(tp);
+        return tps != null && isFetchableAndSubscribed(tp, tps);
     }
 
     public synchronized boolean hasValidPosition(TopicPartition tp) {
