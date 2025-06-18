@@ -59,13 +59,11 @@ import java.util.function.Consumer;
 
 public class ClientQuotaManager {
 
-    static final class QuotaTypes {
-        static final int NO_QUOTAS = 0;
-        static final int CLIENT_ID_QUOTA_ENABLED = 1;
-        static final int USER_QUOTA_ENABLED = 2;
-        static final int USER_CLIENT_ID_QUOTA_ENABLED = 4;
-        static final int CUSTOM_QUOTAS = 8; // No metric update optimizations are used with custom quotas
-    }
+    private static final int NO_QUOTAS = 0;
+    private static final int CLIENT_ID_QUOTA_ENABLED = 1;
+    private static final int USER_QUOTA_ENABLED = 2;
+    private static final int USER_CLIENT_ID_QUOTA_ENABLED = 4;
+    private static final int CUSTOM_QUOTAS = 8; // No metric update optimizations are used with custom quotas
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientQuotaManager.class);
 
@@ -97,8 +95,6 @@ public class ClientQuotaManager {
             return "user " + sanitizedUser;
         }
     }
-
-    // Convert to record - this is a simple data holder
     public record ClientIdEntity(String clientId) implements ClientQuotaEntity.ConfigEntity {
 
         @Override
@@ -264,7 +260,7 @@ public class ClientQuotaManager {
         this.clientQuotaType = QuotaType.toClientQuotaType(quotaType);
 
         this.quotaTypesEnabled = clientQuotaCallbackPlugin.isPresent() ?
-                QuotaTypes.CUSTOM_QUOTAS : QuotaTypes.NO_QUOTAS;
+                CUSTOM_QUOTAS : NO_QUOTAS;
 
         this.delayQueueSensor = metrics.sensor(quotaType + "-delayQueue");
         this.delayQueueSensor.add(metrics.metricName("queue-size", quotaType.toString(),
@@ -334,7 +330,7 @@ public class ClientQuotaManager {
      * return true until the next broker restarts, even if all quotas are subsequently deleted.
      */
     public boolean quotasEnabled() {
-        return quotaTypesEnabled != QuotaTypes.NO_QUOTAS;
+        return quotaTypesEnabled != NO_QUOTAS;
     }
 
     /**
@@ -443,7 +439,7 @@ public class ClientQuotaManager {
      * Note: this method is expensive, it is meant to be used by tests only
      */
     public Quota quota(String user, String clientId) {
-        KafkaPrincipal userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user);
+        var userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user);
         return quota(userPrincipal, clientId);
     }
 
@@ -452,12 +448,12 @@ public class ClientQuotaManager {
      * Note: this method is expensive, it is meant to be used by tests only
      */
     public Quota quota(KafkaPrincipal userPrincipal, String clientId) {
-        Map<String, String> metricTags = quotaCallback.quotaMetricTags(clientQuotaType, userPrincipal, clientId);
+        var metricTags = quotaCallback.quotaMetricTags(clientQuotaType, userPrincipal, clientId);
         return Quota.upperBound(quotaLimit(metricTags));
     }
 
     private double quotaLimit(Map<String, String> metricTags) {
-        Double limit = quotaCallback.quotaLimit(clientQuotaType, metricTags);
+        var limit = quotaCallback.quotaLimit(clientQuotaType, metricTags);
         return limit != null ? limit : Long.MAX_VALUE;
     }
 
@@ -565,12 +561,12 @@ public class ClientQuotaManager {
 
             if (userEntity.isPresent()) {
                 if (clientEntity.isPresent()) {
-                    currentQuotaTypes |= QuotaTypes.USER_CLIENT_ID_QUOTA_ENABLED;
+                    currentQuotaTypes |= USER_CLIENT_ID_QUOTA_ENABLED;
                 } else {
-                    currentQuotaTypes |= QuotaTypes.USER_QUOTA_ENABLED;
+                    currentQuotaTypes |= USER_QUOTA_ENABLED;
                 }
             } else if (clientEntity.isPresent()) {
-                currentQuotaTypes |= QuotaTypes.CLIENT_ID_QUOTA_ENABLED;
+                currentQuotaTypes |= CLIENT_ID_QUOTA_ENABLED;
             }
 
             quotaTypesEnabled = currentQuotaTypes;
@@ -618,10 +614,10 @@ public class ClientQuotaManager {
         // if this is a default quota update, traverse metrics to find all affected values.
         // Otherwise, update just the single matching one.
         var singleUpdate = switch (quotaTypesEnabled) {
-            case QuotaTypes.NO_QUOTAS,
-                 QuotaTypes.CLIENT_ID_QUOTA_ENABLED,
-                 QuotaTypes.USER_QUOTA_ENABLED,
-                 QuotaTypes.USER_CLIENT_ID_QUOTA_ENABLED -> updatedQuotaEntity.isPresent();
+            case NO_QUOTAS,
+                 CLIENT_ID_QUOTA_ENABLED,
+                 USER_QUOTA_ENABLED,
+                 USER_CLIENT_ID_QUOTA_ENABLED -> updatedQuotaEntity.isPresent();
             default -> false;
         };
 
@@ -807,16 +803,16 @@ public class ClientQuotaManager {
 
             // Access the outer class's quotaTypesEnabled field
             switch (quotaTypesEnabled) {
-                case QuotaTypes.NO_QUOTAS:
-                case QuotaTypes.CLIENT_ID_QUOTA_ENABLED:
+                case NO_QUOTAS:
+                case CLIENT_ID_QUOTA_ENABLED:
                     userTag = "";
                     clientIdTag = clientId;
                     break;
-                case QuotaTypes.USER_QUOTA_ENABLED:
+                case USER_QUOTA_ENABLED:
                     userTag = sanitizedUser;
                     clientIdTag = "";
                     break;
-                case QuotaTypes.USER_CLIENT_ID_QUOTA_ENABLED:
+                case USER_CLIENT_ID_QUOTA_ENABLED:
                     userTag = sanitizedUser;
                     clientIdTag = clientId;
                     break;
