@@ -33,6 +33,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -345,7 +346,18 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
         }
         metrics.updateLastAppliedImageProvenance(image.provenance());
-        metrics.setCurrentMetadataVersion(image.features().metadataVersionOrThrow());
+        MetadataVersion metadataVersion = image.features().metadataVersionOrThrow();
+        metrics.setCurrentMetadataVersion(metadataVersion);
+        metrics.setFinalizedFeatureLevel(
+            MetadataVersion.FEATURE_NAME,
+            metadataVersion.featureLevel()
+        );
+        for (var finalizedFeatureEntry : image.features().finalizedVersions().entrySet()) {
+            metrics.setFinalizedFeatureLevel(
+                finalizedFeatureEntry.getKey(),
+                finalizedFeatureEntry.getValue()
+            );
+        }
         if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }

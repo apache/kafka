@@ -24,6 +24,8 @@ import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
+import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -34,6 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 public class MetadataLoaderMetricsTest {
@@ -71,7 +74,14 @@ public class MetadataLoaderMetricsTest {
                     Set.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
-                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
+                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadata.version",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraft.version",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=transaction.version",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=group.version",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=eligible.leader.replicas.version",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=share.version",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=streams.version"
                     ));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
@@ -153,8 +163,43 @@ public class MetadataLoaderMetricsTest {
         }
     }
 
+    @Test
+    public void testFinalizedFeatureLevelMetrics() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try {
+            try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
+                @SuppressWarnings("unchecked")
+                Gauge<Short> finalizedMetadataVersion = (Gauge<Short>) registry
+                    .allMetrics()
+                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=metadata.version"));
+                @SuppressWarnings("unchecked")
+                Gauge<Short> finalizedKRaftVersion = (Gauge<Short>) registry
+                    .allMetrics()
+                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=kraft.version"));
+
+                assertEquals(MINIMUM_VERSION.featureLevel(), finalizedMetadataVersion.value());
+                assertEquals((short) 0, finalizedKRaftVersion.value());
+
+                fakeMetrics.metrics.setFinalizedFeatureLevel(MetadataVersion.FEATURE_NAME, MetadataVersion.LATEST_PRODUCTION.featureLevel());
+                assertEquals(MetadataVersion.LATEST_PRODUCTION.featureLevel(), finalizedMetadataVersion.value());
+
+                fakeMetrics.metrics.setFinalizedFeatureLevel(KRaftVersion.FEATURE_NAME, KRaftVersion.LATEST_PRODUCTION.featureLevel());
+                assertEquals(KRaftVersion.LATEST_PRODUCTION.featureLevel(), finalizedKRaftVersion.value());
+            }
+            ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
+                Set.of());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
     private static MetricName metricName(String type, String name) {
         String mBeanName = String.format("kafka.server:type=%s,name=%s", type, name);
         return new MetricName("kafka.server", type, name, null, mBeanName);
+    }
+
+    private static MetricName metricName(String type, String name, String scope) {
+        String mBeanName = String.format("kafka.server:type=%s,name=%s,%s", type, name, scope);
+        return new MetricName("kafka.server", type, name, scope, mBeanName);
     }
 }

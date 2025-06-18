@@ -18,6 +18,7 @@
 package org.apache.kafka.image.loader.metrics;
 
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
@@ -25,8 +26,11 @@ import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,10 +46,13 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         "MetadataLoader", "HandleLoadSnapshotCount");
     public static final MetricName CURRENT_CONTROLLER_ID = getMetricName(
         "MetadataLoader", "CurrentControllerId");
+    public static final String FINALIZED_LEVEL_METRIC_NAME = "FinalizedLevel";
+    private static final String FEATURE_NAME_TAG = "featureName";
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicReference<MetadataVersion> currentMetadataVersion =
             new AtomicReference<>(MetadataVersion.MINIMUM_VERSION);
+    private final Map<String, Short> finalizedFeatureLevels = new ConcurrentHashMap<>();
     private final AtomicInteger currentControllerId = new AtomicInteger(-1);
     private final AtomicLong handleLoadSnapshotCount = new AtomicLong(0);
     private final Consumer<Long> batchProcessingTimeNsUpdater;
@@ -88,6 +95,44 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
                 return handleLoadSnapshotCount();
             }
         }));
+        // TODO: Need to remove the '.' from the feature name?
+        for (var featureName : Feature.PRODUCTION_FEATURE_NAMES) {
+            String normalizedName = featureName.replace(".version", "Version");
+            finalizedFeatureLevels.put(featureName, (short) 0);
+            addFinalizedFeatureLevelMetric(featureName);
+        }
+        String normalizedMetadataVersionName = MetadataVersion.FEATURE_NAME.replace(".version", "Version");
+        finalizedFeatureLevels.put(
+            MetadataVersion.FEATURE_NAME,
+            MetadataVersion.MINIMUM_VERSION.featureLevel()
+        );
+        addFinalizedFeatureLevelMetric(MetadataVersion.FEATURE_NAME);
+    }
+
+    private void addFinalizedFeatureLevelMetric(String featureName) {
+        registry.ifPresent(r -> r.newGauge(
+            getFeatureNameTagMetricName(
+                "MetadataLoader",
+                FINALIZED_LEVEL_METRIC_NAME,
+                featureName
+            ),
+            new Gauge<Short>() {
+                @Override
+                public Short value() {
+                    return finalizedFeatureLevel(featureName);
+                }
+            }
+        ));
+    }
+
+    private void removeFinalizedFeatureLevelMetric(String featureName) {
+        registry.ifPresent(r -> r.removeMetric(
+            getFeatureNameTagMetricName(
+                "MetadataLoader",
+                FINALIZED_LEVEL_METRIC_NAME,
+                featureName
+            )
+        ));
     }
 
     /**
@@ -142,6 +187,15 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         return this.handleLoadSnapshotCount.get();
     }
 
+    public void setFinalizedFeatureLevel(String featureName, short featureLevel) {
+        // TODO: Need to remove the '.' from the feature name?
+        finalizedFeatureLevels.put(featureName, featureLevel);
+    }
+
+    public short finalizedFeatureLevel(String featureName) {
+        return finalizedFeatureLevels.getOrDefault(featureName, (short) 0);
+    }
+
     @Override
     public void close() {
         registry.ifPresent(r -> List.of(
@@ -149,9 +203,20 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
             CURRENT_CONTROLLER_ID,
             HANDLE_LOAD_SNAPSHOT_COUNT
         ).forEach(r::removeMetric));
+        // TODO: Need to remove the '.' from the feature name?
+        for (var featureName : finalizedFeatureLevels.keySet()) {
+            removeFinalizedFeatureLevelMetric(featureName);
+        }
+        removeFinalizedFeatureLevelMetric(MetadataVersion.FEATURE_NAME);
     }
 
     private static MetricName getMetricName(String type, String name) {
         return KafkaYammerMetrics.getMetricName("kafka.server", type, name);
+    }
+
+    private static MetricName getFeatureNameTagMetricName(String type, String name, String featureName) {
+        LinkedHashMap<String, String> featureNameTag = new LinkedHashMap<>();
+        featureNameTag.put(FEATURE_NAME_TAG, featureName);
+        return KafkaYammerMetrics.getMetricName("kafka.server", type, name, featureNameTag);
     }
 }
