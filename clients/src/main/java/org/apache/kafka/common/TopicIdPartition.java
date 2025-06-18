@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.util.Objects;
 
 /**
@@ -85,8 +87,7 @@ public class TopicIdPartition {
      * @return true if topic has same topicId and partition index as topic names some time might be empty.
     */
     public boolean same(TopicIdPartition tpId) {
-        boolean emptyTopicName = tpId.topic() == null || tpId.topic().isEmpty();
-        if (emptyTopicName && !tpId.topicId.equals(Uuid.ZERO_UUID)) {
+        if (Utils.isBlank(tpId.topic()) && !tpId.topicId.equals(Uuid.ZERO_UUID)) {
             return topicId.equals(tpId.topicId) &&
                     topicPartition.partition() == tpId.partition();
         } else {
