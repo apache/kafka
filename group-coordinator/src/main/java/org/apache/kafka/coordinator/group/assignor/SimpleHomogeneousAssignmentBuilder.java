@@ -196,9 +196,9 @@ public class SimpleHomogeneousAssignmentBuilder {
 
         revokeUnassignablePartitions();
 
-        revokeOversharedPartitions();
-
         revokeOverfilledMembers();
+
+        revokeOversharedPartitions();
 
         // Add in any partitions which are currently not in the assignment.
         targetPartitions.forEach(topicPartition -> finalAssignmentByPartition.computeIfAbsent(topicPartition, k -> new HashSet<>()));
@@ -274,59 +274,7 @@ public class SimpleHomogeneousAssignmentBuilder {
     }
 
     /**
-     * Revoke any over-shared partitions. Prefer to revoke from overfilled members first.
-     */
-    private void revokeOversharedPartitions() {
-        finalAssignmentByPartition.forEach((topicPartition, assignedMembers) -> {
-            int assignedMemberCount = assignedMembers.size();
-            if (assignedMemberCount > desiredSharing) {
-                Iterator<Integer> assignedMemberIterator = assignedMembers.iterator();
-                while (assignedMemberIterator.hasNext()) {
-                    Integer memberIndex = assignedMemberIterator.next();
-                    if (overfilledMembers.contains(memberIndex)) {
-                        Set<Integer> partitions = newGroupAssignment.get(memberIndex).get(topicPartition.topicId());
-                        if (partitions.remove(topicPartition.partitionId())) {
-                            assignedMemberCount--;
-                            assignedMemberIterator.remove();
-                            finalAssignmentByMember.get(memberIndex).remove(topicPartition);
-                            unfilledMembers.add(memberIndex);
-                        }
-                    }
-                    if (assignedMemberCount <= desiredSharing) {
-                        break;
-                    }
-                }
-            }
-            if (assignedMemberCount > desiredSharing) {
-                Iterator<Integer> assignedMemberIterator = assignedMembers.iterator();
-                while (assignedMemberIterator.hasNext()) {
-                    Integer memberIndex = assignedMemberIterator.next();
-                    if (!overfilledMembers.contains(memberIndex)) {
-                        Map<Uuid, Set<Integer>> newMemberAssignment = newGroupAssignment.get(memberIndex);
-                        if (newMemberAssignment == null) {
-                            newMemberAssignment = AssignorHelpers.deepCopyAssignment(oldGroupAssignment.get(memberIndex));
-                            newGroupAssignment.put(memberIndex, newMemberAssignment);
-                        }
-                        Set<Integer> partitions = newMemberAssignment.get(topicPartition.topicId());
-                        if (partitions != null) {
-                            if (partitions.remove(topicPartition.partitionId())) {
-                                assignedMemberCount--;
-                                assignedMemberIterator.remove();
-                                finalAssignmentByMember.get(memberIndex).remove(topicPartition);
-                                unfilledMembers.add(memberIndex);
-                            }
-                        }
-                    }
-                    if (assignedMemberCount <= desiredSharing) {
-                        break;
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Revoke partitions from members which are still overfilled.
+     * Revoke partitions from members which are overfilled.
      */
     private void revokeOverfilledMembers() {
         if (overfilledMembers.isEmpty())
@@ -339,9 +287,42 @@ public class SimpleHomogeneousAssignmentBuilder {
                 Iterator<TopicIdPartition> iterator = memberFinalAssignment.iterator();
                 while (iterator.hasNext()) {
                     TopicIdPartition topicPartition = iterator.next();
+                    newGroupAssignment.get(memberIndex).get(topicPartition.topicId()).remove(topicPartition.partitionId());
                     finalAssignmentByPartition.get(topicPartition).remove(memberIndex);
                     iterator.remove();
                     if (memberFinalAssignment.size() == memberDesiredAssignmentCount) {
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Revoke any over-shared partitions.
+     */
+    private void revokeOversharedPartitions() {
+        finalAssignmentByPartition.forEach((topicPartition, assignedMembers) -> {
+            int assignedMemberCount = assignedMembers.size();
+            if (assignedMemberCount > desiredSharing) {
+                Iterator<Integer> assignedMemberIterator = assignedMembers.iterator();
+                while (assignedMemberIterator.hasNext()) {
+                    Integer memberIndex = assignedMemberIterator.next();
+                    Map<Uuid, Set<Integer>> newMemberAssignment = newGroupAssignment.get(memberIndex);
+                    if (newMemberAssignment == null) {
+                        newMemberAssignment = AssignorHelpers.deepCopyAssignment(oldGroupAssignment.get(memberIndex));
+                        newGroupAssignment.put(memberIndex, newMemberAssignment);
+                    }
+                    Set<Integer> partitions = newMemberAssignment.get(topicPartition.topicId());
+                    if (partitions != null) {
+                        if (partitions.remove(topicPartition.partitionId())) {
+                            assignedMemberCount--;
+                            assignedMemberIterator.remove();
+                            finalAssignmentByMember.get(memberIndex).remove(topicPartition);
+                            unfilledMembers.add(memberIndex);
+                        }
+                    }
+                    if (assignedMemberCount <= desiredSharing) {
                         break;
                     }
                 }
