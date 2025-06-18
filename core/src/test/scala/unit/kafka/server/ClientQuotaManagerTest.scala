@@ -120,7 +120,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val expectedMaxValueInQuotaWindow =
       if (expectedBound < Long.MaxValue) config.quotaWindowSizeSeconds * (config.numQuotaSamples - 1) * expectedBound.toDouble
       else Double.MaxValue
-    assertEquals(expectedMaxValueInQuotaWindow, quotaManager.getMaxValueInQuotaWindow(session, clientId), 0.01)
+    assertEquals(expectedMaxValueInQuotaWindow, quotaManager.maxValueInQuotaWindow(session, clientId), 0.01)
 
     val throttleTimeMs = maybeRecord(quotaManager, user, clientId, value * config.numQuotaSamples)
     if (expectThrottle)
@@ -130,7 +130,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   }
 
   @Test
-  def testGetMaxValueInQuotaWindowWithNonDefaultQuotaWindow(): Unit = {
+  def testMaxValueInQuotaWindowWithNonDefaultQuotaWindow(): Unit = {
     val numFullQuotaWindows = 3   // 3 seconds window (vs. 10 seconds default)
     val nonDefaultConfig = new ClientQuotaManagerConfig(numFullQuotaWindows + 1)
     val clientQuotaManager = new ClientQuotaManager(nonDefaultConfig, metrics, QuotaType.FETCH, time, "")
@@ -138,7 +138,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
     try {
       // no quota set
-      assertEquals(Double.MaxValue, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
+      assertEquals(Double.MaxValue, clientQuotaManager.maxValueInQuotaWindow(userSession, "client1"), 0.01)
 
       // Set default <user> quota config
       clientQuotaManager.updateQuota(
@@ -146,7 +146,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
         Optional.empty,
         Optional.of(new Quota(10, true))
       )
-      assertEquals(10 * numFullQuotaWindows, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
+      assertEquals(10 * numFullQuotaWindows, clientQuotaManager.maxValueInQuotaWindow(userSession, "client1"), 0.01)
     } finally {
       clientQuotaManager.shutdown()
     }

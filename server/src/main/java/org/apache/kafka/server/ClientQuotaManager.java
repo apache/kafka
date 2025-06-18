@@ -404,7 +404,7 @@ public class ClientQuotaManager {
      * Recording any larger value will always be throttled, even if no other values were recorded in the quota window.
      * This is used for deciding the maximum bytes that can be fetched at once
      */
-    public double getMaxValueInQuotaWindow(Session session, String clientId) {
+    public double maxValueInQuotaWindow(Session session, String clientId) {
         if (quotasEnabled()) {
             var clientSensors = getOrCreateQuotaSensors(session, clientId);
             var limit = quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags());
