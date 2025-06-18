@@ -31,17 +31,25 @@ import java.util.Set;
  * <p>
  * Configured subtopologies may be recreated every time the input topics used by the subtopology are modified.
  *
+ * @param numberOfTasks           Precomputed number of tasks. Not that not every source topic may have a partition for
+ *                                every task, in cases where there are multiple source topics with an unequal number of
+ *                                partitions (e.g., one topic has 3 partitions and another has 5 and both are used in a
+ *                                merge).
  * @param sourceTopics            The source topics of the subtopology.
  * @param repartitionSourceTopics The repartition source topics of the subtopology.
  * @param repartitionSinkTopics   The repartition sink topics of the subtopology.
  * @param stateChangelogTopics    The state changelog topics of the subtopology.
  */
-public record ConfiguredSubtopology(Set<String> sourceTopics,
+public record ConfiguredSubtopology(int numberOfTasks,
+                                    Set<String> sourceTopics,
                                     Map<String, ConfiguredInternalTopic> repartitionSourceTopics,
                                     Set<String> repartitionSinkTopics,
                                     Map<String, ConfiguredInternalTopic> stateChangelogTopics) {
 
     public ConfiguredSubtopology {
+        if (numberOfTasks <= 0) {
+            throw new IllegalArgumentException("Number of tasks must be positive");
+        }
         Objects.requireNonNull(sourceTopics, "sourceTopics can't be null");
         Objects.requireNonNull(repartitionSourceTopics, "repartitionSourceTopics can't be null");
         Objects.requireNonNull(repartitionSinkTopics, "repartitionSinkTopics can't be null");
@@ -60,5 +68,7 @@ public record ConfiguredSubtopology(Set<String> sourceTopics,
                 .map(ConfiguredInternalTopic::asStreamsGroupDescribeTopicInfo)
                 .sorted(Comparator.comparing(StreamsGroupDescribeResponseData.TopicInfo::name)).toList());
     }
+
+
 
 }

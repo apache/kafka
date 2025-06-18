@@ -2479,7 +2479,7 @@ public class FetchRequestManagerTest {
         assertTrue(fetchedRecords.containsKey(tp0));
         assertEquals(fetchedRecords.get(tp0).size(), 2);
         List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp0);
-        Set<String> expectedCommittedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2"));
+        Set<String> expectedCommittedKeys = Set.of("commit1-1", "commit1-2");
         Set<String> actuallyCommittedKeys = new HashSet<>();
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
             actuallyCommittedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
@@ -2741,7 +2741,7 @@ public class FetchRequestManagerTest {
     public void testConsumingViaIncrementalFetchRequests() {
         buildFetcher(2);
 
-        assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        assignFromUser(Set.of(tp0, tp1));
         subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
         subscriptions.seekValidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
@@ -3196,7 +3196,7 @@ public class FetchRequestManagerTest {
 
         // Setup so that tp0 & tp1 are subscribed and will be fetched from.
         // Also, setup client's metadata for tp0 & tp1.
-        subscriptions.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        subscriptions.assignFromUser(Set.of(tp0, tp1));
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
                 tp -> validLeaderEpoch, topicIds, false));
@@ -3289,7 +3289,7 @@ public class FetchRequestManagerTest {
 
         // Setup so that tp0 & tp1 are subscribed and will be fetched from.
         // Also, setup client's metadata for tp0 & tp1.
-        subscriptions.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        subscriptions.assignFromUser(Set.of(tp0, tp1));
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
                 tp -> validLeaderEpoch, topicIds, false));
