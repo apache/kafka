@@ -147,7 +147,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      */
     void runOnce() {
         // The following code avoids use of the Java Collections Streams API to reduce overhead in this loop.
-        List<NetworkPollEvent> events = processApplicationEvents();
+        List<NetworkPollEvent<?>> events = processApplicationEvents();
 
         final long currentTimeMs = time.milliseconds();
         if (lastPollTimeMs != 0L) {
@@ -165,8 +165,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
 
-        for (NetworkPollEvent event : events) {
-            event.future().complete(null);
+        for (NetworkPollEvent<?> event : events) {
+            event.pollFuture().complete(null);
         }
 
         long maxTimeToWaitMs = Long.MAX_VALUE;
@@ -186,7 +186,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     /**
      * Process the events—if any—that were produced by the application thread.
      */
-    private List<NetworkPollEvent> processApplicationEvents() {
+    private List<NetworkPollEvent<?>> processApplicationEvents() {
         LinkedList<ApplicationEvent> events = new LinkedList<>();
         applicationEventQueue.drainTo(events);
         if (events.isEmpty())
@@ -194,7 +194,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         asyncConsumerMetrics.recordApplicationEventQueueSize(0);
         long startMs = time.milliseconds();
-        List<NetworkPollEvent> networkPollEvents = new ArrayList<>();
+        List<NetworkPollEvent<?>> networkPollEvents = new ArrayList<>();
 
         for (ApplicationEvent event : events) {
             asyncConsumerMetrics.recordApplicationEventQueueTime(time.milliseconds() - event.enqueuedMs());
@@ -207,7 +207,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                     maybeFailOnMetadataError(List.of((CompletableEvent<?>) event));
 
                     if (event instanceof NetworkPollEvent)
-                        networkPollEvents.add((NetworkPollEvent) event);
+                        networkPollEvents.add((NetworkPollEvent<?>) event);
                 }
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {

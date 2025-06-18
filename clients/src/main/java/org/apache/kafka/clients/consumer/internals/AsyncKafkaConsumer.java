@@ -1786,7 +1786,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         // send any new fetches (won't resend pending fetches)
-        sendFetches(timer);
+        NetworkPollEvent<Void> networkPollEvent = sendFetches(timer);
 
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
@@ -1804,11 +1804,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // Wait for the next NetworkClient poll to finish, as there may not be anything immediately available. Note the
         // use of a shorter, dedicated "pollTimer" here which updates "timer" so that calling method (poll) will
         // correctly handle the overall timeout.
-        NetworkPollEvent event = new NetworkPollEvent(calculateDeadlineMs(pollTimer));
-        wakeupTrigger.setActiveTask(event.future());
+        wakeupTrigger.setActiveTask(networkPollEvent.pollFuture());
 
         try {
-            applicationEventHandler.addAndGet(event);
+            ConsumerUtils.getResult(networkPollEvent.pollFuture(), pollTimer);
         } catch (InterruptException e) {
             log.trace("Interrupt during fetch", e);
             throw e;
@@ -1899,12 +1898,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * @param timer Timer used to bound how long the consumer waits for the requests to be created, which in practice
      *              is used to avoid using {@link Long#MAX_VALUE} to wait "forever"
      */
-    private void sendFetches(Timer timer) {
+    private NetworkPollEvent<Void> sendFetches(Timer timer) {
+        CreateFetchRequestsEvent event = new CreateFetchRequestsEvent(calculateDeadlineMs(timer));
+
         try {
             applicationEventHandler.addAndGet(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
         } catch (TimeoutException swallow) {
             // Can be ignored, per above comments.
         }
+
+        return event;
     }
 
     /**

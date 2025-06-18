@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
+import java.util.concurrent.CompletableFuture;
 
-public class NetworkPollEvent extends CompletableApplicationEvent<Void> {
+public interface NetworkPollEvent<T> extends CompletableEvent<T> {
 
-    public NetworkPollEvent(final long deadlineMs) {
-        super(Type.NETWORK_POLL, deadlineMs);
-    }
+    CompletableFuture<Void> pollFuture();
 }

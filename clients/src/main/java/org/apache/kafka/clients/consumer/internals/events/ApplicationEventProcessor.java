@@ -212,10 +212,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((StreamsOnAllTasksLostCallbackCompletedEvent) event);
                 return;
 
-            case NETWORK_POLL:
-                // No processing logic needed.
-                return;
-
             default:
                 log.warn("Application event type {} was not expected", event.type());
         }
