@@ -1902,7 +1902,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void sendFetches(Timer timer) {
         try {
             applicationEventHandler.addAndGet(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
-        } catch (TimeoutException e) {
+        } catch (TimeoutException swallow) {
             // Can be ignored, per above comments.
         }
     }
@@ -2215,7 +2215,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     Timer pollInterval = time.timer(100L);
                     return ConsumerUtils.getResult(future, pollInterval);
                 }
-            } catch (TimeoutException e) {
+            } catch (TimeoutException swallow) {
                 // Ignore this as we will retry the event until the timeout expires.
             } finally {
                 timer.update();

@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -147,6 +146,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
+        // The following code avoids use of the Java Collections Streams API to reduce overhead in this loop.
         List<NetworkPollEvent> events = processApplicationEvents();
 
         final long currentTimeMs = time.milliseconds();
@@ -155,12 +155,13 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
         lastPollTimeMs = currentTimeMs;
 
-        final long pollWaitTimeMs = requestManagers.entries().stream()
-                .map(rm -> rm.poll(currentTimeMs))
-                .mapToLong(networkClientDelegate::addAll)
-                .filter(ms -> ms <= MAX_POLL_TIMEOUT_MS)
-                .min()
-                .orElse(MAX_POLL_TIMEOUT_MS);
+        long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
+
+        for (RequestManager rm : requestManagers.entries()) {
+            NetworkClientDelegate.PollResult pollResult = rm.poll(currentTimeMs);
+            long timeoutMs = networkClientDelegate.addAll(pollResult);
+            pollWaitTimeMs = Math.min(pollWaitTimeMs, timeoutMs);
+        }
 
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
 
@@ -168,10 +169,14 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             event.future().complete(null);
         }
 
-        cachedMaximumTimeToWait = requestManagers.entries().stream()
-                .mapToLong(rm -> rm.maximumTimeToWait(currentTimeMs))
-                .min()
-                .orElse(Long.MAX_VALUE);
+        long maxTimeToWaitMs = Long.MAX_VALUE;
+
+        for (RequestManager rm : requestManagers.entries()) {
+            long waitMs = rm.maximumTimeToWait(currentTimeMs);
+            maxTimeToWaitMs = Math.min(maxTimeToWaitMs, waitMs);
+        }
+
+        cachedMaximumTimeToWait = maxTimeToWaitMs;
 
         reapExpiredApplicationEvents(currentTimeMs);
         List<CompletableEvent<?>> uncompletedEvents = applicationEventReaper.uncompletedEvents();
@@ -248,10 +253,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     static void runAtClose(final Collection<RequestManager> requestManagers,
                            final NetworkClientDelegate networkClientDelegate,
                            final long currentTimeMs) {
-        // These are the optional outgoing requests at the
-        requestManagers.stream()
-                .map(rm -> rm.pollOnClose(currentTimeMs))
-                .forEach(networkClientDelegate::addAll);
+        // These are the optional outgoing requests at the time of closing the consumer
+        for (RequestManager rm : requestManagers) {
+            NetworkClientDelegate.PollResult pollResult = rm.pollOnClose(currentTimeMs);
+            networkClientDelegate.addAll(pollResult);
+        }
     }
 
     public boolean isRunning() {
@@ -375,12 +381,13 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * If there is a metadata error, complete all uncompleted events that require subscription metadata.
      */
     private void maybeFailOnMetadataError(List<CompletableEvent<?>> events) {
-        List<? extends CompletableApplicationEvent<?>> subscriptionMetadataEvent = events.stream()
-                .filter(e -> e instanceof CompletableApplicationEvent<?>)
-                .map(e -> (CompletableApplicationEvent<?>) e)
-                .filter(CompletableApplicationEvent::requireSubscriptionMetadata)
-                .collect(Collectors.toList());
-        
+        List<CompletableApplicationEvent<?>> subscriptionMetadataEvent = new ArrayList<>();
+
+        for (CompletableEvent<?> ce : events) {
+            if (ce instanceof CompletableApplicationEvent && ((CompletableApplicationEvent<?>) ce).requireSubscriptionMetadata())
+                subscriptionMetadataEvent.add((CompletableApplicationEvent<?>) ce);
+        }
+
         if (subscriptionMetadataEvent.isEmpty())
             return;
         networkClientDelegate.getAndClearMetadataError().ifPresent(metadataError ->

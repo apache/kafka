@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
 import org.apache.kafka.common.utils.Utils;
 
@@ -89,7 +89,7 @@ public class DefaultAssertionCreator implements AssertionCreator {
 
                 return privateKey(contents.getBytes(StandardCharsets.UTF_8), passphrase);
             } catch (GeneralSecurityException | IOException e) {
-                throw new KafkaException("An error occurred generating the OAuth assertion private key from " + file.getPath(), e);
+                throw new JwtRetrieverException("An error occurred generating the OAuth assertion private key from " + file.getPath(), e);
             }
         }
     }
