@@ -18,9 +18,12 @@ package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
@@ -38,6 +41,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -57,6 +61,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -68,6 +73,7 @@ import static java.time.LocalDateTime.now;
 import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -104,6 +110,25 @@ public class ResetStreamsGroupOffsetTest {
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
     }
 
+    @AfterEach
+    public void deleteTopicsAndGroups() {
+        try (final Admin adminClient = cluster.createAdminClient()) {
+            // delete all topics
+            final Set<String> topics = adminClient.listTopics().names().get();
+            adminClient.deleteTopics(topics).all().get();
+            // delete all groups
+            List<String> groupIds =
+                adminClient.listGroups(ListGroupsOptions.forStreamsGroups().timeoutMs(1000)).all().get()
+                    .stream().map(GroupListing::groupId).toList();
+            adminClient.deleteStreamsGroups(groupIds).all().get();
+        } catch (final UnknownTopicOrPartitionException ignored) {
+        } catch (final ExecutionException | InterruptedException e) {
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
     @AfterAll
     public static void closeCluster() {
         cluster.stop();
@@ -122,6 +147,22 @@ public class ResetStreamsGroupOffsetTest {
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);
             assertTrue(message.contains("Option [reset-offsets] takes one of these options: [all-groups], [group]"));
+            exited.set(true);
+        }));
+        try {
+            getStreamsGroupService(args);
+        } finally {
+            assertTrue(exited.get());
+        }
+    }
+
+    @Test
+    public void testResetOffsetsWithDeleteInternalTopicsOption() {
+        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--all-groups", "--all-input-topics", "--to-offset", "5", "--delete-all-internal-topics"};
+        AtomicBoolean exited = new AtomicBoolean(false);
+        Exit.setExitProcedure(((statusCode, message) -> {
+            assertNotEquals(0, statusCode);
+            assertTrue(message.contains("Option [delete-all-internal-topics] takes [execute] when [reset-offsets] is used"));
             exited.set(true);
         }));
         try {
@@ -284,11 +325,31 @@ public class ResetStreamsGroupOffsetTest {
             assertEquals(exp, toOffsetMap(importedOffsets.get(appId)));
         }
 
-        adminClient.deleteTopics(List.of(topic1, topic2)).all().get();
+        // assert that the internal topics are not deleted
+        assertEquals(2, getInternalTopics(appId).size());
     }
 
     @Test
-    public void testTopicsWhenResettingOffset() throws Exception {
+    public void testResetOffsetsWithDeleteSpecifiedInternalTopics() throws Exception {
+        final String appId = generateRandomAppId();
+        final String internalTopic = appId + "-aggregated_value-changelog";
+        final String topic1 = generateRandomTopic();
+        final String topic2 = generateRandomTopic();
+        final int numOfPartitions = 2;
+        String[] args;
+        produceConsumeShutdown(appId, topic1, topic2, RECORD_TOTAL * numOfPartitions * 2);
+        produceMessagesOnTwoPartitions(RECORD_TOTAL, topic1);
+        produceMessagesOnTwoPartitions(RECORD_TOTAL, topic2);
+
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-input-topics", "--execute", "--to-offset", "5",
+            "--delete-internal-topic", internalTopic
+        };
+
+        resetOffsetsAndAssertInternalTopicDeletion(args, appId, internalTopic);
+    }
+
+    @Test
+    public void testResetOffsetsWithDeleteAllInternalTopics() throws Exception {
         final String appId = generateRandomAppId();
         final String topic1 = generateRandomTopic();
         final String topic2 = generateRandomTopic();
@@ -298,10 +359,8 @@ public class ResetStreamsGroupOffsetTest {
         produceMessagesOnTwoPartitions(RECORD_TOTAL, topic1);
         produceMessagesOnTwoPartitions(RECORD_TOTAL, topic2);
 
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-input-topics", "--to-offset", "5"};
-        resetOffsetsAndAssertInternalTopicDeletionForDryRunAndExecute(args, appId);
-
-        adminClient.deleteTopics(List.of(topic1, topic2)).all().get();
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-input-topics", "--delete-all-internal-topics", "--execute", "--to-offset", "5"};
+        resetOffsetsAndAssertInternalTopicDeletion(args, appId);
     }
 
     private void resetForNextTest(String appId, long desiredOffset, String... topics) throws ExecutionException, InterruptedException {
@@ -389,23 +448,47 @@ public class ResetStreamsGroupOffsetTest {
         AssertCommittedOffsets(appId, topic, expectedCommittedOffset, partitions);
     }
 
-    private void resetOffsetsAndAssertInternalTopicDeletion(String[] args,
-                                       String appId) throws InterruptedException {
-        final boolean executeMode = Arrays.asList(args).contains("--execute");
-        List<String> internalTopics;
-        List<String> allTopics;
+    private void resetOffsetsAndAssertInternalTopicDeletion(String[] args, String appId, String... specifiedInternalTopics) throws InterruptedException {
+        List<String> specifiedInternalTopicsList = asList(specifiedInternalTopics);
+        Set<String> allInternalTopics = getInternalTopics(appId);
+        specifiedInternalTopicsList.forEach(allInternalTopics::remove);
+
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
-            internalTopics = service.retrieveInternalTopics(List.of(appId)).get(appId);
-            allTopics = service.collectAllTopics(appId);
             service.resetOffsets();
         }
 
-        // assert that the internal topics are deleted in --execute mode and not in --dry-run mode
-        allTopics.addAll(List.of("__consumer_offsets", "__transaction_state"));
-        if (executeMode) {
-            allTopics.removeAll(internalTopics);
+        // assert that the internal topics are deleted
+        if (specifiedInternalTopics.length > 0) {
+            Set<String> internalTopicsAfterReset = getInternalTopics(appId);
+
+            TestUtils.waitForCondition(
+                () -> internalTopicsAfterReset.size() == allInternalTopics.size(),
+                30_000, "Internal topics were not deleted as expected after reset"
+            );
+
+            specifiedInternalTopicsList.forEach(topic -> {
+                assertFalse(internalTopicsAfterReset.contains(topic),
+                    "Internal topic '" + topic + "' was not deleted as expected after reset");
+            });
+
+        } else {
+            TestUtils.waitForCondition(() -> {
+                Set<String> internalTopicsAfterReset = getInternalTopics(appId);
+                return internalTopicsAfterReset.isEmpty();
+            }, 30_000, "Internal topics were not deleted after reset");
         }
-        cluster.waitForRemainingTopics(30000, allTopics.toArray(new String[0]));
+    }
+
+    private Set<String> getInternalTopics(String appId) {
+        try {
+            Set<String> topics = adminClient.listTopics().names().get();
+            return topics.stream()
+                .filter(topic -> topic.startsWith(appId + "-"))
+                .filter(topic -> topic.endsWith("-changelog") || topic.endsWith("-repartition"))
+                .collect(Collectors.toSet());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -497,13 +580,6 @@ public class ResetStreamsGroupOffsetTest {
         resetOffsetsAndAssert(args, appId, topic, expectedOffset, expectedCommittedOffset, partitions);
         resetOffsetsAndAssert(addTo(args, "--dry-run"), appId, topic,  expectedOffset, expectedCommittedOffset, partitions);
         resetOffsetsAndAssert(addTo(args, "--execute"), appId, topic, expectedOffset, expectedOffset, partitions);
-    }
-
-    private void resetOffsetsAndAssertInternalTopicDeletionForDryRunAndExecute(String[] args,
-                                                          String appId) throws InterruptedException {
-        resetOffsetsAndAssertInternalTopicDeletion(args, appId);
-        resetOffsetsAndAssertInternalTopicDeletion(addTo(args, "--dry-run"), appId);
-        resetOffsetsAndAssertInternalTopicDeletion(addTo(args, "--execute"), appId);
     }
 
     private void resetOffsetsAndAssertForDryRunAndExecute(String[] args,

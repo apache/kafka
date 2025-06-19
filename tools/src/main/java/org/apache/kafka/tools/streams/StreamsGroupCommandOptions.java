@@ -73,6 +73,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String RESET_TO_LATEST_DOC = "Reset offsets to latest offset.";
     private static final String RESET_TO_CURRENT_DOC = "Reset offsets to current offset.";
     private static final String RESET_SHIFT_BY_DOC = "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative.";
+    private static final String DELETE_INTERNAL_TOPIC_DOC = "Delete specified internal topic of the streams group. Supported operations: reset-offsets." +
+        "This option is applicable only when --execute is used.";
+    private static final String DELETE_ALL_INTERNAL_TOPICS_DOC = "Delete all internal topics linked to the streams group. Supported operations: reset-offsets, delete." +
+        "With reset-offsets, this option is applicable only when --execute is used.";
     private static final String VERBOSE_DOC = """
         Use with --describe --state  to show group epoch and target assignment epoch.
         Use with --describe --members to show for each member the member epoch, target assignment epoch, current assignment, target assignment, and whether member is still using the classic rebalance protocol.
@@ -101,6 +105,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     final OptionSpec<Void> resetToLatestOpt;
     final OptionSpec<Void> resetToCurrentOpt;
     final OptionSpec<Long> resetShiftByOpt;
+    final OptionSpec<String> deleteInternalTopicOpt;
+    final OptionSpec<Void> deleteAllInternalTopicsOpt;
     final OptionSpec<Void> dryRunOpt;
     final OptionSpec<Void> executeOpt;
     final OptionSpec<Void> exportOpt;
@@ -110,6 +116,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
     final Set<OptionSpec<?>> allStreamsGroupLevelOpts;
     final Set<OptionSpec<?>> allDeleteOffsetsOpts;
+    final Set<OptionSpec<?>> allDeleteInternalGroupsOpts;
 
     public static StreamsGroupCommandOptions fromArgs(String[] args) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
@@ -181,6 +188,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("number-of-offsets")
             .ofType(Long.class);
+        deleteInternalTopicOpt = parser.accepts("delete-internal-topic", DELETE_INTERNAL_TOPIC_DOC)
+            .withRequiredArg()
+            .ofType(String.class);
+        deleteAllInternalTopicsOpt = parser.accepts("delete-all-internal-topics", DELETE_ALL_INTERNAL_TOPICS_DOC);
 
         verboseOpt = parser.accepts("verbose", VERBOSE_DOC)
             .availableIf(describeOpt);
@@ -194,8 +205,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
         allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
         allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(inputTopicOpt, allInputTopicsOpt));
+        allDeleteInternalGroupsOpts = new HashSet<>(Arrays.asList(resetOffsetsOpt, deleteOpt));
     }
 
+    @SuppressWarnings("NPathComplexity")
     void checkArgs() {
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list, or describe streams groups.");
 
@@ -224,8 +237,12 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             checkOffsetResetArgs();
         }
 
+        if (options.has(deleteAllInternalTopicsOpt) || options.has(deleteInternalTopicOpt)) {
+            checkDeleteInternalTopicsArgs();
+        }
+
         if ((options.has(dryRunOpt) || options.has(executeOpt)) && !options.has(resetOffsetsOpt))
-            CommandLineUtils.printUsageAndExit(parser, "Only Option " + resetOffsetsOpt + "accepts " + executeOpt + " or " + dryRunOpt);
+            CommandLineUtils.printUsageAndExit(parser, "Only Option " + resetOffsetsOpt + " accepts " + executeOpt + " or " + dryRunOpt);
 
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allGroupSelectionScopeOpts, groupOpt));
@@ -281,5 +298,24 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, minus(allResetOffsetScenarioOpts, resetToCurrentOpt));
         CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, minus(allResetOffsetScenarioOpts, resetShiftByOpt));
         CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetScenarioOpts, resetFromFileOpt));
+    }
+
+    private void checkDeleteAllInternalTopicsArgs() {
+        if (!options.has(resetOffsetsOpt) && !options.has(deleteOpt)) {
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + deleteAllInternalTopicsOpt + " takes one of these options: " + allDeleteInternalGroupsOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+        } else if (options.has(resetOffsetsOpt) && !options.has(executeOpt)) {
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + deleteAllInternalTopicsOpt + " takes " + executeOpt + " when " + resetOffsetsOpt + " is used.");
+        }
+    }
+
+    private void checkDeleteInternalTopicsArgs() {
+        if (options.has(deleteAllInternalTopicsOpt)) {
+            checkDeleteAllInternalTopicsArgs();
+        } else if (options.has(deleteInternalTopicOpt) && (!options.has(resetOffsetsOpt) || !options.has(executeOpt))) {
+            CommandLineUtils.printUsageAndExit(parser,
+                "Option " + deleteInternalTopicOpt + " takes " + resetOffsetsOpt + " when " + executeOpt + " is used.");
+        }
     }
 }
