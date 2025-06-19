@@ -360,7 +360,7 @@ public class FetchRequest extends AbstractRequest {
                         .setPartitions(partitionResponses));
             });
         }
-        return new FetchResponse(new FetchResponseData()
+        return FetchResponse.of(new FetchResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
                 .setSessionId(data.sessionId())

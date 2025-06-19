@@ -23,6 +23,7 @@ import java.util.function.Consumer
 import kafka.network.RequestChannel
 import kafka.server.ClientQuotaManager._
 import kafka.utils.Logging
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
@@ -137,22 +138,26 @@ object ClientQuotaManager {
  * @param quotaType Quota type of this quota manager
  * @param time @Time object to use
  * @param threadNamePrefix The thread prefix to use
- * @param clientQuotaCallback An optional @ClientQuotaCallback
+ * @param clientQuotaCallbackPlugin An optional @ClientQuotaCallback and 
+ *                                  wrap it in a {@link org.apache.kafka.common.internals.Plugin}
  */
 class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
                          private val quotaType: QuotaType,
                          private val time: Time,
                          private val threadNamePrefix: String,
-                         private val clientQuotaCallback: Option[ClientQuotaCallback] = None) extends Logging {
+                         private val clientQuotaCallbackPlugin: Option[Plugin[ClientQuotaCallback]] = None) extends Logging {
 
   private val lock = new ReentrantReadWriteLock()
   private val sensorAccessor = new SensorAccess(lock, metrics)
-  private val quotaCallback = clientQuotaCallback.getOrElse(new DefaultQuotaCallback)
+  private val quotaCallback = clientQuotaCallbackPlugin match {
+    case Some(plugin) => plugin.get()
+    case None => new DefaultQuotaCallback
+  }
   private val clientQuotaType = QuotaType.toClientQuotaType(quotaType)
 
   @volatile
-  private var quotaTypesEnabled = clientQuotaCallback match {
+  private var quotaTypesEnabled = clientQuotaCallbackPlugin match {
     case Some(_) => QuotaTypes.CustomQuotas
     case None => QuotaTypes.NoQuotas
   }

@@ -51,6 +51,7 @@ import org.apache.kafka.common.network.SaslChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -763,7 +764,7 @@ public class SaslAuthenticatorTest {
         selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion((short) 0));
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
 
         ApiVersion apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
@@ -822,7 +823,7 @@ public class SaslAuthenticatorTest {
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
         ApiVersionsResponse response =
-            ApiVersionsResponse.parse(responseBuffer, version);
+            ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), version);
         assertEquals(Errors.INVALID_REQUEST.code(), response.data().errorCode());
 
         // Send ApiVersionsRequest with a supported version. This should succeed.
@@ -861,7 +862,7 @@ public class SaslAuthenticatorTest {
         selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), version);
         assertEquals(Errors.NONE.code(), response.data().errorCode());
 
         // Test that client can authenticate successfully

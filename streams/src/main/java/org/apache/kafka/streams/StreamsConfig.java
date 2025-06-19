@@ -68,6 +68,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -608,6 +609,16 @@ public class StreamsConfig extends AbstractConfig {
         " topics (e.g., changelog and repartition topics) and their associated state stores." +
         " When enabled, the application will refuse to start if any internal resource has an auto-generated name.";
 
+    /**
+     * <code>group.protocol</code>
+     */
+    public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
+    public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(
+        Locale.ROOT);
+    private static final String GROUP_PROTOCOL_DOC = "The group protocol streams should use. We currently " +
+        "support \"classic\" or \"streams\". If \"streams\" is specified, then the streams rebalance protocol will be " +
+        "used. Otherwise, the classic group protocol will be used.";
+
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
     private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "The output interval in milliseconds for logging summary information.\n" +
@@ -1042,6 +1053,12 @@ public class StreamsConfig extends AbstractConfig {
                         TOPOLOGY_OPTIMIZATION_CONFIGS::toString),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
+            .define(GROUP_PROTOCOL_CONFIG,
+                    Type.STRING,
+                    DEFAULT_GROUP_PROTOCOL,
+                    ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
+                    Importance.MEDIUM,
+                    GROUP_PROTOCOL_DOC)
 
             // LOW
 
@@ -1303,6 +1320,9 @@ public class StreamsConfig extends AbstractConfig {
         // This is settable in the main Streams config, but it's a private API for testing
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
 
+        // This is settable in the main Streams config, but it's a private API for testing
+        public static final String INTERNAL_CONSUMER_WRAPPER = "__internal.consumer.wrapper__";
+
         // Private API used to control the emit latency for left/outer join results (https://issues.apache.org/jira/browse/KAFKA-10847)
         public static final String EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__emit.interval.ms.kstreams.outer.join.spurious.results.fix__";
 
@@ -1505,6 +1525,28 @@ public class StreamsConfig extends AbstractConfig {
         }
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
         verifyClientTelemetryConfigs();
+        verifyStreamsProtocolCompatibility(doLog);
+    }
+
+    private void verifyStreamsProtocolCompatibility(final boolean doLog) {
+        if (doLog && isStreamsProtocolEnabled()) {
+            log.warn("The streams rebalance protocol is still in development and should not be used in production. "
+                + "Please set group.protocol=classic (default) in all production use cases.");
+            final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
+            final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
+            if (instanceId != null && !instanceId.isEmpty()) {
+                throw new ConfigException("Streams rebalance protocol does not support static membership. "
+                    + "Please set group.protocol=classic or remove group.instance.id from the configuration.");
+            }
+            if (getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG) != 0) {
+                log.warn("Warmup replicas are not supported yet with the streams protocol and will be ignored. "
+                    + "If you want to use warmup replicas, please set group.protocol=classic.");
+            }
+            if (getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG) != 0) {
+                log.warn("Standby replicas are configured broker-side in the streams group protocol and will be ignored. "
+                    + "Please use the admin client or kafka-configs.sh to set the streams groups's standby replicas.");
+            }
+        }
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
@@ -1626,6 +1668,8 @@ public class StreamsConfig extends AbstractConfig {
 
     private Map<String, Object> getCommonConsumerConfigs() {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
+
+        clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
 
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
@@ -2096,6 +2140,10 @@ public class StreamsConfig extends AbstractConfig {
 
     public ProcessingExceptionHandler processingExceptionHandler() {
         return getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
+    }
+
+    protected boolean isStreamsProtocolEnabled() {
+        return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name());
     }
 
     /**

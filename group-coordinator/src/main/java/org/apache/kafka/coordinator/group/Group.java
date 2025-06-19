@@ -117,7 +117,7 @@ public interface Group {
         String groupInstanceId,
         int generationIdOrMemberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
 
     ) throws KafkaException;
 

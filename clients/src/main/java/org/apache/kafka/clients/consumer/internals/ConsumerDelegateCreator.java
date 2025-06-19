@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Time;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * {@code ConsumerDelegateCreator} implements a quasi-factory pattern to allow the caller to remain unaware of the
@@ -60,7 +61,7 @@ public class ConsumerDelegateCreator {
             GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toUpperCase(Locale.ROOT));
 
             if (groupProtocol == GroupProtocol.CONSUMER)
-                return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
+                return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer, Optional.empty());
             else
                 return new ClassicKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
         } catch (KafkaException e) {

@@ -154,6 +154,7 @@ class ConsumerTask implements Runnable, Closeable {
     }
 
     // visible for testing
+    @SuppressWarnings("deprecation")
     void closeConsumer() {
         try {
             consumer.close(Duration.ofSeconds(30));

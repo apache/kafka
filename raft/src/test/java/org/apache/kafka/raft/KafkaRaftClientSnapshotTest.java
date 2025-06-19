@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
@@ -154,7 +155,13 @@ public final class KafkaRaftClientSnapshotTest {
         long localLogEndOffset = context.log.endOffset().offset();
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, localLogEndOffset, snapshotId.epoch());
+        context.assertFetchRequestData(
+            fetchRequest,
+            epoch,
+            localLogEndOffset,
+            snapshotId.epoch(),
+            context.client.highWatermark()
+        );
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
@@ -162,7 +169,12 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         context.pollUntilRequest();
-        context.assertSentFetchRequest(epoch, localLogEndOffset, snapshotId.epoch());
+        context.assertSentFetchRequest(
+            epoch,
+            localLogEndOffset,
+            snapshotId.epoch(),
+            context.client.highWatermark()
+        );
 
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
@@ -196,7 +208,13 @@ public final class KafkaRaftClientSnapshotTest {
         long localLogEndOffset = context.log.endOffset().offset();
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, localLogEndOffset, snapshotId.epoch());
+        context.assertFetchRequestData(
+            fetchRequest,
+            epoch,
+            localLogEndOffset,
+            snapshotId.epoch(),
+            context.client.highWatermark()
+        );
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
@@ -204,7 +222,12 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         context.pollUntilRequest();
-        context.assertSentFetchRequest(epoch, localLogEndOffset, snapshotId.epoch());
+        context.assertSentFetchRequest(
+            epoch,
+            localLogEndOffset,
+            snapshotId.epoch(),
+            context.client.highWatermark()
+        );
 
         RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
         context.client.register(secondListener);
@@ -1144,7 +1167,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1161,7 +1184,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1178,7 +1201,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // Fetch timer is not reset; sleeping for remainder should transition to prospective
         context.time.sleep(context.fetchTimeoutMs - slept);
@@ -1205,7 +1228,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1248,7 +1271,13 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, snapshotId.offset(), snapshotId.epoch());
+        context.assertFetchRequestData(
+            fetchRequest,
+            epoch,
+            snapshotId.offset(),
+            snapshotId.epoch(),
+            context.client.highWatermark()
+        );
 
         // Check that the snapshot was written to the log
         RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
@@ -1278,7 +1307,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1353,7 +1382,13 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, snapshotId.offset(), snapshotId.epoch());
+        context.assertFetchRequestData(
+            fetchRequest,
+            epoch,
+            snapshotId.offset(),
+            snapshotId.epoch(),
+            context.client.highWatermark()
+        );
 
         // Check that the snapshot was written to the log
         RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
@@ -1383,7 +1418,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1425,7 +1460,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
     @ParameterizedTest
@@ -1445,7 +1480,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1487,7 +1522,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0, context.client.highWatermark());
     }
 
     @ParameterizedTest
@@ -1506,7 +1541,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1548,7 +1583,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0, context.client.highWatermark());
     }
 
     @ParameterizedTest
@@ -1567,7 +1602,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1638,7 +1673,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1686,7 +1721,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         // Follower should send a fetch request
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -1735,7 +1770,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         // Follower should send a fetch request
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
     @ParameterizedTest
@@ -1754,7 +1789,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -2013,7 +2048,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         assertTrue(voters.contains(fetchRequest.destination().id()));
-        context.assertFetchRequestData(fetchRequest, epoch, 1L, 1);
+        context.assertFetchRequestData(fetchRequest, epoch, 1L, 1, context.client.highWatermark());
 
         // The response does not advance the high watermark
         List<String> records1 = List.of("b", "c");
@@ -2041,7 +2076,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
         assertTrue(voters.contains(fetchRequest.destination().id()));
-        context.assertFetchRequestData(fetchRequest, epoch, 3L, 3);
+        context.assertFetchRequestData(fetchRequest, epoch, 3L, 3, context.client.highWatermark());
 
         List<String> records2 = List.of("d", "e", "f");
         int batch2Epoch = 4;

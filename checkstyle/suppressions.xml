@@ -37,15 +37,11 @@
 
     <!-- core -->
     <suppress checks="NPathComplexity" files="(ClusterTestExtensions|KafkaApisBuilder|SharePartition|SharePartitionManager).java"/>
-    <suppress checks="NPathComplexity|ClassFanOutComplexity|ClassDataAbstractionCoupling|JavaNCSS" files="(RemoteLogManager|RemoteLogManagerTest).java"/>
-    <suppress checks="MethodLength" files="RemoteLogManager.java"/>
-    <suppress checks="MethodLength" files="RemoteLogManagerConfig.java"/>
-    <suppress checks="ClassFanOutComplexity" files="RemoteLogManagerTest.java"/>
     <suppress checks="MethodLength"
               files="(KafkaClusterTestKit).java"/>
     <suppress checks="NPathComplexity" files="TestKitNodes.java"/>
     <suppress checks="JavaNCSS"
-              files="(RemoteLogManagerTest|SharePartitionManagerTest|SharePartitionTest).java"/>
+              files="(SharePartitionManagerTest|SharePartitionTest|ShareConsumerTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="SharePartitionManagerTest"/>
     <suppress checks="CyclomaticComplexity" files="SharePartition.java"/>
 
@@ -102,10 +98,10 @@
               files="(AbstractFetch|ClientTelemetryReporter|ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|DefaultSslEngineFactory|Authorizer|RecordAccumulator|MemoryRecords|FetchSessionHandler|MockAdminClient).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaAdminClientTest).java"/>
+              files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaAdminClientTest|KafkaProducerTest).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AbstractMembershipManager|ConsumerCoordinator|BufferPool|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Agent|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|AbstractStickyAssignor|Authorizer|FetchSessionHandler|RecordAccumulator|Shell).java"/>
+              files="(AbstractMembershipManager|ConsumerCoordinator|BufferPool|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Agent|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|AbstractStickyAssignor|Authorizer|FetchSessionHandler|RecordAccumulator|Shell|MockConsumer).java"/>
 
     <suppress checks="(JavaNCSS|CyclomaticComplexity|MethodLength)"
               files="CoordinatorClient.java"/>
@@ -129,7 +125,7 @@
               files="(OffsetFetcher|RequestResponse)Test.java"/>
 
     <suppress checks="JavaNCSS"
-              files="RequestResponseTest.java|FetcherTest.java|FetchRequestManagerTest.java|KafkaAdminClientTest.java"/>
+              files="RequestResponseTest.java|FetcherTest.java|FetchRequestManagerTest.java|KafkaAdminClientTest.java|ConsumerMembershipManagerTest.java"/>
 
     <suppress checks="NPathComplexity"
               files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark"/>
@@ -167,6 +163,9 @@
 
     <suppress checks="NPathComplexity"
               files="(DistributedHerder|AbstractHerder|RestClient|RestServer|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask|WorkerSourceTask|TopicAdmin).java"/>
+
+    <suppress checks="ClassFanOutComplexity"
+              files="ShareConsumerTest.java"/>
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -361,7 +360,9 @@
     <suppress checks="ParameterNumber"
               files="(LogAppendInfo|LogLoader|RemoteLogManagerConfig|UnifiedLog).java"/>
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
-              files="(UnifiedLog).java"/>
+              files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest).java"/>
+    <suppress checks="MethodLength" files="(RemoteLogManager|RemoteLogManagerConfig).java"/>
+    <suppress checks="JavaNCSS" files="RemoteLogManagerTest.java"/>
 
     <!-- benchmarks -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"

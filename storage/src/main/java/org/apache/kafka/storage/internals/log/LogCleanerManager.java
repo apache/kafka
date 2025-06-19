@@ -346,7 +346,7 @@ public class LogCleanerManager {
     public void abortCleaning(TopicPartition topicPartition) {
         inLock(lock, () -> {
             abortAndPauseCleaning(topicPartition);
-            resumeCleaning(List.of(topicPartition));
+            resumeCleaning(Set.of(topicPartition));
             return null;
         });
     }
@@ -396,7 +396,7 @@ public class LogCleanerManager {
      * Resume the cleaning of paused partitions.
      * Each call of this function will undo one pause.
      */
-    public void resumeCleaning(List<TopicPartition> topicPartitions) {
+    public void resumeCleaning(Set<TopicPartition> topicPartitions) {
         inLock(lock, () -> {
             topicPartitions.forEach(topicPartition -> {
                 LogCleaningState state = inProgress.get(topicPartition);

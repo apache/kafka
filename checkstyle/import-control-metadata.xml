@@ -176,6 +176,9 @@
             <allow pkg="org.apache.kafka.controller" />
             <allow pkg="org.apache.kafka.metadata" />
             <allow pkg="org.apache.kafka.common.internals" />
+            <allow pkg="org.apache.kafka.common.metrics" />
+            <allow pkg="org.apache.kafka.common.metrics.internals" />
+            <allow pkg="org.apache.kafka.common.metrics.stats" />
         </subpackage>
         <subpackage name="bootstrap">
             <allow pkg="org.apache.kafka.snapshot" />

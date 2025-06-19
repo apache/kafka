@@ -21,17 +21,17 @@ import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
-import org.apache.kafka.clients.admin.ListConsumerGroupsOptions;
-import org.apache.kafka.clients.admin.ListConsumerGroupsResult;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
+import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberDescription;
@@ -177,10 +177,11 @@ public class ConsumerGroupCommand {
 
     @SuppressWarnings("Regexp")
     static Set<GroupType> consumerGroupTypesFromString(String input) {
+        Set<GroupType> validTypes = Set.of(GroupType.CLASSIC, GroupType.CONSUMER);
         Set<GroupType> parsedTypes = Stream.of(input.toLowerCase().split(",")).map(s -> GroupType.parse(s.trim())).collect(Collectors.toSet());
-        if (parsedTypes.contains(GroupType.UNKNOWN)) {
-            List<String> validTypes = Arrays.stream(GroupType.values()).filter(t -> t != GroupType.UNKNOWN).map(Object::toString).collect(Collectors.toList());
-            throw new IllegalArgumentException("Invalid types list '" + input + "'. Valid types are: " + String.join(", ", validTypes));
+        if (!validTypes.containsAll(parsedTypes)) {
+            throw new IllegalArgumentException("Invalid types list '" + input + "'. Valid types are: " +
+                String.join(", ", validTypes.stream().map(GroupType::toString).collect(Collectors.toSet())));
         }
         return parsedTypes;
     }
@@ -241,7 +242,7 @@ public class ConsumerGroupCommand {
             if (includeType || includeState) {
                 Set<GroupType> types = typeValues();
                 Set<GroupState> states = stateValues();
-                List<ConsumerGroupListing> listings = listConsumerGroupsWithFilters(types, states);
+                List<GroupListing> listings = listConsumerGroupsWithFilters(types, states);
 
                 printGroupInfo(listings, includeType, includeState);
             } else {
@@ -263,17 +264,17 @@ public class ConsumerGroupCommand {
                 : consumerGroupTypesFromString(typeValue);
         }
 
-        private void printGroupInfo(List<ConsumerGroupListing> groups, boolean includeType, boolean includeState) {
-            Function<ConsumerGroupListing, String> groupId = ConsumerGroupListing::groupId;
-            Function<ConsumerGroupListing, String> groupType = groupListing -> groupListing.type().orElse(GroupType.UNKNOWN).toString();
-            Function<ConsumerGroupListing, String> groupState = groupListing -> groupListing.groupState().orElse(GroupState.UNKNOWN).toString();
+        private void printGroupInfo(List<GroupListing> groups, boolean includeType, boolean includeState) {
+            Function<GroupListing, String> groupId = GroupListing::groupId;
+            Function<GroupListing, String> groupType = groupListing -> groupListing.type().orElse(GroupType.UNKNOWN).toString();
+            Function<GroupListing, String> groupState = groupListing -> groupListing.groupState().orElse(GroupState.UNKNOWN).toString();
 
             OptionalInt maybeMax = groups.stream().mapToInt(groupListing -> Math.max(15, groupId.apply(groupListing).length())).max();
             int maxGroupLen = maybeMax.orElse(15) + 10;
             String format = "%-" + maxGroupLen + "s";
             List<String> header = new ArrayList<>();
             header.add("GROUP");
-            List<Function<ConsumerGroupListing, String>> extractors = new ArrayList<>();
+            List<Function<GroupListing, String>> extractors = new ArrayList<>();
             extractors.add(groupId);
 
             if (includeType) {
@@ -290,7 +291,7 @@ public class ConsumerGroupCommand {
 
             System.out.printf(format + "%n", header.toArray(new Object[0]));
 
-            for (ConsumerGroupListing groupListing : groups) {
+            for (GroupListing groupListing : groups) {
                 Object[] info = extractors.stream().map(extractor -> extractor.apply(groupListing)).toArray(Object[]::new);
                 System.out.printf(format + "%n", info);
             }
@@ -298,20 +299,20 @@ public class ConsumerGroupCommand {
 
         List<String> listConsumerGroups() {
             try {
-                ListConsumerGroupsResult result = adminClient.listConsumerGroups(withTimeoutMs(new ListConsumerGroupsOptions()));
-                Collection<ConsumerGroupListing> listings = result.all().get();
-                return listings.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toList());
+                ListGroupsResult result = adminClient.listGroups(withTimeoutMs(ListGroupsOptions.forConsumerGroups()));
+                Collection<GroupListing> listings = result.all().get();
+                return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
         }
 
-        List<ConsumerGroupListing> listConsumerGroupsWithFilters(Set<GroupType> types, Set<GroupState> states) throws ExecutionException, InterruptedException {
-            ListConsumerGroupsOptions listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions());
-            listConsumerGroupsOptions
+        List<GroupListing> listConsumerGroupsWithFilters(Set<GroupType> types, Set<GroupState> states) throws ExecutionException, InterruptedException {
+            ListGroupsOptions listGroupsOptions = withTimeoutMs(ListGroupsOptions.forConsumerGroups());
+            listGroupsOptions
                 .inGroupStates(states)
                 .withTypes(types);
-            ListConsumerGroupsResult result = adminClient.listConsumerGroups(listConsumerGroupsOptions);
+            ListGroupsResult result = adminClient.listGroups(listGroupsOptions);
             return new ArrayList<>(result.all().get());
         }
 
@@ -779,30 +780,29 @@ public class ConsumerGroupCommand {
 
             switch (topLevelResult) {
                 case NONE:
-                    System.out.println("Request succeed for deleting offsets with topic " + String.join(", ", topics) + " group " + groupId);
+                    System.out.println("Request succeeded for deleting offsets from group " + groupId + ".");
                     break;
                 case INVALID_GROUP_ID:
-                    printError("'" + groupId + "' is not valid.", Optional.empty());
-                    break;
                 case GROUP_ID_NOT_FOUND:
-                    printError("'" + groupId + "' does not exist.", Optional.empty());
-                    break;
                 case GROUP_AUTHORIZATION_FAILED:
-                    printError("Access to '" + groupId + "' is not authorized.", Optional.empty());
-                    break;
                 case NON_EMPTY_GROUP:
-                    printError("Deleting offsets of a consumer group '" + groupId + "' is forbidden if the group is not empty.", Optional.empty());
+                    printError(topLevelResult.message(), Optional.empty());
                     break;
                 case GROUP_SUBSCRIBED_TO_TOPIC:
                 case TOPIC_AUTHORIZATION_FAILED:
                 case UNKNOWN_TOPIC_OR_PARTITION:
-                    printError("Encounter some partition level error, see the follow-up details:", Optional.empty());
+                    printError("Encountered some partition-level error, see the follow-up details.", Optional.empty());
                     break;
                 default:
-                    printError("Encounter some unknown error: " + topLevelResult, Optional.empty());
+                    printError("Encountered some unknown error: " + topLevelResult, Optional.empty());
             }
 
-            String format = "%n%-30s %-15s %-15s";
+            int maxTopicLen = 15;
+            for (TopicPartition tp : partitionLevelResult.keySet()) {
+                maxTopicLen = Math.max(maxTopicLen, tp.topic().length());
+            }
+
+            String format = "%n%" + (-maxTopicLen) + "s %-10s %-15s";
 
             System.out.printf(format, "TOPIC", "PARTITION", "STATUS");
             partitionLevelResult.entrySet().stream()
@@ -812,7 +812,7 @@ public class ConsumerGroupCommand {
                     Throwable error = e.getValue();
                     System.out.printf(format,
                         tp.topic(),
-                        tp.partition() >= 0 ? tp.partition() : "Not Provided",
+                        tp.partition() >= 0 ? tp.partition() : MISSING_COLUMN_VALUE,
                         error != null ? "Error: " + error.getMessage() : "Successful"
                     );
                 });
@@ -1354,13 +1354,13 @@ public class ConsumerGroupCommand {
             });
 
             if (failed.isEmpty())
-                System.out.println("Deletion of requested consumer groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
+                System.out.println("Deletion of requested consumer groups (" + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")) + ") was successful.");
             else {
                 printError("Deletion of some consumer groups failed:", Optional.empty());
                 failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty())
-                    System.out.println("\nThese consumer groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
+                    System.out.println("\nThese consumer groups were deleted successfully: " + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")));
             }
 
             failed.putAll(success);

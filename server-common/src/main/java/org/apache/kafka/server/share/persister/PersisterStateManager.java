@@ -1475,8 +1475,7 @@ public class PersisterStateManager {
                     .map(entry -> new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .collect(Collectors.toList())),
-                true
+                    .collect(Collectors.toList()))
             );
         }
 

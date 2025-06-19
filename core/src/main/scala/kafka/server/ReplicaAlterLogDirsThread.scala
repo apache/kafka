@@ -24,6 +24,8 @@ import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch, TopicIdPartition}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
+import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.PartitionFetchState
 
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap

@@ -18,7 +18,7 @@
 package kafka.log
 
 import java.io.File
-import java.util.Properties
+import java.util.{Optional, Properties}
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -85,7 +85,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     // force a checkpoint
     // and make sure its gone from checkpoint file
     cleaner.logs.remove(topicPartitions(0))
-    cleaner.updateCheckpoints(logDir, partitionToRemove = Option(topicPartitions(0)))
+    cleaner.updateCheckpoints(logDir, Optional.of(topicPartitions(0)))
     val checkpoints = new OffsetCheckpointFile(new File(logDir, LogCleanerManager.OFFSET_CHECKPOINT_FILE), null).read()
     // we expect partition 0 to be gone
     assertFalse(checkpoints.containsKey(topicPartitions(0)))
@@ -280,7 +280,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     // Verify no cleaning with LogCleanerIoBufferSizeProp=1
     val firstDirty = log.activeSegment.baseOffset
     val topicPartition = new TopicPartition("log", 0)
-    cleaner.awaitCleaned(topicPartition, firstDirty, maxWaitMs = 10)
+    cleaner.awaitCleaned(topicPartition, firstDirty, 10)
     assertTrue(cleaner.cleanerManager.allCleanerCheckpoints.isEmpty, "Should not have cleaned")
 
     def kafkaConfigWithCleanerConfig(cleanerConfig: CleanerConfig): KafkaConfig = {
@@ -317,7 +317,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than
     // TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG
     val topicPartition = new TopicPartition(topic, partitionId)
-    cleaner.awaitCleaned(topicPartition, firstDirty)
+    cleaner.awaitCleaned(topicPartition, firstDirty, 60000L)
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(topicPartition)
     assertTrue(lastCleaned >= firstDirty, s"log cleaner should have processed up to offset $firstDirty, but lastCleaned=$lastCleaned")
   }

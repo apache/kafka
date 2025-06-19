@@ -26,16 +26,14 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testOffsetsForLeaderEpochErrorCodes(quorum: String): Unit = {
+  @Test
+  def testOffsetsForLeaderEpochErrorCodes(): Unit = {
     val topic = "topic"
     val partition = new TopicPartition(topic, 0)
     val epochs = offsetForLeaderTopicCollectionFor(partition, 0, RecordBatch.NO_PARTITION_LEADER_EPOCH)
@@ -57,9 +55,8 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, request)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCurrentEpochValidation(quorum: String): Unit = {
+  @Test
+  def testCurrentEpochValidation(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val partitionToLeader = createTopic(topic, replicationFactor = 3)
