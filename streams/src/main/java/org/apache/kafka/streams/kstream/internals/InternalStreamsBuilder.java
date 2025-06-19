@@ -300,22 +300,30 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
-    // use this method for testing only
     public void buildAndOptimizeTopology() {
-        buildAndOptimizeTopology(null);
+        buildAndOptimizeTopologyInternal(null);
     }
 
+    @Deprecated
     public void buildAndOptimizeTopology(final Properties props) {
+        buildAndOptimizeTopologyInternal(props);
+    }
+
+    private void buildAndOptimizeTopologyInternal(final Properties props) {
         mergeDuplicateSourceNodes();
-        optimizeTopology(props);
+        if (props != null) {
+            optimizeTopology(props);
+        } else {
+            optimizeTopology();
+        }
         enableVersionedSemantics();
 
-        final PriorityQueue<GraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(GraphNode::buildPriority));
-
+        final PriorityQueue<GraphNode> graphNodePriorityQueue =
+            new PriorityQueue<>(5, Comparator.comparing(GraphNode::buildPriority));
         graphNodePriorityQueue.offer(root);
 
         while (!graphNodePriorityQueue.isEmpty()) {
-            final GraphNode streamGraphNode = graphNodePriorityQueue.remove();
+            final GraphNode streamGraphNode = graphNodePriorityQueue.poll();
 
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Adding nodes to topology {} child nodes {}", streamGraphNode, streamGraphNode.children());
@@ -326,14 +334,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 streamGraphNode.setHasWrittenToTopology(true);
             }
 
-            for (final GraphNode graphNode : streamGraphNode.children()) {
-                graphNodePriorityQueue.offer(graphNode);
+            for (final GraphNode child : streamGraphNode.children()) {
+                graphNodePriorityQueue.offer(child);
             }
         }
+
         internalTopologyBuilder.validateCopartition();
-
         internalTopologyBuilder.checkUnprovidedNames();
-
     }
 
     /**
@@ -342,12 +349,36 @@ public class InternalStreamsBuilder implements InternalNameProvider {
      */
     private void optimizeTopology(final Properties props) {
         final Set<String> optimizationConfigs;
+
         if (props == null || !props.containsKey(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)) {
             optimizationConfigs = Collections.emptySet();
         } else {
             optimizationConfigs = StreamsConfig.verifyTopologyOptimizationConfigs(
-                (String) props.get(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));
+                (String) props.get(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)
+            );
         }
+
+        applyOptimizations(optimizationConfigs);
+    }
+
+    /**
+     * This method is called after the topology has been built, and it applies the optimizations
+     * based on the configuration set in the topology configs.
+     */
+    private void optimizeTopology() {
+        final StreamsConfig topicSpecificConfigs = internalTopologyBuilder.topologySpecificConfigs();
+        final String configValue = topicSpecificConfigs != null
+            ? topicSpecificConfigs.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)
+            : null;
+
+        final Set<String> optimizationConfigs = configValue != null
+            ? StreamsConfig.verifyTopologyOptimizationConfigs(configValue)
+            : Collections.emptySet();
+
+        applyOptimizations(optimizationConfigs);
+    }
+
+    private void applyOptimizations(final Set<String> optimizationConfigs) {
         if (optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
             LOG.debug("Optimizing the Kafka Streams graph for ktable source nodes");
             reuseKTableSourceTopics();

@@ -85,7 +85,7 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSi
  * If they are only set in the configs passed in to the KafkaStreams constructor, it will be too late for them
  * to be applied and the config will be ignored.
  */
-@SuppressWarnings("deprecation")
+@Deprecated
 public final class TopologyConfig extends AbstractConfig {
 
     public static class InternalConfig {
@@ -317,6 +317,7 @@ public final class TopologyConfig extends AbstractConfig {
      * @return the DslStoreSuppliers if the value was explicitly configured (either by
      *         {@link StreamsConfig#DEFAULT_DSL_STORE} or {@link StreamsConfig#DSL_STORE_SUPPLIERS_CLASS_CONFIG})
      */
+    @Deprecated
     public Optional<DslStoreSuppliers> resolveDslStoreSuppliers() {
         if (isTopologyOverride(DSL_STORE_SUPPLIERS_CLASS_CONFIG, topologyOverrides) || globalAppConfigs.originals().containsKey(DSL_STORE_SUPPLIERS_CLASS_CONFIG)) {
             return Optional.of(Utils.newInstance(dslStoreSuppliers, DslStoreSuppliers.class));

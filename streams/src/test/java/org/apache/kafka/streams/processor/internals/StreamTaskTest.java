@@ -46,7 +46,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.LockException;
@@ -101,7 +100,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -1675,7 +1673,7 @@ public class StreamTaskTest {
     public void shouldLogNotReadyWhenStaleAfterThreshold() throws Exception {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        
+
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1684,17 +1682,17 @@ public class StreamTaskTest {
 
         try (final LogCaptureAppender streamTaskAppender = LogCaptureAppender.createAndRegister(StreamTask.class);
              final LogCaptureAppender partitionGroupAppender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            
+
             // Enable TRACE logging for PartitionGroup to capture the "ready for processing" message
             partitionGroupAppender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            
+
             // Set lastNotReadyLogTime to 100 seconds ago
             final long initialTime = time.milliseconds();
             task.setLastNotReadyLogTime(initialTime - 100_000L);
-            
+
             // Advance time by 19.999 seconds
             long newTime = time.milliseconds() + 19_999L;
-            
+
             // Should not trigger logging after being stale for 119 seconds
             assertFalse(task.isProcessable(newTime));
             List<String> messages = streamTaskAppender.getMessages();
@@ -1705,7 +1703,7 @@ public class StreamTaskTest {
 
             // Should trigger logging after being stale for 120 seconds
             assertFalse(task.isProcessable(newTime));
-            
+
             // Validate INFO log from StreamTask about partition2 not being ready
             messages = streamTaskAppender.getMessages();
             final String expectedNotReadyMessage = "stream-thread [Test worker] task [0_0] Partition topic2-0 has fetched lag of -1\n\tWaiting to fetch data for topic2-0";
@@ -1719,7 +1717,7 @@ public class StreamTaskTest {
                 ))
             );
             assertThat(messages.get(0), equalTo(expectedNotReadyMessage));
-            
+
             // Validate TRACE log from PartitionGroup about partition1 being ready
             assertThat(
                 partitionGroupAppender.getEvents(),
@@ -2165,7 +2163,7 @@ public class StreamTaskTest {
             Set.of(partition1, repartition),
             topology,
             consumer,
-            new TopologyConfig(null, config, new Properties()).getTaskConfig(),
+            config.getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2787,7 +2785,7 @@ public class StreamTaskTest {
                 partitions,
                 topology,
                 consumer,
-                new TopologyConfig(null, createConfig("100"), new Properties()).getTaskConfig(),
+                createConfig("100").getTaskConfig(),
                 metrics,
                 stateDirectory,
                 cache,
@@ -3258,7 +3256,7 @@ public class StreamTaskTest {
             Set.of(partition1),
             topology,
             consumer,
-            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+            config.getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -3300,7 +3298,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+            config.getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -3334,7 +3332,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+            config.getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -3373,7 +3371,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+            config.getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -3408,7 +3406,7 @@ public class StreamTaskTest {
             Set.of(partition1),
             topology,
             consumer,
-            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+            config.getTaskConfig(),
             new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
@@ -3445,7 +3443,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+            config.getTaskConfig(),
             new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
@@ -3485,7 +3483,7 @@ public class StreamTaskTest {
                 partitions,
                 topology,
                 consumer,
-                new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+                config.getTaskConfig(),
                 new StreamsMetricsImpl(metrics, "test", time),
                 stateDirectory,
                 cache,
@@ -3521,10 +3519,9 @@ public class StreamTaskTest {
             singleton(partition1),
             topology,
             consumer,
-            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+            config.getTaskConfig(),
             new StreamsMetricsImpl(metrics, "test", time),
-            stateDirectory,
-            cache,
+            stateDirectory,                 cache,
             time,
             stateManager,
             recordCollector,
@@ -3554,7 +3551,7 @@ public class StreamTaskTest {
             Set.of(partition1),
             topology,
             consumer,
-            new TopologyConfig(null, config, new Properties()).getTaskConfig(),
+            config.getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,

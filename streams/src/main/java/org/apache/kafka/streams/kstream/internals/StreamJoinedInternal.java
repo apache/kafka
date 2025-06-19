@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
@@ -32,6 +33,7 @@ public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
     // store in the desired order (see comments in OuterStreamJoinFactory)
     private final DslStoreSuppliers passedInDslStoreSuppliers;
 
+    @SuppressWarnings("deprecation")
     //Needs to be public for testing
     public StreamJoinedInternal(
         final StreamJoined<K, V1, V2> streamJoined,
@@ -40,9 +42,14 @@ public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
         super(streamJoined);
         passedInDslStoreSuppliers = dslStoreSuppliers;
         if (dslStoreSuppliers == null) {
-            final TopologyConfig topologyConfig = builder.internalTopologyBuilder().topologyConfigs();
-            if (topologyConfig != null) {
-                dslStoreSuppliers = topologyConfig.resolveDslStoreSuppliers().orElse(null);
+            final StreamsConfig streamsConfig = builder.internalTopologyBuilder.topologySpecificConfigs();
+            if (streamsConfig != null) {
+                dslStoreSuppliers = streamsConfig.resolveDslStoreSuppliers().orElse(null);
+            } else {
+                final TopologyConfig topologyConfig = builder.internalTopologyBuilder().topologyConfigs();
+                if (topologyConfig != null) {
+                    dslStoreSuppliers = topologyConfig.resolveDslStoreSuppliers().orElse(null);
+                }
             }
         }
     }

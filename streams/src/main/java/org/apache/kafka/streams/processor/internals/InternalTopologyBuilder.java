@@ -27,6 +27,7 @@ import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.AutoOffsetResetInternal;
+import org.apache.kafka.streams.kstream.internals.TaskConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -66,28 +67,55 @@ import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 
+@SuppressWarnings("deprecation")
 public class InternalTopologyBuilder {
 
     public InternalTopologyBuilder() {
         this.topologyName = null;
         this.ensureExplicitInternalResourceNaming = false;
         this.processorWrapper = new NoOpProcessorWrapper();
+        this.dslStoreSuppliers = null;
     }
 
+    @Deprecated
     public InternalTopologyBuilder(final TopologyConfig topologyConfigs) {
         Objects.requireNonNull(topologyConfigs, "topologyConfigs cannot be null");
 
         this.topologyConfigs = topologyConfigs;
         this.topologyName = topologyConfigs.topologyName;
         this.ensureExplicitInternalResourceNaming = topologyConfigs.ensureExplicitInternalResourceNaming;
+        this.dslStoreSuppliers = topologyConfigs.dslStoreSuppliers;
         try {
             processorWrapper = topologyConfigs.getConfiguredInstance(
                 PROCESSOR_WRAPPER_CLASS_CONFIG,
                 ProcessorWrapper.class,
                 topologyConfigs.originals()
+            );
+        } catch (final Exception e) {
+            final String errorMessage = String.format(
+                "Unable to instantiate ProcessorWrapper from value of config %s. Please provide a valid class "
+                    + "that implements the ProcessorWrapper interface.", PROCESSOR_WRAPPER_CLASS_CONFIG);
+            log.error(errorMessage, e);
+            throw new ConfigException(errorMessage, e);
+        }
+    }
+
+    public InternalTopologyBuilder(final StreamsConfig topologySpecificConfigs) {
+        Objects.requireNonNull(topologySpecificConfigs, "streamConfigs cannot be null");
+
+        this.topologySpecificConfigs = topologySpecificConfigs;
+        this.topologyName = null;
+        this.ensureExplicitInternalResourceNaming = topologySpecificConfigs.ensureExplicitInternalResourceNaming;
+        this.dslStoreSuppliers = topologySpecificConfigs.dslStoreSuppliers;
+        try {
+            processorWrapper = topologySpecificConfigs.getConfiguredInstance(
+                PROCESSOR_WRAPPER_CLASS_CONFIG,
+                ProcessorWrapper.class,
+                topologySpecificConfigs.originals()
             );
         } catch (final Exception e) {
             final String errorMessage = String.format(
@@ -194,13 +222,20 @@ public class InternalTopologyBuilder {
 
     // TODO KAFKA-13283: once we enforce all configs be passed in when constructing the topology builder then we can set
     //  this up front and make it final, but for now we have to wait for the global app configs passed in to rewriteTopology
+    @SuppressWarnings("deprecation")
     private TopologyConfig topologyConfigs;  // the configs for this topology, including overrides and global defaults
+
+    private StreamsConfig topologySpecificConfigs;
+
+    private TaskConfig taskConfig;
 
     private boolean hasPersistentStores = false;
 
     private final boolean ensureExplicitInternalResourceNaming;
 
     private final Set<InternalResourcesNaming> implicitInternalNames = new LinkedHashSet<>();
+
+    public final Class<?> dslStoreSuppliers;
 
     public static class ReprocessFactory<KIn, VIn, KOut, VOut> {
 
@@ -411,6 +446,9 @@ public class InternalTopologyBuilder {
             ? new Properties()
             : topologyConfigs.topologyOverrides;
         topologyConfigs = new TopologyConfig(topologyName, applicationConfig, topologyOverrides);
+
+        topologySpecificConfigs = applicationConfig;
+        taskConfig = applicationConfig.getTaskConfig();
     }
 
     @SuppressWarnings("deprecation")
@@ -418,8 +456,17 @@ public class InternalTopologyBuilder {
         this.namedTopology = namedTopology;
     }
 
+    @Deprecated
     public synchronized TopologyConfig topologyConfigs() {
         return topologyConfigs;
+    }
+
+    public synchronized StreamsConfig topologySpecificConfigs() {
+        return topologySpecificConfigs;
+    }
+
+    public synchronized TaskConfig taskConfigs() {
+        return taskConfig;
     }
 
     public String topologyName() {
@@ -438,7 +485,7 @@ public class InternalTopologyBuilder {
         setStreamsConfig(config);
 
         // maybe strip out caching layers
-        if (topologyConfigs.cacheSize == 0L) {
+        if (topologyConfigs.cacheSize == 0L && topologySpecificConfigs.cacheSize == 0L) {
             for (final StoreFactory storeFactory : stateFactories.values()) {
                 storeFactory.withCachingDisabled();
             }
@@ -455,6 +502,76 @@ public class InternalTopologyBuilder {
         }
 
         return this;
+    }
+
+    /**
+     * Verify that the topology-specific configs are set correctly in the provided {@link StreamsConfig}.
+     * This method checks that the configs are set in both the topology and the StreamsConfig, and that they match.
+     *
+     * @param config the {@link StreamsConfig} to verify against
+     * @throws TopologyException if any of the topology-specific configs are not set correctly
+     */
+    public void verifySpecificTopologyConfig(final StreamsConfig config) {
+        Objects.requireNonNull(config, "config cannot be null");
+
+        // check that the topology configs is set
+        if (topologySpecificConfigs == null) {
+            return;
+        }
+
+        final StringBuilder resultException = new StringBuilder();
+        final StringBuilder resultLog = new StringBuilder();
+
+        verifyConfig(
+            config.originals().get(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG),
+            topologySpecificConfigs.originals().get(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG),
+            ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG,
+            ensureExplicitInternalResourceNaming,
+            resultException,
+            resultLog
+        );
+        verifyConfig(
+            config.originals().get(DEFAULT_DSL_STORE_CONFIG),
+            topologySpecificConfigs.originals().get(DEFAULT_DSL_STORE_CONFIG),
+            DEFAULT_DSL_STORE_CONFIG,
+            topologySpecificConfigs.originals().get(DEFAULT_DSL_STORE_CONFIG),
+            resultException,
+            resultLog
+        );
+        verifyConfig(
+            config.originals().get(PROCESSOR_WRAPPER_CLASS_CONFIG),
+            topologySpecificConfigs.originals().get(PROCESSOR_WRAPPER_CLASS_CONFIG),
+            PROCESSOR_WRAPPER_CLASS_CONFIG,
+            processorWrapper,
+            resultException,
+            resultLog
+        );
+
+        if (resultLog.length() > 0) {
+            log.warn(resultLog.toString());
+        }
+        if (resultException.length() > 0) {
+            throw new TopologyException(resultException.toString());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> void verifyConfig(final Object configValue,
+                                  final Object topologyValue,
+                                  final String configKey,
+                                  final Object expectedTopologyValue,
+                                  final StringBuilder exceptionBuilder,
+                                  final StringBuilder logBuilder
+    ) {
+        final T original = (T) configValue;
+        final T topology = (T) topologyValue;
+
+        if (original != null && topology == null) {
+            exceptionBuilder.append(String.format("The topology-specific config %s is set in StreamsConfig but not applied to the topology.%n", configKey));
+        } else if (original != null && !original.equals(expectedTopologyValue)) {
+            logBuilder.append(String.format("The topology-specific config %s has different values in the topology %s and in StreamsConfig %s.%n",
+                configKey, expectedTopologyValue, original));
+        }
     }
 
     private void verifyName(final String name) {

@@ -26,8 +26,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.internals.TaskConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -253,7 +253,7 @@ public class ActiveTaskCreatorTest {
         final ProcessorTopology topology = mock(ProcessorTopology.class);
         final SourceNode sourceNode = mock(SourceNode.class);
 
-        when(builder.topologyConfigs()).thenReturn(new TopologyConfig(new StreamsConfig(properties)));
+        when(builder.taskConfigs()).thenReturn(new TaskConfig(0, 0, 1000, null, null, null, false));
         when(builder.buildSubtopology(0)).thenReturn(topology);
         when(topology.sinkTopics()).thenReturn(emptySet());
         when(stateDirectory.getOrCreateDirectoryForTask(task00)).thenReturn(mock(File.class));

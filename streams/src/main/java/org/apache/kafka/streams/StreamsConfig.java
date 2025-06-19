@@ -49,6 +49,8 @@ import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.SessionWindowedSerializer;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
+import org.apache.kafka.streams.kstream.internals.TaskConfig;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor;
@@ -57,6 +59,7 @@ import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
+import org.apache.kafka.streams.state.DslStoreSuppliers;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,8 +74,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -82,6 +87,7 @@ import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.parseType;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSize;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
@@ -1481,6 +1487,18 @@ public class StreamsConfig extends AbstractConfig {
         this(props, true);
     }
 
+
+    public final int maxBufferedSize;
+    public final long cacheSize;
+    public final long maxTaskIdleMs;
+    public final long taskTimeoutMs;
+    public final String storeType;
+    public final Class<?> dslStoreSuppliers;
+    public final Supplier<TimestampExtractor> timestampExtractorSupplier;
+    public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
+    public final Supplier<ProcessingExceptionHandler> processingExceptionHandlerSupplier;
+    public final boolean ensureExplicitInternalResourceNaming;
+
     @SuppressWarnings("this-escape")
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
@@ -1489,9 +1507,39 @@ public class StreamsConfig extends AbstractConfig {
         if (eosEnabled) {
             verifyEOSTransactionTimeoutCompatibility();
         }
+
+        this.maxBufferedSize = this.getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        this.cacheSize = totalCacheSize(this);
+        this.maxTaskIdleMs = getLong(MAX_TASK_IDLE_MS_CONFIG);
+        this.taskTimeoutMs = getLong(TASK_TIMEOUT_MS_CONFIG);
+        this.timestampExtractorSupplier = () -> getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+
+        final String deserializationExceptionHandlerKey = (originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)
+                || originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)) ?
+                DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG :
+                DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
+        this.deserializationExceptionHandlerSupplier = () -> getConfiguredInstance(deserializationExceptionHandlerKey, DeserializationExceptionHandler.class);
+
+        this.processingExceptionHandlerSupplier = () -> getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
+        this.storeType = getString(DEFAULT_DSL_STORE_CONFIG);
+        this.dslStoreSuppliers = getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+        this.ensureExplicitInternalResourceNaming = getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG);
+
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
         verifyClientTelemetryConfigs();
         verifyStreamsProtocolCompatibility(doLog);
+    }
+
+    public TaskConfig getTaskConfig() {
+        return new TaskConfig(
+                maxTaskIdleMs,
+                taskTimeoutMs,
+                maxBufferedSize,
+                timestampExtractorSupplier.get(),
+                deserializationExceptionHandlerSupplier.get(),
+                processingExceptionHandlerSupplier.get(),
+                eosEnabled
+        );
     }
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
@@ -2109,6 +2157,20 @@ public class StreamsConfig extends AbstractConfig {
 
     protected boolean isStreamsProtocolEnabled() {
         return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name());
+    }
+
+    /**
+     * @return the DslStoreSuppliers if the value was explicitly configured (either by
+     *         {@link StreamsConfig#DEFAULT_DSL_STORE} or {@link StreamsConfig#DSL_STORE_SUPPLIERS_CLASS_CONFIG})
+     */
+    public Optional<DslStoreSuppliers> resolveDslStoreSuppliers() {
+        if (this.originals().containsKey(DSL_STORE_SUPPLIERS_CLASS_CONFIG)) {
+            return Optional.of(Utils.newInstance(dslStoreSuppliers, DslStoreSuppliers.class));
+        } else if (this.originals().containsKey(DEFAULT_DSL_STORE_CONFIG)) {
+            return Optional.of(MaterializedInternal.parse(storeType));
+        } else {
+            return Optional.empty();
+        }
     }
 
     /**
