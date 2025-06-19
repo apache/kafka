@@ -43,7 +43,7 @@ import java.util.Optional;
  */
 public class ControllerMutationQuotaManager extends ClientQuotaManager {
 
-    private static final Logger log = LoggerFactory.getLogger(ControllerMutationQuotaManager.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ControllerMutationQuotaManager.class);
 
     /**
      * @param config ClientQuotaManagerConfig quota configs
@@ -111,8 +111,8 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
             return 0;
         } catch (QuotaViolationException e) {
             int throttleTimeMs = (int) throttleTimeMs(e);
-            if (log.isDebugEnabled()) {
-                log.debug("Quota violated for sensor ({}). Delay time: ({})",
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Quota violated for sensor ({}). Delay time: ({})",
                         quotaSensor.name(), throttleTimeMs);
             }
             return throttleTimeMs;
