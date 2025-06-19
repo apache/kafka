@@ -33,15 +33,16 @@ import org.apache.kafka.common.utils.Time;
 
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
@@ -84,16 +85,23 @@ public class TopicMetadataRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // Prune any requests which have timed out
-        List<TopicMetadataRequestState> expiredRequests = inflightRequests.stream()
-                .filter(TimedRequestState::isExpired)
-                .collect(Collectors.toList());
-        expiredRequests.forEach(TopicMetadataRequestState::expire);
+        Iterator<TopicMetadataRequestState> requestStateIterator = inflightRequests.iterator();
 
-        List<NetworkClientDelegate.UnsentRequest> requests = inflightRequests.stream()
-            .map(req -> req.send(currentTimeMs))
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .collect(Collectors.toList());
+        while (requestStateIterator.hasNext()) {
+            TopicMetadataRequestState requestState = requestStateIterator.next();
+
+            if (requestState.isExpired()) {
+                requestState.expire();
+                requestStateIterator.remove();
+            }
+        }
+
+        List<NetworkClientDelegate.UnsentRequest> requests = new ArrayList<>();
+
+        for (TopicMetadataRequestState request : inflightRequests) {
+            Optional<NetworkClientDelegate.UnsentRequest> unsentRequest = request.send(currentTimeMs);
+            unsentRequest.ifPresent(requests::add);
+        }
 
         return requests.isEmpty() ? EMPTY : new NetworkClientDelegate.PollResult(0, requests);
     }
@@ -181,7 +189,9 @@ public class TopicMetadataRequestManager implements RequestManager {
         }
 
         private void expire() {
-            completeFutureAndRemoveRequest(
+            // The request state is removed from inflightRequests via an iterator by the caller of this method,
+            // so don't remove it from inflightRequests here.
+            future.completeExceptionally(
                     new TimeoutException("Timeout expired while fetching topic metadata"));
         }
 
