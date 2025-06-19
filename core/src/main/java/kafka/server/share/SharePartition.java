@@ -501,8 +501,12 @@ public class SharePartition {
 
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    log.error("Failed to initialize the share partition: {}-{}. Exception occurred: {}.",
+                    log.debug("Failed to initialize the share partition: {}-{}. Exception occurred: {}.",
                         groupId, topicIdPartition, partitionData);
+                    if (!(ex instanceof UnknownServerException)) {
+                        log.error("Failed to initialize the share partition: {}-{}. Exception occurred: {}.",
+                            groupId, topicIdPartition, partitionData);
+                    }
                     throwable = ex;
                     return;
                 }
@@ -2324,8 +2328,12 @@ public class SharePartition {
                 PartitionErrorData partitionData = state.partitions().get(0);
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    log.error("Failed to write the share group state for share partition: {}-{} due to exception",
+                    log.debug("Failed to write the share group state for share partition: {}-{} due to exception",
                         groupId, topicIdPartition, ex);
+                    if (!(ex instanceof UnknownServerException)) {
+                        log.error("Failed to write the share group state for share partition: {}-{} due to exception",
+                            groupId, topicIdPartition, ex);
+                    }
                     future.completeExceptionally(ex);
                     return;
                 }
