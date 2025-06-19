@@ -31,7 +31,6 @@ import java.util.Set;
  */
 public class ShareGroupMessageFormatter extends CoordinatorRecordMessageFormatter {
     private static final Set<Short> ALLOWED_RECORDS = Set.of(
-        CoordinatorRecordType.SHARE_GROUP_PARTITION_METADATA.id(),
         CoordinatorRecordType.SHARE_GROUP_MEMBER_METADATA.id(),
         CoordinatorRecordType.SHARE_GROUP_METADATA.id(),
         CoordinatorRecordType.SHARE_GROUP_TARGET_ASSIGNMENT_METADATA.id(),

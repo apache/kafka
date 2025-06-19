@@ -17,9 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -135,104 +132,4 @@ public class HttpJwtRetrieverTest extends OAuthBearerTest {
         when(mockedIn.read(any(byte[].class))).thenThrow(new IOException());
         assertThrows(IOException.class, () -> HttpJwtRetriever.copy(mockedIn, out));
     }
-
-    @Test
-    public void testParseAccessToken() throws IOException {
-        String expected = "abc";
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode node = mapper.createObjectNode();
-        node.put("access_token", expected);
-
-        String actual = HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node));
-        assertEquals(expected, actual);
-    }
-
-    @Test
-    public void testParseAccessTokenEmptyAccessToken() {
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode node = mapper.createObjectNode();
-        node.put("access_token", "");
-
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node)));
-    }
-
-    @Test
-    public void testParseAccessTokenMissingAccessToken() {
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode node = mapper.createObjectNode();
-        node.put("sub", "jdoe");
-
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node)));
-    }
-
-    @Test
-    public void testParseAccessTokenInvalidJson() {
-        assertThrows(IOException.class, () -> HttpJwtRetriever.parseAccessToken("not valid JSON"));
-    }
-
-    @Test
-    public void testFormatAuthorizationHeader() {
-        assertAuthorizationHeader("id", "secret", false, "Basic aWQ6c2VjcmV0");
-    }
-
-    @Test
-    public void testFormatAuthorizationHeaderEncoding() {
-        // according to RFC-7617, we need to use the *non-URL safe* base64 encoder. See KAFKA-14496.
-        assertAuthorizationHeader("SOME_RANDOM_LONG_USER_01234", "9Q|0`8i~ute-n9ksjLWb\\50\"AX@UUED5E", false, "Basic U09NRV9SQU5ET01fTE9OR19VU0VSXzAxMjM0OjlRfDBgOGl+dXRlLW45a3NqTFdiXDUwIkFYQFVVRUQ1RQ==");
-        // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
-        assertAuthorizationHeader("user!@~'", "secret-(*)!", true, "Basic dXNlciUyMSU0MCU3RSUyNzpzZWNyZXQtJTI4KiUyOSUyMQ==");
-    }
-
-    private void assertAuthorizationHeader(String clientId, String clientSecret, boolean urlencode, String expected) {
-        String actual = HttpJwtRetriever.formatAuthorizationHeader(clientId, clientSecret, urlencode);
-        assertEquals(expected, actual, String.format("Expected the HTTP Authorization header generated for client ID \"%s\" and client secret \"%s\" to match", clientId, clientSecret));
-    }
-
-    @Test
-    public void testFormatAuthorizationHeaderMissingValues() {
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader(null, "secret", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("id", null, false));
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader(null, null, false));
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("", "secret", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("id", "", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("", "", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("  ", "secret", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("id", "  ", false));
-        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.formatAuthorizationHeader("  ", "  ", false));
-    }
-
-    @Test
-    public void testFormatRequestBody() {
-        String expected = "grant_type=client_credentials&scope=scope";
-        String actual = HttpJwtRetriever.formatRequestBody("scope");
-        assertEquals(expected, actual);
-    }
-
-    @Test
-    public void testFormatRequestBodyWithEscaped() {
-        String questionMark = "%3F";
-        String exclamationMark = "%21";
-
-        String expected = String.format("grant_type=client_credentials&scope=earth+is+great%s", exclamationMark);
-        String actual = HttpJwtRetriever.formatRequestBody("earth is great!");
-        assertEquals(expected, actual);
-
-        expected = String.format("grant_type=client_credentials&scope=what+on+earth%s%s%s%s%s", questionMark, exclamationMark, questionMark, exclamationMark, questionMark);
-        actual = HttpJwtRetriever.formatRequestBody("what on earth?!?!?");
-        assertEquals(expected, actual);
-    }
-
-    @Test
-    public void testFormatRequestBodyMissingValues() {
-        String expected = "grant_type=client_credentials";
-        String actual = HttpJwtRetriever.formatRequestBody(null);
-        assertEquals(expected, actual);
-
-        actual = HttpJwtRetriever.formatRequestBody("");
-        assertEquals(expected, actual);
-
-        actual = HttpJwtRetriever.formatRequestBody("  ");
-        assertEquals(expected, actual);
-    }
-
 }

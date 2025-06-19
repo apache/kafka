@@ -55,8 +55,9 @@ object RaftControllerNodeProvider {
     raftManager: RaftManager[ApiMessageAndVersion],
     config: KafkaConfig,
   ): RaftControllerNodeProvider = {
-    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.get(0))
+    val controllerSecurityProtocol = Option(config.effectiveListenerSecurityProtocolMap.get(controllerListenerName))
+      .getOrElse(SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
     new RaftControllerNodeProvider(
       raftManager,

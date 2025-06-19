@@ -116,6 +116,9 @@ public enum MetadataVersion {
     // Streams groups are early access in 4.1 (KIP-1071).
     IBP_4_1_IV0(26, "4.1", "IV0", false),
 
+    // Send FETCH version 18 in the replica fetcher (KIP-1166)
+    IBP_4_1_IV1(27, "4.1", "IV1", false),
+
     // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of
     // IBP_4_2_IVx accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
     // a placeholder.
@@ -126,7 +129,7 @@ public enum MetadataVersion {
     // *** SHARE GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A SHARE   ***
     // *** GROUPS FEATURE TO BE DEFINED IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON ***
     // *** DYNAMICALLY TO TRY OUT THE PREVIEW CAPABILITY.                                      ***
-    IBP_4_2_IV0(27, "4.2", "IV0", false),
+    IBP_4_2_IV0(28, "4.2", "IV0", false),
 
     // Enables "streams" groups by default for new clusters (KIP-1071).
     //
@@ -134,7 +137,7 @@ public enum MetadataVersion {
     // *** STREAMS GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A STREAMS ***
     // *** GROUPS FEATURE TO BE DEFINED IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON   ***
     // *** DYNAMICALLY TO TRY OUT THE EARLY ACCESS CAPABILITY.                                   ***
-    IBP_4_2_IV1(28, "4.2", "IV1", false);
+    IBP_4_2_IV1(29, "4.2", "IV1", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -264,13 +267,15 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_9_IV0)) {
+        if (isAtLeast(IBP_4_1_IV1)) {
+            return 18;
+        } else if (isAtLeast(IBP_3_9_IV0)) {
             return 17;
-        } else if (this.isAtLeast(IBP_3_7_IV4)) {
+        } else if (isAtLeast(IBP_3_7_IV4)) {
             return 16;
-        } else if (this.isAtLeast(IBP_3_5_IV1)) {
+        } else if (isAtLeast(IBP_3_5_IV1)) {
             return 15;
-        } else if (this.isAtLeast(IBP_3_5_IV0)) {
+        } else if (isAtLeast(IBP_3_5_IV0)) {
             return 14;
         } else {
             return 13;
