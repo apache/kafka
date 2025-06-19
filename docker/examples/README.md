@@ -18,7 +18,7 @@ Installation Prepration
 
 Note that the `Docker` version **must be >= 20.10.4**.
 
-The prior Docker versions (e.g., 17.03.x–20.10.3) may cause permission errors when running the Kafka container, as they do not correctly set directory permissions when creating container paths like `/opt/kafka/config`.
+The prior Docker versions may cause permission errors when running the Kafka container, as they do not correctly set directory permissions when creating container paths like `/opt/kafka/config`.
 
 If you are using the prior version, you may encounter the following error during container startup:
 ```text
