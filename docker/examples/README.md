@@ -13,6 +13,25 @@ Kafka server can be started using following ways:
 - File input
 - Environment variables
 
+Installation Preparation
+------------
+
+Note that the `Docker` version **must be >= 20.10.4**.
+
+The prior Docker versions may cause permission errors when running the Kafka container, as they do not correctly set directory permissions when creating container paths like `/opt/kafka/config`.
+
+If you are using the prior version, you may encounter the following error during container startup:
+```text
+===> User
+uid=1000(appuser) gid=1000(appuser) groups=1000(appuser)
+===> Setting default values of environment variables if not already set.
+===> Configuring …
+Running in KRaft mode…
+/opt/kafka/config/ file not writable
+```
+
+To avoid this, **please upgrade Docker to 20.10.4 or later**.
+
 Running on default configs
 --------------------------
 
