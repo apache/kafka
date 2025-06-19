@@ -70,7 +70,7 @@ public class SubscriptionStateTest {
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
         assertEquals(1L, state.position(tp0).offset);
-        state.assignFromUser(Collections.emptySet());
+        state.assignFromUser(Set.of());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
         assertFalse(state.isAssigned(tp0));
@@ -197,7 +197,7 @@ public class SubscriptionStateTest {
 
         state.unsubscribe();
         assertEquals(2, state.assignmentId());
-        assertEquals(Collections.emptySet(), state.assignedPartitions());
+        assertEquals(Set.of(), state.assignedPartitions());
 
         Set<TopicPartition> autoAssignment = Set.of(t1p0);
         state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
