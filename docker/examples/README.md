@@ -32,8 +32,6 @@ Running in KRaft mode…
 
 To avoid this, **please upgrade Docker to 20.10.4 or later**.
 
-This issue was fixed in Docker [20.10.4 release](https://docs.docker.com/engine/release-notes/20.10/#20104), specifically in Use 0755 permissions when creating missing directories [moby/moby#42017](https://github.com/moby/moby/pull/42017).
-
 Running on default configs
 --------------------------
 
