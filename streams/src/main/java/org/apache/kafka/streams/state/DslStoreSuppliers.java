@@ -17,9 +17,10 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.StreamsBuilder;
 
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * {@code DslStoreSuppliers} defines a grouping of factories to construct
@@ -36,8 +37,8 @@ import java.util.Map;
  *     {@link org.apache.kafka.streams.kstream.StreamJoined#withDslStoreSuppliers(DslStoreSuppliers)}</li>
  *
  *     <li>Passed in via a Topology configuration override (configured in a
- *     {@link org.apache.kafka.streams.TopologyConfig} and passed into the
- *     {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig)} constructor</li>
+ *     Properties or Map and passed into the
+ *     {@link StreamsBuilder#StreamsBuilder(Properties)} or {@link StreamsBuilder#StreamsBuilder(Map)} constructors</li>
  *
  *     <li>Configured as a global default in {@link org.apache.kafka.streams.StreamsConfig} using
  *     the {@link org.apache.kafka.streams.StreamsConfig#DSL_STORE_SUPPLIERS_CLASS_CONFIG}</li>

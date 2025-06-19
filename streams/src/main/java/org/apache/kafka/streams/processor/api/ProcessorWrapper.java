@@ -20,12 +20,11 @@ package org.apache.kafka.streams.processor.api;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper.WrappedFixedKeyProcessorSupplierImpl;
 import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper.WrappedProcessorSupplierImpl;
 
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Wrapper class that can be used to inject custom wrappers around the processors of their application topology.
@@ -35,12 +34,12 @@ import java.util.Map;
  * while testing or debugging an application topology).
  * <p>
  * NOTE: in order to use this feature, you must set the {@link StreamsConfig#PROCESSOR_WRAPPER_CLASS_CONFIG} config and pass it
- * in as a {@link TopologyConfig} when creating the {@link StreamsBuilder} or {@link Topology} by using the
- * appropriate constructor (ie {@link StreamsBuilder#StreamsBuilder(TopologyConfig)} or {@link Topology#Topology(TopologyConfig)})
+ * in as a Properties or Map when creating the {@link StreamsBuilder} by using the
+ * appropriate constructor (ie {@link StreamsBuilder#StreamsBuilder(Properties)} or {@link StreamsBuilder#StreamsBuilder(Map)})
  * <p>
  * Can be configured, if desired, by implementing the {@link #configure(Map)} method. This will be invoked when
- * the {@code ProcessorWrapper} is instantiated, and will provide it with the TopologyConfigs that were passed in
- * to the {@link StreamsBuilder} or {@link Topology} constructor.
+ * the {@code ProcessorWrapper} is instantiated, and will provide it with the StreamsConfig that were passed in
+ * to one of the {@link StreamsBuilder} constructors.
  */
 public interface ProcessorWrapper extends Configurable {
 

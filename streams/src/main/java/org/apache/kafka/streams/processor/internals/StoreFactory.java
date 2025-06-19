@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -43,7 +45,8 @@ import java.util.Set;
  *     creation of the Topology but before the stores themselves are created.
  *     This allows Kafka Streams to respect configurations such as
  *     {@link StreamsConfig#DEFAULT_DSL_STORE_CONFIG} even if it isn't passed
- *     to {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig)}</li>
+ *     to {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig)},
+ *     {@link StreamsBuilder#StreamsBuilder(Properties)} or {@link StreamsBuilder#StreamsBuilder(Map)}</li>
  * </ul>
  */
 public interface StoreFactory extends ConfigurableStore {
