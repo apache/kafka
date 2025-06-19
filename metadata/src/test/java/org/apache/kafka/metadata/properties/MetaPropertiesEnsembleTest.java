@@ -28,7 +28,6 @@ import java.nio.file.Files;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -53,8 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public final class MetaPropertiesEnsembleTest {
     private static final MetaPropertiesEnsemble FOO =
         new MetaPropertiesEnsemble(
-            new HashSet<>(List.of("/tmp/empty1", "/tmp/empty2")),
-            new HashSet<>(List.of("/tmp/error3")),
+            Set.of("/tmp/empty1", "/tmp/empty2"),
+            Set.of("/tmp/error3"),
             Stream.of(
                 new SimpleImmutableEntry<>("/tmp/dir4",
                     new MetaProperties.Builder().
@@ -93,34 +92,34 @@ public final class MetaPropertiesEnsembleTest {
 
     @Test
     public void testEmptyLogDirsForFoo() {
-        assertEquals(new HashSet<>(List.of("/tmp/empty1", "/tmp/empty2")),
+        assertEquals(Set.of("/tmp/empty1", "/tmp/empty2"),
             FOO.emptyLogDirs());
     }
 
     @Test
     public void testEmptyLogDirsForEmpty() {
-        assertEquals(new HashSet<>(), EMPTY.emptyLogDirs());
+        assertEquals(Set.of(), EMPTY.emptyLogDirs());
     }
 
     @Test
     public void testErrorLogDirsForFoo() {
-        assertEquals(new HashSet<>(List.of("/tmp/error3")), FOO.errorLogDirs());
+        assertEquals(Set.of("/tmp/error3"), FOO.errorLogDirs());
     }
 
     @Test
     public void testErrorLogDirsForEmpty() {
-        assertEquals(new HashSet<>(), EMPTY.errorLogDirs());
+        assertEquals(Set.of(), EMPTY.errorLogDirs());
     }
 
     @Test
     public void testLogDirPropsForFoo() {
-        assertEquals(new HashSet<>(List.of("/tmp/dir4", "/tmp/dir5")),
+        assertEquals(Set.of("/tmp/dir4", "/tmp/dir5"),
             FOO.logDirProps().keySet());
     }
 
     @Test
     public void testLogDirPropsForEmpty() {
-        assertEquals(new HashSet<>(),
+        assertEquals(Set.of(),
             EMPTY.logDirProps().keySet());
     }
 
