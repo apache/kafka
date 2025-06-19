@@ -200,7 +200,6 @@ public class ClientQuotaManager {
     protected final Metrics metrics;
     private final QuotaType quotaType;
     protected final Time time;
-    private final Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final SensorAccess sensorAccessor;
@@ -254,24 +253,19 @@ public class ClientQuotaManager {
         this.metrics = metrics;
         this.quotaType = quotaType;
         this.time = time;
-        this.clientQuotaCallbackPlugin = clientQuotaCallbackPlugin;
-
         this.sensorAccessor = new SensorAccess(lock, metrics);
         this.clientQuotaType = QuotaType.toClientQuotaType(quotaType);
-
         this.quotaTypesEnabled = clientQuotaCallbackPlugin.isPresent() ?
                 CUSTOM_QUOTAS : NO_QUOTAS;
-
         this.delayQueueSensor = metrics.sensor(quotaType + "-delayQueue");
         this.delayQueueSensor.add(metrics.metricName("queue-size", quotaType.toString(),
                 "Tracks the size of the delay queue"), new CumulativeSum());
         this.throttledChannelReaper = new ThrottledChannelReaper(delayQueue, threadNamePrefix);
-
         this.quotaCallback = clientQuotaCallbackPlugin
                 .map(Plugin::get)
                 .orElse(new DefaultQuotaCallback());
 
-        start(); // Use the start method to keep spotbugs happy
+        start(); // Extract thread start to separate method to avoid SC_START_IN_CTOR warning
     }
 
     public ClientQuotaManager(ClientQuotaManagerConfig config,
