@@ -73,6 +73,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -259,7 +260,7 @@ public class TopicCommandTest {
                 .configs(Collections.emptyMap());
 
         verify(adminClient, times(1)).createTopics(
-                eq(new HashSet<>(Arrays.asList(expectedNewTopic))),
+                eq(Set.of(expectedNewTopic)),
                 argThat(exception -> !exception.shouldRetryOnQuotaViolation())
         );
     }
