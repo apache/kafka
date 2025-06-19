@@ -443,7 +443,7 @@ public interface ClusterInstance {
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
                 if (cause instanceof UnknownTopicOrPartitionException ||
-                    cause instanceof LeaderNotAvailableException) {
+                        cause instanceof LeaderNotAvailableException) {
                     continue;
                 } else {
                     throw e;
@@ -455,5 +455,13 @@ public interface ClusterInstance {
 
         throw new AssertionError("Timing out after " + timeoutMs +
                 " ms since a leader was not elected for partition " + topicPartition);
+    }
+
+    default List<Integer> boundPorts() {
+        return brokers().values().stream()
+                .map(KafkaBroker::socketServer)
+                .map(s -> s.boundPort(clientListener()))
+                .toList();
+
     }
 }
