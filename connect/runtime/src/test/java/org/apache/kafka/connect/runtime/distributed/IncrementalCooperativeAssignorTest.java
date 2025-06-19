@@ -923,7 +923,7 @@ public class IncrementalCooperativeAssignorTest {
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
                 new ArrayList<>(configuredAssignment.values()));
 
-        Set<String> expectedWorkers = new HashSet<>(Arrays.asList(newWorker, flakyWorker));
+        Set<String> expectedWorkers = Set.of(newWorker, flakyWorker);
         assertEquals(expectedWorkers,
             assignor.candidateWorkersForReassignment,
             "Wrong set of workers for reassignments");
@@ -1455,7 +1455,7 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     private void assertWorkers(String... workers) {
-        assertEquals(new HashSet<>(Arrays.asList(workers)), returnedAssignments.allWorkers(), "Wrong set of workers");
+        assertEquals(Set.of(workers), returnedAssignments.allWorkers(), "Wrong set of workers");
     }
 
     /**
