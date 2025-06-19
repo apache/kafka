@@ -16,6 +16,7 @@
  */
 package unit.kafka.server
 
+import kafka.network.SocketServer
 import kafka.server.{BrokerServer, ControllerServer}
 import org.apache.kafka.common.test.api.{ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
@@ -68,6 +69,20 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
         .setBrokerId(sourceBroker.config.brokerId)
         .setBrokerEpoch(sourceBroker.lifecycleManager.brokerEpoch)
     ).build()
-    IntegrationTestUtils.connectAndReceive[AllocateProducerIdsResponse](allocateRequest, cluster.boundPorts().get(0))
+
+    connectAndReceive(
+      controllerServer.socketServer,
+      allocateRequest
+    )
+  }
+
+  private def connectAndReceive(
+    controllerSocketServer: SocketServer,
+    request: AllocateProducerIdsRequest
+  ): AllocateProducerIdsResponse = {
+    IntegrationTestUtils.connectAndReceive[AllocateProducerIdsResponse](
+      request,
+      controllerSocketServer.boundPort(cluster.controllerListenerName())
+    )
   }
 }
