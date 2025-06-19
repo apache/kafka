@@ -36,12 +36,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
-import static java.util.Collections.singleton;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,8 +63,8 @@ public class SubscriptionStateTest {
 
     @Test
     public void partitionAssignment() {
-        state.assignFromUser(singleton(tp0));
-        assertEquals(singleton(tp0), state.assignedPartitions());
+        state.assignFromUser(Set.of(tp0));
+        assertEquals(Set.of(tp0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
         assertFalse(state.hasAllFetchPositions());
         state.seek(tp0, 1);
@@ -91,20 +91,20 @@ public class SubscriptionStateTest {
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
 
-        state.subscribe(singleton(topic1), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
         // assigned partitions should remain unchanged
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
 
-        assertTrue(state.checkAssignmentMatchedSubscription(singleton(t1p0)));
-        state.assignFromSubscribed(singleton(t1p0));
+        assertTrue(state.checkAssignmentMatchedSubscription(Set.of(t1p0)));
+        state.assignFromSubscribed(Set.of(t1p0));
         // assigned partitions should immediately change
-        assertEquals(singleton(t1p0), state.assignedPartitions());
+        assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
 
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
         // assigned partitions should remain unchanged
-        assertEquals(singleton(t1p0), state.assignedPartitions());
+        assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
 
         state.unsubscribe();
@@ -115,24 +115,24 @@ public class SubscriptionStateTest {
 
     @Test
     public void testGroupSubscribe() {
-        state.subscribe(singleton(topic1), Optional.of(rebalanceListener));
-        assertEquals(singleton(topic1), state.metadataTopics());
+        state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
+        assertEquals(Set.of(topic1), state.metadataTopics());
 
-        assertFalse(state.groupSubscribe(singleton(topic1)));
-        assertEquals(singleton(topic1), state.metadataTopics());
+        assertFalse(state.groupSubscribe(Set.of(topic1)));
+        assertEquals(Set.of(topic1), state.metadataTopics());
 
         assertTrue(state.groupSubscribe(Set.of(topic, topic1)));
         assertEquals(Set.of(topic, topic1), state.metadataTopics());
 
         // `groupSubscribe` does not accumulate
-        assertFalse(state.groupSubscribe(singleton(topic1)));
-        assertEquals(singleton(topic1), state.metadataTopics());
+        assertFalse(state.groupSubscribe(Set.of(topic1)));
+        assertEquals(Set.of(topic1), state.metadataTopics());
 
-        state.subscribe(singleton("anotherTopic"), Optional.of(rebalanceListener));
+        state.subscribe(Set.of("anotherTopic"), Optional.of(rebalanceListener));
         assertEquals(Set.of(topic1, "anotherTopic"), state.metadataTopics());
 
-        assertFalse(state.groupSubscribe(singleton("anotherTopic")));
-        assertEquals(singleton("anotherTopic"), state.metadataTopics());
+        assertFalse(state.groupSubscribe(Set.of("anotherTopic")));
+        assertEquals(Set.of("anotherTopic"), state.metadataTopics());
     }
 
     @Test
@@ -142,44 +142,44 @@ public class SubscriptionStateTest {
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
 
-        state.subscribeFromPattern(Collections.singleton(topic));
+        state.subscribeFromPattern(Set.of(topic));
         // assigned partitions should remain unchanged
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
 
-        assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp1)));
-        state.assignFromSubscribed(singleton(tp1));
+        assertTrue(state.checkAssignmentMatchedSubscription(Set.of(tp1)));
+        state.assignFromSubscribed(Set.of(tp1));
 
         // assigned partitions should immediately change
-        assertEquals(singleton(tp1), state.assignedPartitions());
+        assertEquals(Set.of(tp1), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
-        assertEquals(singleton(topic), state.subscription());
+        assertEquals(Set.of(topic), state.subscription());
 
-        assertTrue(state.checkAssignmentMatchedSubscription(singleton(t1p0)));
-        state.assignFromSubscribed(singleton(t1p0));
+        assertTrue(state.checkAssignmentMatchedSubscription(Set.of(t1p0)));
+        state.assignFromSubscribed(Set.of(t1p0));
 
         // assigned partitions should immediately change
-        assertEquals(singleton(t1p0), state.assignedPartitions());
+        assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
-        assertEquals(singleton(topic), state.subscription());
+        assertEquals(Set.of(topic), state.subscription());
 
         state.subscribe(Pattern.compile(".*t"), Optional.of(rebalanceListener));
         // assigned partitions should remain unchanged
-        assertEquals(singleton(t1p0), state.assignedPartitions());
+        assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
 
-        state.subscribeFromPattern(singleton(topic));
+        state.subscribeFromPattern(Set.of(topic));
         // assigned partitions should remain unchanged
-        assertEquals(singleton(t1p0), state.assignedPartitions());
+        assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
 
-        assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));
-        state.assignFromSubscribed(singleton(tp0));
+        assertTrue(state.checkAssignmentMatchedSubscription(Set.of(tp0)));
+        state.assignFromSubscribed(Set.of(tp0));
 
         // assigned partitions should immediately change
-        assertEquals(singleton(tp0), state.assignedPartitions());
+        assertEquals(Set.of(tp0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
-        assertEquals(singleton(topic), state.subscription());
+        assertEquals(Set.of(topic), state.subscription());
 
         state.unsubscribe();
         // assigned partitions should immediately change
@@ -200,7 +200,7 @@ public class SubscriptionStateTest {
         assertEquals(Collections.emptySet(), state.assignedPartitions());
 
         Set<TopicPartition> autoAssignment = Set.of(t1p0);
-        state.subscribe(singleton(topic1), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
         assertTrue(state.checkAssignmentMatchedSubscription(autoAssignment));
         state.assignFromSubscribed(autoAssignment);
         assertEquals(3, state.assignmentId());
@@ -209,7 +209,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void partitionReset() {
-        state.assignFromUser(singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         state.seek(tp0, 5);
         assertEquals(5L, state.position(tp0).offset);
         state.requestOffsetReset(tp0);
@@ -225,29 +225,29 @@ public class SubscriptionStateTest {
 
     @Test
     public void topicSubscription() {
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
         assertEquals(1, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
         assertTrue(state.hasAutoAssignedPartitions());
-        assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));
-        state.assignFromSubscribed(singleton(tp0));
+        assertTrue(state.checkAssignmentMatchedSubscription(Set.of(tp0)));
+        state.assignFromSubscribed(Set.of(tp0));
 
         state.seek(tp0, 1);
         assertEquals(1L, state.position(tp0).offset);
-        assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp1)));
-        state.assignFromSubscribed(singleton(tp1));
+        assertTrue(state.checkAssignmentMatchedSubscription(Set.of(tp1)));
+        state.assignFromSubscribed(Set.of(tp1));
 
         assertTrue(state.isAssigned(tp1));
         assertFalse(state.isAssigned(tp0));
         assertFalse(state.isFetchable(tp1));
-        assertEquals(singleton(tp1), state.assignedPartitions());
+        assertEquals(Set.of(tp1), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
     }
 
     @Test
     public void partitionPause() {
-        state.assignFromUser(singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         state.seek(tp0, 100);
         assertTrue(state.isFetchable(tp0));
         state.pause(tp0);
@@ -258,10 +258,10 @@ public class SubscriptionStateTest {
 
     @Test
     public void testMarkingPartitionPending() {
-        state.assignFromUser(singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         state.seek(tp0, 100);
         assertTrue(state.isFetchable(tp0));
-        state.markPendingRevocation(singleton(tp0));
+        state.markPendingRevocation(Set.of(tp0));
         assertFalse(state.isFetchable(tp0));
         assertFalse(state.isPaused(tp0));
     }
@@ -269,17 +269,17 @@ public class SubscriptionStateTest {
     @Test
     public void testAssignedPartitionsAwaitingCallbackKeepPositionDefinedInCallback() {
         // New partition assigned. Should not be fetchable or initializing positions.
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
-        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribedAwaitingCallback(Set.of(tp0), Set.of(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
-        assertEquals(singleton(tp0.topic()), state.subscription());
+        assertEquals(Set.of(tp0.topic()), state.subscription());
 
         // Simulate callback setting position to start fetching from
         state.seek(tp0, 100);
 
         // Callback completed. Partition should be fetchable, and should not require
         // initializing positions (position already defined in the callback)
-        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        state.enablePartitionsAwaitingCallback(Set.of(tp0));
         assertEquals(0, state.initializingPartitions().size());
         assertTrue(state.isFetchable(tp0));
         assertTrue(state.hasAllFetchPositions());
@@ -289,14 +289,14 @@ public class SubscriptionStateTest {
     @Test
     public void testAssignedPartitionsAwaitingCallbackInitializePositionsWhenCallbackCompletes() {
         // New partition assigned. Should not be fetchable or initializing positions.
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
-        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribedAwaitingCallback(Set.of(tp0), Set.of(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
-        assertEquals(singleton(tp0.topic()), state.subscription());
+        assertEquals(Set.of(tp0.topic()), state.subscription());
 
         // Callback completed (without updating positions). Partition should require initializing
         // positions, and start fetching once a valid position is set.
-        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        state.enablePartitionsAwaitingCallback(Set.of(tp0));
         assertEquals(1, state.initializingPartitions().size());
         state.seek(tp0, 100);
         assertTrue(state.isFetchable(tp0));
@@ -307,23 +307,23 @@ public class SubscriptionStateTest {
     @Test
     public void testAssignedPartitionsAwaitingCallbackDoesNotAffectPreviouslyOwnedPartitions() {
         // First partition assigned and callback completes.
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
-        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribedAwaitingCallback(Set.of(tp0), Set.of(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
-        assertEquals(singleton(tp0.topic()), state.subscription());
-        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        assertEquals(Set.of(tp0.topic()), state.subscription());
+        state.enablePartitionsAwaitingCallback(Set.of(tp0));
         state.seek(tp0, 100);
         assertTrue(state.isFetchable(tp0));
 
         // New partition added to the assignment. Owned partitions should continue to be
         // fetchable, while the newly added should not be fetchable until callback completes.
-        state.assignFromSubscribedAwaitingCallback(Set.of(tp0, tp1), singleton(tp1));
+        state.assignFromSubscribedAwaitingCallback(Set.of(tp0, tp1), Set.of(tp1));
         assertTrue(state.isFetchable(tp0));
         assertFalse(state.isFetchable(tp1));
         assertEquals(1, state.initializingPartitions().size());
 
         // Callback completed. Added partition be initializing positions and become fetchable when it gets one.
-        state.enablePartitionsAwaitingCallback(singleton(tp1));
+        state.enablePartitionsAwaitingCallback(Set.of(tp1));
         assertEquals(1, state.initializingPartitions().size());
         assertEquals(tp1, state.initializingPartitions().iterator().next());
         state.seek(tp1, 200);
@@ -331,7 +331,7 @@ public class SubscriptionStateTest {
     }
 
     private void assertAssignmentAppliedAwaitingCallback(TopicPartition topicPartition) {
-        assertEquals(singleton(topicPartition), state.assignedPartitions());
+        assertEquals(Set.of(topicPartition), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
 
         assertFalse(state.isFetchable(topicPartition));
@@ -341,9 +341,9 @@ public class SubscriptionStateTest {
 
     @Test
     public void invalidPositionUpdate() {
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
-        assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));
-        state.assignFromSubscribed(singleton(tp0));
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        assertTrue(state.checkAssignmentMatchedSubscription(Set.of(tp0)));
+        state.assignFromSubscribed(Set.of(tp0));
 
         assertThrows(IllegalStateException.class, () -> state.position(tp0,
             new SubscriptionState.FetchPosition(0, Optional.empty(), leaderAndEpoch)));
@@ -351,15 +351,15 @@ public class SubscriptionStateTest {
 
     @Test
     public void cantAssignPartitionForUnsubscribedTopics() {
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
-        assertFalse(state.checkAssignmentMatchedSubscription(Collections.singletonList(t1p0)));
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        assertFalse(state.checkAssignmentMatchedSubscription(List.of(t1p0)));
     }
 
     @Test
     public void cantAssignPartitionForUnmatchedPattern() {
         state.subscribe(Pattern.compile(".*t"), Optional.of(rebalanceListener));
-        state.subscribeFromPattern(Collections.singleton(topic));
-        assertFalse(state.checkAssignmentMatchedSubscription(Collections.singletonList(t1p0)));
+        state.subscribeFromPattern(Set.of(topic));
+        assertFalse(state.checkAssignmentMatchedSubscription(List.of(t1p0)));
     }
 
     @Test
@@ -370,26 +370,26 @@ public class SubscriptionStateTest {
 
     @Test
     public void cantSubscribeTopicAndPattern() {
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
         assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
     }
 
     @Test
     public void cantSubscribePartitionAndPattern() {
-        state.assignFromUser(singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
     }
 
     @Test
     public void cantSubscribePatternAndTopic() {
         state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
-        assertThrows(IllegalStateException.class, () -> state.subscribe(singleton(topic), Optional.of(rebalanceListener)));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Set.of(topic), Optional.of(rebalanceListener)));
     }
 
     @Test
     public void cantSubscribePatternAndPartition() {
         state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
-        assertThrows(IllegalStateException.class, () -> state.assignFromUser(singleton(tp0)));
+        assertThrows(IllegalStateException.class, () -> state.assignFromUser(Set.of(tp0)));
     }
 
     @Test
@@ -434,14 +434,14 @@ public class SubscriptionStateTest {
 
         TopicIdPartitionSet reconciledAssignmentFromRegex = new TopicIdPartitionSet();
         reconciledAssignmentFromRegex.addAll(Uuid.randomUuid(), topic, Set.of(0));
-        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        state.assignFromSubscribedAwaitingCallback(Set.of(tp0), Set.of(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
 
         // Simulate callback setting position to start fetching from
         state.seek(tp0, 100);
 
         // Callback completed. Partition should be fetchable, from the position previously defined
-        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        state.enablePartitionsAwaitingCallback(Set.of(tp0));
         assertEquals(0, state.initializingPartitions().size());
         assertTrue(state.isFetchable(tp0));
         assertTrue(state.hasAllFetchPositions());
@@ -462,7 +462,7 @@ public class SubscriptionStateTest {
         state.setAssignedTopicIds(Set.of(firstAssignedUuid, secondAssignedUuid));
 
         // First reconciliation completes and updates the subscription state
-        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        state.assignFromSubscribedAwaitingCallback(Set.of(tp0), Set.of(tp0));
 
         // First assignment should have been applied
         assertAssignmentAppliedAwaitingCallback(tp0);
@@ -506,16 +506,16 @@ public class SubscriptionStateTest {
     public void unsubscribeUserAssignment() {
         state.assignFromUser(Set.of(tp0, tp1));
         state.unsubscribe();
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
-        assertEquals(singleton(topic), state.subscription());
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        assertEquals(Set.of(topic), state.subscription());
     }
 
     @Test
     public void unsubscribeUserSubscribe() {
-        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
         state.unsubscribe();
-        state.assignFromUser(singleton(tp0));
-        assertEquals(singleton(tp0), state.assignedPartitions());
+        state.assignFromUser(Set.of(tp0));
+        assertEquals(Set.of(tp0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
     }
 
@@ -523,10 +523,10 @@ public class SubscriptionStateTest {
     public void unsubscription() {
         state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
         state.subscribeFromPattern(Set.of(topic, topic1));
-        assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp1)));
-        state.assignFromSubscribed(singleton(tp1));
+        assertTrue(state.checkAssignmentMatchedSubscription(Set.of(tp1)));
+        state.assignFromSubscribed(Set.of(tp1));
 
-        assertEquals(singleton(tp1), state.assignedPartitions());
+        assertEquals(Set.of(tp1), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
 
         state.unsubscribe();
@@ -534,8 +534,8 @@ public class SubscriptionStateTest {
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
 
-        state.assignFromUser(singleton(tp0));
-        assertEquals(singleton(tp0), state.assignedPartitions());
+        state.assignFromUser(Set.of(tp0));
+        assertEquals(Set.of(tp0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
 
         state.unsubscribe();
@@ -546,7 +546,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testPreferredReadReplicaLease() {
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         // Default state
         assertFalse(state.preferredReadReplica(tp0, 0L).isPresent());
@@ -577,7 +577,7 @@ public class SubscriptionStateTest {
     @Test
     public void testSeekUnvalidatedWithNoOffsetEpoch() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         // Seek with no offset epoch requires no validation no matter what the current leader is
         state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.empty(),
@@ -601,7 +601,7 @@ public class SubscriptionStateTest {
     @Test
     public void testSeekUnvalidatedWithNoEpochClearsAwaitingValidation() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         // Seek with no offset epoch requires no validation no matter what the current leader is
         state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.of(2),
@@ -621,7 +621,7 @@ public class SubscriptionStateTest {
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(broker1.idString(), NodeApiVersions.create());
 
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.of(2),
                 new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(5))));
@@ -650,7 +650,7 @@ public class SubscriptionStateTest {
     @Test
     public void testSeekValidatedShouldClearAwaitingValidation() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
                 new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10))));
@@ -668,7 +668,7 @@ public class SubscriptionStateTest {
     @Test
     public void testCompleteValidationShouldClearAwaitingValidation() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
                 new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10))));
@@ -685,7 +685,7 @@ public class SubscriptionStateTest {
     @Test
     public void testOffsetResetWhileAwaitingValidation() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
                 new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10))));
@@ -699,7 +699,7 @@ public class SubscriptionStateTest {
     @Test
     public void testMaybeCompleteValidation() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         int currentEpoch = 10;
         long initialOffset = 10L;
@@ -726,7 +726,7 @@ public class SubscriptionStateTest {
         apiVersions.update("1", oldApis);
 
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
                 new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10))));
@@ -755,7 +755,7 @@ public class SubscriptionStateTest {
     @Test
     public void testMaybeCompleteValidationAfterPositionChange() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         int currentEpoch = 10;
         long initialOffset = 10L;
@@ -784,7 +784,7 @@ public class SubscriptionStateTest {
     @Test
     public void testMaybeCompleteValidationAfterOffsetReset() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         int currentEpoch = 10;
         long initialOffset = 10L;
@@ -810,7 +810,7 @@ public class SubscriptionStateTest {
     @Test
     public void testTruncationDetectionWithResetPolicy() {
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         int currentEpoch = 10;
         long initialOffset = 10L;
@@ -839,7 +839,7 @@ public class SubscriptionStateTest {
     public void testTruncationDetectionWithoutResetPolicy() {
         Node broker1 = new Node(1, "localhost", 9092);
         state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         int currentEpoch = 10;
         long initialOffset = 10L;
@@ -869,7 +869,7 @@ public class SubscriptionStateTest {
     public void testTruncationDetectionUnknownDivergentOffsetWithResetPolicy() {
         Node broker1 = new Node(1, "localhost", 9092);
         state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         int currentEpoch = 10;
         long initialOffset = 10L;
@@ -894,7 +894,7 @@ public class SubscriptionStateTest {
     public void testTruncationDetectionUnknownDivergentOffsetWithoutResetPolicy() {
         Node broker1 = new Node(1, "localhost", 9092);
         state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         int currentEpoch = 10;
         long initialOffset = 10L;
@@ -942,7 +942,7 @@ public class SubscriptionStateTest {
         // Check that offset reset works when we can't validate offsets (older brokers)
 
         Node broker1 = new Node(1, "localhost", 9092);
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         // Reset offsets
         state.requestOffsetReset(tp0, AutoOffsetResetStrategy.EARLIEST);
@@ -988,7 +988,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void nullPositionLagOnNoPosition() {
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
 
         assertNull(state.partitionLag(tp0, IsolationLevel.READ_UNCOMMITTED));
         assertNull(state.partitionLag(tp0, IsolationLevel.READ_COMMITTED));
@@ -1002,7 +1002,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testPositionOrNull() {
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
         state.seek(tp0, 5);
 
@@ -1012,7 +1012,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testTryUpdatingHighWatermark() {
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
 
         final long highWatermark = 10L;
@@ -1023,7 +1023,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testTryUpdatingLogStartOffset() {
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
         final long position = 25;
         state.seek(tp0, position);
@@ -1036,7 +1036,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testTryUpdatingLastStableOffset() {
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
 
         final long lastStableOffset = 10L;
@@ -1047,7 +1047,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testTryUpdatingPreferredReadReplica() {
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
 
         final int preferredReadReplicaId = 10;
@@ -1060,7 +1060,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testRequestOffsetResetIfPartitionAssigned() {
-        state.assignFromUser(Collections.singleton(tp0));
+        state.assignFromUser(Set.of(tp0));
         final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
 
         state.requestOffsetResetIfPartitionAssigned(tp0);
