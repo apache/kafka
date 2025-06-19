@@ -171,19 +171,19 @@ object ClientQuotaMetadataManager {
       case UserEntity(user) =>
         (Some(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
       case DefaultUserEntity =>
-        (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), None)
+        (Some(ClientQuotaManager.DEFAULT_USER_ENTITY), None)
       case ClientIdEntity(clientId) =>
         (None, Some(new ClientQuotaManager.ClientIdEntity(clientId)))
       case DefaultClientIdEntity =>
-        (None, Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE))
+        (None, Some(ClientQuotaManager.DEFAULT_USER_CLIENT_ID))
       case ExplicitUserExplicitClientIdEntity(user, clientId) =>
         (Some(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(new ClientQuotaManager.ClientIdEntity(clientId)))
       case ExplicitUserDefaultClientIdEntity(user) =>
-        (Some(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE))
+        (Some(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.DEFAULT_USER_CLIENT_ID))
       case DefaultUserExplicitClientIdEntity(clientId) =>
-        (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), Some(new ClientQuotaManager.ClientIdEntity(clientId)))
+        (Some(ClientQuotaManager.DEFAULT_USER_ENTITY), Some(new ClientQuotaManager.ClientIdEntity(clientId)))
       case DefaultUserDefaultClientIdEntity =>
-        (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE))
+        (Some(ClientQuotaManager.DEFAULT_USER_ENTITY), Some(ClientQuotaManager.DEFAULT_USER_CLIENT_ID))
       case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
     }
   }

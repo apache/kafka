@@ -71,13 +71,6 @@ public class ClientQuotaManager {
     private static final int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
     private static final String DEFAULT_NAME = "<default>";
 
-    public static final KafkaQuotaEntity DEFAULT_CLIENT_ID_QUOTA_ENTITY =
-            new KafkaQuotaEntity(null, DefaultClientIdEntity.INSTANCE);
-    public static final KafkaQuotaEntity DEFAULT_USER_QUOTA_ENTITY =
-            new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, null);
-    public static final KafkaQuotaEntity DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY =
-            new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, DefaultClientIdEntity.INSTANCE);
-
     public record UserEntity(String sanitizedUser) implements ClientQuotaEntity.ConfigEntity {
 
         @Override
@@ -113,11 +106,7 @@ public class ClientQuotaManager {
         }
     }
 
-    public static class DefaultUserEntity implements ClientQuotaEntity.ConfigEntity {
-        public static final DefaultUserEntity INSTANCE = new DefaultUserEntity();
-
-        private DefaultUserEntity() {}
-
+    public static final ClientQuotaEntity.ConfigEntity DEFAULT_USER_ENTITY = new ClientQuotaEntity.ConfigEntity() {
         @Override
         public ClientQuotaEntity.ConfigEntityType entityType() {
             return ClientQuotaEntity.ConfigEntityType.DEFAULT_USER;
@@ -132,28 +121,29 @@ public class ClientQuotaManager {
         public String toString() {
             return "default user";
         }
-    }
-
-    public static class DefaultClientIdEntity implements ClientQuotaEntity.ConfigEntity {
-        public static final DefaultClientIdEntity INSTANCE = new DefaultClientIdEntity();
-
-        private DefaultClientIdEntity() {}
-
+    };
+    
+    public static final ClientQuotaEntity.ConfigEntity DEFAULT_USER_CLIENT_ID = new ClientQuotaEntity.ConfigEntity() {
         @Override
         public ClientQuotaEntity.ConfigEntityType entityType() {
             return ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID;
         }
-
         @Override
         public String name() {
             return DEFAULT_NAME;
-        }
-
+        }  
         @Override
         public String toString() {
             return "default client-id";
         }
-    }
+    };
+
+    public static final KafkaQuotaEntity DEFAULT_CLIENT_ID_QUOTA_ENTITY =
+            new KafkaQuotaEntity(null, DEFAULT_USER_CLIENT_ID);
+    public static final KafkaQuotaEntity DEFAULT_USER_QUOTA_ENTITY =
+            new KafkaQuotaEntity(DEFAULT_USER_ENTITY, null);
+    public static final KafkaQuotaEntity DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY =
+            new KafkaQuotaEntity(DEFAULT_USER_ENTITY, DEFAULT_USER_CLIENT_ID);
 
     public record KafkaQuotaEntity(ClientQuotaEntity.ConfigEntity userEntity,
                                           ClientQuotaEntity.ConfigEntity clientIdEntity) implements ClientQuotaEntity {
@@ -173,7 +163,7 @@ public class ClientQuotaManager {
         public String sanitizedUser() {
             if (userEntity instanceof UserEntity userRecord) {
                 return userRecord.sanitizedUser();
-            } else if (userEntity == DefaultUserEntity.INSTANCE) {
+            } else if (userEntity == DEFAULT_USER_ENTITY) {
                 return DEFAULT_NAME;
             }
             return "";
@@ -574,8 +564,8 @@ public class ClientQuotaManager {
 
             // Determine which entities need metric config updates
             Optional<KafkaQuotaEntity> updatedEntity;
-            if (userEntity.filter(entity -> entity == DefaultUserEntity.INSTANCE).isPresent() ||
-                    clientEntity.filter(entity -> entity == DefaultClientIdEntity.INSTANCE).isPresent()) {
+            if (userEntity.filter(entity -> entity == DEFAULT_USER_ENTITY).isPresent() ||
+                    clientEntity.filter(entity -> entity == DEFAULT_USER_CLIENT_ID).isPresent()) {
                 // More than one entity may need updating, so updateQuotaMetricConfigs will go through all metrics
                 updatedEntity = Optional.empty();
             } else {
@@ -737,11 +727,11 @@ public class ClientQuotaManager {
             if (quota != null) return quota;
 
             // /config/users/<user>/clients/<default>
-            quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, DefaultClientIdEntity.INSTANCE));
+            quota = overriddenQuotas.get(new KafkaQuotaEntity(userEntity, DEFAULT_USER_CLIENT_ID));
             if (quota != null) return quota;
 
             // /config/users/<default>/clients/<client-id>
-            quota = overriddenQuotas.get(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity));
+            quota = overriddenQuotas.get(new KafkaQuotaEntity(DEFAULT_USER_ENTITY, clientIdEntity));
             if (quota != null) return quota;
 
             // /config/users/<default>/clients/<default>
@@ -826,7 +816,7 @@ public class ClientQuotaManager {
                     clientIdTag = clientId;
 
                     // 3) /config/users/<user>
-                    if (overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, DefaultClientIdEntity.INSTANCE))) break;
+                    if (overriddenQuotas.containsKey(new KafkaQuotaEntity(userEntity, DEFAULT_USER_CLIENT_ID))) break;
                     userTag = sanitizedUser;
                     clientIdTag = "";
 
@@ -836,7 +826,7 @@ public class ClientQuotaManager {
                     clientIdTag = clientId;
 
                     // 5) /config/users/<default>/clients/<default>
-                    if (overriddenQuotas.containsKey(new KafkaQuotaEntity(DefaultUserEntity.INSTANCE, clientIdEntity))) break;
+                    if (overriddenQuotas.containsKey(new KafkaQuotaEntity(DEFAULT_USER_ENTITY, clientIdEntity))) break;
                     userTag = sanitizedUser;
                     clientIdTag = clientId;
 

@@ -44,7 +44,7 @@ class ClientQuotaMetadataManagerTest {
       ClientQuotaMetadataManager.transferToClientQuotaEntity(UserEntity("user"))
     )
     assertEquals(
-      (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), None),
+      (Some(ClientQuotaManager.DEFAULT_USER_ENTITY), None),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserEntity)
     )
     assertEquals(
@@ -52,7 +52,7 @@ class ClientQuotaMetadataManagerTest {
       ClientQuotaMetadataManager.transferToClientQuotaEntity(ClientIdEntity("client"))
     )
     assertEquals(
-      (None, Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE)),
+      (None, Some(ClientQuotaManager.DEFAULT_USER_CLIENT_ID)),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultClientIdEntity)
     )
     assertEquals(
@@ -60,15 +60,15 @@ class ClientQuotaMetadataManagerTest {
       ClientQuotaMetadataManager.transferToClientQuotaEntity(ExplicitUserExplicitClientIdEntity("user", "client"))
     )
     assertEquals(
-      (Some(new ClientQuotaManager.UserEntity("user")), Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE)),
+      (Some(new ClientQuotaManager.UserEntity("user")), Some(ClientQuotaManager.DEFAULT_USER_CLIENT_ID)),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(ExplicitUserDefaultClientIdEntity("user"))
     )
     assertEquals(
-      (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), Some(new ClientQuotaManager.ClientIdEntity("client"))),
+      (Some(ClientQuotaManager.DEFAULT_USER_ENTITY), Some(new ClientQuotaManager.ClientIdEntity("client"))),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserExplicitClientIdEntity("client"))
     )
     assertEquals(
-      (Some(ClientQuotaManager.DefaultUserEntity.INSTANCE), Some(ClientQuotaManager.DefaultClientIdEntity.INSTANCE)),
+      (Some(ClientQuotaManager.DEFAULT_USER_ENTITY), Some(ClientQuotaManager.DEFAULT_USER_CLIENT_ID)),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserDefaultClientIdEntity)
     )
   }

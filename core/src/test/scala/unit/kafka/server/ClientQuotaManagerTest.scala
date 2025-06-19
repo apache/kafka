@@ -110,7 +110,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client1 = UserClient("User1", "p1", Optional.of(new ClientQuotaManager.UserEntity("User1")), Optional.empty)
     val client2 = UserClient("User2", "p2", Optional.of(new ClientQuotaManager.UserEntity("User2")), Optional.empty)
     val randomClient = UserClient("RandomUser", "random-client-id", Optional.empty, Optional.empty)
-    val defaultConfigClient = UserClient("", "", Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE), Optional.empty)
+    val defaultConfigClient = UserClient("", "", Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.empty)
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -142,7 +142,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Set default <user> quota config
       clientQuotaManager.updateQuota(
-        Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
         Optional.empty,
         Optional.of(new Quota(10, true))
       )
@@ -164,7 +164,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Set default <user> quota config
       clientQuotaManager.updateQuota(
-        Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
         Optional.empty,
         Optional.of(new Quota(10, true))
       )
@@ -172,7 +172,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Remove default <user> quota config, back to no quotas
       clientQuotaManager.updateQuota(
-        Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
         Optional.empty,
         Optional.empty
       )
@@ -243,18 +243,18 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
     try {
       clientQuotaManager.updateQuota(
-        Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
         Optional.empty,
         Optional.of(new Quota(1000, true))
       )
       clientQuotaManager.updateQuota(
         Optional.empty,
-        Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
         Optional.of(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
-        Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE),
-        Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
         Optional.of(new Quota(3000, true))
       )
       clientQuotaManager.updateQuota(
@@ -279,7 +279,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       )
       clientQuotaManager.updateQuota(
         Optional.of(new ClientQuotaManager.UserEntity("userB")),
-        Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
         Optional.of(new Quota(8000, true))
       )
       clientQuotaManager.updateQuota(
@@ -308,8 +308,8 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Remove default <user, client> quota config, revert to <user> default
       clientQuotaManager.updateQuota(
-        Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE),
-        Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
         Optional.empty
       )
       checkQuota(clientQuotaManager, "userD", "client1", 1000, 0, expectThrottle = false)    // Metrics tags changed, restart counter
@@ -319,7 +319,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Remove default <user> quota config, revert to <client-id> default
       clientQuotaManager.updateQuota(
-        Optional.of(ClientQuotaManager.DefaultUserEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
         Optional.empty,
         Optional.empty
       )
@@ -357,7 +357,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       checkQuota(clientQuotaManager, "userA", "client6", 11000, 8500, expectThrottle = false)
       clientQuotaManager.updateQuota(
         Optional.of(new ClientQuotaManager.UserEntity("userA")),
-        Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
         Optional.of(new Quota(12000, true))
       )
       clientQuotaManager.updateQuota(
@@ -379,7 +379,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         Optional.empty,
-        Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
         Optional.of(new Quota(500, true))
       )
 
@@ -430,7 +430,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         Optional.empty,
-        Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
         Optional.of(new Quota(500, true))
       )
 
@@ -455,7 +455,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         Optional.empty,
-        Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
         Optional.of(new Quota(500, true))
       )
 
@@ -485,7 +485,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         Optional.empty,
-        Optional.of(ClientQuotaManager.DefaultClientIdEntity.INSTANCE),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
         Optional.of(new Quota(500, true))
       )
 
