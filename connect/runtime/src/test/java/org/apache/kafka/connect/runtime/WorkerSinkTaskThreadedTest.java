@@ -65,7 +65,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -111,8 +110,8 @@ public class WorkerSinkTaskThreadedTest {
     private static final TopicPartition TOPIC_PARTITION2 = new TopicPartition(TOPIC, PARTITION2);
     private static final TopicPartition TOPIC_PARTITION3 = new TopicPartition(TOPIC, PARTITION3);
     private static final TopicPartition UNASSIGNED_TOPIC_PARTITION = new TopicPartition(TOPIC, 200);
-    private static final Set<TopicPartition> INITIAL_ASSIGNMENT = new HashSet<>(Arrays.asList(
-            TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3));
+    private static final Set<TopicPartition> INITIAL_ASSIGNMENT = Set.of(
+            TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
     private static final long TIMESTAMP = 42L;
@@ -439,7 +438,7 @@ public class WorkerSinkTaskThreadedTest {
         doAnswer(invocation -> {
             return null; // initial assignment
         }).doAnswer(invocation -> {
-            assertEquals(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3)), sinkTaskContext.getValue().assignment());
+            assertEquals(Set.of(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3), sinkTaskContext.getValue().assignment());
             return null;
         }).doAnswer(invocation -> {
             try {
