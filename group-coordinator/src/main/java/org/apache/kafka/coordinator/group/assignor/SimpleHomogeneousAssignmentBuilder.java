@@ -182,10 +182,9 @@ public class SimpleHomogeneousAssignmentBuilder {
     /**
      * Here's the step-by-step breakdown of the assignment process:
      * <ol>
-     *   <li>Revoke partitions from the existing assignment that are no longer part of each member's
-     *     subscriptions.</li>
-     *   <li>Revoke any partitions which are shared more than desired.</li>
+     *   <li>Revoke partitions from the existing assignment that are no longer part of each member's subscriptions.</li>
      *   <li>Revoke partitions from members which have too many partitions.</li>
+     *   <li>Revoke any partitions which are shared more than desired.</li>
      *   <li>Assign any partitions which have insufficient members assigned.</li>
      * </ol>
      */
