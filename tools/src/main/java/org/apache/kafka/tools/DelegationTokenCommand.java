@@ -37,12 +37,11 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
@@ -299,10 +298,10 @@ public class DelegationTokenCommand {
             }
 
             // check invalid args
-            CommandLineUtils.checkInvalidArgs(parser, options, createOpt, new HashSet<>(Arrays.asList(hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, renewOpt, new HashSet<>(Arrays.asList(renewPrincipalsOpt, maxLifeTimeOpt, expiryTimePeriodOpt, ownerPrincipalsOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, expiryOpt, new HashSet<>(Arrays.asList(renewOpt, maxLifeTimeOpt, renewTimePeriodOpt, ownerPrincipalsOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, new HashSet<>(Arrays.asList(renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, createOpt, Set.of(hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, renewOpt, Set.of(renewPrincipalsOpt, maxLifeTimeOpt, expiryTimePeriodOpt, ownerPrincipalsOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, expiryOpt, Set.of(renewOpt, maxLifeTimeOpt, renewTimePeriodOpt, ownerPrincipalsOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set.of(renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt));
         }
     }
 }
