@@ -89,7 +89,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             val originalsFiltered = c.originals.entrySet.stream()
               .filter(e =>
                 e.getValue != null &&
-                  !c.nonInternalValues.containsKey(e.getKey) // exclude keys already in nonInternalValues
+                  !nonInternalValues.containsKey(e.getKey) // exclude keys already in nonInternalValues
               )
             java.util.stream.Stream.concat(nonInternalValues.entrySet().stream(), originalsFiltered)
           case m: java.util.Map[_, _] =>
