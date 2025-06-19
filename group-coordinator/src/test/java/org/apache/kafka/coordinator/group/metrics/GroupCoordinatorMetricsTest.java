@@ -36,8 +36,6 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -63,7 +61,7 @@ public class GroupCoordinatorMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
 
-        HashSet<org.apache.kafka.common.MetricName> expectedMetrics = new HashSet<>(Arrays.asList(
+        Set<org.apache.kafka.common.MetricName> expectedMetrics = Set.of(
             metrics.metricName("offset-commit-rate", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("offset-commit-count", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("offset-expiration-rate", GroupCoordinatorMetrics.METRICS_GROUP),
@@ -159,11 +157,11 @@ public class GroupCoordinatorMetricsTest {
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Map.of("state", StreamsGroupState.NOT_READY.toString()))
-        ));
+        );
 
         try {
             try (GroupCoordinatorMetrics ignored = new GroupCoordinatorMetrics(registry, metrics)) {
-                HashSet<String> expectedRegistry = new HashSet<>(Arrays.asList(
+                Set<String> expectedRegistry = Set.of(
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumOffsets",
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups",
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsPreparingRebalance",
@@ -171,7 +169,7 @@ public class GroupCoordinatorMetricsTest {
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsStable",
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsDead",
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsEmpty"
-                ));
+                );
 
                 assertMetricsForTypeEqual(registry, "kafka.coordinator.group", expectedRegistry);
                 expectedMetrics.forEach(metricName -> assertTrue(metrics.metrics().containsKey(metricName), metricName + " is missing"));

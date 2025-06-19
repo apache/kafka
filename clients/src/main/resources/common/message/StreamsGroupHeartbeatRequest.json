@@ -20,7 +20,7 @@
   "name": "StreamsGroupHeartbeatRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
-  // The StreamsGroupDescribeRequest API is added as part of KIP-1071 and is still under
+  // The StreamsGroupHeartbeatRequest API is added as part of KIP-1071 and is still under
   // development. Hence, the API is not exposed by default by brokers unless
   // explicitly enabled.
   "latestVersionUnstable": true,
@@ -50,13 +50,13 @@
           "fields": [
             { "name": "SubtopologyId", "type": "string", "versions": "0+",
               "about": "String to uniquely identify the subtopology. Deterministically generated from the topology" },
-            { "name": "SourceTopics", "type": "[]string", "versions": "0+",
+            { "name": "SourceTopics", "type": "[]string", "versions": "0+", "entityType": "topicName",
               "about": "The topics the topology reads from." },
             { "name": "SourceTopicRegex", "type": "[]string", "versions": "0+",
               "about": "The regular expressions identifying topics the subtopology reads from." },
             { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
               "about": "The set of state changelog topics associated with this subtopology. Created automatically." },
-            { "name": "RepartitionSinkTopics", "type": "[]string", "versions": "0+",
+            { "name": "RepartitionSinkTopics", "type": "[]string", "versions": "0+", "entityType": "topicName",
               "about": "The repartition topics the subtopology writes to." },
             { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
               "about": "The set of source topics that are internally created repartition topics. Created automatically." },
@@ -104,7 +104,7 @@
         "about": "value of the config" }
     ]},
     { "name": "TopicInfo", "versions": "0+", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The name of the topic." },
       { "name": "Partitions", "type": "int32", "versions": "0+",
         "about": "The number of partitions in the topic. Can be 0 if no specific number of partitions is enforced. Always 0 for changelog topics." },
