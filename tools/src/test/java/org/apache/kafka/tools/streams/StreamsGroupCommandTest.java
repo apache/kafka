@@ -377,7 +377,7 @@ public class StreamsGroupCommandTest {
     public void testDeleteStreamsGroup() {
         Admin adminClient = mock(KafkaAdminClient.class);
         String groupId = "foo-group";
-        List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", groupId, "--delete"));
+        List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", groupId, "--delete", "--delete-all-internal-topics"));
 
         DeleteStreamsGroupsResult deleteStreamsGroupsResult = mock(DeleteStreamsGroupsResult.class);
         when(adminClient.deleteStreamsGroups(eq(List.of(groupId)), any(DeleteStreamsGroupsOptions.class))).thenReturn(deleteStreamsGroupsResult);
