@@ -405,7 +405,7 @@ public class PersisterStateManager {
                 errorConsumer.accept(Errors.NETWORK_EXCEPTION, null);
                 return Optional.of(Errors.NETWORK_EXCEPTION);
             } else if (response.wasTimedOut()) {
-                log.debug("Response for RPC {} with key {} timed out - {}.", name(), this.partitionKey, response);
+                log.error("Response for RPC {} with key {} timed out - {}.", name(), this.partitionKey, response);
                 errorConsumer.accept(Errors.REQUEST_TIMED_OUT, null);
                 return Optional.of(Errors.REQUEST_TIMED_OUT);
             } else {
