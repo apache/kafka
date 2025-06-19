@@ -13,7 +13,7 @@ Kafka server can be started using following ways:
 - File input
 - Environment variables
 
-Installation Prepration
+Installation Preparation
 ------------
 
 Note that the `Docker` version **must be >= 20.10.4**.
