@@ -53,7 +53,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -910,7 +909,7 @@ public class DescribeConsumerGroupTest {
             String group = GROUP_PREFIX + groupProtocol.name();
             createTopic(topic, 2);
 
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, new HashSet<>(Arrays.asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1))), Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1)), Collections.emptyMap());
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {

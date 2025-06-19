@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.utils.LogContext;
@@ -91,6 +92,13 @@ public class SubscriptionState {
     /* the list of topics the user has requested */
     private Set<String> subscription;
 
+    /**
+     * Topic IDs received in an assignment from the coordinator when using the Consumer rebalance protocol.
+     * This will be used to include assigned topic IDs in metadata requests when the consumer
+     * does not know the topic names (ex. when the user subscribes to a RE2J regex computed on the broker)
+     */
+    private Set<Uuid> assignedTopicIds;
+
     /* The list of topics the group has subscribed to. This may include some topics which are not part
      * of `subscription` for the leader of a group since it is responsible for detecting metadata changes
      * which require a group rebalance. */
@@ -149,6 +157,7 @@ public class SubscriptionState {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new TreeSet<>(); // use a sorted set for better logging
+        this.assignedTopicIds = new TreeSet<>();
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
@@ -338,6 +347,7 @@ public class SubscriptionState {
         this.subscription = Collections.emptySet();
         this.groupSubscription = Collections.emptySet();
         this.assignment.clear();
+        this.assignedTopicIds = Collections.emptySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
         this.assignmentId++;
@@ -477,7 +487,7 @@ public class SubscriptionState {
         List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
-            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || topicPartitionState.isFetchable())
+            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || isFetchableAndSubscribed(topicPartition, topicPartitionState))
                     && isAvailable.test(topicPartition)) {
                 result.add(topicPartition);
             }
@@ -485,23 +495,34 @@ public class SubscriptionState {
         return result;
     }
 
+    /**
+     * Check if the partition is fetchable.
+     * If the consumer has explicitly subscribed to a list of topic names,
+     * this will also check that the partition is contained in the subscription.
+     */
+    private synchronized boolean isFetchableAndSubscribed(TopicPartition topicPartition, TopicPartitionState topicPartitionState) {
+        if (subscriptionType.equals(SubscriptionType.AUTO_TOPICS) && !subscription.contains(topicPartition.topic())) {
+            log.trace("Assigned partition {} is not in the subscription {} so will be considered not fetchable.", topicPartition, subscription);
+            return false;
+        }
+        return topicPartitionState.isFetchable();
+    }
+
     public synchronized boolean hasAutoAssignedPartitions() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN
                 || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
     }
 
-    public synchronized boolean isAssignedFromRe2j(String topic) {
-        if (!hasRe2JPatternSubscription()) {
+    /**
+     * Check if the topic ID has been received in an assignment
+     * from the coordinator after subscribing to a broker-side regex.
+     */
+    public synchronized boolean isAssignedFromRe2j(Uuid topicId) {
+        if (topicId == null || !hasRe2JPatternSubscription()) {
             return false;
         }
 
-        for (TopicPartition topicPartition : assignment.partitionSet()) {
-            if (topicPartition.topic().equals(topic)) {
-                return true;
-            }
-        }
-
-        return false;
+        return this.assignedTopicIds.contains(topicId);
     }
 
     public synchronized void position(TopicPartition tp, FetchPosition position) {
@@ -871,8 +892,8 @@ public class SubscriptionState {
     }
 
     synchronized boolean isFetchable(TopicPartition tp) {
-        TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
-        return assignedOrNull != null && assignedOrNull.isFetchable();
+        TopicPartitionState tps = assignedStateOrNull(tp);
+        return tps != null && isFetchableAndSubscribed(tp, tps);
     }
 
     public synchronized boolean hasValidPosition(TopicPartition tp) {
@@ -909,6 +930,21 @@ public class SubscriptionState {
                                                                   Collection<TopicPartition> addedPartitions) {
         assignFromSubscribed(fullAssignment);
         markPendingOnAssignedCallback(addedPartitions, true);
+    }
+
+    /**
+     * @return Topic IDs received in an assignment that have not been reconciled yet, so we need metadata for them.
+     */
+    public synchronized Set<Uuid> assignedTopicIds() {
+        return assignedTopicIds;
+    }
+
+    /**
+     * Set the set of topic IDs that have been assigned to the consumer by the coordinator.
+     * This is used for topic IDs received in an assignment when using the new consumer rebalance protocol (KIP-848).
+     */
+    public synchronized  void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
+        this.assignedTopicIds = assignedTopicIds;
     }
 
     /**

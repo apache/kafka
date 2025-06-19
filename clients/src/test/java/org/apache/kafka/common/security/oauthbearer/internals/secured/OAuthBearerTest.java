@@ -193,7 +193,7 @@ public abstract class OAuthBearerTest {
     }
 
     protected String createJwt(String header, String payload, String signature) {
-        Base64.Encoder enc = Base64.getEncoder();
+        Base64.Encoder enc = Base64.getUrlEncoder();
         header = enc.encodeToString(Utils.utf8(header));
         payload = enc.encodeToString(Utils.utf8(payload));
         signature = enc.encodeToString(Utils.utf8(signature));

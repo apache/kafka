@@ -871,6 +871,13 @@ public class ReplicationControlManager {
                 createTopicPolicy.get().validate(supplier.get());
             } catch (PolicyViolationException e) {
                 return new ApiError(Errors.POLICY_VIOLATION, e.getMessage());
+            } catch (Throwable e) {
+                // return the corresponding API error, but emit the stack trace first if it is an unknown server error
+                ApiError apiError = ApiError.fromThrowable(e);
+                if (apiError.error() == Errors.UNKNOWN_SERVER_ERROR) {
+                    log.error("Unknown server error validating Create Topic", e);
+                }
+                return apiError;
             }
         }
         return ApiError.NONE;
