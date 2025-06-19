@@ -933,9 +933,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   private def connectAndReceive(request: ShareGroupHeartbeatRequest): ShareGroupHeartbeatResponse = {
-    val socketServer = cluster.brokerSocketServers().asScala.head
-    val listenerName = cluster.clientListener()
-    IntegrationTestUtils.connectAndReceive[ShareGroupHeartbeatResponse](request, socketServer.boundPort(listenerName))
+    IntegrationTestUtils.connectAndReceive[ShareGroupHeartbeatResponse](request, cluster.boundPorts().get(0))
   }
 
   private def increasePartitions[B <: KafkaBroker](admin: Admin,

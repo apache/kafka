@@ -915,9 +915,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
   ): T = {
-    val destination = cluster.anyBrokerSocketServer()
-    val listenerName = cluster.clientListener()
-    IntegrationTestUtils.connectAndReceive[T](request, destination.boundPort(listenerName))
+    IntegrationTestUtils.connectAndReceive[T](request, cluster.boundPorts().get(0))
   }
 
   protected def connectAndReceive[T <: AbstractResponse](
