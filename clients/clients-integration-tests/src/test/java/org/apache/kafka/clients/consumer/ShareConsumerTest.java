@@ -56,6 +56,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
@@ -111,6 +112,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Timeout(1200)
 @Tag("integration")
 @ClusterTestDefaults(
+    types = {Type.KRAFT},
     serverProperties = {
         @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
         @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
