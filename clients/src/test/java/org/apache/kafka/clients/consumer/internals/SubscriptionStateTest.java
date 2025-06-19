@@ -36,9 +36,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -111,6 +114,54 @@ public class SubscriptionStateTest {
         // assigned partitions should immediately change
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
+    }
+
+    @Test
+    public void testIsFetchableOnManualAssignment() {
+        state.assignFromUser(Set.of(tp0, tp1));
+        assertAssignedPartitionIsFetchable();
+    }
+
+    @Test
+    public void testIsFetchableOnAutoAssignment() {
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribed(Set.of(tp0, tp1));
+        assertAssignedPartitionIsFetchable();
+    }
+
+    private void assertAssignedPartitionIsFetchable() {
+        assertEquals(2, state.assignedPartitions().size());
+        assertTrue(state.assignedPartitions().contains(tp0));
+        assertTrue(state.assignedPartitions().contains(tp1));
+
+        assertFalse(state.isFetchable(tp0), "Should not be fetchable without a valid position");
+        assertFalse(state.isFetchable(tp1), "Should not be fetchable without a valid position");
+
+        state.seek(tp0, 1);
+        state.seek(tp1, 1);
+
+        assertTrue(state.isFetchable(tp0));
+        assertTrue(state.isFetchable(tp1));
+    }
+
+    @Test
+    public void testIsFetchableConsidersExplicitTopicSubscription() {
+        state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
+        state.assignFromSubscribed(Set.of(t1p0));
+        state.seek(t1p0, 1);
+
+        assertEquals(Set.of(t1p0), state.assignedPartitions());
+        assertTrue(state.isFetchable(t1p0));
+
+        // Change subscription. Assigned partitions should remain unchanged but not fetchable.
+        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        assertEquals(Set.of(t1p0), state.assignedPartitions());
+        assertFalse(state.isFetchable(t1p0), "Assigned partitions not in the subscription should not be fetchable");
+
+        // Unsubscribe. Assigned partitions should be cleared and not fetchable.
+        state.unsubscribe();
+        assertTrue(state.assignedPartitions().isEmpty());
+        assertFalse(state.isFetchable(t1p0));
     }
 
     @Test
@@ -1070,5 +1121,34 @@ public class SubscriptionStateTest {
         state.requestOffsetResetIfPartitionAssigned(unassignedPartition);
 
         assertThrows(IllegalStateException.class, () -> state.isOffsetResetNeeded(unassignedPartition));
+    }
+
+    // This test ensures the "fetchablePartitions" does not run the custom predicate if the partition is not fetchable
+    // This func is used in the hot path for fetching, to find fetchable partitions that are not in the buffer,
+    // so it should avoid evaluating the predicate if not needed.
+    @Test
+    public void testFetchablePartitionsPerformsCheapChecksFirst() {
+        // Setup fetchable partition and pause it
+        state.assignFromUser(Set.of(tp0));
+        state.seek(tp0, 100);
+        assertTrue(state.isFetchable(tp0));
+        state.pause(tp0);
+
+        // Retrieve fetchable partitions with custom predicate.
+        AtomicBoolean predicateEvaluated = new AtomicBoolean(false);
+        Predicate<TopicPartition> isBuffered = tp -> {
+            predicateEvaluated.set(true);
+            return true;
+        };
+        List<TopicPartition> fetchablePartitions = state.fetchablePartitions(isBuffered);
+        assertTrue(fetchablePartitions.isEmpty());
+        assertFalse(predicateEvaluated.get(), "Custom predicate should not be evaluated when partitions are not fetchable");
+
+        // Resume partition and retrieve fetchable again
+        state.resume(tp0);
+        predicateEvaluated.set(false);
+        fetchablePartitions = state.fetchablePartitions(isBuffered);
+        assertTrue(predicateEvaluated.get());
+        assertEquals(tp0, fetchablePartitions.get(0));
     }
 }
