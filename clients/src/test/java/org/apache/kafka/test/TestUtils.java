@@ -28,7 +28,6 @@ import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -322,15 +321,13 @@ public class TestUtils {
     }
 
     /**
-     * Convert EndPoint to String
+     * Assert that two Endpoints are equal by comparing all fields
      */
-    public static String endpointToString(Endpoint endPoint) {
-        String host = endPoint.host();
-        int port = endPoint.port();
-        ListenerName listenerName = ListenerName.normalised(endPoint.listener());
-
-        String hostport = (host == null) ? (":" + port) : Utils.formatAddress(host, port);
-        return listenerName.value() + "://" + hostport;
+    public static void assertEndpointsEqual(Endpoint expected, Endpoint actual) {
+        assertEquals(expected.host(), actual.host(), "Host mismatch");
+        assertEquals(expected.port(), actual.port(), "Port mismatch");
+        assertEquals(expected.listener(), actual.listener(), "Listener mismatch");
+        assertEquals(expected.securityProtocol(), actual.securityProtocol(), "Security protocol mismatch");
     }
 
     public static Properties producerConfig(final String bootstrapServers,

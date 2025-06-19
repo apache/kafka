@@ -592,8 +592,10 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "plaintext://localhost:9091,SsL://localhost:9092")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL,CONTROLLER:PLAINTEXT")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listener == "SSL").map(JTestUtils.endpointToString))
-    assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.listener == "PLAINTEXT").map(JTestUtils.endpointToString))
+    JTestUtils.assertEndpointsEqual(new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9092),
+      config.listeners.find(_.listener == "SSL").getOrElse(fail("SSL endpoint not found")))
+    JTestUtils.assertEndpointsEqual( new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9091),
+      config.listeners.find(_.listener == "PLAINTEXT").getOrElse(fail("PLAINTEXT endpoint not found")))
   }
 
   private def listenerListToEndPoints(listenerList: String,
@@ -1186,7 +1188,8 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(defaults)
     assertEquals(1, config.brokerId)
-    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedBrokerListeners.map(JTestUtils.endpointToString))
+    JTestUtils.assertEndpointsEqual(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "127.0.0.1", 1122),
+      config.effectiveAdvertisedBrokerListeners.head)
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
     assertEquals(util.List.of("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
