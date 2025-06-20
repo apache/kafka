@@ -1367,7 +1367,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     sendFirstShareFetchRequest(memberId1, groupId, send, socket1)
 
     initProducer()
-    // Producing 1 records to the topic created above
+    // Producing 1 record to the topic created above
     produceData(topicIdPartition, 1)
 
     // Sending a share Fetch Request
@@ -1378,7 +1378,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareFetchResponseData1 = shareFetchResponse1.data()
     val partitionData1 = shareFetchResponseData1.responses().stream().findFirst().get().partitions().get(0)
 
-    // Producing 1 records to the topic created above
+    // Producing 1 record to the topic created above
     produceData(topicIdPartition, 1)
 
     // Sending another share Fetch Request with same groupId to the same topicPartition but with different memberId,
@@ -1390,7 +1390,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareFetchResponseData2 = shareFetchResponse2.data()
     val partitionData2 = shareFetchResponseData2.responses().stream().findFirst().get().partitions().get(0)
 
-    // Producing 1 records to the topic created above
+    // Producing 1 record to the topic created above
     produceData(topicIdPartition, 1)
 
     // Sending another share Fetch Request with same groupId to the same topicPartition but with different memberId,
@@ -1404,7 +1404,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     // Each consumer should have received 1 record and any record should only be consumed by 1 consumer
     assertEquals(partitionData1.acquiredRecords().get(0).firstOffset(), partitionData1.acquiredRecords().get(0).lastOffset())
-    assertEquals(partitionData1.acquiredRecords().get(0).firstOffset() , 0)
+    assertEquals(partitionData1.acquiredRecords().get(0).firstOffset(), 0)
 
     assertEquals(partitionData2.acquiredRecords().get(0).firstOffset(), partitionData2.acquiredRecords().get(0).lastOffset())
     assertEquals(partitionData2.acquiredRecords().get(0).firstOffset(), 1)
