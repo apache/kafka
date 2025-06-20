@@ -374,7 +374,7 @@ public class PersisterStateManager {
 
             // We don't know if FIND_COORD or actual REQUEST. Let's err on side of request.
             if (response == null) {
-                requestErrorResponse(Errors.UNKNOWN_SERVER_ERROR, new NetworkException("Did not receive any response"));
+                requestErrorResponse(Errors.UNKNOWN_SERVER_ERROR, new NetworkException("Did not receive any response (response = null)"));
                 sender.wakeup();
                 return;
             }
@@ -402,14 +402,14 @@ public class PersisterStateManager {
             log.debug("Response for RPC {} with key {} is invalid - {}.", name(), this.partitionKey, response);
 
             if (response.wasDisconnected()) {
-                errorConsumer.accept(Errors.NETWORK_EXCEPTION, null);
+                errorConsumer.accept(Errors.NETWORK_EXCEPTION, new NetworkException("Server response indicates disconnect."));
                 return Optional.of(Errors.NETWORK_EXCEPTION);
             } else if (response.wasTimedOut()) {
                 log.error("Response for RPC {} with key {} timed out - {}.", name(), this.partitionKey, response);
-                errorConsumer.accept(Errors.REQUEST_TIMED_OUT, null);
+                errorConsumer.accept(Errors.REQUEST_TIMED_OUT, new NetworkException("Server response indicates timeout."));
                 return Optional.of(Errors.REQUEST_TIMED_OUT);
             } else {
-                errorConsumer.accept(Errors.UNKNOWN_SERVER_ERROR, new NetworkException("Did not receive any response"));
+                errorConsumer.accept(Errors.UNKNOWN_SERVER_ERROR, new NetworkException("Server did not provide any response."));
                 return Optional.of(Errors.UNKNOWN_SERVER_ERROR);
             }
         }

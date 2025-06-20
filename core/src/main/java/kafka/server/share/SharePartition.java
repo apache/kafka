@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -501,12 +502,8 @@ public class SharePartition {
 
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    log.debug("Failed to initialize the share partition: {}-{}. Exception occurred: {}.",
-                        groupId, topicIdPartition, partitionData);
-                    if (!(ex instanceof UnknownServerException)) {
-                        log.error("Failed to initialize the share partition: {}-{}. Exception occurred: {}.",
-                            groupId, topicIdPartition, partitionData);
-                    }
+                    logError(String.format("Failed to initialize the share partition: %s-%s. Exception occurred: %s.",
+                        groupId, topicIdPartition, partitionData), ex);
                     throwable = ex;
                     return;
                 }
@@ -2328,12 +2325,8 @@ public class SharePartition {
                 PartitionErrorData partitionData = state.partitions().get(0);
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    log.debug("Failed to write the share group state for share partition: {}-{} due to exception",
-                        groupId, topicIdPartition, ex);
-                    if (!(ex instanceof UnknownServerException)) {
-                        log.error("Failed to write the share group state for share partition: {}-{} due to exception",
-                            groupId, topicIdPartition, ex);
-                    }
+                    logError(String.format("Failed to write the share group state for share partition: %s-%s due to exception",
+                        groupId, topicIdPartition), ex);
                     future.completeExceptionally(ex);
                     return;
                 }
@@ -2355,6 +2348,8 @@ public class SharePartition {
                 new FencedStateEpochException(errorMessage);
             case FENCED_LEADER_EPOCH ->
                 new NotLeaderOrFollowerException(errorMessage);
+            case NETWORK_EXCEPTION ->
+                new NetworkException(errorMessage);
             default ->
                 new UnknownServerException(errorMessage);
         };
@@ -2581,6 +2576,13 @@ public class SharePartition {
             archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
         }
         return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
+    }
+
+    private void logError(String message, Throwable e) {
+        log.debug(message, e);
+        if (!(e instanceof NetworkException)) {
+            log.error(message, e);
+        }
     }
 
     /**
