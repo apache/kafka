@@ -163,9 +163,10 @@ class StreamsUpgradeTest(Test):
         self.processor3.stop_node(self.processor3.node)
 
         # make sure the members have stopped
-        self.wait_for_verification(self.processor1, "SMOKE-TEST-CLIENT-CLOSED", self.processor1.STDOUT_FILE)
-        self.wait_for_verification(self.processor2, "SMOKE-TEST-CLIENT-CLOSED", self.processor2.STDOUT_FILE)
-        self.wait_for_verification(self.processor3, "SMOKE-TEST-CLIENT-CLOSED", self.processor3.STDOUT_FILE)
+        # some older versions crash on shutdown, so we allow crashes here.
+        self.wait_for_verification(self.processor1, "SMOKE-TEST-CLIENT-(EXCEPTION|CLOSED)", self.processor1.STDOUT_FILE)
+        self.wait_for_verification(self.processor2, "SMOKE-TEST-CLIENT-(EXCEPTION|CLOSED)", self.processor2.STDOUT_FILE)
+        self.wait_for_verification(self.processor3, "SMOKE-TEST-CLIENT-(EXCEPTION|CLOSED)", self.processor3.STDOUT_FILE)
 
         self.roll_logs(self.processor1, ".1-1")
         self.roll_logs(self.processor2, ".1-1")
@@ -252,7 +253,8 @@ class StreamsUpgradeTest(Test):
                 second_other_monitor.wait_until(self.processed_msg,
                                                 timeout_sec=60,
                                                 err_msg="Never saw output '%s' on " % self.processed_msg + str(second_other_node.account))
-        node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
+        # some older versions crash on shutdown, so we allow crashes here.
+        node.account.ssh_capture("grep -E 'SMOKE-TEST-CLIENT-(EXCEPTION|CLOSED)' %s" % processor.STDOUT_FILE, allow_fail=False)
 
         if upgrade_from is None:  # upgrade disabled -- second round of rolling bounces
             roll_counter = ".1-"  # second round of rolling bounces
