@@ -17,20 +17,31 @@
 package org.apache.kafka.clients.admin;
 
 
+import kafka.server.KafkaConfig;
+
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.metrics.ClientMetricsConfigs;
+import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class StaticBrokerConfigTest {
     private static final String TOPIC = "topic";
@@ -106,6 +117,82 @@ public class StaticBrokerConfigTest {
             assertNotEquals(CUSTOM_VALUE,
                 configEntry.value(),
                 "Config value should not be custom value since controller doesn't have related static config");
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT})
+    public void testInternalConfigsDoNotReturnForDescribeConfigs(ClusterInstance cluster) throws Exception {
+        try (
+                Admin admin = cluster.admin();
+                Admin controllerAdmin = cluster.admin(Map.of(), true)
+        ) {
+            ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+            ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, TOPIC);
+            ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, "testGroup");
+            ConfigResource clientMetricsResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "testClient");
+
+            admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1))).config(TOPIC).get();
+            // make sure the topic metadata exist
+            cluster.waitForTopic(TOPIC, 1);
+            Map<ConfigResource, Config> configResourceMap = admin.describeConfigs(
+                    List.of(brokerResource, topicResource, groupResource, clientMetricsResource)).all().get();
+
+            // test for case ConfigResource.Type == BROKER
+            // Notice: since the testing framework actively sets three internal configurations when starting the
+            // broker (see org.apache.kafka.common.test.KafkaClusterTestKit.Builder.createNodeConfig()),
+            // so the API `describeConfigs` will also return these three configurations. However, other internal
+            // configurations will not be returned
+            Set<String> ignoreConfigNames = Set.of(
+                    ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG,
+                    ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG,
+                    KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG);
+            Config brokerConfig = configResourceMap.get(brokerResource);
+            assertNotContainsInternalConfig(brokerConfig, KafkaConfig.configDef().configKeys(), ignoreConfigNames);
+
+            // test for case ConfigResource.Type == TOPIC
+            Config topicConfig = configResourceMap.get(topicResource);
+            assertNotContainsAnyInternalConfig(topicConfig, LogConfig.configKeys());
+
+            // test for case ConfigResource.Type == GROUP
+            Config groupConfig = configResourceMap.get(groupResource);
+            assertNotContainsAnyInternalConfig(groupConfig, GroupConfig.configDef().configKeys());
+
+            // test for case ConfigResource.Type == CLIENT_METRICS
+            Config clientMetricsConfig = configResourceMap.get(clientMetricsResource);
+            assertNotContainsAnyInternalConfig(clientMetricsConfig, ClientMetricsConfigs.configDef().configKeys());
+
+            // test for controller node, and ConfigResource.Type == BROKER
+            ConfigResource controllerResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
+            Map<ConfigResource, Config> controllerConfigMap = controllerAdmin.describeConfigs(List.of(controllerResource)).all().get();
+            Config controllerConfig = controllerConfigMap.get(controllerResource);
+            assertNotContainsInternalConfig(controllerConfig, KafkaConfig.configDef().configKeys(), ignoreConfigNames);
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT})
+    public void testInternalConfigsDoNotReturnForCreateTopics(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.admin()) {
+            // test for createTopics API
+            Config config = admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1))).config(TOPIC).get();
+            assertNotContainsAnyInternalConfig(config, LogConfig.configKeys());
+        }
+    }
+
+    private void assertNotContainsAnyInternalConfig(Config config, Map<String, ConfigDef.ConfigKey> configKeyMap) {
+        assertNotContainsInternalConfig(config, configKeyMap, Set.of());
+    }
+
+    private void assertNotContainsInternalConfig(Config config, Map<String, ConfigDef.ConfigKey> configKeyMap,
+                                                 Set<String> ignoreConfigNames) {
+        assertFalse(config.entries().isEmpty());
+        for (ConfigEntry topicConfigEntry : config.entries()) {
+            String configName = topicConfigEntry.name();
+            ConfigDef.ConfigKey configKey = configKeyMap.get(configName);
+
+            assertNotNull(configKey, "The ConfigKey of the config named '" + configName + "' should not be null");
+            if (!ignoreConfigNames.contains(configName)) {
+                assertFalse(configKey.internalConfig, "The config named '" + configName + "' is an internal config and should not be returned");
+            }
         }
     }
 }

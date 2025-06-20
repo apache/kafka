@@ -51,6 +51,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import com.fasterxml.jackson.databind.JsonNode;
 

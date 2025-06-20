@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
 import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -88,7 +89,7 @@ class TestRaftServer(
     val endpoints = Endpoints.fromInetSocketAddresses(
       config.effectiveAdvertisedControllerListeners
         .map { endpoint =>
-          (endpoint.listenerName, InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
+          (ListenerName.normalised(endpoint.listener), InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
         }
         .toMap
         .asJava

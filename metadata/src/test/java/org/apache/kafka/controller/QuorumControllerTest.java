@@ -102,12 +102,12 @@ import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.metalog.LocalLogManager;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.snapshot.FileRawSnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
@@ -660,7 +660,7 @@ public class QuorumControllerTest {
                 ).iterator()));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
-                new HashSet<>(List.of("foo", "bar"))).get();
+                Set.of("foo", "bar")).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("bar").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();

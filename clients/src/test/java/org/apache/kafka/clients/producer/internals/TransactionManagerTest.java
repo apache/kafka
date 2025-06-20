@@ -23,10 +23,13 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.PreparedTxnState;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -131,10 +134,13 @@ public class TransactionManagerTest {
     private final int transactionTimeoutMs = 1121;
 
     private final String topic = "test";
+    private static final Uuid TOPIC_ID = Uuid.fromString("y2J9jXHhfIkQ1wK8mMKXx1");
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
     private final long producerId = 13131L;
     private final short epoch = 1;
+    private final long ongoingProducerId = 999L;
+    private final short bumpedOngoingEpoch = 11;
     private final String consumerGroupId = "myConsumerGroup";
     private final String memberId = "member";
     private final int generationId = 5;
@@ -2952,7 +2958,7 @@ public class TransactionManagerTest {
             "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
         runUntil(commitResult::isCompleted);  // the commit shouldn't be completed without being sent since the produce request failed.
         assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
-        assertThrows(TimeoutException.class, commitResult::await);
+        assertInstanceOf(TimeoutException.class, assertThrows(TransactionAbortableException.class, commitResult::await).getCause());
 
         assertTrue(transactionManager.hasAbortableError());
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -3150,7 +3156,7 @@ public class TransactionManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testMaybeResolveSequencesTransactionalProducer(boolean transactionV2Enabled) throws Exception {
+    public void testMaybeResolveSequencesTransactionalProducer(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.of(transactionalId), transactionV2Enabled);
 
         // Initialize transaction with initial producer ID and epoch.
@@ -4019,6 +4025,56 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasOngoingTransaction());
     }
 
+    @Test
+    public void testInitializeTransactionsWithKeepPreparedTxn() {
+        doInitTransactionsWith2PCEnabled(true);
+        runUntil(transactionManager::hasProducerId);
+
+        // Expect a bumped epoch in the response.
+        assertTrue(transactionManager.hasProducerId());
+        assertFalse(transactionManager.hasOngoingTransaction());
+        assertEquals(ongoingProducerId, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals(bumpedOngoingEpoch, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    @Test
+    public void testPrepareTransaction() {
+        doInitTransactionsWith2PCEnabled(false);
+        runUntil(transactionManager::hasProducerId);
+
+        // Begin a transaction
+        transactionManager.beginTransaction();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        // Add a partition to the transaction
+        transactionManager.maybeAddPartition(tp0);
+
+        // Capture the current producer ID and epoch before preparing the response
+        long producerId = transactionManager.producerIdAndEpoch().producerId;
+        short epoch = transactionManager.producerIdAndEpoch().epoch;
+
+        // Simulate a produce request
+        try {
+            // Prepare the response before sending to ensure it's ready
+            prepareProduceResponse(Errors.NONE, producerId, epoch);
+
+            appendToAccumulator(tp0);
+            // Wait until the request is processed
+            runUntil(() -> !client.hasPendingResponses());
+        } catch (InterruptedException e) {
+            fail("Unexpected interruption: " + e);
+        }
+
+        transactionManager.prepareTransaction();
+        assertTrue(transactionManager.isPrepared());
+
+        PreparedTxnState preparedState = transactionManager.preparedTransactionState();
+        // Validate the state contains the correct serialized producer ID and epoch
+        assertEquals(producerId + ":" + epoch, preparedState.toString());
+        assertEquals(producerId, preparedState.producerId());
+        assertEquals(epoch, preparedState.epoch());
+    }
+
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
         AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);
         AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(0);
@@ -4053,7 +4109,7 @@ public class TransactionManagerTest {
         long producerId,
         short producerEpoch
     ) {
-        prepareInitPidResponse(error, shouldDisconnect, producerId, producerEpoch, false, false, (long) -1, (short) -1);
+        prepareInitPidResponse(error, shouldDisconnect, producerId, producerEpoch, false, false, -1, (short) -1);
     }
 
     private void prepareInitPidResponse(
@@ -4320,7 +4376,7 @@ public class TransactionManagerTest {
     @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, int logStartOffset) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(tp, resp);
+        Map<TopicIdPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(new TopicIdPartition(TOPIC_ID, tp), resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
@@ -4350,6 +4406,48 @@ public class TransactionManagerTest {
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+        transactionManager.maybeUpdateTransactionV2Enabled(true);
+
+        result.await();
+        assertTrue(result.isSuccessful());
+        assertTrue(result.isAcked());
+    }
+
+    private void doInitTransactionsWith2PCEnabled(boolean keepPrepared) {
+        initializeTransactionManager(Optional.of(transactionalId), true, true);
+        TransactionalRequestResult result = transactionManager.initializeTransactions(keepPrepared);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        if (keepPrepared) {
+            // Simulate an ongoing prepared transaction (ongoingProducerId != -1).
+            short ongoingEpoch = bumpedOngoingEpoch - 1;
+            prepareInitPidResponse(
+                Errors.NONE,
+                false,
+                ongoingProducerId,
+                bumpedOngoingEpoch,
+                true,
+                true,
+                ongoingProducerId,
+                ongoingEpoch
+            );
+        } else {
+            prepareInitPidResponse(
+                Errors.NONE,
+                false,
+                producerId,
+                epoch,
+                false,
+                true,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH
+            );
+        }
+
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
 
@@ -4406,39 +4504,6 @@ public class TransactionManagerTest {
 
     private void runUntil(Supplier<Boolean> condition) {
         ProducerTestUtils.runUntil(sender, condition);
-    }
-
-    @Test
-    public void testInitializeTransactionsWithKeepPreparedTxn() {
-        initializeTransactionManager(Optional.of(transactionalId), true, true);
-
-        client.prepareResponse(
-            FindCoordinatorResponse.prepareResponse(Errors.NONE, transactionalId, brokerNode)
-        );
-
-        // Simulate an ongoing prepared transaction (ongoingProducerId != -1).
-        long ongoingProducerId = 999L;
-        short ongoingEpoch = 10;
-        short bumpedEpoch = 11;
-
-        prepareInitPidResponse(
-            Errors.NONE,
-            false,
-            ongoingProducerId,
-            bumpedEpoch,
-            true,
-            true,
-            ongoingProducerId,
-            ongoingEpoch
-        );
-
-        transactionManager.initializeTransactions(true);
-        runUntil(transactionManager::hasProducerId);
-        
-        assertTrue(transactionManager.hasProducerId());
-        assertFalse(transactionManager.hasOngoingTransaction());
-        assertEquals(ongoingProducerId, transactionManager.producerIdAndEpoch().producerId);
-        assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
     }
 
     /**

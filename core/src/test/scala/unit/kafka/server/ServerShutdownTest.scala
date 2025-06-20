@@ -29,11 +29,11 @@ import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.storage.internals.log.LogManager
-import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.time.Duration
 import java.util.Properties
@@ -104,7 +104,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
 
     // do a clean shutdown and check that offset checkpoint file exists
     shutdownBroker()
-    for (logDir <- config.logDirs) {
+    for (logDir <- config.logDirs.asScala) {
       val OffsetCheckpointFile = new File(logDir, LogManager.RECOVERY_POINT_CHECKPOINT_FILE)
       assertTrue(OffsetCheckpointFile.exists)
       assertTrue(OffsetCheckpointFile.length() > 0)
@@ -134,21 +134,19 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     producer.close()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
+  @Test
+  def testCleanShutdownAfterFailedStartup(): Unit = {
     propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
     shutdownBroker()
     shutdownKRaftController()
     verifyCleanShutdownAfterFailedStartup[CancellationException]
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
+  @Test
+  def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
     createTopic(topic)
     shutdownBroker()
-    config.logDirs.foreach { dirName =>
+    config.logDirs.forEach { dirName =>
       val partitionDir = new File(dirName, s"$topic-0")
       partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
@@ -174,9 +172,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
+  @Test
+  def testShutdownWithKRaftControllerUnavailable(): Unit = {
     shutdownKRaftController()
     killBroker(0, Duration.ofSeconds(1))
     CoreUtils.delete(broker.config.logDirs)
@@ -220,9 +217,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testConsecutiveShutdown(quorum: String): Unit = {
+  @Test
+  def testConsecutiveShutdown(): Unit = {
     shutdownBroker()
     brokers.head.shutdown()
   }

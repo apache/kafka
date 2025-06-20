@@ -486,6 +486,7 @@ public class DefaultStatePersister implements Persister {
                                     partitionResult.partition(),
                                     partitionResult.stateEpoch(),
                                     partitionResult.startOffset(),
+                                    partitionResult.leaderEpoch(),
                                     partitionResult.errorCode(),
                                     partitionResult.errorMessage()))
                                 .toList();
@@ -493,6 +494,7 @@ public class DefaultStatePersister implements Persister {
                             log.error("Unexpected exception while getting data from share coordinator", e);
                             return List.of(PartitionFactory.newPartitionStateSummaryData(
                                 partition,
+                                -1,
                                 -1,
                                 -1,
                                 Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException

@@ -41,6 +41,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -50,6 +51,8 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
@@ -670,6 +673,32 @@ public class ShareConsumerImplTest {
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         consumer.close();
         verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"TOPIC_AUTHORIZATION_FAILED", "GROUP_AUTHORIZATION_FAILED", "INVALID_TOPIC_EXCEPTION"})
+    public void testCloseWithBackgroundQueueErrorsAfterUnsubscribe(Errors error) {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Complete the acknowledge on close event successfully
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        
+        // Complete the unsubscribe event successfully
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
+
+        // Mock the applicationEventHandler to add errors to the queue after unsubscribe
+        doAnswer(invocation -> {
+            // Add errors to the queue after unsubscribe event is processed
+            backgroundEventQueue.add(new ErrorEvent(error.exception()));
+            return null;
+        }).when(applicationEventHandler).add(any(StopFindCoordinatorOnCloseEvent.class));
+
+        // Close should complete successfully despite the errors in the background queue
+        assertDoesNotThrow(() -> consumer.close());
+
+        // Verify that the background queue was processed
+        assertTrue(backgroundEventQueue.isEmpty(), "Background queue should be empty after close");
     }
 
     private Properties requiredConsumerPropertiesAndGroupId(final String groupId) {

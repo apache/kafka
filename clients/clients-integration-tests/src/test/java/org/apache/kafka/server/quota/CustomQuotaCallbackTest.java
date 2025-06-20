@@ -173,7 +173,7 @@ public class CustomQuotaCallbackTest {
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
-            MetricName metricName = metrics.metricName(METRIC_NAME, METRIC_DESCRIPTION, Map.of());
+            MetricName metricName = metrics.metricName(METRIC_NAME, METRIC_DESCRIPTION, new LinkedHashMap<>());
             metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> 1);
         }
         

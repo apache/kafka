@@ -25,6 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -143,6 +144,7 @@ import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRES
 import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
 import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.THROTTLING_QUOTA_EXCEEDED;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.QUOTA_EXCEEDED_IN_TEST_MSG;
@@ -921,6 +923,34 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testCreateTopicsWithPolicyUnexpectedException() {
+        CreateTopicPolicy policy = new CreateTopicPolicy() {
+            @Override
+            public void validate(RequestMetadata requestMetadata) throws PolicyViolationException {
+                if (requestMetadata.topic().equals("known_error")) {
+                    throw new InvalidTopicException("Known client-server errors");
+                }
+
+                throw new RuntimeException("Unknown client-server errors");
+            }
+
+            @Override
+            public void close() throws Exception { /* Nothing to do */ }
+
+            @Override
+            public void configure(Map<String, ?> configs) { /* Nothing to do */ }
+        };
+
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
+                setCreateTopicPolicy(policy).
+                build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        ctx.createTestTopic("known_error", 2, (short) 2, INVALID_TOPIC_EXCEPTION.code());
+        ctx.createTestTopic("blah_error", 2, (short) 2, UNKNOWN_SERVER_ERROR.code());
+    }
+
+    @Test
     public void testCreateTopicWithCollisionChars() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ctx.registerBrokers(0, 1, 2);
@@ -1566,7 +1596,7 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1, 3);
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
-            createTopics(requestContext, request, new HashSet<>(List.of("foo", "bar", "quux", "foo2")));
+            createTopics(requestContext, request, Set.of("foo", "bar", "quux", "foo2"));
         ctx.replay(createTopicResult.records());
         List<CreatePartitionsTopic> topics = new ArrayList<>();
         topics.add(new CreatePartitionsTopic().
@@ -1690,7 +1720,7 @@ public class ReplicationControlManagerTest {
         ControllerRequestContext requestContext =
                 anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
-            createTopics(requestContext, request, new HashSet<>(List.of("foo")));
+            createTopics(requestContext, request, Set.of("foo"));
         ctx.replay(createTopicResult.records());
 
         ctx.registerBrokers(0, 1);
@@ -2961,12 +2991,12 @@ public class ReplicationControlManagerTest {
         KRaftClusterDescriber describer = replication.clusterDescriber;
         HashSet<UsableBroker> brokers = new HashSet<>();
         describer.usableBrokers().forEachRemaining(broker -> brokers.add(broker));
-        assertEquals(new HashSet<>(List.of(
+        assertEquals(Set.of(
             new UsableBroker(0, Optional.empty(), true),
             new UsableBroker(1, Optional.empty(), true),
             new UsableBroker(2, Optional.empty(), false),
             new UsableBroker(3, Optional.empty(), false),
-            new UsableBroker(4, Optional.empty(), false))), brokers);
+            new UsableBroker(4, Optional.empty(), false)), brokers);
         assertEquals(DirectoryId.MIGRATING, describer.defaultDir(1));
         assertEquals(Uuid.fromString("ozwqsVMFSNiYQUPSJA3j0w"), describer.defaultDir(2));
         assertEquals(DirectoryId.UNASSIGNED, describer.defaultDir(3));

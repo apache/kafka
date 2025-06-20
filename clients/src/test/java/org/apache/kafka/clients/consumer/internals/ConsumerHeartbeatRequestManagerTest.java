@@ -647,17 +647,6 @@ public class ConsumerHeartbeatRequestManagerTest {
         clearInvocations(backgroundEventHandler);
     }
 
-    private void mockErrorResponse(Errors error, String exceptionCustomMsg) {
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
-
-        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        ClientResponse response = createHeartbeatResponse(
-            result.unsentRequests.get(0), error, exceptionCustomMsg);
-        result.unsentRequests.get(0).handler().onComplete(response);
-    }
-
     private void mockResponseWithException(UnsupportedVersionException exception, boolean isFromBroker) {
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
@@ -1018,6 +1007,34 @@ public class ConsumerHeartbeatRequestManagerTest {
         when(subscriptions.subscriptionPattern()).thenReturn(null);
         data = heartbeatState.buildRequestData();
         assertNull(data.subscribedTopicRegex());
+    }
+
+    @Test
+    public void testRackIdInHeartbeatLifecycle() {
+        heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+
+        // Initial heartbeat with rackId
+        mockJoiningMemberData(null);
+        when(membershipManager.rackId()).thenReturn(Optional.of("rack1"));
+        ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
+        assertEquals("rack1", data.rackId());
+
+        // RackId not included in HB if member state is not JOINING
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.rackId());
+
+        // RackId included in HB if member state changes to JOINING again
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        data = heartbeatState.buildRequestData();
+        assertEquals("rack1", data.rackId());
+
+        // Empty rackId not included in HB
+        when(membershipManager.rackId()).thenReturn(Optional.empty());
+        heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.rackId());
     }
 
     private void assertHeartbeat(ConsumerHeartbeatRequestManager hrm, int nextPollMs) {

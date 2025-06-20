@@ -74,12 +74,6 @@ public class DescribeAclsResponseTest {
             PatternType.LITERAL,
             Collections.singletonList(ALLOW_CREATE_ACL));
 
-    private static final DescribeAclsResource LITERAL_ACL2 = buildResource(
-            "group",
-            ResourceType.GROUP,
-            PatternType.LITERAL,
-            Collections.singletonList(DENY_READ_ACL));
-
     @Test
     public void shouldThrowIfUnknown() {
         assertThrows(IllegalArgumentException.class,

@@ -156,7 +156,7 @@ public class RequestContextTest {
                 .setTimeoutMs(1);
         data.topicData().add(
                 new ProduceRequestData.TopicProduceData()
-                        .setName("foo")
+                        .setName("foo") // versions in this test < 13, topicId can't be used
                         .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                                 .setIndex(42))));
 

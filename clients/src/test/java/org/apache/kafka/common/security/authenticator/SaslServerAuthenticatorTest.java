@@ -128,7 +128,7 @@ public class SaslServerAuthenticatorTest {
             return headerBuffer.remaining();
         });
 
-        assertThrows(InvalidRequestException.class, () -> authenticator.authenticate());
+        assertThrows(InvalidRequestException.class, authenticator::authenticate);
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 
@@ -156,7 +156,7 @@ public class SaslServerAuthenticatorTest {
             return headerBuffer.remaining();
         });
 
-        assertThrows(InvalidRequestException.class, () -> authenticator.authenticate());
+        assertThrows(InvalidRequestException.class, authenticator::authenticate);
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 

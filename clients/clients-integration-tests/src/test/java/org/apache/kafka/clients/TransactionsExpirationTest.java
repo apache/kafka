@@ -165,8 +165,8 @@ public class TransactionsExpirationTest {
 
     private void testTransactionAfterProducerIdExpires(ClusterInstance clusterInstance, boolean isTV2Enabled) throws InterruptedException {
         clusterInstance.createTopic(TOPIC1, 4, (short) 3);
-        long oldProducerId = 0;
-        long oldProducerEpoch = 0;
+        long oldProducerId;
+        long oldProducerEpoch;
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, TRANSACTION_ID

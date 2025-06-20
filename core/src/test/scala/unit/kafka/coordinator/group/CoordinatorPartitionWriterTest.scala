@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.server.{LogAppendResult, ReplicaManager}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
@@ -86,13 +86,16 @@ class CoordinatorPartitionWriterTest {
   @Test
   def testWriteRecords(): Unit = {
     val tp = new TopicPartition("foo", 0)
+    val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
     val replicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+
     val partitionRecordWriter = new CoordinatorPartitionWriter(
-      replicaManager
+        replicaManager
     )
 
-    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
 
     when(replicaManager.appendRecordsToLeader(
       ArgumentMatchers.eq(1.toShort),
@@ -102,7 +105,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
-    )).thenReturn(Map(tp -> LogAppendResult(
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
       new LogAppendInfo(
         5L,
         10L,
@@ -133,10 +136,9 @@ class CoordinatorPartitionWriterTest {
       VerificationGuard.SENTINEL,
       batch
     ))
-
     assertEquals(
       batch,
-      recordsCapture.getValue.getOrElse(tp, throw new AssertionError(s"No records for $tp"))
+      recordsCapture.getValue.getOrElse(new TopicIdPartition(topicId, tp), throw new AssertionError(s"No records for $tp"))
     )
   }
 
@@ -191,13 +193,16 @@ class CoordinatorPartitionWriterTest {
   @Test
   def testWriteRecordsWithFailure(): Unit = {
     val tp = new TopicPartition("foo", 0)
+    val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
     val replicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager
     )
 
-    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
 
     when(replicaManager.appendRecordsToLeader(
       ArgumentMatchers.eq(1.toShort),
@@ -207,7 +212,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
-    )).thenReturn(Map(tp -> LogAppendResult(
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
       LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
       Some(Errors.NOT_LEADER_OR_FOLLOWER.exception),
       false
