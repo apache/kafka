@@ -32,7 +32,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * A concurrent event accumulator which group events per key and ensure that only one
+ * A concurrent event accumulator which groups events per key and ensures that only one
  * event with a given key can be processed concurrently.
  *
  * This class is threadsafe.
