@@ -1808,6 +1808,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         try {
             ConsumerUtils.getResult(networkPollEvent.pollFuture(), pollTimer);
+        } catch (TimeoutException swallow) {
+            // Ignored. This is a common case when waiting for network activity.
         } catch (InterruptException e) {
             log.trace("Interrupt during fetch", e);
             throw e;
