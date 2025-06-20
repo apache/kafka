@@ -28,6 +28,9 @@
     <li>The <code>org.apache.kafka.disallowed.login.modules</code> config was deprecated. Please use the <code>org.apache.kafka.allowed.login.modules</code>
         instead.
     </li>
+    <li>The <code>KafkaPrincipalBuilder</code> now extends <code>KafkaPrincipalSerde</code>. Force developer to implement <code>KafkaPrincipalSerde</code> interface for custom <code>KafkaPrincipalBuilder</code>.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/1gq9F">KIP-1157</a>.
+    </li>
 </ul>
 
 
