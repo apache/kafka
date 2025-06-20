@@ -182,9 +182,9 @@ class ProducerIntegrationTest {
 
   private def verifyUniqueIds(clusterInstance: ClusterInstance): Unit = {
     // Request enough PIDs from each broker to ensure each broker generates two blocks
-    val ids = clusterInstance.brokerSocketServers().stream().flatMap( broker => {
+    val ids = clusterInstance.brokers().values().stream().flatMap( broker => {
       IntStream.range(0, 1001).parallel().mapToObj( _ =>
-        nextProducerId(broker, clusterInstance.clientListener())
+        nextProducerId(broker.socketServer, clusterInstance.clientListener())
       )}).collect(Collectors.toList[Long]).asScala.toSeq
 
     val brokerCount = clusterInstance.brokerIds.size

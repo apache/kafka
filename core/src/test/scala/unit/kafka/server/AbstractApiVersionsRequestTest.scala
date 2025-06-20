@@ -38,9 +38,9 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
     val socket = if (cluster.controllerListenerName() == listenerName) {
-      cluster.controllerSocketServers().asScala.head
+      cluster.controllers().values().stream().map(_.socketServer).findFirst().get()
     } else {
-      cluster.brokerSocketServers().asScala.head
+      cluster.brokers().values().asScala.head.socketServer
     }
     IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, socket.boundPort(listenerName))
   }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.test.junit;
 
-import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
@@ -42,7 +41,6 @@ import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -139,13 +137,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     .controllerListenerNames()
                     .get(0)
             );
-        }
-
-        @Override
-        public Collection<SocketServer> controllerSocketServers() {
-            return controllers().values().stream()
-                .map(ControllerServer::socketServer)
-                .collect(Collectors.toList());
         }
 
         @Override
