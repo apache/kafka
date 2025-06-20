@@ -483,7 +483,7 @@ public class StreamsGroupCommand {
                                 result.put(groupId, resetOffsetsForInactiveGroup(groupId, dryRun));
                                 // delete internal topics
                                 if (!dryRun) {
-                                    List<String> internalTopics = getInternalTopicsForGroup(groupId);
+                                    List<String> internalTopics = getInternalTopicsToBeDeleted(groupId);
                                     if (!internalTopics.isEmpty()) {
                                         try {
                                             adminClient.deleteTopics(internalTopics).all().get();
@@ -518,7 +518,7 @@ public class StreamsGroupCommand {
             return result;
         }
 
-        private List<String> getInternalTopicsForGroup(String groupId) {
+        private List<String> getInternalTopicsToBeDeleted(String groupId) {
             List<String> internalTopics = new ArrayList<>();
             if (opts.options.has(opts.deleteAllInternalTopicsOpt)) {
                 internalTopics = retrieveInternalTopics(List.of(groupId)).get(groupId);
@@ -660,19 +660,17 @@ public class StreamsGroupCommand {
                 ? new ArrayList<>(listStreamsGroups())
                 : new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
 
-            final boolean deleteInternalTopics = opts.options.has(opts.deleteAllInternalTopicsOpt);
-
             // pre admin call checks
             Map<String, Throwable> failed = preAdminCallChecks(groupIds);
 
             groupIds.removeAll(failed.keySet());
             Map<String, Throwable> success = new HashMap<>();
-            Map<String, List<String>> internalTopics = new HashMap<>();
+            Map<String, List<String>> internalTopicsToBeDeleted = new HashMap<>();
             Map<String, Throwable> internalTopicsDeletionFailures = new HashMap<>();
             if (!groupIds.isEmpty()) {
-                // retrieve internal topics before deleting groups
-                if (deleteInternalTopics) {
-                    internalTopics = retrieveInternalTopics(groupIds);
+                // if needed, retrieve internal topics before deleting groups
+                if (opts.options.has(opts.deleteAllInternalTopicsOpt)) {
+                    internalTopicsToBeDeleted = retrieveInternalTopics(groupIds);
                 }
                 // delete streams groups
                 Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteStreamsGroups(
@@ -692,7 +690,7 @@ public class StreamsGroupCommand {
                 });
 
                 // delete internal topics
-                internalTopicsDeletionFailures = maybeDeleteInternalTopics(deleteInternalTopics, success, internalTopics);
+                internalTopicsDeletionFailures = maybeDeleteInternalTopics(success, internalTopicsToBeDeleted);
             }
 
             // display outcome messages based on the results
@@ -706,8 +704,8 @@ public class StreamsGroupCommand {
                     System.out.println("\nThese streams groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("', '")) + "'.");
                 }
             }
-            if (!internalTopics.keySet().isEmpty()) {
-                printInternalTopicErrors(internalTopicsDeletionFailures, success.keySet(), internalTopics.keySet());
+            if (!internalTopicsToBeDeleted.keySet().isEmpty()) {
+                printInternalTopicErrors(internalTopicsDeletionFailures, success.keySet(), internalTopicsToBeDeleted.keySet());
             }
             // for testing purpose: return all failures, including internal topics deletion failures
             failed.putAll(success);
@@ -715,11 +713,9 @@ public class StreamsGroupCommand {
             return failed;
         }
 
-        private Map<String, Throwable> maybeDeleteInternalTopics(boolean deleteInternalTopics,
-                                               Map<String, Throwable> success,
-                                               Map<String, List<String>> internalTopics) {
+        private Map<String, Throwable> maybeDeleteInternalTopics(Map<String, Throwable> success, Map<String, List<String>> internalTopics) {
             Map<String, Throwable> internalTopicsDeletionFailures = new HashMap<>();
-            if (deleteInternalTopics && !success.isEmpty()) {
+            if (!internalTopics.isEmpty() && !success.isEmpty()) {
                 for (String groupId : success.keySet()) {
                     List<String> internalTopicsToDelete = internalTopics.get(groupId);
                     if (internalTopicsToDelete != null && !internalTopicsToDelete.isEmpty()) {
