@@ -135,12 +135,9 @@ public class ConfigDefTest {
             Map<String, Object> m = new HashMap<>();
             m.put("name", value);
             ConfigDef def = new ConfigDef().define("name", type, Importance.HIGH, "docs");
-            try {
-                def.parse(m);
-                fail("Expected a config exception on bad input for value " + value);
-            } catch (ConfigException e) {
-                // this is good
-            }
+            assertThrows(ConfigException.class,
+                () -> def.parse(m),
+                "Expected a config exception on bad input for value " + value);
         }
     }
 
@@ -486,12 +483,9 @@ public class ConfigDefTest {
         for (Object value : badValues) {
             Map<String, Object> m = new HashMap<>();
             m.put("name", value);
-            try {
-                def.parse(m);
-                fail("Expected a config exception due to invalid value " + value);
-            } catch (ConfigException e) {
-                // this is good
-            }
+            assertThrows(ConfigException.class,
+                () -> def.parse(m),
+                "Expected a config exception due to invalid value " + value);
         }
     }
 
