@@ -44,6 +44,11 @@ public abstract class AbstractControllerMutationQuota implements ControllerMutat
 
     @Override
     public int throttleTime() {
+        // If no throttle time has been recorded, return 0
+        if (lastThrottleTimeMs == 0L) {
+            return 0;
+        }
+        
         // If a throttle time has been recorded, we adjust it by deducting the time elapsed
         // between the recording and now. We do this because `throttleTime` may be called
         // long after having recorded it, especially when a request waits in the purgatory.
