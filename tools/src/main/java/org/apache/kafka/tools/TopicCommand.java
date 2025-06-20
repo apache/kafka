@@ -820,8 +820,8 @@ public abstract class TopicCommand {
                     .ofType(java.lang.Integer.class);
             options = parser.parse(args);
 
-            allTopicLevelOpts = new HashSet<>(Arrays.asList(alterOpt, createOpt, describeOpt, listOpt, deleteOpt));
-            allReplicationReportOpts = new HashSet<>(Arrays.asList(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt));
+            allTopicLevelOpts = Set.of(alterOpt, createOpt, describeOpt, listOpt, deleteOpt);
+            allReplicationReportOpts = Set.of(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt);
 
             checkArgs();
         }
@@ -980,8 +980,8 @@ public abstract class TopicCommand {
             if (!has(listOpt) && !has(describeOpt))
                 CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
             if (has(alterOpt)) {
-                Set<OptionSpec<?>> usedOptions = new HashSet<>(Arrays.asList(bootstrapServerOpt, configOpt));
-                Set<OptionSpec<?>> invalidOptions = new HashSet<>(Arrays.asList(alterOpt));
+                Set<OptionSpec<?>> usedOptions = Set.of(bootstrapServerOpt, configOpt);
+                Set<OptionSpec<?>> invalidOptions = Set.of(alterOpt);
                 CommandLineUtils.checkInvalidArgsSet(parser, options, usedOptions, invalidOptions, Optional.of(KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS));
                 CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt);
             }

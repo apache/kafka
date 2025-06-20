@@ -566,43 +566,43 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions("a", 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 3L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 3L, 5L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions("aa", 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L, 4L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(2L, 4L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 2L, 3L, 4L, 5L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions("a", "aa", 10, 0)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(2L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions(null, "aa", 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 2L, 3L, 4L, 5L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions("a", null, 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 2L, 3L, 4L, 5L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions(null, null, 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 2L, 3L, 4L, 5L)));
         }
     }
 
@@ -622,43 +622,43 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions("a", 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 3L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 3L, 5L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions("aa", 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L, 4L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(2L, 4L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions("a", "aa", 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 2L, 3L, 4L, 5L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions("a", "aa", 10, 0)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(2L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions(null, "aa", 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 2L, 3L, 4L, 5L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions("a", null, 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 2L, 3L, 4L, 5L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions(null, null, 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+            assertThat(valuesToSet(iterator), equalTo(Set.of(1L, 2L, 3L, 4L, 5L)));
         }
     }
 
@@ -961,11 +961,11 @@ public abstract class AbstractSessionBytesStoreTest {
             sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)
         ) {
             if (storeType() == StoreType.InMemoryStore) {
-                assertEquals(valuesToSet(iterator), new HashSet<>(Arrays.asList(2L, 3L, 4L)));
+                assertEquals(valuesToSet(iterator), Set.of(2L, 3L, 4L));
             } else {
                 // The 2 records with values 2L and 3L are considered expired as
                 // their end times < observed stream time - retentionPeriod + 1.
-                assertEquals(valuesToSet(iterator), new HashSet<>(Collections.singletonList(4L)));
+                assertEquals(valuesToSet(iterator), Set.of(4L));
             }
         }
     }

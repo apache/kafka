@@ -407,10 +407,10 @@ public interface ClusterInstance {
         }
     }
 
-    default Collection<Integer> boundPorts() {
+    default List<Integer> boundPorts() {
         return brokers().values().stream()
                 .map(KafkaBroker::socketServer)
                 .map(s -> s.boundPort(clientListener()))
-                .collect(Collectors.toList());
+                .toList();
     }
 }

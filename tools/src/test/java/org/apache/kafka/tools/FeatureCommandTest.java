@@ -121,8 +121,16 @@ public class FeatureCommandTest {
                         "disable", "--feature", "metadata.version"))
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
-        assertEquals("Could not disable metadata.version. The update failed for all features since the following " +
-                "feature had an error: Invalid update version 0 for feature metadata.version. Local controller 3000 only supports versions 7-28", commandOutput);
+        assertEquals(
+            String.format(
+                "Could not disable metadata.version. The update failed for all features since the " +
+                "following feature had an error: Invalid update version 0 for feature " +
+                "metadata.version. Local controller 3000 only supports versions %s-%s",
+                MetadataVersion.MINIMUM_VERSION.featureLevel(),
+                MetadataVersion.latestTesting().featureLevel()
+            ),
+            commandOutput
+        );
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),

@@ -333,7 +333,7 @@ public abstract class ConsumerCoordinatorTest {
             List<Collection<String>> capturedTopics = topicsCaptor.getAllValues();
 
             // expected the final group subscribed topics to be updated to "topic1" and "topic2"
-            Set<String> expectedTopicsGotCalled = new HashSet<>(Arrays.asList(topic1, topic2));
+            Set<String> expectedTopicsGotCalled = Set.of(topic1, topic2);
             assertEquals(expectedTopicsGotCalled, capturedTopics.get(1));
         }
     }
@@ -1279,7 +1279,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         // Make sure that the metadata was refreshed during the rebalance and thus subscriptions now contain two topics.
-        final Set<String> updatedSubscriptionSet = new HashSet<>(Arrays.asList(topic1, topic2));
+        final Set<String> updatedSubscriptionSet = Set.of(topic1, topic2);
         assertEquals(updatedSubscriptionSet, subscriptions.subscription());
 
         // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
@@ -1300,7 +1300,7 @@ public abstract class ConsumerCoordinatorTest {
                 }
             }));
             coordinator.maybeUpdateSubscriptionMetadata();
-            assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), subscriptions.subscription());
+            assertEquals(Set.of(topic1, topic2), subscriptions.subscription());
 
             client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
             coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -2072,7 +2072,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(new HashSet<>(Arrays.asList(tp1, tp2)), subscriptions.assignedPartitions());
+        assertEquals(Set.of(tp1, tp2), subscriptions.assignedPartitions());
     }
 
     /**
@@ -2264,7 +2264,7 @@ public abstract class ConsumerCoordinatorTest {
         // and join the group again
         rebalanceListener.revoked = null;
         rebalanceListener.assigned = null;
-        subscriptions.subscribe(new HashSet<>(Arrays.asList(topic1, otherTopic)), Optional.of(rebalanceListener));
+        subscriptions.subscribe(Set.of(topic1, otherTopic), Optional.of(rebalanceListener));
         client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(assigned, Errors.NONE));
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
@@ -3269,12 +3269,9 @@ public abstract class ConsumerCoordinatorTest {
     public void testAuthenticationFailureInEnsureActiveGroup() {
         client.createPendingAuthenticationError(node, 300);
 
-        try {
-            coordinator.ensureActiveGroup();
-            fail("Expected an authentication error.");
-        } catch (AuthenticationException e) {
-            // OK
-        }
+        assertThrows(AuthenticationException.class,
+            () -> coordinator.ensureActiveGroup(),
+            "Expected an authentication error.");
     }
 
     @Test

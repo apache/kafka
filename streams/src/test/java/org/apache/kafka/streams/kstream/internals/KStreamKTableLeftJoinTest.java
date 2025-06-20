@@ -40,9 +40,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
@@ -119,7 +117,7 @@ public class KStreamKTableLeftJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(streamTopic, tableTopic)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(streamTopic, tableTopic), copartitionGroups.iterator().next());
     }
 
     @Test

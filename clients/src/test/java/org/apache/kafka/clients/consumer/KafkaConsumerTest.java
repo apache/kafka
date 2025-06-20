@@ -1974,12 +1974,9 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testOperationsBySubscribingConsumerWithDefaultGroupId(GroupProtocol groupProtocol) {
-        try {
-            newConsumer(groupProtocol, null, Optional.of(Boolean.TRUE));
-            fail("Expected an InvalidConfigurationException");
-        } catch (InvalidConfigurationException e) {
-            // OK, expected
-        }
+        assertThrows(InvalidConfigurationException.class,
+            () -> newConsumer(groupProtocol, null, Optional.of(true)),
+            "Expected an InvalidConfigurationException");
 
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null)) {
             assertThrows(InvalidGroupIdException.class, () -> consumer.subscribe(Set.of(topic)));
@@ -2087,7 +2084,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(List.of(tp0), Errors.NONE), coordinator);
 
-        client.prepareResponseFrom(body -> body instanceof FetchRequest 
+        client.prepareResponseFrom(body -> body instanceof FetchRequest
             && ((FetchRequest) body).fetchData(topicNames).containsKey(new TopicIdPartition(topicId, tp0)), fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
@@ -2142,7 +2139,7 @@ public class KafkaConsumerTest {
                 future.get(100, TimeUnit.MILLISECONDS);
                 if (closeTimeoutMs != 0)
                     fail("Close completed without waiting for commit or leave response");
-            } catch (TimeoutException e) {
+            } catch (TimeoutException swallow) {
                 // Expected exception
             }
 
@@ -3563,9 +3560,9 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
             Node node = metadata.fetch().nodes().get(0);
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         }
-        
+
         final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
-        
+
         int maxPreparedResponses = GroupProtocol.CLASSIC.equals(groupProtocol) ? 10 : 1;
         for (int i = 0; i < maxPreparedResponses; i++) {
             client.prepareResponse(
@@ -3586,20 +3583,20 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
     @EnumSource(GroupProtocol.class)
     public void testCommittedThrowsTimeoutExceptionForNoResponse(GroupProtocol groupProtocol) {
         Time time = new MockTime(Duration.ofSeconds(1).toMillis());
-        
+
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
-        
+
         initMetadata(client, Map.of(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.assign(List.of(tp0));
-        
+
         // lookup coordinator
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-        
+
         // try to get committed offsets for one topic-partition - but it is disconnected so there's no response and it will time out
         client.prepareResponseFrom(offsetResponse(Map.of(tp0, 0L), Errors.NONE), coordinator, true);
         org.apache.kafka.common.errors.TimeoutException timeoutException = assertThrows(org.apache.kafka.common.errors.TimeoutException.class,

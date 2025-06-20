@@ -86,7 +86,7 @@ public class StreamsGroupCommandTest {
         )));
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(result);
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(cgcArgs, adminClient);
-        Set<String> expectedGroups = new HashSet<>(Arrays.asList(firstGroup, secondGroup));
+        Set<String> expectedGroups = Set.of(firstGroup, secondGroup);
 
         final Set[] foundGroups = new Set[]{Set.of()};
         TestUtils.waitForCondition(() -> {
@@ -122,13 +122,13 @@ public class StreamsGroupCommandTest {
         )));
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(resultWithAllStates);
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(cgcArgs, adminClient);
-        Set<GroupListing> expectedListing = new HashSet<>(Arrays.asList(
+        Set<GroupListing> expectedListing = Set.of(
             new GroupListing(firstGroup, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.STABLE)),
-            new GroupListing(secondGroup, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.EMPTY))));
+            new GroupListing(secondGroup, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.EMPTY)));
 
         final Set[] foundListing = new Set[]{Set.of()};
         TestUtils.waitForCondition(() -> {
-            foundListing[0] = new HashSet<>(service.listStreamsGroupsInStates(new HashSet<>(Arrays.asList(GroupState.values()))));
+            foundListing[0] = new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.values())));
             return Objects.equals(expectedListing, foundListing[0]);
         }, "Expected to show groups " + expectedListing + ", but found " + foundListing[0]);
 
@@ -275,7 +275,7 @@ public class StreamsGroupCommandTest {
 
         assertNotNull(internalTopics.get(groupId));
         assertEquals(4, internalTopics.get(groupId).size());
-        assertEquals(new HashSet<>(List.of(groupId + "-1-changelog", groupId + "-2-changelog", groupId + "-1-repartition", groupId + "-2-repartition")),
+        assertEquals(Set.of(groupId + "-1-changelog", groupId + "-2-changelog", groupId + "-1-repartition", groupId + "-2-repartition"),
             new HashSet<>(internalTopics.get(groupId)));
         assertFalse(internalTopics.get(groupId).stream().anyMatch(List.of("some-pre-fix-changelog", groupId + "-some-thing")::contains));
         assertFalse(internalTopics.get(groupId).stream().anyMatch(sourceTopics::contains));
@@ -344,34 +344,34 @@ public class StreamsGroupCommandTest {
     @Test
     public void testGroupStatesFromString() {
         Set<GroupState> result = StreamsGroupCommand.groupStatesFromString("empty");
-        assertEquals(new HashSet<>(List.of(GroupState.EMPTY)), result);
+        assertEquals(Set.of(GroupState.EMPTY), result);
         result = StreamsGroupCommand.groupStatesFromString("EMPTY");
-        assertEquals(new HashSet<>(List.of(GroupState.EMPTY)), result);
+        assertEquals(Set.of(GroupState.EMPTY), result);
 
         result = StreamsGroupCommand.groupStatesFromString("notready");
-        assertEquals(new HashSet<>(List.of(GroupState.NOT_READY)), result);
+        assertEquals(Set.of(GroupState.NOT_READY), result);
         result = StreamsGroupCommand.groupStatesFromString("notReady");
-        assertEquals(new HashSet<>(List.of(GroupState.NOT_READY)), result);
+        assertEquals(Set.of(GroupState.NOT_READY), result);
 
         result = StreamsGroupCommand.groupStatesFromString("assigning");
-        assertEquals(new HashSet<>(List.of(GroupState.ASSIGNING)), result);
+        assertEquals(Set.of(GroupState.ASSIGNING), result);
         result = StreamsGroupCommand.groupStatesFromString("ASSIGNING");
-        assertEquals(new HashSet<>(List.of(GroupState.ASSIGNING)), result);
+        assertEquals(Set.of(GroupState.ASSIGNING), result);
 
         result = StreamsGroupCommand.groupStatesFromString("RECONCILING");
-        assertEquals(new HashSet<>(List.of(GroupState.RECONCILING)), result);
+        assertEquals(Set.of(GroupState.RECONCILING), result);
         result = StreamsGroupCommand.groupStatesFromString("reconCILING");
-        assertEquals(new HashSet<>(List.of(GroupState.RECONCILING)), result);
+        assertEquals(Set.of(GroupState.RECONCILING), result);
 
         result = StreamsGroupCommand.groupStatesFromString("STABLE");
-        assertEquals(new HashSet<>(List.of(GroupState.STABLE)), result);
+        assertEquals(Set.of(GroupState.STABLE), result);
         result = StreamsGroupCommand.groupStatesFromString("stable");
-        assertEquals(new HashSet<>(List.of(GroupState.STABLE)), result);
+        assertEquals(Set.of(GroupState.STABLE), result);
 
         result = StreamsGroupCommand.groupStatesFromString("DEAD");
-        assertEquals(new HashSet<>(List.of(GroupState.DEAD)), result);
+        assertEquals(Set.of(GroupState.DEAD), result);
         result = StreamsGroupCommand.groupStatesFromString("dead");
-        assertEquals(new HashSet<>(List.of(GroupState.DEAD)), result);
+        assertEquals(Set.of(GroupState.DEAD), result);
 
         assertThrow("preparingRebalance");
         assertThrow("completingRebalance");
@@ -386,7 +386,7 @@ public class StreamsGroupCommandTest {
     }
 
     private static void assertThrow(final String wrongState) {
-        final Set<String> validStates = new HashSet<>(Arrays.asList("Assigning", "Dead", "Empty", "Reconciling", "Stable", "NotReady"));
+        final Set<String> validStates = Set.of("Assigning", "Dead", "Empty", "Reconciling", "Stable", "NotReady");
 
         final Exception exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString(wrongState));
 
