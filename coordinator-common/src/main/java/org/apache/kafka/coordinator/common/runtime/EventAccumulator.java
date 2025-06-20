@@ -90,7 +90,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     private int size;
 
     /**
-     * A boolean indicated whether the accumulator is closed.
+     * A boolean indicating whether the accumulator is closed.
      */
     private boolean closed;
 
