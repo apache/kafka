@@ -174,7 +174,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
 
     /**
      * Returns the next {{@link Event}} available. This method blocks for the provided
-     * time and returns null of no event is available.
+     * time and returns null if no event is available.
      *
      * @param timeout   The timeout.
      * @param unit      The timeout unit.
