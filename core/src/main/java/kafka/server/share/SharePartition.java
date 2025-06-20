@@ -2077,7 +2077,7 @@ public class SharePartition {
             lock.writeLock().lock();
             try {
                 if (exception != null) {
-                    log.error("Failed to write state to persister for the share partition: {}-{}",
+                    log.debug("Failed to write state to persister for the share partition: {}-{}",
                         groupId, topicIdPartition, exception);
                     updatedStates.forEach(state -> state.completeStateTransition(false));
                     future.completeExceptionally(exception);
@@ -2426,7 +2426,7 @@ public class SharePartition {
             if (!stateBatches.isEmpty()) {
                 writeShareGroupState(stateBatches).whenComplete((result, exception) -> {
                     if (exception != null) {
-                        log.error("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId: {}",
+                        log.debug("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId: {}",
                             groupId, topicIdPartition, memberId, exception);
                     }
                     // Even if write share group state RPC call fails, we will still go ahead with the state transition.
@@ -2579,8 +2579,9 @@ public class SharePartition {
     }
 
     private void logError(String message, Throwable e) {
-        log.debug(message, e);
-        if (!(e instanceof NetworkException)) {
+        if (e instanceof NetworkException) {
+            log.debug(message, e);
+        } else {
             log.error(message, e);
         }
     }
