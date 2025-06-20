@@ -181,10 +181,8 @@ public class ClientQuotaManager {
         }
     }
 
-    public static class DefaultTags {
-        public static final String USER = "user";
-        public static final String CLIENT_ID = "client-id";
-    }
+    public static final String USER_TAG = "user";
+    public static final String CLIENT_ID_TAG = "client-id";
 
     private final ClientQuotaManagerConfig config;
     protected final Metrics metrics;
@@ -610,7 +608,7 @@ public class ClientQuotaManager {
                     () -> new IllegalStateException("Quota entity not specified"));
             var user = quotaEntity.sanitizedUser();
             var clientId = quotaEntity.clientId();
-            var metricTags = Map.of(DefaultTags.USER, user, DefaultTags.CLIENT_ID, clientId);
+            var metricTags = Map.of(USER_TAG, user, CLIENT_ID_TAG, clientId);
 
             var quotaMetricName = clientQuotaMetricName(metricTags);
             // Change the underlying metric config if the sensor has been created
@@ -691,8 +689,8 @@ public class ClientQuotaManager {
 
         @Override
         public Double quotaLimit(ClientQuotaType quotaType, Map<String, String> metricTags) {
-            String sanitizedUser = metricTags.get(DefaultTags.USER);
-            String clientId = metricTags.get(DefaultTags.CLIENT_ID);
+            String sanitizedUser = metricTags.get(USER_TAG);
+            String clientId = metricTags.get(CLIENT_ID_TAG);
 
             if (sanitizedUser == null || clientId == null) {
                 return null;
@@ -844,8 +842,8 @@ public class ClientQuotaManager {
             }
 
             var result = new LinkedHashMap<String, String>();
-            result.put(DefaultTags.USER, userTag);
-            result.put(DefaultTags.CLIENT_ID, clientIdTag);
+            result.put(USER_TAG, userTag);
+            result.put(CLIENT_ID_TAG, clientIdTag);
             return result;
         }
 

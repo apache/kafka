@@ -43,7 +43,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota.QuotaType
-import org.apache.kafka.server.ClientQuotaManager.DefaultTags
+import org.apache.kafka.server.ClientQuotaManager
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -389,7 +389,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       "tokens",
       QuotaType.CONTROLLER_MUTATION.toString,
       "Tracking remaining tokens in the token bucket per user/client-id",
-      java.util.Map.of(DefaultTags.USER, user, DefaultTags.CLIENT_ID, ""))
+      java.util.Map.of(ClientQuotaManager.USER_TAG, user, ClientQuotaManager.CLIENT_ID_TAG, ""))
     Option(metrics.metric(metricName))
   }
 
