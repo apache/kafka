@@ -124,8 +124,8 @@ public class CustomQuotaCallbackTest {
         private String nodeId;
 
         @Override
-        public Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
-            return Map.of();
+        public LinkedHashMap<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
+            return new LinkedHashMap<>();
         }
 
         @Override

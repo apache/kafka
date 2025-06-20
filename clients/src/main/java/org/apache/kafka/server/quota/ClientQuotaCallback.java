@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -44,7 +45,7 @@ public interface ClientQuotaCallback extends Configurable {
      * @param clientId  The client id associated with the request
      * @return quota metric tags that indicate which other clients share this quota
      */
-    Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId);
+    LinkedHashMap<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId);
 
     /**
      * Returns the quota limit associated with the provided metric tags. These tags were returned from

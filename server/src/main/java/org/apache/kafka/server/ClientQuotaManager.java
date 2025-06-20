@@ -683,7 +683,7 @@ public class ClientQuotaManager {
         }
 
         @Override
-        public Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
+        public LinkedHashMap<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
             return quotaMetricTags(Sanitizer.sanitize(principal.getName()), clientId);
         }
 
@@ -779,7 +779,7 @@ public class ClientQuotaManager {
             return false;
         }
 
-        public Map<String, String> quotaMetricTags(String sanitizedUser, String clientId) {
+        public LinkedHashMap<String, String> quotaMetricTags(String sanitizedUser, String clientId) {
             String userTag;
             String clientIdTag;
 
