@@ -56,6 +56,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
@@ -111,6 +112,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Timeout(1200)
 @Tag("integration")
 @ClusterTestDefaults(
+    types = {Type.KRAFT},
     serverProperties = {
         @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
         @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
@@ -1205,22 +1207,25 @@ public class ShareConsumerTest {
             int consumer1MessageCount = 0;
             int consumer2MessageCount = 0;
 
-            // Poll three times to receive records. The second poll acknowledges the records
-            // from the first poll, and so on. The third poll's records are not acknowledged
+            // Poll until we receive all the records. The second poll acknowledges the records
+            // from the first poll, and so on.
+            // The last poll's records are not acknowledged
             // because the consumer is closed, which makes the broker release the records fetched.
-            ConsumerRecords<byte[], byte[]> records1 = shareConsumer1.poll(Duration.ofMillis(5000));
-            consumer1MessageCount += records1.count();
-            int consumer1MessageCountA = records1.count();
-            records1 = shareConsumer1.poll(Duration.ofMillis(5000));
-            consumer1MessageCount += records1.count();
-            int consumer1MessageCountB = records1.count();
-            records1 = shareConsumer1.poll(Duration.ofMillis(5000));
-            int consumer1MessageCountC = records1.count();
-            assertEquals(totalMessages, consumer1MessageCountA + consumer1MessageCountB + consumer1MessageCountC);
-            shareConsumer1.close();
-
             int maxRetries = 10;
             int retries = 0;
+            int lastPollRecordCount = 0;
+            while (consumer1MessageCount < totalMessages && retries < maxRetries) {
+                lastPollRecordCount = shareConsumer1.poll(Duration.ofMillis(5000)).count();
+                consumer1MessageCount += lastPollRecordCount;
+                retries++;
+            }
+            assertEquals(totalMessages, consumer1MessageCount);
+            shareConsumer1.close();
+
+            // These records are released after the first consumer closes.
+            consumer1MessageCount -= lastPollRecordCount;
+
+            retries = 0;
             while (consumer1MessageCount + consumer2MessageCount < totalMessages && retries < maxRetries) {
                 ConsumerRecords<byte[], byte[]> records2 = shareConsumer2.poll(Duration.ofMillis(5000));
                 consumer2MessageCount += records2.count();
