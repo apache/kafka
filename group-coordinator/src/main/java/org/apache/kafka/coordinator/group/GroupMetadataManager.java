@@ -2576,10 +2576,6 @@ public class GroupMetadataManager {
             records
         ) || initializedAssignmentPending(group);
 
-        if (bumpGroupEpoch) {
-            metrics.record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
-        }
-
         int groupEpoch = group.groupEpoch();
         Map<String, SubscriptionCount> subscribedTopicNamesMap = group.subscribedTopicNames();
         SubscriptionType subscriptionType = group.subscriptionType();
@@ -2615,6 +2611,7 @@ public class GroupMetadataManager {
                 groupEpoch += 1;
                 records.add(newShareGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
                 log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
+                metrics.record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
             }
 
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
