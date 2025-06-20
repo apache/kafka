@@ -2792,11 +2792,19 @@ class KafkaApis(val requestChannel: RequestChannel,
               if (responseData.status() == null) {
                 responseData.setStatus(new util.ArrayList());
               }
-              responseData.status().add(
-                new StreamsGroupHeartbeatResponseData.Status()
-                  .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-                  .setStatusDetail("Unauthorized to CREATE on topics " + createTopicUnauthorized.mkString(",") + ".")
-              )
+              val missingInternalTopicStatus =
+                responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
+              if (missingInternalTopicStatus.isPresent) {
+                missingInternalTopicStatus.get().setStatusDetail(
+                  missingInternalTopicStatus.get().statusDetail() + "; Unauthorized to CREATE on topics " + createTopicUnauthorized.mkString(", ") + "."
+                )
+              } else {
+                responseData.status().add(
+                  new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+                    .setStatusDetail("Unauthorized to CREATE on topics " + createTopicUnauthorized.mkString(", ") + ".")
+                )
+              }
             } else {
               autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext);
             }
