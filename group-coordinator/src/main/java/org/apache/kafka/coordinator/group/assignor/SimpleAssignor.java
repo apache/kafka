@@ -58,7 +58,7 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
  * Balance is prioritized above stickiness.
  */
 public class SimpleAssignor implements ShareGroupPartitionAssignor {
-    private static final Logger LOG = LoggerFactory.getLogger(SimpleAssignor.class);
+    private static final Logger log = LoggerFactory.getLogger(SimpleAssignor.class);
     private static final String SIMPLE_ASSIGNOR_NAME = "simple";
 
     /**
@@ -82,10 +82,10 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             return new GroupAssignment(Map.of());
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
-            LOG.debug("Detected that all members are subscribed to the same set of topics, invoking the homogeneous assignment algorithm");
+            log.debug("Detected that all members are subscribed to the same set of topics, invoking the homogeneous assignment algorithm");
             return new SimpleHomogeneousAssignmentBuilder(groupSpec, subscribedTopicDescriber).build();
         } else {
-            LOG.debug("Detected that the members are subscribed to different sets of topics, invoking the heterogeneous assignment algorithm");
+            log.debug("Detected that the members are subscribed to different sets of topics, invoking the heterogeneous assignment algorithm");
             return assignHeterogeneous(groupSpec, subscribedTopicDescriber);
         }
     }
@@ -98,7 +98,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
                 continue;
 
             // Subscribed topic partitions for the share group member.
-            List<TopicIdPartition> targetPartitions = computeTargetPartitions(groupSpec, spec.subscribedTopicIds(), subscribedTopicDescriber);
+            List<TopicIdPartition> targetPartitions = AssignorHelpers.computeTargetPartitions(groupSpec, spec.subscribedTopicIds(), subscribedTopicDescriber);
             memberToPartitionsSubscription.put(memberId, targetPartitions);
         }
 
@@ -168,7 +168,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             roundRobinAssignment(topicToMemberSubscription.get(unassignedTopic), unassignedPartitions.get(unassignedTopic), newAssignment));
 
         // Step 3: We combine current assignment and new assignment.
-        Map<String, Set<TopicIdPartition>> finalAssignment = newHashMap(numGroupMembers);
+        Map<String, Set<TopicIdPartition>> finalAssignment = AssignorHelpers.newHashMap(numGroupMembers);
 
         newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
             finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
@@ -234,30 +234,6 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         }
     }
 
-    static List<TopicIdPartition> computeTargetPartitions(
-        GroupSpec groupSpec,
-        Set<Uuid> subscribedTopicIds,
-        SubscribedTopicDescriber subscribedTopicDescriber
-    ) {
-        List<TopicIdPartition> targetPartitions = new ArrayList<>();
-        subscribedTopicIds.forEach(topicId -> {
-            int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
-            if (numPartitions == -1) {
-                throw new PartitionAssignorException(
-                    "Members are subscribed to topic " + topicId + " which doesn't exist in the topic metadata."
-                );
-            }
-
-            for (int partition = 0; partition < numPartitions; partition++) {
-                if (groupSpec.isPartitionAssignable(topicId, partition)) {
-                    targetPartitions.add(new TopicIdPartition(topicId, partition));
-                }
-            }
-        });
-
-        return targetPartitions;
-    }
-
     private GroupAssignment groupAssignment(
         Map<String, Set<TopicIdPartition>> assignmentByMember,
         Collection<String> allGroupMembers
@@ -275,17 +251,5 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         });
 
         return new GroupAssignment(members);
-    }
-
-    //
-    // Utility methods to construct collection classes with known capacity.
-    // Equivalent to HashMap.newHashMap and HashSet.newHashSet which are introduced in Java 19.
-    //
-    static <K, V> HashMap<K, V> newHashMap(int numMappings) {
-        return new HashMap<>((int) (((numMappings + 1) / 0.75f) + 1));
-    }
-
-    static <K> HashSet<K> newHashSet(int numElements) {
-        return new HashSet<>((int) (((numElements + 1) / 0.75f) + 1));
     }
 }

@@ -31,10 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.assignor.SimpleAssignor.computeTargetPartitions;
-import static org.apache.kafka.coordinator.group.assignor.SimpleAssignor.newHashMap;
-import static org.apache.kafka.coordinator.group.assignor.SimpleAssignor.newHashSet;
-
 /**
  * The homogeneous simple assignment builder is used to generate the target assignment for a share group with
  * all its members subscribed to the same set of topics.
@@ -140,12 +136,12 @@ public class SimpleHomogeneousAssignmentBuilder {
         // Number the members 0 to M - 1.
         this.numGroupMembers = groupSpec.memberIds().size();
         this.memberIds = new ArrayList<>(groupSpec.memberIds());
-        this.memberIndices = newHashMap(numGroupMembers);
+        this.memberIndices = AssignorHelpers.newHashMap(numGroupMembers);
         for (int memberIndex = 0; memberIndex < numGroupMembers; memberIndex++) {
             memberIndices.put(memberIds.get(memberIndex), memberIndex);
         }
 
-        this.targetPartitions = computeTargetPartitions(groupSpec, subscribedTopicIds, subscribedTopicDescriber);
+        this.targetPartitions = AssignorHelpers.computeTargetPartitions(groupSpec, subscribedTopicIds, subscribedTopicDescriber);
 
         int numTargetPartitions = targetPartitions.size();
         if (numTargetPartitions == 0) {
@@ -154,12 +150,12 @@ public class SimpleHomogeneousAssignmentBuilder {
             this.desiredSharing = (numGroupMembers + numTargetPartitions - 1) / numTargetPartitions;
         }
         this.desiredAssignmentCount = new int[numGroupMembers];
-        this.oldGroupAssignment = newHashMap(numGroupMembers);
-        this.newGroupAssignment = newHashMap(numGroupMembers);
-        this.finalAssignmentByPartition = newHashMap(numTargetPartitions);
-        this.finalAssignmentByMember = newHashMap(numGroupMembers);
-        this.unfilledMembers = newHashSet(numGroupMembers);
-        this.overfilledMembers = newHashSet(numGroupMembers);
+        this.oldGroupAssignment = AssignorHelpers.newHashMap(numGroupMembers);
+        this.newGroupAssignment = AssignorHelpers.newHashMap(numGroupMembers);
+        this.finalAssignmentByPartition = AssignorHelpers.newHashMap(numTargetPartitions);
+        this.finalAssignmentByMember = AssignorHelpers.newHashMap(numGroupMembers);
+        this.unfilledMembers = AssignorHelpers.newHashSet(numGroupMembers);
+        this.overfilledMembers = AssignorHelpers.newHashSet(numGroupMembers);
 
         // Extract the old group assignment from the group metadata specification.
         groupSpec.memberIds().forEach(memberId -> {
@@ -193,6 +189,7 @@ public class SimpleHomogeneousAssignmentBuilder {
             return new GroupAssignment(Map.of());
         }
 
+        // The order of steps here is not that significant, but assignRemainingPartitions must go last.
         revokeUnassignablePartitions();
 
         revokeOverfilledMembers();
@@ -205,7 +202,7 @@ public class SimpleHomogeneousAssignmentBuilder {
         assignRemainingPartitions();
 
         // Combine the old and the new group assignments to give the result.
-        Map<String, MemberAssignment> targetAssignment = newHashMap(numGroupMembers);
+        Map<String, MemberAssignment> targetAssignment = AssignorHelpers.newHashMap(numGroupMembers);
         for (int memberIndex = 0; memberIndex < numGroupMembers; memberIndex++) {
             Map<Uuid, Set<Integer>> memberAssignment = newGroupAssignment.get(memberIndex);
             if (memberAssignment == null) {
