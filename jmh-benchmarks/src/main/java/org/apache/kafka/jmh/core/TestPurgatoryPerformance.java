@@ -79,7 +79,7 @@ public class TestPurgatoryPerformance {
         Random rand = new Random();
         List<FakeOperationKey> keys = IntStream.range(0, numKeys)
                 .mapToObj(i -> new FakeOperationKey(format("fakeKey%d", rand.nextInt(numPossibleKeys))))
-                .collect(Collectors.toList());
+                .toList();
 
         AtomicLong requestArrivalTime = new AtomicLong(start);
         AtomicLong end = new AtomicLong(0);

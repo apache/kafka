@@ -39,7 +39,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @State(Scope.Benchmark)
@@ -59,7 +58,7 @@ public class ProducerRequestBenchmark {
                     .mapToObj(recordIndex -> new SimpleRecord(100, "hello0".getBytes(StandardCharsets.UTF_8)))
                     .toList()
                     .toArray(new SimpleRecord[0]))))
-                .collect(Collectors.toList()))
+                .toList())
     );
     private static final ProduceRequestData PRODUCE_REQUEST_DATA = new ProduceRequestData()
             .setTimeoutMs(100)
