@@ -229,9 +229,10 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         if (skipAssignment)
             throw new IllegalStateException("Can't skip assignment because Connect does not support static membership.");
 
-        return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
-               ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
-               : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
+        ConnectProtocolCompatibility protocolCompatibility = ConnectProtocolCompatibility.fromProtocol(protocol);
+        return protocolCompatibility == EAGER
+               ? eagerAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this)
+               : incrementalAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this);
     }
 
     @Override
