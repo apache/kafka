@@ -4157,6 +4157,14 @@ class ReplicaManagerTest {
       val topicIds = Map(topic -> Uuid.ZERO_UUID, "foo" -> Uuid.randomUuid()).asJava
       val topicNames = topicIds.asScala.map(_.swap).asJava
 
+      val leaderDelta = createLeaderDelta(
+        topicId = Uuid.ZERO_UUID,
+        partition = topicPartition,
+        leaderId = 0,
+        replicas = brokerList,
+        isr = brokerList,
+      )
+
       def leaderAndIsrRequest(epoch: Int, name: String): LeaderAndIsrRequest =
         new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
           Seq(new LeaderAndIsrRequest.PartitionState()
@@ -4180,11 +4188,12 @@ class ReplicaManagerTest {
       assertEquals(Errors.NONE, response.partitionErrors(topicNames).get(topicPartition))
 
       // There is no file if the topic has the default UUID.
-      val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topic), (_, _) => ())
+      replicaManager.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
+//      val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topic), (_, _) => ())
       assertTrue(replicaManager.localLog(topicPartition).isDefined)
       val log2 = replicaManager.localLog(topicPartition).get
       assertFalse(log2.partitionMetadataFile.get.exists())
-      assertEquals(Errors.NONE, response2.partitionErrors(topicNames).get(topicPartition))
+//      assertEquals(Errors.NONE, response2.partitionErrors(topicNames).get(topicPartition))
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -4205,21 +4214,22 @@ class ReplicaManagerTest {
       // Delete the data directory to trigger a storage exception
       Utils.delete(dataDir)
 
-      val request = makeLeaderAndIsrRequest(
-        topicId = Uuid.randomUuid(),
-        topicPartition = topicPartition,
-        replicas = Seq(0, 1),
-        leaderAndIsr = new LeaderAndIsr(if (becomeLeader) 0 else 1, List(0, 1).map(Int.box).asJava)
+      val leaderDelta = createLeaderDelta(
+        topicId = topicId,
+        partition = topicPartition,
+        leaderId = if (becomeLeader) 0 else 1,
+        replicas = util.Arrays.asList(0 , 1),
+        isr = util.Arrays.asList(0, 1),
       )
+      replicaManager.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
 
-      replicaManager.becomeLeaderOrFollower(0, request, (_, _) => ())
       val hostedPartition = replicaManager.getPartition(topicPartition)
       assertEquals(
         classOf[HostedPartition.Offline],
         hostedPartition.getClass
       )
       assertEquals(
-        request.topicIds().get(topicPartition.topic()),
+        topicId,
         hostedPartition.asInstanceOf[HostedPartition.Offline].partition.flatMap(p => p.topicId).get
       )
     } finally {
@@ -5474,23 +5484,16 @@ class ReplicaManagerTest {
       // Registering a listener should fail because the partition does not exist yet.
       assertFalse(replicaManager.maybeAddListener(tp, listener))
 
-      // Broker 0 becomes leader of the partition
-      val leaderAndIsrPartitionState = new LeaderAndIsrRequest.PartitionState()
-        .setTopicName(topic)
-        .setPartitionIndex(0)
-        .setControllerEpoch(0)
-        .setLeader(0)
-        .setLeaderEpoch(leaderEpoch)
-        .setIsr(replicas)
-        .setPartitionEpoch(0)
-        .setReplicas(replicas)
-        .setIsNew(true)
-      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(leaderAndIsrPartitionState).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
-      assertEquals(Errors.NONE, leaderAndIsrResponse.error)
+      // Broker 0 becomes leader of the partition using applyDelta
+      val leaderDelta = createLeaderDelta(
+        topicId = topicId,
+        partition = tp,
+        leaderId = 0,
+        replicas = replicas,
+        isr = replicas,
+        leaderEpoch = leaderEpoch
+      )
+      replicaManager.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
 
       // Registering it should succeed now.
       assertTrue(replicaManager.maybeAddListener(tp, listener))
