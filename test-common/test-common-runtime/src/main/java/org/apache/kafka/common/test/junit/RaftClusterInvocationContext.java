@@ -71,10 +71,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     private final ClusterConfig clusterConfig;
     private final boolean isCombined;
 
-    // Copied from TestUtils (package-private)
-    private static final long DEFAULT_POLL_INTERVAL_MS = 100;
-    private static final long DEFAULT_MAX_WAIT_MS = 15_000;
-
     /**
      * Wait for condition to be met for at most 15 seconds and throw assertion failure otherwise.
      * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
