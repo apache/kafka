@@ -4446,10 +4446,10 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <h4 class="anchor-heading"><a id="eligible_leader_replicas_overview" class="anchor-link"></a><a href="#eligible_leader_replicas_overview">Overview</a></h4>
 
   <p>Starting from Apache Kafka 4.0, Eligible Leader Replicas (<a href="https://cwiki.apache.org/confluence/x/mpOzDw">KIP-966 Part 1</a>)
-    is available for the users to an improvement to Kafka replication. As the "strict min ISR" rule has been generally applied, which means the high watermark for the data partition can't advance
-    if the size of the ISR is smaller than the min ISR(<code>min.insync.replicas</code>), it makes some replicas that are not in the ISR safe to become the leader. The KRaft controller
-    stores such replicas in the PartitionRecord field called <code>Eligible Leader Replicas</code>. During the leader election, the controller will select the leaders
-    with the following order:</p>
+    is available for the users to an improvement to Kafka replication (ELR is enabled by default on new clusters starting 4.1). As the "strict min ISR" rule has been generally applied,
+    which means the high watermark for the data partition can't advance if the size of the ISR is smaller than the min ISR(<code>min.insync.replicas</code>), it makes some replicas
+    that are not in the ISR safe to become the leader. The KRaft controller stores such replicas in the PartitionRecord field called <code>Eligible Leader Replicas</code>. During the
+    leader election, the controller will select the leaders with the following order:</p>
   <ul>
     <li>If ISR is not empty, select one of them.</li>
     <li>If ELR is not empty, select one that is not fenced.</li>

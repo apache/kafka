@@ -200,7 +200,7 @@ public class ConnectorsResourceTest {
 
         Collection<String> connectors = (Collection<String>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
         // Ordering isn't guaranteed, compare sets
-        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_NAME, CONNECTOR2_NAME)), new HashSet<>(connectors));
+        assertEquals(Set.of(CONNECTOR_NAME, CONNECTOR2_NAME), new HashSet<>(connectors));
     }
 
     @Test
@@ -218,7 +218,7 @@ public class ConnectorsResourceTest {
 
         Map<String, Map<String, Object>> expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
         // Ordering isn't guaranteed, compare sets
-        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_NAME, CONNECTOR2_NAME)), expanded.keySet());
+        assertEquals(Set.of(CONNECTOR_NAME, CONNECTOR2_NAME), expanded.keySet());
         assertEquals(connector2, expanded.get(CONNECTOR2_NAME).get("status"));
         assertEquals(connector, expanded.get(CONNECTOR_NAME).get("status"));
     }
@@ -238,7 +238,7 @@ public class ConnectorsResourceTest {
 
         Map<String, Map<String, Object>> expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
         // Ordering isn't guaranteed, compare sets
-        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_NAME, CONNECTOR2_NAME)), expanded.keySet());
+        assertEquals(Set.of(CONNECTOR_NAME, CONNECTOR2_NAME), expanded.keySet());
         assertEquals(connector2, expanded.get(CONNECTOR2_NAME).get("info"));
         assertEquals(connector, expanded.get(CONNECTOR_NAME).get("info"));
     }
@@ -262,7 +262,7 @@ public class ConnectorsResourceTest {
 
         Map<String, Map<String, Object>> expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
         // Ordering isn't guaranteed, compare sets
-        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_NAME, CONNECTOR2_NAME)), expanded.keySet());
+        assertEquals(Set.of(CONNECTOR_NAME, CONNECTOR2_NAME), expanded.keySet());
         assertEquals(connectorInfo2, expanded.get(CONNECTOR2_NAME).get("info"));
         assertEquals(connectorInfo, expanded.get(CONNECTOR_NAME).get("info"));
         assertEquals(connector2, expanded.get(CONNECTOR2_NAME).get("status"));

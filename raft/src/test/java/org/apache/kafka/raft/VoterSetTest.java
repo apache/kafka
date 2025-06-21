@@ -29,8 +29,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -85,7 +83,7 @@ public final class VoterSetTest {
     @Test
     void testVoterIds() {
         VoterSet voterSet = VoterSet.fromMap(voterMap(IntStream.of(1, 2, 3), true));
-        assertEquals(new HashSet<>(List.of(1, 2, 3)), voterSet.voterIds());
+        assertEquals(Set.of(1, 2, 3), voterSet.voterIds());
     }
 
     @Test

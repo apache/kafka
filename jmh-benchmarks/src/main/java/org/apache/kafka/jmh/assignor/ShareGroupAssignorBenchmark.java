@@ -94,7 +94,7 @@ public class ShareGroupAssignorBenchmark {
     @Param({"1", "10", "100"})
     private int partitionCount;
 
-    @Param({"10", "100"})
+    @Param({"1", "10", "100"})
     private int topicCount;
 
     @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
