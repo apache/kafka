@@ -39,7 +39,10 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
@@ -173,8 +176,8 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
         private String clientId() {
             return getValue(
+                SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID,
                 CLIENT_ID_CONFIG,
-                "clientId",
                 true,
                 cu::validateString,
                 jou::validateString
@@ -183,8 +186,8 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
         private String clientSecret() {
             return getValue(
+                SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
                 CLIENT_SECRET_CONFIG,
-                "clientSecret",
                 true,
                 cu::validatePassword,
                 jou::validateString
@@ -193,8 +196,8 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
         private String scope() {
             return getValue(
+                SASL_OAUTHBEARER_SCOPE,
                 SCOPE_CONFIG,
-                "scope",
                 false,
                 cu::validateString,
                 jou::validateString
