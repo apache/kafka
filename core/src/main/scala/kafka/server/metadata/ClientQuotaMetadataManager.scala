@@ -151,13 +151,13 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 
     // Convert entity into Options with sanitized values for QuotaManagers
     val (userEntity, clientEntity) = transferToClientQuotaEntity(quotaEntity)
+    val quotaValue = newValue.map(v => Optional.of(new Quota(v, true))).getOrElse(Optional.empty[Quota]())
 
-    val quotaValue = newValue.map(new Quota(_, true))
     try {
       manager.updateQuota(
         userEntity,
         clientEntity,
-        quotaValue.toJava
+        quotaValue
       )
     } catch {
       case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
