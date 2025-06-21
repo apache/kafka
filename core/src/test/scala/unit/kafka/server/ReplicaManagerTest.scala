@@ -1251,52 +1251,46 @@ class ReplicaManagerTest {
    */
   private def verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(extraProps: Properties,
                                                                              expectTruncation: Boolean): Unit = {
-    val topicPartition = 0
     val followerBrokerId = 0
     val leaderBrokerId = 1
-    val controllerId = 0
-    val controllerEpoch = 0
     var leaderEpoch = 1
     val leaderEpochIncrement = 2
-    val aliveBrokerIds = Seq[Integer](followerBrokerId, leaderBrokerId)
     val countDownLatch = new CountDownLatch(1)
     val offsetFromLeader = 5
 
     // Prepare the mocked components for the test
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(new MockTimer(time),
-      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
+      0, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
       expectTruncation = expectTruncation, localLogOffset = Optional.of(10), offsetFromLeader = offsetFromLeader, extraProps = extraProps, topicId = Optional.of(topicId))
 
     try {
       // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
-      val tp = new TopicPartition(topic, topicPartition)
-      val partition = replicaManager.createPartition(tp)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-      partition.makeFollower(
-        leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds),
-        offsetCheckpoints,
-        None)
+      val directoryIds = replicaManager.logManager.directoryIdsSet.toList
+      val initialFollowerDelta = topicsCreateDelta( startId = followerBrokerId, isStartIdLeader = false, partitions = List(0), directoryIds = directoryIds, topic, topicIds(topic), leaderEpoch)
+      val initialImage = imageFromTopics(initialFollowerDelta.apply())
+      replicaManager.applyDelta(initialFollowerDelta, initialImage)
+
+      // Verify log created and partition is hosted
+      val localLog = replicaManager.localLog(topicPartition)
+      assertTrue(localLog.isDefined, "Log should be created for follower after applyDelta")
+      val hostedPartition = replicaManager.getPartition(topicPartition)
+      assertTrue(hostedPartition.isInstanceOf[HostedPartition.Online])
 
       // Make local partition a follower - because epoch increased by more than 1, truncation should
       // trigger even though leader does not change
       leaderEpoch += leaderEpochIncrement
-      val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(
-        controllerId, controllerEpoch, brokerEpoch,
-        Seq(leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
-        Collections.singletonMap(topic, topicId),
-        Set(new Node(followerBrokerId, "host1", 0),
-          new Node(leaderBrokerId, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0,
-        (_, followers) => assertEquals(followerBrokerId, followers.head.partitionId))
+      val epochJumpDelta = topicsCreateDelta( followerBrokerId, isStartIdLeader = false, partitions = List(0), directoryIds = directoryIds, topicName = topic, topicId = topicIds(topic), leaderEpoch = leaderEpoch)
+      val newImage = imageFromTopics(epochJumpDelta.apply())
+      replicaManager.applyDelta(epochJumpDelta, newImage)
+
       assertTrue(countDownLatch.await(1000L, TimeUnit.MILLISECONDS))
 
       // Truncation should have happened once
       if (expectTruncation) {
-        verify(mockLogMgr).truncateTo(Map(tp -> offsetFromLeader), isFuture = false)
+        verify(mockLogMgr).truncateTo(Map(topicPartition -> offsetFromLeader), isFuture = false)
       }
 
-      verify(mockLogMgr).finishedInitializingLog(ArgumentMatchers.eq(tp), any())
+      verify(mockLogMgr).finishedInitializingLog(ArgumentMatchers.eq(topicPartition), any())
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
