@@ -118,6 +118,19 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return true;
     }
 
+    /**
+     * Indicates whether this provider may return zero test template invocation contexts.
+     * Prior to JUnit 5.12, returning zero contexts was silently allowed. Starting from JUnit 5.12,
+     * a PreconditionViolationException is thrown unless this method explicitly returns {@code true}.
+     *
+     * @param context the extension context for the test template method
+     * @return {@code true} to allow this provider to return zero invocation contexts
+     * @see <a href="https://github.com/junit-team/junit5/commit/89a46dfa10c6447ef010fbff7903bfcb3c18975a">JUnit 5.12 Breaking Change</a>
+     */
+    public boolean mayReturnZeroTestTemplateInvocationContexts(ExtensionContext context) {
+        return true;
+    }
+
     private boolean isClusterTest(ExtensionContext context) {
         Method method = context.getRequiredTestMethod();
         return method.getDeclaredAnnotation(ClusterTemplate.class) != null ||

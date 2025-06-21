@@ -324,9 +324,9 @@ public class AclControlManagerTest {
             assertEquals(Optional.empty(), result.exception());
             deleted.add(result.aclBinding());
         }
-        assertEquals(new HashSet<>(List.of(
+        assertEquals(Set.of(
             TEST_ACLS.get(0).toBinding(),
-                TEST_ACLS.get(2).toBinding())), deleted);
+                TEST_ACLS.get(2).toBinding()), deleted);
         assertEquals(InvalidRequestException.class,
             deleteResult.response().get(1).exception().get().getClass());
         RecordTestUtils.replayAll(manager, deleteResult.records());
