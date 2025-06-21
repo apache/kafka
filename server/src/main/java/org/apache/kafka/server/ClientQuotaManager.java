@@ -138,11 +138,11 @@ public class ClientQuotaManager {
         }
     };
 
-    public static final KafkaQuotaEntity DEFAULT_CLIENT_ID_QUOTA_ENTITY =
+    private static final KafkaQuotaEntity DEFAULT_CLIENT_ID_QUOTA_ENTITY =
             new KafkaQuotaEntity(null, DEFAULT_USER_CLIENT_ID);
-    public static final KafkaQuotaEntity DEFAULT_USER_QUOTA_ENTITY =
+    private static final KafkaQuotaEntity DEFAULT_USER_QUOTA_ENTITY =
             new KafkaQuotaEntity(DEFAULT_USER_ENTITY, null);
-    public static final KafkaQuotaEntity DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY =
+    private static final KafkaQuotaEntity DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY =
             new KafkaQuotaEntity(DEFAULT_USER_ENTITY, DEFAULT_USER_CLIENT_ID);
 
     public record KafkaQuotaEntity(ClientQuotaEntity.ConfigEntity userEntity,
