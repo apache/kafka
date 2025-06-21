@@ -5422,7 +5422,7 @@ class ReplicaManagerTest {
       // Registering a listener should fail because the partition does not exist yet.
       assertFalse(replicaManager.maybeAddListener(tp, listener))
 
-      // Broker 0 becomes leader of the partition using applyDelta
+      // Broker 0 becomes leader of the partition
       val leaderDelta = createLeaderDelta(
         topicId = topicId,
         partition = tp,
