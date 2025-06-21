@@ -656,6 +656,7 @@ class ReplicaManagerTest {
           isr = brokerList
         )
         replicaManager.applyDelta(delta, imageFromTopics(delta.apply()))
+        replicaManager.getPartitionOrException(tp)
       }
 
       def appendRecord(pid: Long, sequence: Int, partition: Int): Unit = {
@@ -4130,8 +4131,8 @@ class ReplicaManagerTest {
       // The file exists if the topic has the default UUID.
       replicaManager.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
       assertTrue(replicaManager.localLog(topicPartition).isDefined)
-      val log2 = replicaManager.localLog(topicPartition).get
-      assertTrue(log2.partitionMetadataFile.get.exists())
+      val log = replicaManager.localLog(topicPartition).get
+      assertTrue(log.partitionMetadataFile.get.exists())
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
