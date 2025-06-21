@@ -25,9 +25,7 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -129,9 +127,9 @@ public final class QueryableStoreTypes {
         extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedKeyValueStoreType() {
-            super(new HashSet<>(Arrays.asList(
+            super(Set.of(
                 TimestampedKeyValueStore.class,
-                ReadOnlyKeyValueStore.class)));
+                ReadOnlyKeyValueStore.class));
         }
 
         @Override
@@ -158,9 +156,9 @@ public final class QueryableStoreTypes {
         extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedWindowStoreType() {
-            super(new HashSet<>(Arrays.asList(
+            super(Set.of(
                 TimestampedWindowStore.class,
-                ReadOnlyWindowStore.class)));
+                ReadOnlyWindowStore.class));
         }
 
         @Override

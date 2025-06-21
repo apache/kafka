@@ -89,6 +89,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     public static final Exception NULL_TOPIC_ID = new Exception("The topic id cannot be null.");
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
+    public static final Exception WRITE_UNINITIALIZED_SHARE_PARTITION = new Exception("Write operation on uninitialized share partition not allowed.");
+    public static final Exception READ_UNINITIALIZED_SHARE_PARTITION = new Exception("Read operation on uninitialized share partition not allowed.");
 
     public static class Builder implements CoordinatorShardBuilder<ShareCoordinatorShard, CoordinatorRecord> {
         private final ShareCoordinatorConfig config;
@@ -363,38 +365,24 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         int leaderEpoch = partitionData.leaderEpoch();
         SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicId, partitionId);
 
-        ReadShareGroupStateResponseData responseData = null;
+        ShareGroupOffset offsetValue = shareStateMap.get(key);
+        List<ReadShareGroupStateResponseData.StateBatch> stateBatches = (offsetValue.stateBatches() != null && !offsetValue.stateBatches().isEmpty()) ?
+            offsetValue.stateBatches().stream()
+                .map(
+                    stateBatch -> new ReadShareGroupStateResponseData.StateBatch()
+                        .setFirstOffset(stateBatch.firstOffset())
+                        .setLastOffset(stateBatch.lastOffset())
+                        .setDeliveryState(stateBatch.deliveryState())
+                        .setDeliveryCount(stateBatch.deliveryCount())
+                ).toList() : List.of();
 
-        if (!shareStateMap.containsKey(key)) {
-            // Leader epoch update might be needed
-            responseData = ReadShareGroupStateResponse.toResponseData(
-                topicId,
-                partitionId,
-                PartitionFactory.UNINITIALIZED_START_OFFSET,
-                PartitionFactory.DEFAULT_STATE_EPOCH,
-                List.of()
-            );
-        } else {
-            // Leader epoch update might be needed
-            ShareGroupOffset offsetValue = shareStateMap.get(key);
-            List<ReadShareGroupStateResponseData.StateBatch> stateBatches = (offsetValue.stateBatches() != null && !offsetValue.stateBatches().isEmpty()) ?
-                offsetValue.stateBatches().stream()
-                    .map(
-                        stateBatch -> new ReadShareGroupStateResponseData.StateBatch()
-                            .setFirstOffset(stateBatch.firstOffset())
-                            .setLastOffset(stateBatch.lastOffset())
-                            .setDeliveryState(stateBatch.deliveryState())
-                            .setDeliveryCount(stateBatch.deliveryCount())
-                    ).toList() : List.of();
-
-            responseData = ReadShareGroupStateResponse.toResponseData(
-                topicId,
-                partitionId,
-                offsetValue.startOffset(),
-                offsetValue.stateEpoch(),
-                stateBatches
-            );
-        }
+        ReadShareGroupStateResponseData responseData = ReadShareGroupStateResponse.toResponseData(
+            topicId,
+            partitionId,
+            offsetValue.startOffset(),
+            offsetValue.stateEpoch(),
+            stateBatches
+        );
 
         // Optimization in case leaderEpoch update is not required.
         if (leaderEpoch == -1 ||
@@ -644,9 +632,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Util method to generate a ShareSnapshot or ShareUpdate type record for a key, based on various conditions.
      * <p>
-     * If no snapshot has been created for the key => create a new ShareSnapshot record
-     * else if number of ShareUpdate records for key >= max allowed per snapshot per key => create a new ShareSnapshot record
-     * else create a new ShareUpdate record
+     * If number of ShareUpdate records for key >= max allowed per snapshot per key or stateEpoch is highest
+     * seen so far => create a new ShareSnapshot record else create a new ShareUpdate record. This method assumes
+     * that share partition key is present in shareStateMap since it should be called on initialized share partitions.
      *
      * @param partitionData - Represents the data which should be written into the share state record.
      * @param key           - The {@link SharePartitionKey} object.
@@ -658,28 +646,14 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     ) {
         long timestamp = time.milliseconds();
         int updatesPerSnapshotLimit = config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot();
-        if (!shareStateMap.containsKey(key)) {
-            // Since this is the first time we are getting a write request for key, we should be creating a share snapshot record.
-            // The incoming partition data could have overlapping state batches, we must merge them
-            return ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                key.groupId(), key.topicId(), partitionData.partition(),
-                new ShareGroupOffset.Builder()
-                    .setSnapshotEpoch(0)
-                    .setStartOffset(partitionData.startOffset())
-                    .setLeaderEpoch(partitionData.leaderEpoch())
-                    .setStateEpoch(partitionData.stateEpoch())
-                    .setStateBatches(mergeBatches(List.of(), partitionData))
-                    .setCreateTimestamp(timestamp)
-                    .setWriteTimestamp(timestamp)
-                    .build());
-        } else if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit || partitionData.stateEpoch() > shareStateMap.get(key).stateEpoch()) {
+        if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit || partitionData.stateEpoch() > shareStateMap.get(key).stateEpoch()) {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
             int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? currentState.leaderEpoch() : partitionData.leaderEpoch();
             int newStateEpoch = partitionData.stateEpoch() == -1 ? currentState.stateEpoch() : partitionData.stateEpoch();
             long newStartOffset = partitionData.startOffset() == -1 ? currentState.startOffset() : partitionData.startOffset();
 
-            // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot,
-            // we should be creating a share snapshot record.
+            // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot
+            // or state epoch has incremented, we should be creating a share snapshot record.
             // The incoming partition data could have overlapping state batches, we must merge them.
             return ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
                 key.groupId(), key.topicId(), partitionData.partition(),
@@ -772,6 +746,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
+
+        if (!shareStateMap.containsKey(mapKey)) {
+            return Optional.of(getWriteErrorCoordinatorResult(Errors.INVALID_REQUEST, WRITE_UNINITIALIZED_SHARE_PARTITION, topicId, partitionId));
+        }
+
         if (partitionData.leaderEpoch() != -1 && leaderEpochMap.containsKey(mapKey) && leaderEpochMap.get(mapKey) > partitionData.leaderEpoch()) {
             log.error("Write request leader epoch is smaller than last recorded current: {}, requested: {}.", leaderEpochMap.get(mapKey), partitionData.leaderEpoch());
             return Optional.of(getWriteErrorCoordinatorResult(Errors.FENCED_LEADER_EPOCH, null, topicId, partitionId));
@@ -814,6 +793,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
+
+        if (!shareStateMap.containsKey(mapKey)) {
+            log.error("Read on uninitialized share partition {}", mapKey);
+            return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(
+                topicId, partitionId, Errors.INVALID_REQUEST, READ_UNINITIALIZED_SHARE_PARTITION.getMessage()));
+        }
+
         if (leaderEpochMap.containsKey(mapKey) && leaderEpochMap.get(mapKey) > partitionData.leaderEpoch()) {
             log.error("Read request leader epoch is smaller than last recorded current: {}, requested: {}.", leaderEpochMap.get(mapKey), partitionData.leaderEpoch());
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.FENCED_LEADER_EPOCH, Errors.FENCED_LEADER_EPOCH.message()));

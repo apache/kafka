@@ -1099,7 +1099,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     protected static void alterMirrorMakerSourceConnectorOffsets(EmbeddedConnectCluster connectCluster, LongUnaryOperator alterOffset, String... topics) {
-        Set<String> topicsSet = new HashSet<>(List.of(topics));
+        Set<String> topicsSet = Set.of(topics);
         String connectorName = MirrorSourceConnector.class.getSimpleName();
 
         ConnectorOffsets currentOffsets = connectCluster.connectorOffsets(connectorName);
@@ -1129,7 +1129,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     protected static void resetSomeMirrorMakerSourceConnectorOffsets(EmbeddedConnectCluster connectCluster, String... topics) {
-        Set<String> topicsSet = new HashSet<>(List.of(topics));
+        Set<String> topicsSet = Set.of(topics);
         String connectorName = MirrorSourceConnector.class.getSimpleName();
 
         ConnectorOffsets currentOffsets = connectCluster.connectorOffsets(connectorName);

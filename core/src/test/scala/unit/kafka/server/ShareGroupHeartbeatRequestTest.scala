@@ -25,8 +25,10 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.server.common.Feature
+import org.apache.kafka.server.IntegrationTestUtils;
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.Timeout
+
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -931,11 +933,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   private def connectAndReceive(request: ShareGroupHeartbeatRequest): ShareGroupHeartbeatResponse = {
-    IntegrationTestUtils.connectAndReceive[ShareGroupHeartbeatResponse](
-      request,
-      cluster.anyBrokerSocketServer(),
-      cluster.clientListener()
-    )
+    IntegrationTestUtils.connectAndReceive[ShareGroupHeartbeatResponse](request, cluster.boundPorts().get(0))
   }
 
   private def increasePartitions[B <: KafkaBroker](admin: Admin,
