@@ -635,24 +635,19 @@ class ReplicaManagerTest {
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
+      val tp0 = new TopicPartition(topic, 0)
+      val tp1 = new TopicPartition(topic, 1)
 
       // Create a couple partition for the topic.
-      val partition0 = replicaManager.createPartition(new TopicPartition(topic, 0))
+      val partition0 = replicaManager.createPartition(tp0)
       partition0.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
-      val partition1 = replicaManager.createPartition(new TopicPartition(topic, 1))
       partition1.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader for the partitions.
       Seq(0, 1).foreach { partition =>
         val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-          Seq(new LeaderAndIsrRequest.PartitionState()
-            .setTopicName(topic)
-            .setPartitionIndex(partition)
-            .setControllerEpoch(0)
-            .setLeader(0)
-            .setLeaderEpoch(0)
             .setIsr(brokerList)
             .setPartitionEpoch(0)
             .setReplicas(brokerList)
