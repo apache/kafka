@@ -437,9 +437,6 @@ public interface ClusterInstance {
                 if (leader.isPresent()) {
                     return leader.get();
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw e;
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
                 if (cause instanceof UnknownTopicOrPartitionException ||
