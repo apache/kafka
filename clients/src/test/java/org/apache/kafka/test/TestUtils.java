@@ -20,7 +20,6 @@ import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -318,16 +317,6 @@ public class TestUtils {
             attempts--;
         }
         throw new RuntimeException("Failed to create directory after 1000 attempts");
-    }
-
-    /**
-     * Assert that two Endpoints are equal by comparing all fields
-     */
-    public static void assertEndpointsEqual(Endpoint expected, Endpoint actual) {
-        assertEquals(expected.host(), actual.host(), "Host mismatch");
-        assertEquals(expected.port(), actual.port(), "Port mismatch");
-        assertEquals(expected.listener(), actual.listener(), "Listener mismatch");
-        assertEquals(expected.securityProtocol(), actual.securityProtocol(), "Security protocol mismatch");
     }
 
     public static Properties producerConfig(final String bootstrapServers,

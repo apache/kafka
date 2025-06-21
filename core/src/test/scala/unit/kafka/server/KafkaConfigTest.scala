@@ -43,7 +43,6 @@ import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
-import org.apache.kafka.test.{TestUtils => JTestUtils}
 
 import scala.jdk.CollectionConverters._
 
@@ -592,10 +591,17 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "plaintext://localhost:9091,SsL://localhost:9092")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL,CONTROLLER:PLAINTEXT")
     val config = KafkaConfig.fromProps(props)
-    JTestUtils.assertEndpointsEqual(new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9092),
+    assertEndpointsEqual(new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9092),
       config.listeners.find(_.listener == "SSL").getOrElse(fail("SSL endpoint not found")))
-    JTestUtils.assertEndpointsEqual( new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9091),
+    assertEndpointsEqual( new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9091),
       config.listeners.find(_.listener == "PLAINTEXT").getOrElse(fail("PLAINTEXT endpoint not found")))
+  }
+
+  private def assertEndpointsEqual(expected: Endpoint, actual: Endpoint): Unit = {
+    assertEquals(expected.host(), actual.host(), "Host mismatch")
+    assertEquals(expected.port(), actual.port(), "Port mismatch")
+    assertEquals(expected.listener(), actual.listener(), "Listener mismatch")
+    assertEquals(expected.securityProtocol(), actual.securityProtocol(), "Security protocol mismatch")
   }
 
   private def listenerListToEndPoints(listenerList: String,
@@ -1188,7 +1194,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(defaults)
     assertEquals(1, config.brokerId)
-    JTestUtils.assertEndpointsEqual(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "127.0.0.1", 1122),
+    assertEndpointsEqual(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "127.0.0.1", 1122),
       config.effectiveAdvertisedBrokerListeners.head)
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
     assertEquals(util.List.of("/tmp1", "/tmp2"), config.logDirs)
