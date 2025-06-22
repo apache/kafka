@@ -34,9 +34,9 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.nio.charset.Charset
+import java.util
 import java.util.Optional
 import scala.collection.Map
-import scala.jdk.CollectionConverters._
 
 class CoordinatorPartitionWriterTest {
   @Test
@@ -75,8 +75,8 @@ class CoordinatorPartitionWriterTest {
       replicaManager
     )
 
-    when(replicaManager.getLogConfig(tp)).thenReturn(Some(new LogConfig(Map.empty.asJava)))
-    assertEquals(new LogConfig(Map.empty.asJava), partitionRecordWriter.config(tp))
+    when(replicaManager.getLogConfig(tp)).thenReturn(Some(new LogConfig(util.Map.of)))
+    assertEquals(new LogConfig(util.Map.of), partitionRecordWriter.config(tp))
 
     when(replicaManager.getLogConfig(tp)).thenReturn(None)
     assertThrows(classOf[NotLeaderOrFollowerException], () => partitionRecordWriter.config(tp))
@@ -119,7 +119,7 @@ class CoordinatorPartitionWriterTest {
         10L
       ),
       Option.empty,
-      false
+      hasCustomErrorMessage = false
     )))
 
     val batch = MemoryRecords.withRecords(
@@ -215,7 +215,7 @@ class CoordinatorPartitionWriterTest {
     )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
       LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
       Some(Errors.NOT_LEADER_OR_FOLLOWER.exception),
-      false
+      hasCustomErrorMessage = false
     )))
 
     val batch = MemoryRecords.withRecords(
