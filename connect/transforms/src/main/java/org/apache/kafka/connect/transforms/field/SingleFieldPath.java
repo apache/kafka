@@ -22,7 +22,6 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -134,7 +133,7 @@ public class SingleFieldPath {
         // add last step if last char is a dot
         if (!path.isEmpty() && path.charAt(path.length() - 1) == DOT)
             steps.add("");
-        return Collections.unmodifiableList(steps);
+        return List.copyOf(steps);
     }
 
     private static void failWhenIncompleteBacktickPair(String path, int backtickAt) {
