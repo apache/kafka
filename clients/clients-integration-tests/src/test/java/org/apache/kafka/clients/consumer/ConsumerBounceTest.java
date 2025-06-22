@@ -761,10 +761,6 @@ public class ConsumerBounceTest {
     }
 
     private void receiveExactRecords(ConsumerAssignmentPoller consumer, int numRecords, long timeoutMs) throws InterruptedException {
-//        TestUtils.waitForCondition(() -> {
-//            System.err.println("ZZZ " + numRecords + " consumer.receivedMessages() " + consumer.receivedMessages());
-//            return consumer.receivedMessages() == numRecords;
-//        }, timeoutMs, String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
         TestUtils.waitForCondition(() -> consumer.receivedMessages() == numRecords, timeoutMs,
              String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
     }
