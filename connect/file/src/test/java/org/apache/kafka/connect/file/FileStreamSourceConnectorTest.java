@@ -237,7 +237,7 @@ public class FileStreamSourceConnectorTest {
         );
 
         assertTrue(alterOffsets.apply(null));
-        assertTrue(alterOffsets.apply(Collections.emptyMap()));
+        assertTrue(alterOffsets.apply(Map.of()));
         assertTrue(alterOffsets.apply(Map.of(FILENAME_FIELD, FILENAME)));
         assertTrue(alterOffsets.apply(Map.of(FILENAME_FIELD, "/someotherfilename")));
         assertTrue(alterOffsets.apply(Map.of("garbage_partition_key", "garbage_partition_value")));

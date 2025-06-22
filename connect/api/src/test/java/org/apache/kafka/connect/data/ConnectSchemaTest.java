@@ -413,7 +413,7 @@ public class ConnectSchemaTest {
 
         // Optional element schema
         Schema optionalStrings = SchemaBuilder.map(Schema.OPTIONAL_STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA);
-        ConnectSchema.validateValue(fieldName, optionalStrings, Collections.emptyMap());
+        ConnectSchema.validateValue(fieldName, optionalStrings, Map.of());
         ConnectSchema.validateValue(fieldName, optionalStrings, Map.of("key", "value"));
         ConnectSchema.validateValue(fieldName, optionalStrings, Collections.singletonMap("key", null));
         ConnectSchema.validateValue(fieldName, optionalStrings, Collections.singletonMap(null, "value"));
@@ -425,7 +425,7 @@ public class ConnectSchemaTest {
 
         // Required element schema
         Schema requiredStrings = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA);
-        ConnectSchema.validateValue(fieldName, requiredStrings, Collections.emptyMap());
+        ConnectSchema.validateValue(fieldName, requiredStrings, Map.of());
         ConnectSchema.validateValue(fieldName, requiredStrings, Map.of("key", "value"));
         assertInvalidValueForSchema(fieldName, requiredStrings, Collections.singletonMap("key", null),
                 "Invalid value: null used for required value of map field: \"field\", schema type: STRING");
@@ -440,7 +440,7 @@ public class ConnectSchemaTest {
 
         // Null key schema
         Schema nullKeys = SchemaBuilder.type(Schema.Type.MAP);
-        assertInvalidValueForSchema(fieldName, nullKeys, Collections.emptyMap(),
+        assertInvalidValueForSchema(fieldName, nullKeys, Map.of(),
                 "No schema defined for key of map field: \"field\"");
         assertInvalidValueForSchema(fieldName, nullKeys, Map.of("key", "value"),
                 "No schema defined for key of map field: \"field\"");
@@ -457,7 +457,7 @@ public class ConnectSchemaTest {
 
         // Null value schema
         Schema nullValues = SchemaBuilder.mapWithNullValues(Schema.OPTIONAL_STRING_SCHEMA);
-        assertInvalidValueForSchema(fieldName, nullValues, Collections.emptyMap(),
+        assertInvalidValueForSchema(fieldName, nullValues, Map.of(),
                 "No schema defined for value of map field: \"field\"");
         assertInvalidValueForSchema(fieldName, nullValues, Map.of("key", "value"),
                 "No schema defined for value of map field: \"field\"");

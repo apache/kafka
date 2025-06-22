@@ -20,7 +20,6 @@ import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.SchemaBuilderException;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -185,7 +184,7 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public Map<String, String> parameters() {
-        return parameters == null ? null : Collections.unmodifiableMap(parameters);
+        return parameters == null ? null : Map.copyOf(parameters);
     }
 
     /**
@@ -419,7 +418,7 @@ public class SchemaBuilder implements Schema {
      */
     public Schema build() {
         return new ConnectSchema(type, isOptional(), defaultValue, name, version, doc,
-                parameters == null ? null : Collections.unmodifiableMap(parameters),
+                parameters == null ? null : Map.copyOf(parameters),
                 fields == null ? null : List.copyOf(fields.values()), keySchema, valueSchema);
     }
 

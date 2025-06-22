@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.storage;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -37,7 +36,7 @@ public enum ConverterType {
         for (ConverterType type : types) {
             nameToType.put(type.name, type);
         }
-        NAME_TO_TYPE = Collections.unmodifiableMap(nameToType);
+        NAME_TO_TYPE = Map.copyOf(nameToType);
     }
 
     /**
