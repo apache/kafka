@@ -19,10 +19,13 @@ package org.apache.kafka.tools.streams;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.FeatureUpdate;
+import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -44,6 +47,7 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -59,9 +63,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import joptsimple.OptionException;
 
@@ -84,6 +90,7 @@ public class DeleteStreamsGroupTest {
     private static final int RECORD_TOTAL = 10;
     public static EmbeddedKafkaCluster cluster;
     private static String bootstrapServers;
+    private static Admin adminClient;
 
     @BeforeAll
     public static void startCluster() {
@@ -92,6 +99,26 @@ public class DeleteStreamsGroupTest {
         cluster.start();
 
         bootstrapServers = cluster.bootstrapServers();
+        adminClient = cluster.createAdminClient();
+    }
+
+    @AfterEach
+    public void deleteTopicsAndGroups() {
+        try (final Admin adminClient = cluster.createAdminClient()) {
+            // delete all topics
+            final Set<String> topics = adminClient.listTopics().names().get();
+            adminClient.deleteTopics(topics).all().get();
+            // delete all groups
+            List<String> groupIds =
+                adminClient.listGroups(ListGroupsOptions.forStreamsGroups().timeoutMs(1000)).all().get()
+                    .stream().map(GroupListing::groupId).toList();
+            adminClient.deleteStreamsGroups(groupIds).all().get();
+        } catch (final UnknownTopicOrPartitionException ignored) {
+        } catch (final ExecutionException | InterruptedException e) {
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     @AfterAll
@@ -122,7 +149,23 @@ public class DeleteStreamsGroupTest {
     }
 
     @Test
-    public void testDeleteSingleGroup() throws Exception {
+    public void testDeleteWithDeleteInternalTopicOption() {
+        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups", "--delete-internal-topic", "foo"};
+        AtomicBoolean exited = new AtomicBoolean(false);
+        Exit.setExitProcedure(((statusCode, message) -> {
+            assertNotEquals(0, statusCode);
+            assertTrue(message.contains("Option [delete-internal-topic] takes [reset-offsets] when [execute] is used."));
+            exited.set(true);
+        }));
+        try {
+            getStreamsGroupService(args);
+        } finally {
+            assertTrue(exited.get());
+        }
+    }
+
+    @Test
+    public void testDeleteSingleGroupWithoutDeletingInternalTopics() throws Exception {
         final String appId = generateGroupAppId();
         String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--group", appId};
 
@@ -144,19 +187,20 @@ public class DeleteStreamsGroupTest {
                 result.get(appId),
                 "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + result + ")");
 
-            /* test 2: delete EMPTY streams group */
+            /* test 2: delete EMPTY streams group without deleting internal topics */
             stopKSApp(appId, streams, service);
             final Map<String, Throwable> emptyGrpRes = new HashMap<>();
             output = ToolsTestUtils.grabConsoleOutput(() -> emptyGrpRes.putAll(service.deleteGroups()));
 
             assertTrue(output.contains("Deletion of requested streams groups ('" + appId + "') was successful."),
                 "The streams group could not be deleted as expected");
-            assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId + "') was successful."),
+            assertFalse(output.contains("Deletion of associated internal topics of the streams groups ('" + appId + "') was successful."),
                 "The internal topics could not be deleted as expected.");
             assertEquals(1, emptyGrpRes.size());
             assertTrue(emptyGrpRes.containsKey(appId));
             assertNull(emptyGrpRes.get(appId), "The streams group could not be deleted as expected");
-            assertTrue(service.retrieveInternalTopics(List.of(appId)).isEmpty());
+            assertEquals(3, getInternalTopics(appId).size(),
+                "The internal topics were deleted, but they shouldn't have been.");
 
             /* test 3: delete an already deleted streams group (non-existing group) */
             result = service.deleteGroups();
@@ -169,7 +213,30 @@ public class DeleteStreamsGroupTest {
     }
 
     @Test
-    public void testDeleteMultipleGroup() throws Exception {
+    public void testDeleteSingleGroupWithDeletingInternalTopics() throws Exception {
+        final String appId = generateGroupAppId();
+        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--group", appId, "--delete-all-internal-topics"};
+
+        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+        try (KafkaStreams streams = startKSApp(appId, service)) {
+            stopKSApp(appId, streams, service);
+            final Map<String, Throwable> emptyGrpRes = new HashMap<>();
+            String output = ToolsTestUtils.grabConsoleOutput(() -> emptyGrpRes.putAll(service.deleteGroups()));
+
+            assertTrue(output.contains("Deletion of requested streams groups ('" + appId + "') was successful."),
+                "The streams group could not be deleted as expected");
+            assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId + "') was successful."),
+                "The internal topics could not be deleted as expected.");
+            assertEquals(1, emptyGrpRes.size());
+            assertTrue(emptyGrpRes.containsKey(appId));
+            assertNull(emptyGrpRes.get(appId), "The streams group could not be deleted as expected");
+            TestUtils.waitForCondition(() -> getInternalTopics(appId).isEmpty(),
+                "The internal topics of the streams group " + appId + " were not deleted as expected.");
+        }
+    }
+
+    @Test
+    public void testDeleteMultipleGroupsWithoutDeletingInternalTopics() throws Exception {
         final String appId1 = generateGroupAppId();
         final String appId2 = generateGroupAppId();
         final String appId3 = generateGroupAppId();
@@ -222,9 +289,73 @@ public class DeleteStreamsGroupTest {
 
         assertTrue(output.contains("Deletion of some streams groups failed:"), "The streams groups deletion did not work as expected");
         assertTrue(output.contains("Group '" + appId2 + "' could not be deleted due to:")
-            && output.contains("Streams group '" + appId2 + "' is not EMPTY."), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + result + ")");
+            && output.contains("Streams group '" + appId2 + "' is not EMPTY."), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + mixGrpsRes + ")");
         assertTrue(output.contains("Group '" + appId3 + "' could not be deleted due to:")
-            && output.contains("Streams group '" + appId3 + "' is not EMPTY."), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + result + ")");
+            && output.contains("Streams group '" + appId3 + "' is not EMPTY."), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + mixGrpsRes + ")");
+        assertTrue(output.contains("These streams groups were deleted successfully: '" + appId1 + "'"),
+            "The streams groups deletion did not work as expected");
+        assertFalse(output.contains("Deletion of associated internal topics of the streams groups ('" + appId1 + "') was successful."),
+            "The internal topics could not be deleted as expected");
+
+        assertEquals(3, mixGrpsRes.size());
+        assertNull(mixGrpsRes.get(appId1));
+        assertNotNull(mixGrpsRes.get(appId2));
+        assertNotNull(mixGrpsRes.get(appId3));
+        assertEquals(3, getInternalTopics(appId1).size(),
+            "The internal topics were deleted, but they shouldn't have been.");
+        assertEquals(3, getInternalTopics(appId2).size(),
+            "The internal topics were deleted, but they shouldn't have been.");
+        assertEquals(3, getInternalTopics(appId3).size(),
+            "The internal topics were deleted, but they shouldn't have been.");
+
+        /* test 3: delete all groups */
+        stopKSApp(appId2, streams2, service);
+        stopKSApp(appId3, streams3, service);
+
+        final Map<String, Throwable> allGrpsRes = new HashMap<>();
+        output = ToolsTestUtils.grabConsoleOutput(() -> allGrpsRes.putAll(service.deleteGroups()));
+
+        assertTrue(output.contains("Deletion of requested streams groups ('" + appId2 + "', '" + appId3 + "') was successful.") |
+                output.contains("Deletion of requested streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
+            "The streams groups deletion did not work as expected");
+        assertFalse(output.contains("Deletion of associated internal topics of the streams groups ('" + appId2 + "', '" + appId3 + "') was successful.") |
+                output.contains("Deletion of associated internal topics of the streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
+            "The internal topics could not be deleted as expected");
+
+        assertEquals(2, allGrpsRes.size());
+        assertNull(allGrpsRes.get(appId2));
+        assertNull(allGrpsRes.get(appId3));
+        assertEquals(3, getInternalTopics(appId1).size(),
+            "The internal topics were deleted, but they shouldn't have been.");
+        assertEquals(3, getInternalTopics(appId2).size(),
+            "The internal topics were deleted, but they shouldn't have been.");
+        assertEquals(3, getInternalTopics(appId3).size(),
+            "The internal topics were deleted, but they shouldn't have been.");
+    }
+
+    @Test
+    public void testDeleteAllGroupsWithDeletingInternalTopics() throws Exception {
+        final String appId1 = generateGroupAppId();
+        final String appId2 = generateGroupAppId();
+        final String appId3 = generateGroupAppId();
+
+        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups", "--delete-all-internal-topics"};
+
+        StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+        KafkaStreams streams1 = startKSApp(appId1, service);
+        KafkaStreams streams2 = startKSApp(appId2, service);
+        KafkaStreams streams3 = startKSApp(appId3, service);
+
+        /* test 1: delete mix of EMPTY and NON_EMPTY streams group */
+        stopKSApp(appId1, streams1, service);
+        final Map<String, Throwable> mixGrpsRes = new HashMap<>();
+        String output = ToolsTestUtils.grabConsoleOutput(() -> mixGrpsRes.putAll(service.deleteGroups()));
+
+        assertTrue(output.contains("Deletion of some streams groups failed:"), "The streams groups deletion did not work as expected");
+        assertTrue(output.contains("Group '" + appId2 + "' could not be deleted due to:")
+            && output.contains("Streams group '" + appId2 + "' is not EMPTY."), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + mixGrpsRes + ")");
+        assertTrue(output.contains("Group '" + appId3 + "' could not be deleted due to:")
+            && output.contains("Streams group '" + appId3 + "' is not EMPTY."), "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Result was:(" + mixGrpsRes + ")");
         assertTrue(output.contains("These streams groups were deleted successfully: '" + appId1 + "'"),
             "The streams groups deletion did not work as expected");
         assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId1 + "') was successful."),
@@ -234,10 +365,12 @@ public class DeleteStreamsGroupTest {
         assertNull(mixGrpsRes.get(appId1));
         assertNotNull(mixGrpsRes.get(appId2));
         assertNotNull(mixGrpsRes.get(appId3));
-        assertTrue(service.retrieveInternalTopics(List.of(appId1)).isEmpty());
-        assertFalse(service.retrieveInternalTopics(List.of(appId2, appId3)).isEmpty());
+        TestUtils.waitForCondition(() -> getInternalTopics(appId1).isEmpty(),
+            "The internal topics of the streams group " + appId1 + " were not deleted as expected.");
+        assertFalse(getInternalTopics(appId2).isEmpty());
+        assertFalse(getInternalTopics(appId3).isEmpty());
 
-        /* test 3: delete all groups */
+        /* test 2: delete all groups */
         stopKSApp(appId2, streams2, service);
         stopKSApp(appId3, streams3, service);
 
@@ -254,13 +387,16 @@ public class DeleteStreamsGroupTest {
         assertEquals(2, allGrpsRes.size());
         assertNull(allGrpsRes.get(appId2));
         assertNull(allGrpsRes.get(appId3));
-        assertTrue(service.retrieveInternalTopics(List.of(appId1, appId2, appId3)).isEmpty());
+        TestUtils.waitForCondition(() -> getInternalTopics(appId2).isEmpty(),
+            "The internal topics of the streams group " + appId2 + " were not deleted as expected.");
+        TestUtils.waitForCondition(() -> getInternalTopics(appId3).isEmpty(),
+            "The internal topics of the streams group " + appId3 + " were not deleted as expected.");
     }
 
     @Test
     public void testDeleteAllGroupsAfterVersionDowngrade() throws Exception {
         final String appId = generateGroupAppId();
-        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups"};
+        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups", "--delete-all-internal-topics"};
 
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
         try (KafkaStreams streams = startKSApp(appId, service)) {
@@ -277,11 +413,23 @@ public class DeleteStreamsGroupTest {
             assertEquals(1, result.size());
             assertTrue(result.containsKey(appId));
             assertNull(result.get(appId), "The streams group could not be deleted as expected");
-            assertTrue(service.retrieveInternalTopics(List.of(appId)).isEmpty());
-
+            assertEquals(3, getInternalTopics(appId).size(),
+                "The internal topics were deleted, but they shouldn't have been.");
         } finally {
             // upgrade back the streams.version to 1
             updateStreamsGroupProtocol((short) 1);
+        }
+    }
+
+    private Set<String> getInternalTopics(String appId) {
+        try {
+            Set<String> topics = adminClient.listTopics().names().get();
+            return topics.stream()
+                .filter(topic -> topic.startsWith(appId + "-"))
+                .filter(topic -> topic.endsWith("-changelog") || topic.endsWith("-repartition"))
+                .collect(Collectors.toSet());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
         }
     }
 

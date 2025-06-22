@@ -100,7 +100,7 @@
         "about": "A string representation of the status." }
     ]},
     { "name": "TopicPartition", "versions": "0+", "fields": [
-      { "name": "Topic", "type": "string", "versions": "0+",
+      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "topic name" },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "partitions" }
