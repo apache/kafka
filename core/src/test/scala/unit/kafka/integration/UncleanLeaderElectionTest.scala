@@ -17,6 +17,7 @@
 
 package kafka.integration
 
+import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import scala.util.Random
@@ -317,7 +318,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
       valueDeserializer = new StringDeserializer)
     try {
       val tp = new TopicPartition(topic, partitionId)
-      consumer.assign(Seq(tp).asJava)
+      consumer.assign(util.List.of(tp))
       consumer.seek(tp, 0)
       TestUtils.consumeRecords(consumer, numMessages).map(_.value)
     } finally consumer.close()
@@ -410,10 +411,14 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   }
 
   private def alterTopicConfigs(adminClient: Admin, topic: String, topicConfigs: Properties): AlterConfigsResult = {
-    val configEntries = topicConfigs.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
-    adminClient.incrementalAlterConfigs(Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) ->
-      configEntries.asScala.map((e: ConfigEntry) => new AlterConfigOp(e, AlterConfigOp.OpType.SET)).toSeq
-        .asJavaCollection).asJava)
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+
+    val configEntries = topicConfigs.entrySet().stream()
+      .map(e => new ConfigEntry(e.getKey.toString, e.getValue.toString))
+      .map(e => new AlterConfigOp(e, AlterConfigOp.OpType.SET))
+      .toList
+
+    adminClient.incrementalAlterConfigs(util.Map.of(configResource, configEntries))
   }
 
   private def createAdminClient(): Admin = {
@@ -427,7 +432,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   private def waitForNoLeaderAndIsrHasOldLeaderId(metadataCache: MetadataCache, leaderId: Int): Unit = {
     waitUntilTrue(() => metadataCache.getLeaderAndIsr(topic, partitionId).isPresent() &&
       metadataCache.getLeaderAndIsr(topic, partitionId).get.leader() == LeaderConstants.NO_LEADER &&
-      java.util.Arrays.asList(leaderId).equals(metadataCache.getLeaderAndIsr(topic, partitionId).get.isr()),
+      util.List.of(leaderId).equals(metadataCache.getLeaderAndIsr(topic, partitionId).get.isr()),
       "Timed out waiting for broker metadata cache updates the info for topic partition:" + topicPartition)
   }
 }
