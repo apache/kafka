@@ -2201,9 +2201,7 @@ class ReplicaManager(val config: KafkaConfig,
   private def updateLeaderAndFollowerMetrics(newFollowerTopics: Set[String]): Unit = {
     val leaderTopicSet = leaderPartitionsIterator.map(_.topic).toSet
     newFollowerTopics.diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
-
-    // remove metrics for brokers which are not followers of a topic
-    leaderTopicSet.diff(newFollowerTopics).foreach(brokerTopicStats.removeOldFollowerMetrics)
+    // Currently, there are no follower metrics that need to be updated.
   }
 
   protected[server] def maybeAddLogDirFetchers(partitions: Set[Partition],
