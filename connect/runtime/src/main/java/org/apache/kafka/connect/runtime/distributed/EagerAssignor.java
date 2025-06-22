@@ -52,7 +52,7 @@ public class EagerAssignor implements ConnectAssignor {
     }
 
     @Override
-    public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol,
+    public Map<String, ByteBuffer> performAssignment(String leaderId, ConnectProtocolCompatibility protocol,
                                                      List<JoinGroupResponseMember> allMemberMetadata,
                                                      WorkerCoordinator coordinator) {
         log.debug("Performing task assignment");
