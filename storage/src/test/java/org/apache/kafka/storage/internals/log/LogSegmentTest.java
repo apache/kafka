@@ -883,13 +883,7 @@ public class LogSegmentTest {
                     when(seg.timeIndex()).thenReturn(mockTimeIndex);
                     List<Future<?>> futures = new ArrayList<>();
                     for (int i = 0; i < numThreads; i++) {
-                        futures.add(executor.submit(() -> {
-                            try {
-                                seg.maxTimestampSoFar();
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        }));
+                        futures.add(executor.submit(() -> assertDoesNotThrow(seg::maxTimestampSoFar)));
                     }
                     for (Future<?> future : futures) {
                         future.get();
