@@ -19,12 +19,12 @@ package kafka.server
 import org.apache.kafka.common.test.api.{ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, DescribeQuorumRequest, DescribeQuorumResponse}
+import org.apache.kafka.common.requests.{DescribeQuorumRequest, DescribeQuorumResponse}
 import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.server.IntegrationTestUtils
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
 
 @ClusterTestDefaults(types = Array(Type.KRAFT))
 class DescribeQuorumRequestTest(cluster: ClusterInstance) {
@@ -35,7 +35,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
       val request = new DescribeQuorumRequest.Builder(
         singletonRequest(KafkaRaftServer.MetadataPartition)
       ).build(version.toShort)
-      val response = connectAndReceive[DescribeQuorumResponse](request)
+      val response = IntegrationTestUtils.connectAndReceive[DescribeQuorumResponse](request, cluster.boundPorts().get(0))
 
       assertEquals(Errors.NONE, Errors.forCode(response.data.errorCode))
       assertEquals("", response.data.errorMessage)
@@ -85,17 +85,4 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
       }
     }
   }
-
-  private def connectAndReceive[T <: AbstractResponse](
-    request: AbstractRequest
-  )(
-    implicit classTag: ClassTag[T]
-  ): T = {
-    IntegrationTestUtils.connectAndReceive(
-      request,
-      cluster.brokerSocketServers().asScala.head,
-      cluster.clientListener()
-    )
-  }
-
 }

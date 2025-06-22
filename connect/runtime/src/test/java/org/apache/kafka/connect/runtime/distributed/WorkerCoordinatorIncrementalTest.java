@@ -149,6 +149,7 @@ public class WorkerCoordinatorIncrementalTest {
             heartbeatIntervalMs,
             groupId,
             Optional.empty(),
+            null,
             retryBackoffMs,
             retryBackoffMaxMs,
             true);

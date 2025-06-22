@@ -75,7 +75,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
     private final AtomicInteger activeBrokerCount = new AtomicInteger(0);
     private final AtomicInteger controllerShutdownBrokerCount = new AtomicInteger(0);
-    private final Map<Integer, AtomicInteger> brokerRegistrationStates = new ConcurrentHashMap<>();
+    private final Map<Integer, Integer> brokerRegistrationStates = new ConcurrentHashMap<>();
     private final AtomicInteger globalTopicCount = new AtomicInteger(0);
     private final AtomicInteger globalPartitionCount = new AtomicInteger(0);
     private final AtomicInteger offlinePartitionCount = new AtomicInteger(0);
@@ -227,18 +227,14 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             return;
         }
         BrokerRegistrationState brokerState = getBrokerRegistrationState(brokerRegistration);
-        if (brokerRegistrationStates.containsKey(brokerId)) {
-            brokerRegistrationStates.get(brokerId).set(brokerState.state());
-        } else {
-            brokerRegistrationStates.put(brokerId, new AtomicInteger(brokerState.state()));
-        }
+        brokerRegistrationStates.put(brokerId, brokerState.state());
     }
 
     public int brokerRegistrationState(int brokerId) {
         return this.brokerRegistrationStates.getOrDefault(
             brokerId,
-            new AtomicInteger(BrokerRegistrationState.UNREGISTERED.state())
-        ).get();
+            BrokerRegistrationState.UNREGISTERED.state()
+        );
     }
     
     public void setGlobalTopicCount(int topicCount) {
