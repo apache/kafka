@@ -33,7 +33,6 @@ import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
 import org.apache.kafka.server.config.QuotaConfig
 
 import scala.jdk.OptionConverters.RichOptionalDouble
-import scala.jdk.OptionConverters.RichOption
 
 
 
