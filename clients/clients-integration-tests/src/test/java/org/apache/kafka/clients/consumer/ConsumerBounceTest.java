@@ -62,8 +62,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.common.test.TestUtils.SEEDED_RANDOM;
 import static org.apache.kafka.common.test.TestUtils.randomSelect;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -126,8 +124,6 @@ public class ConsumerBounceTest {
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        consumerPollers.clear();
-        consumers.clear();
         clusterInstance.createTopic(topic, numPartitions, numReplica);
     }
 
@@ -165,7 +161,7 @@ public class ConsumerBounceTest {
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
         AtomicInteger consumed = new AtomicInteger(0);
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
 
             consumer.subscribe(List.of(topic));
 
@@ -214,7 +210,7 @@ public class ConsumerBounceTest {
         int numRecords = 1000;
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
-        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name))) {
             consumer.assign(List.of(topicPartition));
             consumer.seek(topicPartition, 0);
 
@@ -265,7 +261,9 @@ public class ConsumerBounceTest {
         TopicPartition newTopicPartition = new TopicPartition(newTopic, 0);
         int numRecords = 1000;
 
-        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name, "max.poll.interval.ms", 6000, "metadata.max.age.ms", 100));
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(
+                Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name, ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 6000,
+                       ConsumerConfig.METADATA_MAX_AGE_CONFIG, 100));
         consumers.add(consumer);
         consumer.subscribe(List.of(newTopic));
         consumer.poll(Duration.ZERO);
@@ -310,9 +308,9 @@ public class ConsumerBounceTest {
         int numRecords = 10;
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
-        checkCloseGoodPath(numRecords, "group1");
-        checkCloseWithCoordinatorFailure(numRecords, "group2", "group3");
-        checkCloseWithClusterFailure(numRecords, "group4", "group5", groupProtocol);
+        checkCloseGoodPath(groupProtocol, numRecords, "group1");
+        checkCloseWithCoordinatorFailure(groupProtocol, numRecords, "group2", "group3");
+        checkCloseWithClusterFailure(groupProtocol, numRecords, "group4", "group5");
     }
 
     /**
@@ -320,8 +318,8 @@ public class ConsumerBounceTest {
      * and leave group. New consumer instance should be able to join group and start consuming from
      * last committed offset.
      */
-    private void checkCloseGoodPath(int numRecords, String groupId) throws InterruptedException {
-        Consumer<byte[], byte[]> consumer = createConsumerAndReceive(groupId, false, numRecords);
+    private void checkCloseGoodPath(GroupProtocol groupProtocol, int numRecords, String groupId) throws InterruptedException {
+        Consumer<byte[], byte[]> consumer = createConsumerAndReceive(groupId, false, numRecords, Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name));
         assertDoesNotThrow(() -> submitCloseAndValidate(consumer, Long.MAX_VALUE, Optional.empty(), gracefulCloseTimeMs).get());
         checkClosedState(groupId, numRecords);
     }
@@ -332,9 +330,9 @@ public class ConsumerBounceTest {
      * Close of consumers using manual assignment should complete with successful commits since a
      * broker is available.
      */
-    private void checkCloseWithCoordinatorFailure(int numRecords, String dynamicGroup, String manualGroup) throws Exception {
-        Consumer<byte[], byte[]> dynamicConsumer = createConsumerAndReceive(dynamicGroup, false, numRecords);
-        Consumer<byte[], byte[]> manualConsumer = createConsumerAndReceive(manualGroup, true, numRecords);
+    private void checkCloseWithCoordinatorFailure(GroupProtocol groupProtocol, int numRecords, String dynamicGroup, String manualGroup) throws Exception {
+        Consumer<byte[], byte[]> dynamicConsumer = createConsumerAndReceive(dynamicGroup, false, numRecords, Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name));
+        Consumer<byte[], byte[]> manualConsumer = createConsumerAndReceive(manualGroup, true, numRecords, Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name));
 
         findCoordinators(List.of(dynamicGroup, manualGroup)).forEach(clusterInstance::shutdownBroker);
 
@@ -351,8 +349,8 @@ public class ConsumerBounceTest {
      * there is no coordinator, but close should timeout and return. If close is invoked with a very
      * large timeout, close should timeout after request timeout.
      */
-    private void checkCloseWithClusterFailure(int numRecords, String group1, String group2, GroupProtocol groupProtocol) throws Exception {
-        Consumer<byte[], byte[]> consumer1 = createConsumerAndReceive(group1, false, numRecords);
+    private void checkCloseWithClusterFailure(GroupProtocol groupProtocol, int numRecords, String group1, String group2) throws Exception {
+        Consumer<byte[], byte[]> consumer1 = createConsumerAndReceive(group1, false, numRecords, Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name));
         Map<String, String> consumerConfig = new HashMap<>();
 
         long requestTimeout = 6000;
@@ -361,6 +359,7 @@ public class ConsumerBounceTest {
             consumerConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
         }
         consumerConfig.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, Long.toString(requestTimeout));
+        consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name);
 
         Consumer<byte[], byte[]> consumer2 = createConsumerAndReceive(group2, true, numRecords, consumerConfig);
 
@@ -583,7 +582,7 @@ public class ConsumerBounceTest {
             Map<String, String> consumerConfigs) {
 
         Map<String, Object> configs = new HashMap<>(consumerConfigs);
-        configs.put(GROUP_ID_CONFIG, group);
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, group);
 
         for (int i = 0; i < numOfConsumersToAdd; i++) {
             Consumer<byte[], byte[]> consumer = clusterInstance.consumer(configs);
@@ -619,7 +618,7 @@ public class ConsumerBounceTest {
     private void checkCloseDuringRebalance(Map<String, String> consumerConfig) throws Exception {
         Map<String, Object> configs = new HashMap<>(consumerConfig);
         String groupId = "group";
-        configs.put(GROUP_ID_CONFIG, groupId);
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
 
         Consumer<byte[], byte[]> consumer1 = clusterInstance.consumer(configs);
         Future<?> f1 = subscribeAndPoll(consumer1, Optional.empty());
@@ -664,7 +663,7 @@ public class ConsumerBounceTest {
     }
 
     Future<?> createConsumerToRebalance(String groupId) throws Exception {
-        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(GROUP_ID_CONFIG, groupId));
+        Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_ID_CONFIG, groupId));
         consumers.add(consumer);
         Semaphore rebalanceSemaphore = new Semaphore(0);
         Future<?> future = subscribeAndPoll(consumer, Optional.of(rebalanceSemaphore));
@@ -678,7 +677,7 @@ public class ConsumerBounceTest {
     private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords,
                                                               Map<String, String> consumerConfig) throws InterruptedException {
         Map<String, Object> configs = new HashMap<>(consumerConfig);
-        configs.put(GROUP_ID_CONFIG, groupId);
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(configs);
         ConsumerAssignmentPoller poller;
 
@@ -694,10 +693,6 @@ public class ConsumerBounceTest {
         poller.shutdown();
 
         return consumer;
-    }
-
-    private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords) throws InterruptedException {
-        return createConsumerAndReceive(groupId, manualAssign, numRecords, Map.of());
     }
 
     private void restartDeadBrokers() {
