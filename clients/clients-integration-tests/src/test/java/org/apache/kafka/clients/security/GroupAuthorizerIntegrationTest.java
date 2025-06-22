@@ -280,63 +280,25 @@ public class GroupAuthorizerIntegrationTest {
 
     @ClusterTest
     public void testClassicConsumeUnsubscribeWithGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        testConsumeUnsubscribeWithGroupPermission(clusterInstance, GroupProtocol.CLASSIC);
+        testConsumeUnsubscribeWithOrWithoutGroupPermission(clusterInstance, GroupProtocol.CLASSIC, true);
     }
 
     @ClusterTest
     public void testAsyncConsumeUnsubscribeWithGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        testConsumeUnsubscribeWithGroupPermission(clusterInstance, GroupProtocol.CONSUMER);
-    }
-
-    private void testConsumeUnsubscribeWithGroupPermission(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
-        setup(clusterInstance);
-        String topic = "topic";
-        String group = "group";
-
-        // allow topic read/write permission to poll/send record
-        Set<AccessControlEntry> acls = new HashSet<>();
-        acls.add(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
-        acls.add(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
-        acls.add(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
-        addAndVerifyAcls(
-                acls,
-                new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
-                clusterInstance
-        );
-        addAndVerifyAcls(
-                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                clusterInstance
-        );
-
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer();
-             Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
-                     ConsumerConfig.GROUP_ID_CONFIG, group,
-                     ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-                     GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
-        ) {
-            clusterInstance.createTopic(topic, 1, (short) 1);
-            producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
-            consumer.subscribe(Collections.singletonList(topic));
-            TestUtils.waitForCondition(() -> {
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
-                return records.count() == 1;
-            }, "consumer failed to receive message");
-            assertDoesNotThrow(consumer::unsubscribe);
-        }
+        testConsumeUnsubscribeWithOrWithoutGroupPermission(clusterInstance, GroupProtocol.CONSUMER, true);
     }
 
     @ClusterTest
     public void testClassicConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        testConsumeUnsubscribeWithoutGroupPermission(clusterInstance, GroupProtocol.CLASSIC);
+        testConsumeUnsubscribeWithOrWithoutGroupPermission(clusterInstance, GroupProtocol.CLASSIC, false);
     }
 
     @ClusterTest
     public void testAsyncConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        testConsumeUnsubscribeWithoutGroupPermission(clusterInstance, GroupProtocol.CONSUMER);
+        testConsumeUnsubscribeWithOrWithoutGroupPermission(clusterInstance, GroupProtocol.CONSUMER, false);
     }
 
-    private void testConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
+    private void testConsumeUnsubscribeWithOrWithoutGroupPermission(ClusterInstance clusterInstance, GroupProtocol groupProtocol, boolean withGroupPermission) throws InterruptedException, ExecutionException {
         setup(clusterInstance);
         String topic = "topic";
         String group = "group";
@@ -370,11 +332,13 @@ public class GroupAuthorizerIntegrationTest {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
                 return records.count() == 1;
             }, "consumer failed to receive message");
-            removeAndVerifyAcls(
-                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                clusterInstance
-            );
+            if (!withGroupPermission) {
+                removeAndVerifyAcls(
+                        Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                        new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+                        clusterInstance
+                );
+            }
             assertDoesNotThrow(consumer::unsubscribe);
         }
     }
