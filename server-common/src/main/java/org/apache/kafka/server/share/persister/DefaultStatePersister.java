@@ -139,6 +139,9 @@ public class DefaultStatePersister implements Persister {
                     .computeIfAbsent(topicData.topicId(), k -> new HashMap<>())
                     .computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
 
+                log.debug("{}-{}-{}: stateEpoch - {}, leaderEpoch - {}.",
+                    groupId, topicData.topicId(), partitionData.partition(), partitionData.stateEpoch(), partitionData.leaderEpoch());
+
                 handlers.add(
                     stateManager.new WriteStateHandler(
                         groupId,
