@@ -1196,19 +1196,16 @@ class ReplicaManagerTest {
     }
   }
 
-  @Test
-  def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(): Unit = {
-    verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(new Properties, expectTruncation = false)
-  }
-
   /**
    * If a partition becomes a follower and the leader is unchanged it should check for truncation
    * if the epoch has increased by more than one (which suggests it has missed an update). For
    * IBP version 2.7 onwards, we don't require this since we can truncate at any time based
    * on diverging epochs returned in fetch responses.
    */
-  private def verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(extraProps: Properties,
-                                                                             expectTruncation: Boolean): Unit = {
+  @Test
+  def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(): Unit = {
+    val extraProps = new Properties
+    val expectTruncation = false
     val followerBrokerId = 0
     val leaderBrokerId = 1
     var leaderEpoch = 1
