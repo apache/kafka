@@ -344,7 +344,7 @@ object StorageTool extends Logging {
     versionMappingParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
-        s"${MetadataVersion.MINIMUM_VERSION}; the default is${MetadataVersion.LATEST_PRODUCTION}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
   }
 
   private def addFeatureDependenciesParser(subparsers: Subparsers): Unit = {
