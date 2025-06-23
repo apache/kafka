@@ -335,6 +335,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
+    public void removeMetric(final MetricName metricName) {
+        metrics.removeMetric(metricName);
+    }
+
     public Map<String, String> taskLevelTagMap(final String threadId, final String taskId) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(THREAD_ID_TAG, threadId);
@@ -517,13 +521,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return getSensors(storeLevelSensors, sensorSuffix, sensorPrefix, recordingLevel, parents);
     }
 
-    public <T> void addStoreLevelMutableMetric(final String taskId,
-                                               final String metricsScope,
-                                               final String storeName,
-                                               final String name,
-                                               final String description,
-                                               final RecordingLevel recordingLevel,
-                                               final Gauge<T> valueProvider) {
+    public <T> MetricName addStoreLevelMutableMetric(final String taskId,
+                                                     final String metricsScope,
+                                                     final String storeName,
+                                                     final String name,
+                                                     final String description,
+                                                     final RecordingLevel recordingLevel,
+                                                     final Gauge<T> valueProvider) {
         final MetricName metricName = metrics.metricName(
             name,
             STATE_STORE_LEVEL_GROUP,
@@ -535,6 +539,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             final String key = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
             storeLevelMetrics.computeIfAbsent(key, ignored -> new LinkedList<>()).push(metricName);
         }
+
+        return metricName;
     }
 
     public final void removeAllStoreLevelSensorsAndMetrics(final String taskId,
