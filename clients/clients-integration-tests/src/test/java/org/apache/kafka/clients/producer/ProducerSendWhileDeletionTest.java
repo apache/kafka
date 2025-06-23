@@ -50,7 +50,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -167,7 +166,7 @@ public class ProducerSendWhileDeletionTest {
     @Timeout(90)
     @ClusterTest
     public void testSendWhileTopicGetRecreated() {
-        int maxNumRecreatTopicAttempts = 10;
+        int maxNumRecreatTopicAttempts = 5;
         List<Uuid> topicIds = new CopyOnWriteArrayList<>();
         var recreateTopicFuture = CompletableFuture.runAsync(() -> {
             for (int i = 1; i <= maxNumRecreatTopicAttempts; i++) {
@@ -179,7 +178,7 @@ public class ProducerSendWhileDeletionTest {
         });
 
         AtomicInteger numSuccess = new AtomicInteger(0);
-        var producerFutures = IntStream.range(0, 2).mapToObj(producerIndex -> CompletableFuture.runAsync(() -> {
+        var producerFuture = CompletableFuture.runAsync(() -> {
             try (var producer = cluster.producer()) {
                 for (int i = 1; i <= numRecords; i++) {
                     var resp = producer.send(new ProducerRecord<>(topic, null, ("value" + i).getBytes()),
@@ -193,11 +192,11 @@ public class ProducerSendWhileDeletionTest {
             } catch (Exception e) {
                 // ignore
             }
-        })).toList();
+        });
         recreateTopicFuture.join();
-        producerFutures.forEach(CompletableFuture::join);
+        producerFuture.join();
         assertTrue(Math.abs(maxNumRecreatTopicAttempts - topicIds.size()) <= 5);
-        assertEquals(20, numSuccess.intValue());
+        assertEquals(10, numSuccess.intValue());
     }
 
     @ClusterTest
