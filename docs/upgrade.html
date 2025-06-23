@@ -19,10 +19,28 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_4_2_0" href="#upgrade_4_2_0">Upgrading to 4.2.0</a></h4>
+
+<h5><a id="upgrade_4_2_0_from" href="#upgrade_4_2_0_from">Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x</a></h5>
+
+<h5><a id="upgrade_420_notable" href="#upgrade_420_notable">Notable changes in 4.2.0</a></h5>
+<ul>
+    <li>The <code>org.apache.kafka.disallowed.login.modules</code> config was deprecated. Please use the <code>org.apache.kafka.allowed.login.modules</code>
+        instead.
+    </li>
+    <li>
+        The <code>remote.log.manager.thread.pool.size</code> config was deprecated. Please use the <code>remote.log.manager.follower.thread.pool.size</code> instead.
+    </li>
+    <li>The <code>KafkaPrincipalBuilder</code> now extends <code>KafkaPrincipalSerde</code>. Force developer to implement <code>KafkaPrincipalSerde</code> interface for custom <code>KafkaPrincipalBuilder</code>.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/1gq9F">KIP-1157</a>.
+    </li>
+</ul>
+
+
 <h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0</a></h4>
 
-<h5><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x</a></h5>
-    <h6><a id="upgrade_410_notable" href="#upgrade_410_notable">Notable changes in 4.1.0</a></h6>
+<h5><a id="upgrade_4_1_0_from" href="#upgrade_4_1_0_from">Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x</a></h5>
+    <h5><a id="upgrade_410_notable" href="#upgrade_410_notable">Notable changes in 4.1.0</a></h5>
         <ul>
             <li>
                 Apache Kafka 4.1 ships with a preview of Queues for Kafka (<a href="https://cwiki.apache.org/confluence/x/4hA0Dw">KIP-932</a>). This feature introduces a new kind of group called
@@ -82,7 +100,7 @@
             </li>
         </ul>
 
-<h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0</a></h4>
+<h4><a id="upgrade_4_0_0_from" href="#upgrade_4_0_0_from">Upgrading to 4.0.0</a></h4>
 
 <h5><a id="upgrade_clients_4_0_0" href="#upgrade_clients_4_0_0">Upgrading Clients to 4.0.0</a></h5>
 

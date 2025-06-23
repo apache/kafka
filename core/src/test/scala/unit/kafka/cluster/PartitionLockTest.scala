@@ -18,6 +18,7 @@
 package kafka.cluster
 
 import java.lang.{Long => JLong}
+import java.util
 import java.util.{Optional, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
@@ -139,9 +140,9 @@ class PartitionLockTest extends Logging {
   def testGetReplicaWithUpdateAssignmentAndIsr(): Unit = {
     val active = new AtomicBoolean(true)
     val replicaToCheck = 3
-    val firstReplicaSet = Seq[Integer](3, 4, 5).asJava
-    val secondReplicaSet = Seq[Integer](1, 2, 3).asJava
-    def partitionState(replicas: java.util.List[Integer]) = new LeaderAndIsrRequest.PartitionState()
+    val firstReplicaSet = util.List.of[Integer](3, 4, 5)
+    val secondReplicaSet = util.List.of[Integer](1, 2, 3)
+    def partitionState(replicas: util.List[Integer]) = new LeaderAndIsrRequest.PartitionState()
       .setControllerEpoch(1)
       .setLeader(replicas.get(0))
       .setLeaderEpoch(1)
