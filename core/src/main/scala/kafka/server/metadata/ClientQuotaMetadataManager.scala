@@ -34,8 +34,6 @@ import org.apache.kafka.server.config.QuotaConfig
 
 import scala.jdk.OptionConverters.RichOptionalDouble
 
-
-
 // A strict hierarchy of entities that we support
 sealed trait QuotaEntity
 case class IpEntity(ip: String) extends QuotaEntity

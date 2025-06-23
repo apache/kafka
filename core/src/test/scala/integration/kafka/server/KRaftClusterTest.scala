@@ -1745,7 +1745,7 @@ object DummyClientQuotaCallback {
 
 class DummyClientQuotaCallback extends ClientQuotaCallback with Reconfigurable {
   var value = 0
-  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.LinkedHashMap[String, String] = new java.util.LinkedHashMap();
+  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = util.Map.of
 
   override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = 1.0
 

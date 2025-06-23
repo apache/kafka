@@ -366,7 +366,7 @@ object GroupedUserQuotaCallback {
   val QuotaGroupTag = "group"
   val DefaultProduceQuotaProp = "default.produce.quota"
   val DefaultFetchQuotaProp = "default.fetch.quota"
-  val UnlimitedQuotaMetricTags = new util.LinkedHashMap[String, String]
+  val UnlimitedQuotaMetricTags = new util.HashMap[String, String]
   val quotaLimitCalls = Map(
     ClientQuotaType.PRODUCE -> new AtomicInteger,
     ClientQuotaType.FETCH -> new AtomicInteger,
@@ -424,7 +424,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
     if (value != null) Some(value.toString.toLong) else None
   }
 
-  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.LinkedHashMap[String, String] = {
+  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = {
     val user = principal.getName
     val userGroup = group(user)
     val newPrincipal = {
@@ -438,9 +438,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
         val userGroup = groupPrincipal.userGroup
         val quotaLimit = quotaOrDefault(userGroup, quotaType)
         if (quotaLimit != null) {
-          val map = new util.LinkedHashMap[String, String]()
-          map.put(QuotaGroupTag, userGroup)
-          map
+          util.Map.of(QuotaGroupTag, userGroup)
         } else
           UnlimitedQuotaMetricTags
       case _ =>

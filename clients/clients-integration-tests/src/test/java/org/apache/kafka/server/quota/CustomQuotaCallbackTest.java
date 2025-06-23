@@ -32,6 +32,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.config.QuotaConfig;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -111,7 +112,7 @@ public class CustomQuotaCallbackTest {
     }
 
     private static Map<String, String> expectedTags(Map<String, String> extraTags) {
-        Map<String, String> tags = new LinkedHashMap<>();
+        var tags = new HashMap<String, String>();
         tags.put("config", QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG);
         tags.put("class", MonitorableCustomQuotaCallback.class.getSimpleName());
         tags.putAll(extraTags);
@@ -124,8 +125,8 @@ public class CustomQuotaCallbackTest {
         private String nodeId;
 
         @Override
-        public LinkedHashMap<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
-            return new LinkedHashMap<>();
+        public Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
+            return Map.of();
         }
 
         @Override

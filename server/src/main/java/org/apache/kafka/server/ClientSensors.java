@@ -26,7 +26,7 @@ import java.util.Objects;
  * Represents the sensors aggregated per client
  */
 public final class ClientSensors {
-    private final LinkedHashMap<String, String> metricTags;
+    private final Map<String, String> metricTags;
     private final Sensor quotaSensor;
     private final Sensor throttleTimeSensor;
 
@@ -35,10 +35,10 @@ public final class ClientSensors {
      * @param quotaSensor sensor that tracks the quota
      * @param throttleTimeSensor sensor that tracks the throttle time
      */
-    public ClientSensors(LinkedHashMap<String, String> metricTags,
+    public ClientSensors(Map<String, String> metricTags,
                          Sensor quotaSensor,
                          Sensor throttleTimeSensor) {
-        this.metricTags = metricTags;
+        this.metricTags = new LinkedHashMap<>(metricTags);
         this.quotaSensor = Objects.requireNonNull(quotaSensor);
         this.throttleTimeSensor = Objects.requireNonNull(throttleTimeSensor);
     }
