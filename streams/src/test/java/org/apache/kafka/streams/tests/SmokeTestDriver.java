@@ -599,7 +599,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
     }
 
-    private static Boolean lessEquals(final Number expected, final Number actual) {
+    private static boolean lessEquals(final Number expected, final Number actual) {
         if (actual instanceof Integer && expected instanceof Integer) {
             return actual.intValue() >= expected.intValue();
         } else if (actual instanceof Long && expected instanceof Long) {
