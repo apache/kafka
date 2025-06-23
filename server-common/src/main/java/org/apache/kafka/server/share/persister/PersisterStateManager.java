@@ -409,7 +409,7 @@ public class PersisterStateManager {
                 errorConsumer.accept(Errors.REQUEST_TIMED_OUT, new NetworkException(String.format("Server response for %s indicates timeout.", this.partitionKey)));
                 return Optional.of(Errors.REQUEST_TIMED_OUT);
             } else {
-                errorConsumer.accept(Errors.UNKNOWN_SERVER_ERROR, new NetworkException(String.format("Server did not provide any response for %s .", this.partitionKey)));
+                errorConsumer.accept(Errors.UNKNOWN_SERVER_ERROR, new NetworkException(String.format("Server did not provide any response for %s.", this.partitionKey)));
                 return Optional.of(Errors.UNKNOWN_SERVER_ERROR);
             }
         }
