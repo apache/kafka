@@ -162,6 +162,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
 
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+
         long maxTimeToWaitMs = Long.MAX_VALUE;
 
         for (RequestManager rm : requestManagers.entries()) {
@@ -187,7 +188,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         asyncConsumerMetrics.recordApplicationEventQueueSize(0);
         long startMs = time.milliseconds();
-
         for (ApplicationEvent event : events) {
             asyncConsumerMetrics.recordApplicationEventQueueTime(time.milliseconds() - event.enqueuedMs());
             try {
