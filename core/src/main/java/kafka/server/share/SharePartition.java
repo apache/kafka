@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -501,8 +502,8 @@ public class SharePartition {
 
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    log.error("Failed to initialize the share partition: {}-{}. Exception occurred: {}.",
-                        groupId, topicIdPartition, partitionData);
+                    logError(String.format("Failed to initialize the share partition: %s-%s. Exception occurred: %s.",
+                        groupId, topicIdPartition, partitionData), ex);
                     throwable = ex;
                     return;
                 }
@@ -2076,7 +2077,7 @@ public class SharePartition {
             lock.writeLock().lock();
             try {
                 if (exception != null) {
-                    log.error("Failed to write state to persister for the share partition: {}-{}",
+                    log.debug("Failed to write state to persister for the share partition: {}-{}",
                         groupId, topicIdPartition, exception);
                     updatedStates.forEach(state -> state.completeStateTransition(false));
                     future.completeExceptionally(exception);
@@ -2324,8 +2325,8 @@ public class SharePartition {
                 PartitionErrorData partitionData = state.partitions().get(0);
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    log.error("Failed to write the share group state for share partition: {}-{} due to exception",
-                        groupId, topicIdPartition, ex);
+                    logError(String.format("Failed to write the share group state for share partition: %s-%s due to exception",
+                        groupId, topicIdPartition), ex);
                     future.completeExceptionally(ex);
                     return;
                 }
@@ -2347,6 +2348,8 @@ public class SharePartition {
                 new FencedStateEpochException(errorMessage);
             case FENCED_LEADER_EPOCH ->
                 new NotLeaderOrFollowerException(errorMessage);
+            case NETWORK_EXCEPTION ->
+                new NetworkException(errorMessage);
             default ->
                 new UnknownServerException(errorMessage);
         };
@@ -2423,7 +2426,7 @@ public class SharePartition {
             if (!stateBatches.isEmpty()) {
                 writeShareGroupState(stateBatches).whenComplete((result, exception) -> {
                     if (exception != null) {
-                        log.error("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId: {}",
+                        log.debug("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId: {}",
                             groupId, topicIdPartition, memberId, exception);
                     }
                     // Even if write share group state RPC call fails, we will still go ahead with the state transition.
@@ -2573,6 +2576,14 @@ public class SharePartition {
             archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
         }
         return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
+    }
+
+    private void logError(String message, Throwable e) {
+        if (e instanceof NetworkException) {
+            log.debug(message, e);
+        } else {
+            log.error(message, e);
+        }
     }
 
     /**
