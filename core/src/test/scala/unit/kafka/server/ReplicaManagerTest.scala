@@ -55,7 +55,7 @@ import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
-import org.apache.kafka.metadata.{LeaderAndIsr, MetadataCache}
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
@@ -3923,43 +3923,6 @@ class ReplicaManagerTest {
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
-  }
-
-  private def makeLeaderAndIsrRequest(
-    topicId: Uuid,
-    topicPartition: TopicPartition,
-    replicas: Seq[Int],
-    leaderAndIsr: LeaderAndIsr,
-    isNew: Boolean = true,
-    brokerEpoch: Int = 0,
-    controllerId: Int = 0,
-    controllerEpoch: Int = 0
-  ): LeaderAndIsrRequest = {
-    val partitionState = new LeaderAndIsrRequest.PartitionState()
-      .setTopicName(topicPartition.topic)
-      .setPartitionIndex(topicPartition.partition)
-      .setControllerEpoch(controllerEpoch)
-      .setLeader(leaderAndIsr.leader)
-      .setLeaderEpoch(leaderAndIsr.leaderEpoch)
-      .setIsr(leaderAndIsr.isr)
-      .setPartitionEpoch(leaderAndIsr.partitionEpoch)
-      .setReplicas(replicas.map(Int.box).asJava)
-      .setIsNew(isNew)
-
-    def mkNode(replicaId: Int): Node = {
-      new Node(replicaId, s"host-$replicaId", 9092)
-    }
-
-    val nodes = Set(mkNode(controllerId)) ++ replicas.map(mkNode).toSet
-
-    new LeaderAndIsrRequest.Builder(
-      controllerId,
-      controllerEpoch,
-      brokerEpoch,
-      Seq(partitionState).asJava,
-      Map(topicPartition.topic -> topicId).asJava,
-      nodes.asJava
-    ).build()
   }
 
   @Test
