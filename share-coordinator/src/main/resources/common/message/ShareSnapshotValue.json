@@ -20,7 +20,7 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "SnapshotEpoch", "type": "uint16", "versions": "0+",
+    { "name": "SnapshotEpoch", "type": "int32", "versions": "0+",
       "about": "The snapshot epoch." },
     { "name": "StateEpoch", "type": "int32", "versions": "0+",
       "about": "The state epoch for this share-partition." },
