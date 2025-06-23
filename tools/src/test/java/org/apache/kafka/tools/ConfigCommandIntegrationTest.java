@@ -445,7 +445,7 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest
     public void testUpdateInvalidBrokerConfigs() {
         updateAndCheckInvalidBrokerConfig(Optional.empty());
-        updateAndCheckInvalidBrokerConfig(cluster.brokers().values().stream().map(broker -> broker.socketServer().config().brokerId() + "").findFirst());
+        updateAndCheckInvalidBrokerConfig(Optional.of(String.valueOf((cluster.brokers().entrySet().iterator().next().getKey()))));
     }
 
     private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) {
@@ -508,8 +508,8 @@ public class ConfigCommandIntegrationTest {
                             "--entity-default"))));
             kafka.utils.TestUtils.waitUntilTrue(
                     () -> cluster.brokers().values().stream()
-                        .map(KafkaBroker::socketServer)
-                        .allMatch(broker -> broker.config().getInt("log.cleaner.threads") == 2),
+                        .map(KafkaBroker::config)
+                        .allMatch(config -> config.getInt("log.cleaner.threads") == 2),
                     () -> "Timeout waiting for topic config propagating to broker",
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                     100L);

@@ -125,6 +125,12 @@ public interface ClusterInstance {
      */
     String bootstrapControllers();
 
+    default List<Integer> controllerBoundPorts() {
+        return controllers().values().stream()
+            .map(ControllerServer::socketServer)
+            .map(ss -> ss.boundPort(controllerListenerName()))
+            .toList();
+    }
 
     String clusterId();
 
