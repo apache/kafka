@@ -2220,7 +2220,7 @@ public class AsyncKafkaConsumerTest {
 
         doAnswer(invocation -> {
             CreateFetchRequestsEvent event = invocation.getArgument(0);
-            CompletableFuture<Void> future = event.pollFuture();
+            CompletableFuture<Void> future = event.future();
 
             if (future.isDone()) {
                 return ConsumerUtils.getResult(future);
@@ -2229,6 +2229,6 @@ public class AsyncKafkaConsumerTest {
             }
 
             return null;
-        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(CreateFetchRequestsEvent.class));
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CreateFetchRequestsEvent.class));
     }
 }

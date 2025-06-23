@@ -58,7 +58,6 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveGroupOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.NetworkPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.PausePartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
@@ -1786,7 +1785,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         // send any new fetches (won't resend pending fetches)
-        NetworkPollEvent<Void> networkPollEvent = sendFetches(timer);
+        CreateFetchRequestsEvent networkPollEvent = sendFetches(timer);
 
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
@@ -1804,10 +1803,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // Wait for the next NetworkClient poll to finish, as there may not be anything immediately available. Note the
         // use of a shorter, dedicated "pollTimer" here which updates "timer" so that calling method (poll) will
         // correctly handle the overall timeout.
-        wakeupTrigger.setActiveTask(networkPollEvent.pollFuture());
+        wakeupTrigger.setActiveTask(networkPollEvent.future());
 
         try {
-            ConsumerUtils.getResult(networkPollEvent.pollFuture(), pollTimer);
+            ConsumerUtils.getResult(networkPollEvent.future(), pollTimer);
         } catch (TimeoutException swallow) {
             // Ignored. This is a common case when waiting for network activity.
         } catch (InterruptException e) {
@@ -1900,15 +1899,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * @param timer Timer used to bound how long the consumer waits for the requests to be created, which in practice
      *              is used to avoid using {@link Long#MAX_VALUE} to wait "forever"
      */
-    private NetworkPollEvent<Void> sendFetches(Timer timer) {
+    private CreateFetchRequestsEvent sendFetches(Timer timer) {
         CreateFetchRequestsEvent event = new CreateFetchRequestsEvent(calculateDeadlineMs(timer));
-
-        try {
-            applicationEventHandler.addAndGet(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
-        } catch (TimeoutException swallow) {
-            // Can be ignored, per above comments.
-        }
-
+        applicationEventHandler.add(event);
         return event;
     }
 

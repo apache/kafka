@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
-import org.apache.kafka.clients.consumer.internals.events.NetworkPollEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -38,7 +37,6 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
@@ -147,7 +145,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      */
     void runOnce() {
         // The following code avoids use of the Java Collections Streams API to reduce overhead in this loop.
-        List<NetworkPollEvent<?>> events = processApplicationEvents();
+        processApplicationEvents();
 
         final long currentTimeMs = time.milliseconds();
         if (lastPollTimeMs != 0L) {
@@ -164,11 +162,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
 
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
-
-        for (NetworkPollEvent<?> event : events) {
-            event.pollFuture().complete(null);
-        }
-
         long maxTimeToWaitMs = Long.MAX_VALUE;
 
         for (RequestManager rm : requestManagers.entries()) {
@@ -186,15 +179,14 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     /**
      * Process the events—if any—that were produced by the application thread.
      */
-    private List<NetworkPollEvent<?>> processApplicationEvents() {
+    private void processApplicationEvents() {
         LinkedList<ApplicationEvent> events = new LinkedList<>();
         applicationEventQueue.drainTo(events);
         if (events.isEmpty())
-            return Collections.emptyList();
+            return;
 
         asyncConsumerMetrics.recordApplicationEventQueueSize(0);
         long startMs = time.milliseconds();
-        List<NetworkPollEvent<?>> networkPollEvents = new ArrayList<>();
 
         for (ApplicationEvent event : events) {
             asyncConsumerMetrics.recordApplicationEventQueueTime(time.milliseconds() - event.enqueuedMs());
@@ -205,9 +197,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                     // This call is meant to handle "immediately completed events" which may not enter the awaiting state,
                     // so metadata errors need to be checked and handled right away.
                     maybeFailOnMetadataError(List.of((CompletableEvent<?>) event));
-
-                    if (event instanceof NetworkPollEvent)
-                        networkPollEvents.add((NetworkPollEvent<?>) event);
                 }
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {
@@ -215,7 +204,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             }
         }
         asyncConsumerMetrics.recordApplicationEventQueueProcessingTime(time.milliseconds() - startMs);
-        return networkPollEvents;
     }
 
     /**

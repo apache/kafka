@@ -19,24 +19,15 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 
-import java.util.concurrent.CompletableFuture;
-
 /**
  * {@code CreateFetchRequestsEvent} signals that the {@link Consumer} wants to issue fetch requests to the nodes
  * for the partitions to which the consumer is currently subscribed. The event is completed when the
  * {@link FetchRequestManager} has finished <em>creating</em> (i.e. not enqueuing, sending, or receiving)
  * fetch requests (if any) to send to the broker nodes.
  */
-public class CreateFetchRequestsEvent extends CompletableApplicationEvent<Void> implements NetworkPollEvent<Void> {
-
-    private final CompletableFuture<Void> pollFuture;
+public class CreateFetchRequestsEvent extends CompletableApplicationEvent<Void> {
 
     public CreateFetchRequestsEvent(final long deadlineMs) {
         super(Type.CREATE_FETCH_REQUESTS, deadlineMs);
-        pollFuture = new CompletableFuture<>();
-    }
-
-    public CompletableFuture<Void> pollFuture() {
-        return pollFuture;
     }
 }
