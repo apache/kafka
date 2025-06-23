@@ -389,6 +389,8 @@ class SharedServer(
       controllerServerMetrics = null
       Utils.closeQuietly(brokerMetrics, "broker metrics")
       brokerMetrics = null
+      Utils.closeQuietly(nodeMetrics, "node metrics")
+      nodeMetrics = null
       Utils.closeQuietly(metrics, "metrics")
       metrics = null
       CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, sharedServerConfig.nodeId.toString, metrics), this)

@@ -203,7 +203,6 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         for (var featureName : finalizedFeatureLevels.keySet()) {
             removeFinalizedFeatureLevelMetric(featureName);
         }
-        removeFinalizedFeatureLevelMetric(MetadataVersion.FEATURE_NAME);
     }
 
     private static MetricName getMetricName(String type, String name) {
