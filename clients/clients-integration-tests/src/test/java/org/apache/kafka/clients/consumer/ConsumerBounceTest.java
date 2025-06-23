@@ -27,7 +27,6 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -40,6 +39,7 @@ import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.ShutdownableThread;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,8 +62,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.kafka.common.test.TestUtils.SEEDED_RANDOM;
-import static org.apache.kafka.common.test.TestUtils.randomSelect;
+import static  org.apache.kafka.test.TestUtils.SEEDED_RANDOM;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -779,7 +778,7 @@ public class ConsumerBounceTest {
         }
 
         private void killRandomBroker() {
-            this.clusterInstance.shutdownBroker(randomSelect(clusterInstance.brokerIds()));
+            this.clusterInstance.shutdownBroker(TestUtils.randomSelect(clusterInstance.brokerIds()));
         }
 
         private void restartDeadBrokers() {
