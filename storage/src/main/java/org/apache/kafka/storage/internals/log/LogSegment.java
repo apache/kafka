@@ -196,6 +196,10 @@ public class LogSegment implements Closeable {
      */
     public TimestampOffset readMaxTimestampAndOffsetSoFar() throws IOException {
         if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
+            // As stated in LogSegment class javadoc, this class is not thread-safe so basically we assume that
+            // methods are called within UnifiedLog#lock.
+            // However, there's exceptional paths where this method can be called outside of the lock,
+            // so we need lock here to prevent multiple threads trying to modify maxTimestampAndOffsetSoFar
             synchronized (maxTimestampAndOffsetLock) {
                 if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
                     maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
