@@ -311,13 +311,12 @@ class ReplicaManagerTest {
       alterPartitionManager = alterPartitionManager)
 
     try {
-      val initialDelta = topicsCreateDelta(0, isStartIdLeader = true,
-        partitions = List(0), topicName = topic, topicId =  topicIds(topic))
-      val initialImage = imageFromTopics(initialDelta.apply())
-      rm.applyDelta(initialDelta, initialImage)
+      val delta = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = topic, topicId =  topicIds(topic))
+      val image = imageFromTopics(delta.apply())
+      rm.applyDelta(delta, image)
       val partition = rm.getPartitionOrException(topicPartition)
 
-      appendRecords(rm,topicPartition,
+      appendRecords(rm, topicPartition,
         MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("first message".getBytes()), new SimpleRecord("second message".getBytes())))
       logManager.maybeUpdatePreferredLogDir(topicPartition, dir2.getAbsolutePath)
 
@@ -1229,7 +1228,6 @@ class ReplicaManagerTest {
     val leaderEpochIncrement = 2
     val countDownLatch = new CountDownLatch(1)
     val offsetFromLeader = 5
-
     // Prepare the mocked components for the test
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(new MockTimer(time),
       0, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
@@ -1856,12 +1854,9 @@ class ReplicaManagerTest {
     val producerEpoch = 0.toShort
     val sequence = 0
     val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
-
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0, tp1))
     try {
-      // Step 1: Apply KRaft metadata to assign tp0 and tp1 as leaders
-      val directoryIds = replicaManager.logManager.directoryIdsSet.toList
-      val leaderDelta = topicsCreateDelta(startId = 0, isStartIdLeader = true, partitions = List(0, 1), directoryIds = directoryIds, topic, topicIds(topic))
+      val leaderDelta = topicsCreateDelta(startId = 0, isStartIdLeader = true, partitions = List(0, 1),  List.empty, topic, topicIds(topic))
       val leaderImage = imageFromTopics(leaderDelta.apply())
       replicaManager.applyDelta(leaderDelta, leaderImage)
 
