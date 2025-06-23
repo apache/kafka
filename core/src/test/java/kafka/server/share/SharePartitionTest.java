@@ -28,7 +28,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
-import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -758,7 +757,7 @@ public class SharePartitionTest {
         result = sharePartition.maybeInitialize();
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(FencedStateEpochException.class, result);
+        assertFutureThrows(NotLeaderOrFollowerException.class, result);
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock FENCED_LEADER_EPOCH error.
@@ -779,6 +778,20 @@ public class SharePartitionTest {
         Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.UNKNOWN_SERVER_ERROR.code(), Errors.UNKNOWN_SERVER_ERROR.message(),
+                    List.of())))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(UnknownServerException.class, result);
+        assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
+
+        // Mock NETWORK_EXCEPTION error.
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.NETWORK_EXCEPTION.code(), Errors.NETWORK_EXCEPTION.message(),
                     List.of())))));
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
@@ -5564,7 +5577,7 @@ public class SharePartitionTest {
 
         result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(FencedStateEpochException.class, result);
+        assertFutureThrows(NotLeaderOrFollowerException.class, result);
 
         // Mock Write state RPC to return error response, FENCED_LEADER_EPOCH.
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
