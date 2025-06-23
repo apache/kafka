@@ -2217,18 +2217,5 @@ public class AsyncKafkaConsumerTest {
             event.markReconcileAndAutoCommitComplete();
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(PollEvent.class));
-
-        doAnswer(invocation -> {
-            CreateFetchRequestsEvent event = invocation.getArgument(0);
-            CompletableFuture<Void> future = event.future();
-
-            if (future.isDone()) {
-                return ConsumerUtils.getResult(future);
-            } else if (Thread.interrupted()) {
-                throw new InterruptException("Test interrupt");
-            }
-
-            return null;
-        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CreateFetchRequestsEvent.class));
     }
 }
