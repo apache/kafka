@@ -1855,10 +1855,15 @@ class ReplicaManagerTest {
     val sequence = 0
     val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
     val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0, tp1))
+    val brokerList = Seq[Integer](0, 1).asJava
     try {
-      val leaderDelta = topicsCreateDelta(startId = 0, isStartIdLeader = true, partitions = List(0, 1),  List.empty, topic, topicIds(topic))
-      val leaderImage = imageFromTopics(leaderDelta.apply())
-      replicaManager.applyDelta(leaderDelta, leaderImage)
+      val leaderDelta0 = createLeaderDelta(topicId, tp0, leaderId = 1, replicas = brokerList, isr = brokerList)
+      val leaderDelta1 = createLeaderDelta(topicId, tp1, leaderId = 1, replicas = brokerList, isr = brokerList)
+      val image0 = imageFromTopics(leaderDelta0.apply())
+      replicaManager.applyDelta(leaderDelta0, image0)
+
+      val image1 = imageFromTopics(leaderDelta1.apply())
+      replicaManager.applyDelta(leaderDelta1, image1)
 
       // If we supply no transactional ID and idempotent records, we do not verify.
       val idempotentRecords = MemoryRecords.withIdempotentRecords(Compression.NONE, producerId, producerEpoch, sequence,
