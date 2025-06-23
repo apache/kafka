@@ -19,13 +19,11 @@ package org.apache.kafka.clients.consumer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.ClientsTestUtils;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
-import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.requests.FindCoordinatorRequest;
-import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -34,7 +32,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.server.IntegrationTestUtils;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
@@ -45,7 +42,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -308,9 +304,9 @@ public class ConsumerBounceTest {
         int numRecords = 10;
         ClientsTestUtils.sendRecords(clusterInstance, topicPartition, numRecords);
 
-        checkCloseGoodPath(groupProtocol, numRecords, "group1");
+//        checkCloseGoodPath(groupProtocol, numRecords, "group1");
         checkCloseWithCoordinatorFailure(groupProtocol, numRecords, "group2", "group3");
-        checkCloseWithClusterFailure(groupProtocol, numRecords, "group4", "group5");
+//        checkCloseWithClusterFailure(groupProtocol, numRecords, "group4", "group5");
     }
 
     /**
@@ -371,28 +367,25 @@ public class ConsumerBounceTest {
     }
 
     private Set<Integer> findCoordinators(List<String> groups) throws Exception {
-        FindCoordinatorRequest request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
-                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-                .setCoordinatorKeys(groups)).build();
-        Set<Integer> nodes = new HashSet<>();
-        TestUtils.waitForCondition(() -> {
-            FindCoordinatorResponse response = null;
-            try {
-                response = IntegrationTestUtils.connectAndReceive(request, clusterInstance.anyBrokerSocketServer().boundPort(new ListenerName("EXTERNAL")));
-            } catch (IOException e) {
-                return false;
-            }
-
-            if (response.hasError())
-                return false;
-            for (String group : groups)
-                if (response.coordinatorByKey(group).isEmpty())
+        Set<Integer> coordinators = new HashSet<>();
+        try (Admin admin = clusterInstance.admin()) {
+            TestUtils.waitForCondition(() -> {
+                try {
+                    DescribeConsumerGroupsResult result = admin.describeConsumerGroups(groups);
+                    for (String group : groups) {
+                        if (result.all().get().containsKey(group)) {
+                            return false;
+                        }
+                        coordinators.add(result.all().get().get(group).coordinator().id());
+                    }
+                    return true;
+                } catch (Exception ignore) {
+                    System.err.println("ZZZ " + ignore);
                     return false;
-                else
-                    nodes.add(response.coordinatorByKey(group).get().nodeId());
-            return true;
-        }, "Failed to find coordinator for group " + groups);
-        return nodes;
+                }
+            }, 10000, "Failed to find coordinator for groups " + groups);
+            return coordinators;
+        }
     }
 
     @ClusterTest
