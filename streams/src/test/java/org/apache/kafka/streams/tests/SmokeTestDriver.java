@@ -607,7 +607,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         } else if (actual instanceof Double && expected instanceof Double) {
             return actual.doubleValue() >= expected.doubleValue();
         } else {
-            throw new RuntimeException("Unexpected type: " + actual.getClass());
+            throw new IllegalArgumentException("Unexpected type: " + actual.getClass());
         }
     }
 
