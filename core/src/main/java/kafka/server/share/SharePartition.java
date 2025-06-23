@@ -23,7 +23,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
-import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -1490,7 +1489,7 @@ public class SharePartition {
                 String.format("Share partition failed to load %s-%s", groupId, topicIdPartition));
             case INITIALIZING -> throw new LeaderNotAvailableException(
                 String.format("Share partition is already initializing %s-%s", groupId, topicIdPartition));
-            case FENCED -> throw new FencedStateEpochException(
+            case FENCED -> throw new LeaderNotAvailableException(
                 String.format("Share partition is fenced %s-%s", groupId, topicIdPartition));
             case EMPTY ->
                 // The share partition is not yet initialized.
