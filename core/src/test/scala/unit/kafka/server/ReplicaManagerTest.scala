@@ -1506,7 +1506,7 @@ class ReplicaManagerTest {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
 
-      val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
+      val partition = replicaManager.createPartition(tp0)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
       // Make this replica the leader
