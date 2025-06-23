@@ -1235,10 +1235,11 @@ class ReplicaManagerTest {
 
     try {
       // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
-      val directoryIds = replicaManager.logManager.directoryIdsSet.toList
-      val initialFollowerDelta = topicsCreateDelta( startId = followerBrokerId, isStartIdLeader = false, partitions = List(0), directoryIds = directoryIds, topic, topicIds(topic), leaderEpoch)
-      val initialImage = imageFromTopics(initialFollowerDelta.apply())
-      replicaManager.applyDelta(initialFollowerDelta, initialImage)
+      val partition = replicaManager.createPartition(topicPartition)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
+      partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      val followerDelta = topicsCreateDelta(startId = followerBrokerId, isStartIdLeader = false, partitions = List(0), List.empty, topic, topicIds(topic), leaderEpoch)
+      replicaManager.applyDelta(followerDelta, imageFromTopics(followerDelta.apply()))
 
       // Verify log created and partition is hosted
       val localLog = replicaManager.localLog(topicPartition)
@@ -1249,9 +1250,8 @@ class ReplicaManagerTest {
       // Make local partition a follower - because epoch increased by more than 1, truncation should
       // trigger even though leader does not change
       leaderEpoch += leaderEpochIncrement
-      val epochJumpDelta = topicsCreateDelta( followerBrokerId, isStartIdLeader = false, partitions = List(0), directoryIds = directoryIds, topicName = topic, topicId = topicIds(topic), leaderEpoch = leaderEpoch)
-      val newImage = imageFromTopics(epochJumpDelta.apply())
-      replicaManager.applyDelta(epochJumpDelta, newImage)
+      val epochJumpDelta = topicsCreateDelta(startId = followerBrokerId, isStartIdLeader = false, partitions = List(0), List.empty, topic, topicIds(topic), leaderEpoch)
+      replicaManager.applyDelta(epochJumpDelta, imageFromTopics(epochJumpDelta.apply()))
 
       assertTrue(countDownLatch.await(1000L, TimeUnit.MILLISECONDS))
 
