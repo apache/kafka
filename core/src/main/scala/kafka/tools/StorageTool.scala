@@ -311,7 +311,7 @@ object StorageTool extends Logging {
     formatParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the initial feature settings. The minimum is " +
-        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.latestTesting().version()}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
 
     formatParser.addArgument("--feature", "-f")
       .help("The setting to use for a specific feature, in feature=level format. For example: `kraft.version=1`.")
@@ -344,7 +344,7 @@ object StorageTool extends Logging {
     versionMappingParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
-        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.latestTesting().version()}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is${MetadataVersion.LATEST_PRODUCTION}")
   }
 
   private def addFeatureDependenciesParser(subparsers: Subparsers): Unit = {
