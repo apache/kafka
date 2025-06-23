@@ -222,6 +222,10 @@ public abstract class AbstractFetch implements Closeable {
                 fetchBuffer.add(completedFetch);
             }
 
+            // "Wake" the fetch buffer on any response, even if it's empty, to allow the consumer to not block
+            // indefinitely waiting on the fetch buffer to get data.
+            fetchBuffer.wakeup();
+
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
                 List<Node> leaderNodes = new ArrayList<>();
 

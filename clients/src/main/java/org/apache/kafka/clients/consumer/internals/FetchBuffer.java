@@ -51,7 +51,7 @@ public class FetchBuffer implements AutoCloseable {
     private final Logger log;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
     private final Lock lock;
-    private final Condition notEmptyCondition;
+    private final Condition blockingCondition;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
 
     private final AtomicBoolean wokenup = new AtomicBoolean(false);
@@ -62,7 +62,7 @@ public class FetchBuffer implements AutoCloseable {
         this.log = logContext.logger(FetchBuffer.class);
         this.completedFetches = new ConcurrentLinkedQueue<>();
         this.lock = new ReentrantLock();
-        this.notEmptyCondition = lock.newCondition();
+        this.blockingCondition = lock.newCondition();
     }
 
     /**
@@ -98,7 +98,7 @@ public class FetchBuffer implements AutoCloseable {
         try {
             lock.lock();
             completedFetches.add(completedFetch);
-            notEmptyCondition.signalAll();
+            blockingCondition.signalAll();
         } finally {
             lock.unlock();
         }
@@ -111,7 +111,7 @@ public class FetchBuffer implements AutoCloseable {
         try {
             lock.lock();
             this.completedFetches.addAll(completedFetches);
-            notEmptyCondition.signalAll();
+            blockingCondition.signalAll();
         } finally {
             lock.unlock();
         }
@@ -158,19 +158,19 @@ public class FetchBuffer implements AutoCloseable {
      * under one of the following conditions:
      *
      * <ol>
-     *     <li>The buffer was already non-empty on entry</li>
-     *     <li>The buffer was populated during the wait</li>
+     *     <li>The buffer was already woken</li>
+     *     <li>The buffer was woken during the wait</li>
      *     <li>The remaining time on the {@link Timer timer} elapsed</li>
      *     <li>The thread was interrupted</li>
      * </ol>
      *
      * @param timer Timer that provides time to wait
      */
-    void awaitNotEmpty(Timer timer) {
+    void awaitWakeup(Timer timer) {
         try {
             lock.lock();
 
-            while (isEmpty() && !wokenup.compareAndSet(true, false)) {
+            while (!wokenup.compareAndSet(true, false)) {
                 // Update the timer before we head into the loop in case it took a while to get the lock.
                 timer.update();
 
@@ -185,7 +185,7 @@ public class FetchBuffer implements AutoCloseable {
                     break;
                 }
 
-                if (!notEmptyCondition.await(timer.remainingMs(), TimeUnit.MILLISECONDS)) {
+                if (!blockingCondition.await(timer.remainingMs(), TimeUnit.MILLISECONDS)) {
                     break;
                 }
             }
@@ -201,7 +201,7 @@ public class FetchBuffer implements AutoCloseable {
         wokenup.set(true);
         try {
             lock.lock();
-            notEmptyCondition.signalAll();
+            blockingCondition.signalAll();
         } finally {
             lock.unlock();
         }
