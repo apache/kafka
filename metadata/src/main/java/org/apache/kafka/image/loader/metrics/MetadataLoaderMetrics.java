@@ -28,6 +28,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -95,13 +96,10 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
                 return handleLoadSnapshotCount();
             }
         }));
-        // TODO: Need to remove the '.' from the feature name?
         for (var featureName : Feature.PRODUCTION_FEATURE_NAMES) {
-            String normalizedName = featureName.replace(".version", "Version");
             finalizedFeatureLevels.put(featureName, (short) 0);
             addFinalizedFeatureLevelMetric(featureName);
         }
-        String normalizedMetadataVersionName = MetadataVersion.FEATURE_NAME.replace(".version", "Version");
         finalizedFeatureLevels.put(
             MetadataVersion.FEATURE_NAME,
             MetadataVersion.MINIMUM_VERSION.featureLevel()
@@ -188,7 +186,6 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
     }
 
     public void setFinalizedFeatureLevel(String featureName, short featureLevel) {
-        // TODO: Need to remove the '.' from the feature name?
         finalizedFeatureLevels.put(featureName, featureLevel);
     }
 
@@ -203,7 +200,6 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
             CURRENT_CONTROLLER_ID,
             HANDLE_LOAD_SNAPSHOT_COUNT
         ).forEach(r::removeMetric));
-        // TODO: Need to remove the '.' from the feature name?
         for (var featureName : finalizedFeatureLevels.keySet()) {
             removeFinalizedFeatureLevelMetric(featureName);
         }
@@ -216,7 +212,18 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
 
     private static MetricName getFeatureNameTagMetricName(String type, String name, String featureName) {
         LinkedHashMap<String, String> featureNameTag = new LinkedHashMap<>();
-        featureNameTag.put(FEATURE_NAME_TAG, featureName);
+        featureNameTag.put(FEATURE_NAME_TAG, sanitizeFeatureName(featureName));
         return KafkaYammerMetrics.getMetricName("kafka.server", type, name, featureNameTag);
+    }
+    
+    private static String sanitizeFeatureName(String featureName) {
+        final var words = featureName.split("\\.");
+        final var builder = new StringBuilder(words[0]);
+        for (int i = 1; i < words.length; i++) {
+            final var word = words[i];
+            builder.append(word.substring(0, 1).toUpperCase(Locale.ROOT))
+                   .append(word.substring(1).toLowerCase(Locale.ROOT));
+        }
+        return builder.toString();
     }
 }

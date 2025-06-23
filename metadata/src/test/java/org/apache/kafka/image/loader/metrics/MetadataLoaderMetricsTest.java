@@ -36,8 +36,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-
 
 public class MetadataLoaderMetricsTest {
     private static class FakeMetadataLoaderMetrics implements AutoCloseable {
@@ -75,13 +73,13 @@ public class MetadataLoaderMetricsTest {
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadata.version",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraft.version",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=transaction.version",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=group.version",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=eligible.leader.replicas.version",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=share.version",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=streams.version"
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=transactionVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=groupVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=eligibleLeaderReplicasVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=shareVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=streamsVersion"
                     ));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
@@ -171,11 +169,11 @@ public class MetadataLoaderMetricsTest {
                 @SuppressWarnings("unchecked")
                 Gauge<Short> finalizedMetadataVersion = (Gauge<Short>) registry
                     .allMetrics()
-                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=metadata.version"));
+                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=metadataVersion"));
                 @SuppressWarnings("unchecked")
                 Gauge<Short> finalizedKRaftVersion = (Gauge<Short>) registry
                     .allMetrics()
-                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=kraft.version"));
+                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=kraftVersion"));
 
                 assertEquals(MINIMUM_VERSION.featureLevel(), finalizedMetadataVersion.value());
                 assertEquals((short) 0, finalizedKRaftVersion.value());
