@@ -49,21 +49,22 @@ public class OpenIterators {
     }
 
     public void add(final MeteredIterator iterator) {
-        if (numOpenIterators.intValue() == 0) {
+        openIterators.add(iterator);
+        numOpenIterators.increment();
+
+        if (numOpenIterators.intValue() == 1) {
             metricName = StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name, streamsMetrics,
                 (config, now) -> openIterators.first().startTimestamp()
             );
         }
-        numOpenIterators.increment();
-        openIterators.add(iterator);
     }
 
     public void remove(final MeteredIterator iterator) {
-        numOpenIterators.decrement();
-        openIterators.remove(iterator);
-        if (numOpenIterators.intValue() == 0) {
+        if (numOpenIterators.intValue() == 1) {
             streamsMetrics.removeMetric(metricName);
         }
+        numOpenIterators.decrement();
+        openIterators.remove(iterator);
     }
 
     public long sum() {
