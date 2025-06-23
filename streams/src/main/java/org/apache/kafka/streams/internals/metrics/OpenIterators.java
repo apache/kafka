@@ -51,9 +51,7 @@ public class OpenIterators {
     public void add(final MeteredIterator iterator) {
         if (numOpenIterators.intValue() == 0) {
             metricName = StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name, streamsMetrics,
-                (config, now) -> {
-                    return openIterators.first().startTimestamp();
-                }
+                (config, now) -> openIterators.first().startTimestamp()
             );
         }
         numOpenIterators.increment();
