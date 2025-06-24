@@ -1201,6 +1201,7 @@ class ReplicaManagerTest {
    * if the epoch has increased by more than one (which suggests it has missed an update). For
    * IBP version 2.7 onwards, we don't require this since we can truncate at any time based
    * on diverging epochs returned in fetch responses.
+   * This test assumes IBP >= 2.7 behavior, so `expectTruncation` is set to false and truncation is not expected.
    */
   @Test
   def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(): Unit = {
