@@ -311,7 +311,7 @@ class ReplicaManagerTest {
       alterPartitionManager = alterPartitionManager)
 
     try {
-      val delta = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = topic, topicId =  topicIds(topic))
+      val delta = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = topic, topicId = topicIds(topic))
       val image = imageFromTopics(delta.apply())
       rm.applyDelta(delta, image)
       val partition = rm.getPartitionOrException(topicPartition)
@@ -3844,7 +3844,7 @@ class ReplicaManagerTest {
       val exception1 = assertThrows(classOf[IllegalStateException], () => {
         replicaManager.applyDelta(inconsistentDelta1, inconsistentImage1)
       })
-      assertTrue(exception1.getMessage.contains("exists, but its ID is"))
+      assertEquals(s"Topic ${topic}-0 exists, but its ID is ${topicId}, not ${invalidTopicId} as expected", exception1.getMessage)
 
       val inconsistentDelta2 = topicsCreateDelta(0, isStartIdLeader = true,
         partitions = List(0), topicName = topic, topicId = invalidTopicId, leaderEpoch = 2)
@@ -3852,7 +3852,7 @@ class ReplicaManagerTest {
       val exception2 = assertThrows(classOf[IllegalStateException], () => {
         replicaManager.applyDelta(inconsistentDelta2, inconsistentImage2)
       })
-      assertTrue(exception2.getMessage.contains("exists, but its ID is"))
+      assertEquals(s"Topic ${topic}-0 exists, but its ID is ${topicId}, not ${invalidTopicId} as expected", exception2.getMessage)
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
