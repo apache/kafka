@@ -42,7 +42,6 @@ import java.util.stream.{Collectors, IntStream, StreamSupport}
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters._
 
-
 @ClusterTestDefaults(types = Array(Type.KRAFT), serverProperties = Array(
   new ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
   new ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
