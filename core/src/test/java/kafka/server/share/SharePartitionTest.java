@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -946,6 +947,19 @@ public class SharePartitionTest {
         SharePartition sharePartition2 = SharePartitionBuilder.builder().withPersister(persister).build();
 
         assertThrows(RuntimeException.class, sharePartition2::maybeInitialize);
+    }
+
+    @Test
+    public void testMaybeInitializeFencedSharePartition() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        // Mark the share partition as fenced.
+        sharePartition.markFenced();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFutureThrows(LeaderNotAvailableException.class, result);
+        assertEquals(SharePartitionState.FENCED, sharePartition.partitionState());
     }
 
     @Test
