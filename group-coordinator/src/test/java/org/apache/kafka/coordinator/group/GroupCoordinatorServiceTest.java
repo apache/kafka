@@ -1953,11 +1953,11 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> partitionCount);
 
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
-            .setGroupId(null)
+            .setGroupId("")
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new ConsumerGroupDescribeResponseData.DescribedGroup()
-                .setGroupId(null)
+                .setGroupId("")
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             describedGroup
         );

@@ -233,6 +233,42 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           )
         )
 
+        // Fetch with empty group id.
+        assertEquals(
+          new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("")
+            .setTopics(List(
+              new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName(if (version < 10) "foo" else "")
+                .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
+                .setPartitions(List(
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(0)
+                    .setCommittedOffset(-1L),
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(1)
+                    .setCommittedOffset(-1L),
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(5)
+                    .setCommittedOffset(-1L)
+                ).asJava)
+            ).asJava),
+          fetchOffsets(
+            group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("")
+              .setMemberId(memberId)
+              .setMemberEpoch(memberEpoch)
+              .setTopics(List(
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setName("foo")
+                  .setTopicId(topicId)
+                  .setPartitionIndexes(List[Integer](0, 1, 5).asJava) // 5 does not exist.
+              ).asJava),
+            requireStable = requireStable,
+            version = version.toShort
+          )
+        )
+
         // Fetch with stale member epoch.
         assertEquals(
           new OffsetFetchResponseData.OffsetFetchResponseGroup()

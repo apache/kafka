@@ -1076,7 +1076,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             } else {
                 futures.add(CompletableFuture.completedFuture(List.of(
                     new ConsumerGroupDescribeResponseData.DescribedGroup()
-                        .setGroupId(null)
+                        .setGroupId("")
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                 )));
             }
