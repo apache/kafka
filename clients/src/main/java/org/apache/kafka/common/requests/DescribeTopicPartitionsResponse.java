@@ -68,16 +68,6 @@ public class DescribeTopicPartitionsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static DescribeTopicPartitionsResponse prepareResponse(
-        int throttleTimeMs,
-        List<DescribeTopicPartitionsResponseTopic> topics
-    ) {
-        DescribeTopicPartitionsResponseData responseData = new DescribeTopicPartitionsResponseData();
-        responseData.setThrottleTimeMs(throttleTimeMs);
-        topics.forEach(topicResponse -> responseData.topics().add(topicResponse));
-        return new DescribeTopicPartitionsResponse(responseData);
-    }
-
     public static DescribeTopicPartitionsResponse parse(Readable readable, short version) {
         return new DescribeTopicPartitionsResponse(
             new DescribeTopicPartitionsResponseData(readable, version));
