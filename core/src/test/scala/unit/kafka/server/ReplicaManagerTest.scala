@@ -1214,7 +1214,7 @@ class ReplicaManagerTest {
     val offsetFromLeader = 5
     // Prepare the mocked components for the test
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(new MockTimer(time),
-      0, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
+      topicPartition.partition(), leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
       expectTruncation = expectTruncation, localLogOffset = Optional.of(10), offsetFromLeader = offsetFromLeader, extraProps = extraProps, topicId = Optional.of(topicId))
 
     try {
@@ -1222,7 +1222,7 @@ class ReplicaManagerTest {
       val partition = replicaManager.createPartition(topicPartition)
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-      val followerDelta = topicsCreateDelta(startId = followerBrokerId, isStartIdLeader = false, partitions = List(0), List.empty, topic, topicIds(topic), leaderEpoch)
+      val followerDelta = topicsCreateDelta(startId = followerBrokerId, isStartIdLeader = false, partitions = List(topicPartition.partition()), List.empty, topic, topicIds(topic), leaderEpoch)
       replicaManager.applyDelta(followerDelta, imageFromTopics(followerDelta.apply()))
 
       // Verify log created and partition is hosted
@@ -1234,7 +1234,7 @@ class ReplicaManagerTest {
       // Make local partition a follower - because epoch increased by more than 1, truncation should
       // trigger even though leader does not change
       leaderEpoch += leaderEpochIncrement
-      val epochJumpDelta = topicsCreateDelta(startId = followerBrokerId, isStartIdLeader = false, partitions = List(0), List.empty, topic, topicIds(topic), leaderEpoch)
+      val epochJumpDelta = topicsCreateDelta(startId = followerBrokerId, isStartIdLeader = false, partitions = List(topicPartition.partition()), List.empty, topic, topicIds(topic), leaderEpoch)
       replicaManager.applyDelta(epochJumpDelta, imageFromTopics(epochJumpDelta.apply()))
 
       assertTrue(countDownLatch.await(1000L, TimeUnit.MILLISECONDS))
