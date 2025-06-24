@@ -727,10 +727,6 @@ public class TransactionManager {
             txnPartitionMap.removeInFlightBatch(batch);
     }
 
-    synchronized void removeBatchAwaitingCompletion(ProducerBatch batch) {
-        txnPartitionMap.removeBatchAwaitingCompletion(batch);
-    }
-
     private int maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
         return txnPartitionMap.maybeUpdateLastAckedSequence(topicPartition, sequence);
     }

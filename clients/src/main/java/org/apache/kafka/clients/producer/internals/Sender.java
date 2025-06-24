@@ -662,7 +662,6 @@ public class Sender implements Runnable {
                 formatErrMsg(response));
             if (transactionManager != null) {
                 transactionManager.removeInFlightBatch(batch);
-                transactionManager.removeBatchAwaitingCompletion(batch);
             }
             this.accumulator.splitAndReenqueue(batch);
             maybeRemoveAndDeallocateBatch(batch);

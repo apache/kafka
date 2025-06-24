@@ -128,8 +128,4 @@ class TxnPartitionMap {
     void removeInFlightBatch(ProducerBatch batch) {
         get(batch.topicPartition).removeInFlightBatch(batch);
     }
-
-    void removeBatchAwaitingCompletion(ProducerBatch batch) {
-        get(batch.topicPartition).removeBatchAwaitingCompletion(batch);
-    }
 }
