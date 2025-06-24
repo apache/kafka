@@ -574,6 +574,91 @@ public class GroupCoordinatorServiceTest {
             future.get(5, TimeUnit.SECONDS)
         );
     }
+    @Test
+    public void testStreamsGroupHeartbeatFailsForUnsupportedFeatures() throws Exception {
+
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(mockRuntime())
+            .build(true);
+
+        AuthorizableRequestContext context = mock(AuthorizableRequestContext.class);
+        when(context.requestVersion()).thenReturn((int) ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("Static membership is not yet supported."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setInstanceId(Uuid.randomUuid().toString())
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("TaskOffsets are not supported yet."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("TaskEndOffsets are not supported yet."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setTaskEndOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("WarmupTasks are not supported yet."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setWarmupTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()))
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("Regular expressions for source topics is not supported yet."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setTopology(new StreamsGroupHeartbeatRequestData.Topology()
+                        .setSubtopologies(List.of(new StreamsGroupHeartbeatRequestData.Subtopology()
+                            .setSourceTopicRegex(List.of("foo.*"))
+                        ))
+                    )
+            ).get(5, TimeUnit.SECONDS)
+        );
+    }
 
     @SuppressWarnings("MethodLength")
     @Test
@@ -584,7 +669,7 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         AuthorizableRequestContext context = mock(AuthorizableRequestContext.class);
-        when(context.requestVersion()).thenReturn((int) ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion());
+        when(context.requestVersion()).thenReturn((int) ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
 
         String memberId = Uuid.randomUuid().toString();
 
@@ -740,24 +825,6 @@ public class GroupCoordinatorServiceTest {
                     .setActiveTasks(List.of())
                     .setStandbyTasks(List.of())
                     .setWarmupTasks(List.of())
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        // InstanceId must be non-empty if provided in all requests.
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("InstanceId can't be empty."),
-                Map.of()
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setGroupId("foo")
-                    .setMemberId(memberId)
-                    .setMemberEpoch(1)
-                    .setInstanceId("")
             ).get(5, TimeUnit.SECONDS)
         );
 

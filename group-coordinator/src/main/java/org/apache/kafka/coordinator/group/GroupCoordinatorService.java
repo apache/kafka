@@ -141,6 +141,7 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationEx
 import static org.apache.kafka.coordinator.group.Utils.throwIfEmptyString;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNotEmptyCollection;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNotNull;
+import static org.apache.kafka.coordinator.group.Utils.throwIfNotNullOrEmpty;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNull;
 
 /**
@@ -541,6 +542,26 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * Validates the request. Specifically, throws if any not-yet-supported features are used.
+     *
+     * @param request The request to validate.
+     * @throws InvalidRequestException if the request is not valid.
+     */
+    private static void throwIfStreamsGroupHeartbeatRequestIsUsingUnsupportedFeatures(
+        StreamsGroupHeartbeatRequestData request
+    ) throws InvalidRequestException {
+        throwIfNotNull(request.instanceId(), "Static membership is not yet supported.");
+        throwIfNotNull(request.taskOffsets(), "TaskOffsets are not supported yet.");
+        throwIfNotNull(request.taskEndOffsets(), "TaskEndOffsets are not supported yet.");
+        throwIfNotNullOrEmpty(request.warmupTasks(), "WarmupTasks are not supported yet.");
+        if (request.topology() != null) {
+            for (StreamsGroupHeartbeatRequestData.Subtopology subtopology : request.topology().subtopologies()) {
+                throwIfNotEmptyCollection(subtopology.sourceTopicRegex(), "Regular expressions for source topics is not supported yet.");
+            }
+        }
+    }
+
+    /**
      * See
      * {@link GroupCoordinator#streamsGroupHeartbeat(AuthorizableRequestContext, StreamsGroupHeartbeatRequestData)}.
      */
@@ -559,6 +580,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         try {
+            throwIfStreamsGroupHeartbeatRequestIsUsingUnsupportedFeatures(request);
             throwIfStreamsGroupHeartbeatRequestIsInvalid(request);
         } catch (Throwable ex) {
             ApiError apiError = ApiError.fromThrowable(ex);
