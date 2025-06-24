@@ -1091,12 +1091,23 @@ sasl.mechanism=OAUTHBEARER</code></pre></li>
                             to communicate with the OAuth identity provider, the configuration might look like this:
                             <pre><code class="language-text">security.protocol=SASL_SSL
 sasl.mechanism=OAUTHBEARER
+sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever
 sasl.oauthbearer.client.credentials.client.id=jdoe
 sasl.oauthbearer.client.credentials.client.secret=$3cr3+
-sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever
 sasl.oauthbearer.scope=my-application-scope
 sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token</code></pre>
 
+                            Or, if using the OAuth <code>urn:ietf:params:oauth:grant-type:jwt-bearer</code> grant type
+                            to communicate with the OAuth identity provider, the configuration might look like this:
+                            <pre><code class="language-text">security.protocol=SASL_SSL
+sasl.mechanism=OAUTHBEARER
+sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever
+sasl.oauthbearer.assertion.private.key.file=/path/to/private.key
+sasl.oauthbearer.assertion.algorithm=RS256
+sasl.oauthbearer.assertion.claim.exp.seconds=600
+sasl.oauthbearer.assertion.template.file=/path/to/template.json
+sasl.oauthbearer.scope=my-application-scope
+sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token</code></pre>
                             The OAUTHBEARER client configuration includes:
 
                             <ul>
