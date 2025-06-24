@@ -21,6 +21,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Quota callback interface for brokers and controllers that enables customization of client quota computation.
@@ -105,6 +106,14 @@ public interface ClientQuotaCallback extends Configurable {
      * @return true if quotas have changed and metric configs may need to be updated
      */
     boolean updateClusterMetadata(Cluster cluster);
+
+    /**
+     * Return a set of active client quota entities, which represent the quotas currently in effect and applicable.
+     * If the callback does not track active client quotas, it may return an empty set.
+     *
+     * @return a set of active client quota entities
+     */
+    Set<ClientQuotaEntity> getActiveQuotasEntities();
 
     /**
      * Closes this instance.

@@ -1759,6 +1759,8 @@ class DummyClientQuotaCallback extends ClientQuotaCallback with Reconfigurable {
 
   override def close(): Unit = {}
 
+  override def getActiveQuotasEntities: util.Set[quota.ClientQuotaEntity] = util.Collections.emptySet()
+
   override def configure(configs: util.Map[String, _]): Unit = {
     val newValue = configs.get(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey)
     if (newValue != null) {

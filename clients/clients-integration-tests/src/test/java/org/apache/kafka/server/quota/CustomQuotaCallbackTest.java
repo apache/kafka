@@ -35,6 +35,7 @@ import org.apache.kafka.test.TestUtils;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -152,6 +153,11 @@ public class CustomQuotaCallbackTest {
         public boolean updateClusterMetadata(Cluster cluster) {
             COUNTERS.computeIfAbsent(nodeId, k -> new AtomicInteger()).incrementAndGet();
             return true;
+        }
+
+        @Override
+        public Set<ClientQuotaEntity> getActiveQuotasEntities() {
+            return Set.of();
         }
 
         @Override

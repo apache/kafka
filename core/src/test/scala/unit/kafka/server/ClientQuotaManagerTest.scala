@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.server.ClientQuotaManager.BaseUserEntity
+import kafka.server.ClientQuotaManager.{BaseUserEntity, KafkaQuotaEntity}
 import org.apache.kafka.common.Cluster
 
 import java.net.InetAddress
@@ -29,7 +29,7 @@ import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, Cl
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import java.util.{Collections, Map}
+import java.util.{Collections, Map, HashMap, Set}
 
 class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = new ClientQuotaManagerConfig()
@@ -580,6 +580,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testQuotaTypesEnabledUpdatesWithCustomCallback(): Unit = {
     val customQuotaCallback = new ClientQuotaCallback {
+      val quotas = new HashMap[ClientQuotaEntity, Quota]()
       override def configure(configs: Map[String, _]): Unit = {}
 
       override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): Map[String, String] = Collections.emptyMap()
@@ -587,11 +588,18 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       override def quotaLimit(quotaType: ClientQuotaType, metricTags: Map[String, String]): java.lang.Double = 1
       override def updateClusterMetadata(cluster: Cluster): Boolean = false
 
-      override def updateQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity, newValue: Double): Unit = {}
+      override def updateQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity, newValue: Double): Unit = {
+        quotas.put(entity.asInstanceOf[KafkaQuotaEntity], new Quota(newValue.toLong, true))
+      }
 
-      override def removeQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity): Unit = {}
+      override def removeQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity): Unit = {
+        quotas.remove(entity.asInstanceOf[KafkaQuotaEntity])
+      }
 
       override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
+
+      override def getActiveQuotasEntities: Set[ClientQuotaEntity] =
+        quotas.keySet().asInstanceOf[Set[ClientQuotaEntity]]
 
       override def close(): Unit = {}
     }
@@ -624,6 +632,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(QuotaTypes.CustomQuotas | QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.quotaTypesEnabled)
       assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
 
+      // Update a duplicate client-id quota, quotaTypesEnabled should remain unchanged
+      clientQuotaManager.updateQuota(None, Some(ClientQuotaManager.ClientIdEntity("client2")), Some(new Quota(10, true)))
+      assertEquals(QuotaTypes.CustomQuotas | QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
+
       // Add a user-client-id quota, quotaTypesEnabled should be QuotaTypes.CustomQuotas | QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserQuotaEnabled
       clientQuotaManager.updateQuota(Some(ClientQuotaManager.UserEntity("userA")), Some(ClientQuotaManager.ClientIdEntity("client1")), Some(new Quota(12, true)))
       assertEquals(QuotaTypes.CustomQuotas | QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserClientIdQuotaEnabled, clientQuotaManager.quotaTypesEnabled)
@@ -631,6 +644,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Remove all quotas, quotaTypesEnabled should be QuotaTypes.CustomQuotas
       clientQuotaManager.updateQuota(Some(ClientQuotaManager.UserEntity("userA")), Some(ClientQuotaManager.ClientIdEntity("client1")), None)
+
       clientQuotaManager.updateQuota(Some(ClientQuotaManager.UserEntity("userA")), None, None)
       clientQuotaManager.updateQuota(None, Some(ClientQuotaManager.ClientIdEntity("client1")), None)
       clientQuotaManager.updateQuota(None, Some(ClientQuotaManager.ClientIdEntity("client2")), None)
