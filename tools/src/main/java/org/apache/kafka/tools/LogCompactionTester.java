@@ -76,6 +76,7 @@ import joptsimple.OptionSet;
  * print an error and exit with exit code 1, otherwise we print the size reduction and exit with exit code 0.
  */
 public class LogCompactionTester {
+    private static final Random RANDOM = new Random();
 
     public static void main(String[] args) throws Exception {
 
@@ -98,7 +99,7 @@ public class LogCompactionTester {
         int topicCount = optionSet.valueOf(options.topicsOpt);
         int sleepSecs = optionSet.valueOf(options.sleepSecsOpt);
 
-        long testId = new Random().nextLong();
+        long testId = RANDOM.nextLong();
         String[] topics = IntStream.range(0, topicCount)
                 .mapToObj(i -> "log-cleaner-test-" + testId + "-" + i)
                 .toArray(String[]::new);
@@ -266,7 +267,6 @@ public class LogCompactionTester {
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
                 producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
-            Random rand = new Random(1);
             int keyCount = (int) (messages / dups);
             Path producedFilePath = Files.createTempFile("kafka-log-cleaner-produced-", ".txt");
             System.out.println("Logging produce requests to " + producedFilePath);
@@ -275,7 +275,7 @@ public class LogCompactionTester {
                     producedFilePath, StandardCharsets.UTF_8)) {
                 for (long i = 0; i < messages * topics.length; i++) {
                     String topic = topics[(int) (i % topics.length)];
-                    int key = rand.nextInt(keyCount);
+                    int key = RANDOM.nextInt(keyCount);
                     boolean delete = (i % 100) < percentDeletes;
                     ProducerRecord<byte[], byte[]> record;
                     if (delete) {
@@ -336,7 +336,7 @@ public class LogCompactionTester {
     private static Consumer<String, String> createConsumer(String brokerUrl) {
         Properties consumerProps = new Properties();
         consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG,
-                "log-cleaner-test-" + new Random().nextInt(Integer.MAX_VALUE));
+                "log-cleaner-test-" + RANDOM.nextInt(Integer.MAX_VALUE));
         consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
         consumerProps.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaConsumer<>(consumerProps, new StringDeserializer(), new StringDeserializer());
