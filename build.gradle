@@ -2425,6 +2425,7 @@ project(':tools') {
     implementation project(':coordinator-common')
     implementation project(':share-coordinator')
     implementation project(':raft')
+    implementation project(':test-common:test-common-runtime')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
