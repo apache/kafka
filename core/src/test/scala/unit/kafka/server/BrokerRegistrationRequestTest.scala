@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.network.SocketServer
 import org.apache.kafka.common.test.api.{ClusterTest, Type}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
@@ -43,15 +42,13 @@ import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 class BrokerRegistrationRequestTest {
 
   def brokerToControllerChannelManager(clusterInstance: ClusterInstance): NodeToControllerChannelManager = {
-    def anyControllerSocketServer(clusterInstance: ClusterInstance): SocketServer = {
-      clusterInstance.controllers().values().stream().map(_.socketServer).findFirst().get()
-    }
+    val controllerSocketServer = clusterInstance.controllers().values().stream().map(_.socketServer).findFirst().get()
     new NodeToControllerChannelManagerImpl(
       new ControllerNodeProvider() {
         def node: Option[Node] = Some(new Node(
-          anyControllerSocketServer(clusterInstance).config.nodeId,
+          controllerSocketServer.config.nodeId,
           "127.0.0.1",
-          anyControllerSocketServer(clusterInstance).boundPort(clusterInstance.controllerListenerName()),
+          controllerSocketServer.boundPort(clusterInstance.controllerListenerName()),
         ))
 
         def listenerName: ListenerName = clusterInstance.controllerListenerName()
@@ -65,7 +62,7 @@ class BrokerRegistrationRequestTest {
       },
       Time.SYSTEM,
       new Metrics(),
-      anyControllerSocketServer(clusterInstance).config,
+      controllerSocketServer.config,
       "heartbeat",
       "test-heartbeat-",
       10000

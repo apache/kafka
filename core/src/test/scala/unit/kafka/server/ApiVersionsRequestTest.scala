@@ -34,7 +34,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   ))
   def testApiVersionsRequest(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.controllerBoundPorts().get(0))
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.brokerBoundPorts().get(0))
     validateApiVersionsResponse(apiVersionsResponse)
   }
 
@@ -44,7 +44,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   ))
   def testApiVersionsRequestIncludesUnreleasedApis(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.controllerBoundPorts().get(0))
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.brokerBoundPorts().get(0))
     validateApiVersionsResponse(apiVersionsResponse, enableUnstableLastVersion = true)
   }
 
@@ -74,7 +74,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   ))
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
-    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.controllerBoundPorts().get(0))
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.brokerBoundPorts().get(0))
     validateApiVersionsResponse(apiVersionsResponse, apiVersion = 0,
       enableUnstableLastVersion = !"false".equals(
         cluster.config().serverProperties().get("unstable.api.versions.enable")))
@@ -91,7 +91,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequestValidationV3(): Unit = {
     // Invalid request because Name and Version are empty by default
     val apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), 3.asInstanceOf[Short])
-    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.controllerBoundPorts().get(0))
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.brokerBoundPorts().get(0))
     assertEquals(Errors.INVALID_REQUEST.code(), apiVersionsResponse.data.errorCode())
   }
 }

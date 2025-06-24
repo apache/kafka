@@ -132,6 +132,13 @@ public interface ClusterInstance {
             .toList();
     }
 
+    default List<Integer> brokerBoundPorts() {
+        return brokers().values().stream()
+            .map(KafkaBroker::socketServer)
+            .map(ss -> ss.boundPort(clientListener()))
+            .toList();
+    }
+
     String clusterId();
 
     //---------------------------[producer/consumer/admin]---------------------------//

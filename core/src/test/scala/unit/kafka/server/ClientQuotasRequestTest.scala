@@ -22,7 +22,7 @@ import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import org.apache.kafka.common.test.api.ClusterTest
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
@@ -33,6 +33,7 @@ import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Disabled
 
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
@@ -202,10 +203,12 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     val entityFilter = ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.IP, knownHost)
     val defaultEntityFilter = ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.IP)
     val allIpEntityFilter = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)
-
+    val properties = new Properties()
+    properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
+    val admin = AdminClient.create(properties)
     def verifyIpQuotas(entityFilter: ClientQuotaFilterComponent, expectedMatches: Map[ClientQuotaEntity, Double]): Unit = {
       TestUtils.tryUntilNoAssertionError() {
-        val result = describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava))
+        val result = admin.describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava)).entities().get()
         assertEquals(expectedMatches.keySet, result.asScala.keySet)
         result.asScala.foreach { case (entity, props) =>
           assertEquals(Set(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG), props.asScala.keySet)
