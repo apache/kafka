@@ -51,4 +51,23 @@ public class TestRecord {
                 "d".equals(components[3])
         );
     }
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TestRecord that = (TestRecord) o;
+        return key == that.key &&
+                value == that.value &&
+                delete == that.delete &&
+                topic.equals(that.topic);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = topic.hashCode();
+        result = 31 * result + key;
+        result = 31 * result + Long.hashCode(value);
+        result = 31 * result + Boolean.hashCode(delete);
+        return result;
+    }
 }
