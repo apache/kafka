@@ -77,40 +77,43 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     new DescribeConfigsResponseData().setResults((authorizedConfigs ++ unauthorizedConfigs).asJava)
   }
 
+  private def buildDescribeConfigsResult(resource: DescribeConfigsResource,
+                                         configs: java.util.stream.Stream[java.util.Map.Entry[String, String]],
+                                         createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
+    val configEntries = configs
+      .filter(entry =>
+        resource.configurationKeys == null ||
+          resource.configurationKeys.isEmpty ||
+          resource.configurationKeys.contains(entry.getKey)
+      )
+      .map[DescribeConfigsResponseData.DescribeConfigsResourceResult](entry => createConfigEntry(entry.getKey, entry.getValue))
+      .toList
+
+    new DescribeConfigsResponseData.DescribeConfigsResult()
+      .setErrorCode(Errors.NONE.code)
+      .setConfigs(configEntries)
+  }
+
+  private def createResponseConfig(resource: DescribeConfigsResource, configs: AbstractConfig,
+                           createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
+    val nonInternalValues = configs.nonInternalValues // cache to avoid multiple calls
+    val nonInternalValuesStream = nonInternalValues.entrySet().stream()
+      .map(e => new java.util.AbstractMap.SimpleEntry[String, String](e.getKey, if (e.getValue == null) null else e.getValue.toString))
+    val originalsFilteredStream = configs.originals.entrySet.stream()
+      .filter(e => e.getValue != null && !nonInternalValues.containsKey(e.getKey)) // skip keys in nonInternalValues
+      .map(e => new java.util.AbstractMap.SimpleEntry[String, String](e.getKey, if (e.getValue == null) null else e.getValue.toString))
+    buildDescribeConfigsResult(resource, java.util.stream.Stream.concat(nonInternalValuesStream, originalsFilteredStream), createConfigEntry)
+  }
+
+  private def createResponseConfig(resource: DescribeConfigsResource, configs: java.util.Map[String, String],
+                           createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
+    buildDescribeConfigsResult(resource, configs.entrySet().stream(), createConfigEntry)
+  }
+
   def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
                       includeSynonyms: Boolean,
                       includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
     resourceToConfigNames.map { resource =>
-      def createResponseConfig(configs: Any,
-                               createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-        val stream = configs match {
-          case c: AbstractConfig =>
-            val nonInternalValues = c.nonInternalValues
-            val originalsFiltered = c.originals.entrySet.stream()
-              .filter(e =>
-                e.getValue != null &&
-                  !nonInternalValues.containsKey(e.getKey) // exclude keys already in nonInternalValues
-              )
-            java.util.stream.Stream.concat(nonInternalValues.entrySet().stream(), originalsFiltered)
-          case m: java.util.Map[_, _] =>
-            m.asInstanceOf[java.util.Map[String, String]].entrySet().stream()
-          case _ => throw new IllegalArgumentException("Unsupported configs type")
-        }
-
-        val configEntries = stream
-          .filter(entry =>
-            resource.configurationKeys == null ||
-              resource.configurationKeys.isEmpty ||
-              resource.configurationKeys.contains(entry.getKey)
-          )
-          .map[DescribeConfigsResponseData.DescribeConfigsResourceResult](entry => createConfigEntry(entry.getKey, entry.getValue))
-          .toList
-        
-        new DescribeConfigsResponseData.DescribeConfigsResult()
-          .setErrorCode(Errors.NONE.code)
-          .setConfigs(configEntries)
-      }
-
       try {
         val configResult = ConfigResource.Type.forId(resource.resourceType) match {
           case ConfigResource.Type.TOPIC =>
@@ -119,7 +122,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             if (metadataCache.contains(topic)) {
               val topicProps = configRepository.topicConfig(topic)
               val logConfig = LogConfig.fromProps(config.extractLogConfigMap, topicProps)
-              createResponseConfig(logConfig, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
+              createResponseConfig(resource, logConfig, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
                 .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
@@ -127,10 +130,10 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
           case ConfigResource.Type.BROKER =>
             if (resource.resourceName == null || resource.resourceName.isEmpty)
-              createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs.asJava,
+              createResponseConfig(resource, config.dynamicConfig.currentDynamicDefaultConfigs.asJava,
                 createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation))
             else if (resourceNameToBrokerId(resource.resourceName) == config.brokerId)
-              createResponseConfig(config,
+              createResponseConfig(resource, config,
                 createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation))
             else
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received ${resource.resourceName}")
@@ -141,7 +144,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             else if (resourceNameToBrokerId(resource.resourceName) != config.brokerId)
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.resourceName}")
             else
-              createResponseConfig(LoggingController.loggers,
+              createResponseConfig(resource, LoggingController.loggers,
                 (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
@@ -152,7 +155,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             } else {
               val clientMetricsProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resource.resourceName))
               val clientMetricsConfig = ClientMetricsConfigs.fromProps(ClientMetricsConfigs.defaultConfigsMap(), clientMetricsProps)
-              createResponseConfig(clientMetricsConfig, createClientMetricsConfigEntry(clientMetricsConfig, clientMetricsProps, includeSynonyms, includeDocumentation))
+              createResponseConfig(resource, clientMetricsConfig, createClientMetricsConfigEntry(clientMetricsConfig, clientMetricsProps, includeSynonyms, includeDocumentation))
             }
 
           case ConfigResource.Type.GROUP =>
@@ -162,7 +165,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             } else {
               val groupProps = configRepository.groupConfig(group)
               val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
-              createResponseConfig(groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
+              createResponseConfig(resource, groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
             }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
