@@ -1500,8 +1500,21 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-                // TO_DO Add code to handle transition to prepared_txn when keepPrepared = true
-                transitionTo(State.READY);
+                // If this is a 2PC-enabled transaction with keepPreparedTxn=true, transition directly
+                // to PREPARED_TRANSACTION state IFF there is an ongoing transaction.
+                if (enable2PC &&
+                    builder.data.keepPreparedTxn() &&
+                    initProducerIdResponse.data().ongoingTxnProducerId() != -1
+                ) {
+                    transitionTo(State.PREPARED_TRANSACTION);
+                    // Update the preparedTxnState with the ongoing pid and epoch from the response.
+                    // This will be used to complete the transaction later.
+                    String serializedState = initProducerIdResponse.data().ongoingTxnProducerId() + 
+                            ":" + initProducerIdResponse.data().ongoingTxnProducerEpoch();
+                    TransactionManager.this.preparedTxnState = new PreparedTxnState(serializedState);
+                } else {
+                    transitionTo(State.READY);
+                }
                 lastError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
