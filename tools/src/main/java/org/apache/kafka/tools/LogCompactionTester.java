@@ -29,9 +29,9 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.test.TestUtils;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -57,7 +57,6 @@ import java.util.stream.Stream;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 
-import static org.apache.kafka.tools.TestRecordUtils.valuesIterator;
 
 /**
  * This is a torture test that runs against an existing broker
@@ -146,14 +145,18 @@ public class LogCompactionTester {
 
             final List<String> pendingTopics = new ArrayList<>();
             TestUtils.waitForCondition(() -> {
-                Set<String> allTopics = adminClient.listTopics().names().get();
-                pendingTopics.clear();
-                pendingTopics.addAll(
-                        Arrays.stream(topics)
-                                .filter(topicName -> !allTopics.contains(topicName))
-                                .toList()
-                );
-                return pendingTopics.isEmpty();
+                try {
+                    Set<String> allTopics = adminClient.listTopics().names().get();
+                    pendingTopics.clear();
+                    pendingTopics.addAll(
+                            Arrays.stream(topics)
+                                    .filter(topicName -> !allTopics.contains(topicName))
+                                    .toList()
+                    );
+                    return pendingTopics.isEmpty();
+                } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
             }, "timed out waiting for topics: " + pendingTopics);
         }
     }
@@ -161,8 +164,8 @@ public class LogCompactionTester {
     private static void validateOutput(File producedDataFile, File consumedDataFile) {
         try (BufferedReader producedReader = externalSort(producedDataFile);
              BufferedReader consumedReader = externalSort(consumedDataFile)) {
-            Iterator<TestRecord> produced = valuesIterator(producedReader);
-            Iterator<TestRecord> consumed = valuesIterator(consumedReader);
+            Iterator<TestRecord> produced = TestRecordUtils.valuesIterator(producedReader);
+            Iterator<TestRecord> consumed = TestRecordUtils.valuesIterator(consumedReader);
 
             File producedDedupedFile = new File(producedDataFile.getAbsolutePath() + ".deduped");
             File consumedDedupedFile = new File(consumedDataFile.getAbsolutePath() + ".deduped");
