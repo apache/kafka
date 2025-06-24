@@ -1205,7 +1205,6 @@ class ReplicaManagerTest {
   @Test
   def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(): Unit = {
     val extraProps = new Properties
-    val expectTruncation = false
     val followerBrokerId = 0
     val leaderBrokerId = 1
     var leaderEpoch = 1
@@ -1215,7 +1214,7 @@ class ReplicaManagerTest {
     // Prepare the mocked components for the test
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition.partition(), leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
-      expectTruncation = expectTruncation, localLogOffset = Optional.of(10), offsetFromLeader = offsetFromLeader, extraProps = extraProps, topicId = Optional.of(topicId))
+      expectTruncation = false, localLogOffset = Optional.of(10), offsetFromLeader = offsetFromLeader, extraProps = extraProps, topicId = Optional.of(topicId))
 
     try {
       // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
@@ -1239,10 +1238,6 @@ class ReplicaManagerTest {
 
       assertTrue(countDownLatch.await(1000L, TimeUnit.MILLISECONDS))
 
-      // Truncation should have happened once
-      if (expectTruncation) {
-        verify(mockLogMgr).truncateTo(Map(topicPartition -> offsetFromLeader), isFuture = false)
-      }
 
       verify(mockLogMgr).finishedInitializingLog(ArgumentMatchers.eq(topicPartition), any())
     } finally {
