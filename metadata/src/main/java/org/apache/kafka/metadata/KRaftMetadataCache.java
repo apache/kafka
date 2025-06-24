@@ -288,8 +288,8 @@ public class KRaftMetadataCache implements MetadataCache {
         while (topics.hasNext()) {
             String topicName = topics.next();
             if (remaining.get() > 0) {
-                Entry<Optional<List<DescribeTopicPartitionsResponsePartition>>, Integer> partitionResponseEntry = partitionMetadataForDescribeTopicResponse(image, topicName, listenerName, topicPartitionStartIndex.apply(topicName), remaining.get());
-                Optional<List<DescribeTopicPartitionsResponsePartition>> partitionResponse = partitionResponseEntry.getKey();
+                var partitionResponseEntry = partitionMetadataForDescribeTopicResponse(image, topicName, listenerName, topicPartitionStartIndex.apply(topicName), remaining.get());
+                var partitionResponse = partitionResponseEntry.getKey();
                 int nextPartition = partitionResponseEntry.getValue();
                 if (partitionResponse.isPresent()) {
                     List<DescribeTopicPartitionsResponsePartition> partitions = partitionResponse.get();
@@ -339,7 +339,8 @@ public class KRaftMetadataCache implements MetadataCache {
 
     @Override
     public Uuid getTopicId(String topicName) {
-        return currentImage.topics().getTopic(topicName) == null ? Uuid.ZERO_UUID : currentImage.topics().getTopic(topicName).id();
+        MetadataImage image = currentImage;
+        return image.topics().getTopic(topicName) == null ? Uuid.ZERO_UUID : image.topics().getTopic(topicName).id();
     }
 
     @Override
@@ -349,17 +350,20 @@ public class KRaftMetadataCache implements MetadataCache {
 
     @Override
     public boolean hasAliveBroker(int brokerId) {
-        return currentImage.cluster().broker(brokerId) != null && !currentImage.cluster().broker(brokerId).fenced();
+        MetadataImage image = currentImage;
+        return image.cluster().broker(brokerId) != null && !image.cluster().broker(brokerId).fenced();
     }
 
     @Override
     public boolean isBrokerFenced(int brokerId) {
-        return currentImage.cluster().broker(brokerId) != null && currentImage.cluster().broker(brokerId).fenced();
+        MetadataImage image = currentImage;
+        return image.cluster().broker(brokerId) != null && image.cluster().broker(brokerId).fenced();
     }
 
     @Override
     public boolean isBrokerShuttingDown(int brokerId) {
-        return currentImage.cluster().broker(brokerId) != null && currentImage.cluster().broker(brokerId).inControlledShutdown();
+        MetadataImage image = currentImage;
+        return image.cluster().broker(brokerId) != null && image.cluster().broker(brokerId).inControlledShutdown();
     }
 
     @Override
@@ -412,23 +416,30 @@ public class KRaftMetadataCache implements MetadataCache {
         return currentImage.topics().topicNameToIdView();
     }
 
+    /**
+     * If the leader is not known, return None;
+     * If the leader is known and corresponding node is available, return Some(node)
+     * If the leader is known but corresponding node with the listener name is not available, return Some(NO_NODE)
+     */
     @Override
     public Optional<Node> getPartitionLeaderEndpoint(String topicName, int partitionId, ListenerName listenerName) {
-        return Optional.ofNullable(currentImage.topics().getTopic(topicName))
+        MetadataImage image = currentImage;
+        return Optional.ofNullable(image.topics().getTopic(topicName))
             .flatMap(topic -> Optional.ofNullable(topic.partitions().get(partitionId)))
-            .flatMap(partition -> Optional.ofNullable(currentImage.cluster().broker(partition.leader))
+            .flatMap(partition -> Optional.ofNullable(image.cluster().broker(partition.leader))
                 .map(broker -> broker.node(listenerName.value()).orElse(Node.noNode())));
     }
 
     @Override
     public Map<Integer, Node> getPartitionReplicaEndpoints(TopicPartition tp, ListenerName listenerName) {
-        TopicImage topic = currentImage.topics().getTopic(tp.topic());
+        MetadataImage image = currentImage;
+        TopicImage topic = image.topics().getTopic(tp.topic());
         if (topic == null) return Map.of();
         PartitionRegistration partition = topic.partitions().get(tp.partition());
         if (partition == null) return Map.of();
         Map<Integer, Node> result = new HashMap<>();
         for (int replicaId : partition.replicas) {
-            BrokerRegistration broker = currentImage.cluster().broker(replicaId);
+            BrokerRegistration broker = image.cluster().broker(replicaId);
             if (broker != null && !broker.fenced()) {
                 broker.node(listenerName.value()).ifPresent(node -> {
                     if (!node.isEmpty()) {
