@@ -106,7 +106,6 @@ class TxnPartitionEntry {
 
     void addInflightBatch(ProducerBatch batch) {
         inflightBatchesBySequence.add(batch);
-        batchesAwaitingCompletion.add(batch);
     }
 
     void setLastAckedOffset(long lastAckedOffset) {
@@ -175,6 +174,10 @@ class TxnPartitionEntry {
 
     public boolean canAddBatch(ProducerBatch batch) {
         return batchesAwaitingCompletion.canAdd(batch);
+    }
+
+    public boolean addBatchAwaitingCompletion(ProducerBatch batch) {
+        return batchesAwaitingCompletion.add(batch);
     }
 
     private static class BatchAwaitingCompletion {

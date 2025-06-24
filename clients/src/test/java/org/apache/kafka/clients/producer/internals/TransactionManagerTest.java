@@ -817,7 +817,7 @@ public class TransactionManagerTest {
         manager.incrementSequenceNumber(tp, 1);
         ProducerBatch batch = batchWithValue(tp, value);
         batch.setProducerState(manager.producerIdAndEpoch(), seq, false);
-        manager.addInFlightBatch(batch);
+        manager.addInFlightBatch(batch, true);
         batch.close();
         return batch;
     }
@@ -832,7 +832,7 @@ public class TransactionManagerTest {
         manager.incrementSequenceNumber(tp, 1);
         ProducerBatch batch = batchWithValue(tp, value);
         batch.setProducerState(manager.producerIdAndEpoch(), seq, true);
-        manager.addInFlightBatch(batch);
+        manager.addInFlightBatch(batch, true);
         batch.close();
         return batch;
     }

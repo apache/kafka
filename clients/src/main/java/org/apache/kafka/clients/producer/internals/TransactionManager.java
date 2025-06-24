@@ -698,10 +698,16 @@ public class TransactionManager {
         txnPartitionMap.get(topicPartition).incrementSequence(increment);
     }
 
-    synchronized void addInFlightBatch(ProducerBatch batch) {
+    synchronized void addInFlightBatch(ProducerBatch batch, boolean addAwaiting) {
         if (!batch.hasSequence())
             throw new IllegalStateException("Can't track batch for partition " + batch.topicPartition + " when sequence is not set.");
-        txnPartitionMap.get(batch.topicPartition).addInflightBatch(batch);
+
+        final TxnPartitionEntry entry = txnPartitionMap.get(batch.topicPartition);
+        entry.addInflightBatch(batch);
+
+        if (addAwaiting) {
+            entry.addBatchAwaitingCompletion(batch);
+        }
     }
 
     /**
