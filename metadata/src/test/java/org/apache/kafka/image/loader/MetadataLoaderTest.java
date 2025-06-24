@@ -59,6 +59,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -355,6 +356,8 @@ public class MetadataLoaderTest {
                 publishers.get(0).latestSnapshotManifest);
             assertEquals(MINIMUM_VERSION,
                 loader.metrics().currentMetadataVersion());
+            assertEquals(MINIMUM_VERSION.featureLevel(),
+                loader.metrics().finalizedFeatureLevel(FEATURE_NAME));
         }
         assertTrue(publishers.get(0).closed);
         assertEquals(Optional.of(MINIMUM_VERSION), publishers.get(0).latestImage.features().metadataVersion());
@@ -640,12 +643,16 @@ public class MetadataLoaderTest {
             assertEquals(200L, loader.lastAppliedOffset());
             assertEquals(MINIMUM_VERSION.featureLevel(),
                 loader.metrics().currentMetadataVersion().featureLevel());
+            assertEquals(MINIMUM_VERSION.featureLevel(),
+                loader.metrics().finalizedFeatureLevel(FEATURE_NAME));
             assertFalse(publishers.get(0).latestDelta.image().isEmpty());
 
             loadTestSnapshot2(loader, 400);
             assertEquals(400L, loader.lastAppliedOffset());
             assertEquals(MetadataVersion.latestProduction().featureLevel(),
                 loader.metrics().currentMetadataVersion().featureLevel());
+            assertEquals(MetadataVersion.latestProduction().featureLevel(),
+                loader.metrics().finalizedFeatureLevel(FEATURE_NAME));
 
             // Make sure the topic in the initial snapshot was overwritten by loading the new snapshot.
             assertFalse(publishers.get(0).latestImage.topics().topicsByName().containsKey("foo"));
@@ -659,6 +666,8 @@ public class MetadataLoaderTest {
             loader.waitForAllEventsToBeHandled();
             assertEquals(IBP_3_5_IV0.featureLevel(),
                 loader.metrics().currentMetadataVersion().featureLevel());
+            assertEquals(IBP_3_5_IV0.featureLevel(),
+                loader.metrics().finalizedFeatureLevel(FEATURE_NAME));
         }
         faultHandler.maybeRethrowFirstException();
     }

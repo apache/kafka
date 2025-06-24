@@ -20,24 +20,28 @@ package org.apache.kafka.server.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
-import org.junit.jupiter.api.Test;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class NodeMetricsTest {
-    @Test
-    public void testMetricsExported() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMetricsExported(boolean enableUnstableVersions) {
         Metrics metrics = new Metrics();
         String expectedGroup = "node-metrics";
 
-        // Metric description is not use for metric name equality
-        Set<MetricName> expectedMetrics = Set.of(
+        // Metric description is not used for metric name equality
+        Set<MetricName> stableFeatureMetrics = Set.of(
             new MetricName("maximum-supported-level", expectedGroup, "", Map.of("feature-name", "metadata-version")),
             new MetricName("minimum-supported-level", expectedGroup, "", Map.of("feature-name", "metadata-version")),
             new MetricName("maximum-supported-level", expectedGroup, "", Map.of("feature-name", "kraft-version")),
@@ -49,13 +53,19 @@ public class NodeMetricsTest {
             new MetricName("maximum-supported-level", expectedGroup, "", Map.of("feature-name", "eligible-leader-replicas-version")),
             new MetricName("minimum-supported-level", expectedGroup, "", Map.of("feature-name", "eligible-leader-replicas-version")),
             new MetricName("maximum-supported-level", expectedGroup, "", Map.of("feature-name", "share-version")),
-            new MetricName("minimum-supported-level", expectedGroup, "", Map.of("feature-name", "share-version")),
-            new MetricName("maximum-supported-level", expectedGroup, "", Map.of("feature-name", "streams-version")),
-            new MetricName("minimum-supported-level", expectedGroup, "", Map.of("feature-name", "streams-version"))
-
+            new MetricName("minimum-supported-level", expectedGroup, "", Map.of("feature-name", "share-version"))
         );
 
-        try (NodeMetrics ignored = new NodeMetrics(metrics, true)) {
+        Set<MetricName> unstableFeatureMetrics = Set.of(
+            new MetricName("maximum-supported-level", expectedGroup, "", Map.of("feature-name", "streams-version")),
+            new MetricName("minimum-supported-level", expectedGroup, "", Map.of("feature-name", "streams-version"))
+        );
+
+        Set<MetricName> expectedMetrics = enableUnstableVersions
+            ? Stream.concat(stableFeatureMetrics.stream(), unstableFeatureMetrics.stream()).collect(Collectors.toSet())
+            : stableFeatureMetrics;
+
+        try (NodeMetrics ignored = new NodeMetrics(metrics, enableUnstableVersions)) {
             Map<MetricName, KafkaMetric> metricsMap = metrics.metrics().entrySet().stream()
                 .filter(entry -> Objects.equals(entry.getKey().group(), expectedGroup))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));

@@ -45,9 +45,9 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         "MetadataLoader", "CurrentMetadataVersion");
     private static final MetricName HANDLE_LOAD_SNAPSHOT_COUNT = getMetricName(
         "MetadataLoader", "HandleLoadSnapshotCount");
-    public static final MetricName CURRENT_CONTROLLER_ID = getMetricName(
+    private static final MetricName CURRENT_CONTROLLER_ID = getMetricName(
         "MetadataLoader", "CurrentControllerId");
-    public static final String FINALIZED_LEVEL_METRIC_NAME = "FinalizedLevel";
+    private static final String FINALIZED_LEVEL_METRIC_NAME = "FinalizedLevel";
     private static final String FEATURE_NAME_TAG = "featureName";
 
     private final Optional<MetricsRegistry> registry;
@@ -214,13 +214,21 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         featureNameTag.put(FEATURE_NAME_TAG, sanitizeFeatureName(featureName));
         return KafkaYammerMetrics.getMetricName("kafka.server", type, name, featureNameTag);
     }
-    
+
+    /**
+     * Sanitize the feature name to be used as a tag in metrics by
+     * converting from dot notation to camel case.
+     * The conversion is done to be consistent with other Yammer metrics.
+     *
+     * @param featureName The feature name in dot notation.
+     * @return The sanitized feature name in camel case.
+     */
     private static String sanitizeFeatureName(String featureName) {
         final var words = featureName.split("\\.");
         final var builder = new StringBuilder(words[0]);
         for (int i = 1; i < words.length; i++) {
             final var word = words[i];
-            builder.append(word.substring(0, 1).toUpperCase(Locale.ROOT))
+            builder.append(Character.toUpperCase(word.charAt(0)))
                    .append(word.substring(1).toLowerCase(Locale.ROOT));
         }
         return builder.toString();

@@ -19,13 +19,13 @@ package org.apache.kafka.image.loader.metrics;
 
 import org.apache.kafka.controller.metrics.ControllerMetricsTestUtils;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;

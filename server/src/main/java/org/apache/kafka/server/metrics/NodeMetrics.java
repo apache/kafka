@@ -21,10 +21,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.controller.QuorumFeatures;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.server.common.Feature;
-import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class NodeMetrics implements AutoCloseable {
@@ -39,18 +36,10 @@ public final class NodeMetrics implements AutoCloseable {
     public NodeMetrics(Metrics metrics, boolean enableUnstableVersions) {
         this.metrics = metrics;
         this.supportedFeatureRanges = QuorumFeatures.defaultSupportedFeatureMap(enableUnstableVersions);
-        for (var featureName : Feature.PRODUCTION_FEATURE_NAMES) {
+        supportedFeatureRanges.forEach((featureName, versionRange) -> {
             addSupportedLevelMetric(MAXIMUM_SUPPORTED_LEVEL_NAME, featureName);
             addSupportedLevelMetric(MINIMUM_SUPPORTED_LEVEL_NAME, featureName);
-        }
-        addSupportedLevelMetric(
-            MAXIMUM_SUPPORTED_LEVEL_NAME,
-            MetadataVersion.FEATURE_NAME
-        );
-        addSupportedLevelMetric(
-            MINIMUM_SUPPORTED_LEVEL_NAME,
-            MetadataVersion.FEATURE_NAME
-        );
+        });
     }
 
     private void addSupportedLevelMetric(String metricName, String featureName) {
@@ -91,8 +80,10 @@ public final class NodeMetrics implements AutoCloseable {
     }
 
     private MetricName getFeatureNameTagMetricName(String name, String group, String featureName) {
-        LinkedHashMap<String, String> featureNameTag = new LinkedHashMap<>();
-        featureNameTag.put(FEATURE_NAME_TAG, featureName.replace(".", "-"));
-        return metrics.metricName(name, group, featureNameTag);
+        return metrics.metricName(
+            name,
+            group,
+            Map.of(FEATURE_NAME_TAG, featureName.replace(".", "-"))
+        );
     }
 }
