@@ -2343,9 +2343,7 @@ public class SharePartition {
                 new GroupIdNotFoundException(errorMessage);
             case UNKNOWN_TOPIC_OR_PARTITION ->
                 new UnknownTopicOrPartitionException(errorMessage);
-            case FENCED_STATE_EPOCH ->
-                new FencedStateEpochException(errorMessage);
-            case FENCED_LEADER_EPOCH ->
+            case FENCED_LEADER_EPOCH, FENCED_STATE_EPOCH ->
                 new NotLeaderOrFollowerException(errorMessage);
             default ->
                 new UnknownServerException(errorMessage);
