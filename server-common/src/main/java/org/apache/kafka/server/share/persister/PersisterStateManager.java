@@ -402,14 +402,14 @@ public class PersisterStateManager {
             log.debug("Response for RPC {} with key {} is invalid - {}.", name(), this.partitionKey, response);
 
             if (response.wasDisconnected()) {
-                errorConsumer.accept(Errors.NETWORK_EXCEPTION, new NetworkException("Server response indicates disconnect."));
+                errorConsumer.accept(Errors.NETWORK_EXCEPTION, new NetworkException(String.format("Server response for %s indicates disconnect.", this.partitionKey)));
                 return Optional.of(Errors.NETWORK_EXCEPTION);
             } else if (response.wasTimedOut()) {
                 log.error("Response for RPC {} with key {} timed out - {}.", name(), this.partitionKey, response);
-                errorConsumer.accept(Errors.REQUEST_TIMED_OUT, new NetworkException("Server response indicates timeout."));
+                errorConsumer.accept(Errors.REQUEST_TIMED_OUT, new NetworkException(String.format("Server response for %s indicates timeout.", this.partitionKey)));
                 return Optional.of(Errors.REQUEST_TIMED_OUT);
             } else {
-                errorConsumer.accept(Errors.UNKNOWN_SERVER_ERROR, new NetworkException("Server did not provide any response."));
+                errorConsumer.accept(Errors.UNKNOWN_SERVER_ERROR, new NetworkException(String.format("Server did not provide any response for %s.", this.partitionKey)));
                 return Optional.of(Errors.UNKNOWN_SERVER_ERROR);
             }
         }

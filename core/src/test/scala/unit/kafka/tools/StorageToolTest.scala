@@ -590,7 +590,7 @@ Found problem:
 
     assertEquals("Unknown release version '2.9-IV2'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
+      " to " + MetadataVersion.latestTesting().version, exception.getMessage
     )
 
     val exception2 = assertThrows(classOf[TerseFailure], () => {
@@ -599,7 +599,7 @@ Found problem:
 
     assertEquals("Unknown release version 'invalid'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
+      " to " + MetadataVersion.latestTesting().version, exception2.getMessage
     )
   }
 
