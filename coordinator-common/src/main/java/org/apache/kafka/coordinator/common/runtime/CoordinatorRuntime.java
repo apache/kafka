@@ -627,7 +627,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 defaultWriteTimeout
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
-            this.maxBatchSize = partitionWriter.config(tp).maxMessageSize();
         }
 
         /**
