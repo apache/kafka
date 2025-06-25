@@ -43,7 +43,6 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -601,6 +600,16 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorBatch currentBatch;
 
         /**
+         * 16KB. Used for initial buffer size for write operations.
+         */
+        final int minBufferSize;
+
+        /**
+         * 1GB. The max batch size
+         */
+        final int maxBatchSize;
+
+        /**
          * Constructor.
          *
          * @param tp The topic partition of the coordinator.
@@ -627,6 +636,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 defaultWriteTimeout
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
+            this.minBufferSize = 512 * 1024; // 512 KB
+            this.maxBatchSize = 1024 * 1024 * 1024; // 1 GB
         }
 
         /**
@@ -759,7 +770,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
             // Release the buffer.
-            bufferSupplier.release(currentBatch.buffer);
+            if (currentBatch.builder.buffer().capacity() > maxBatchSize) {
+                bufferSupplier.release(currentBatch.buffer);
+            } else {
+                // If the buffer is smaller than the max batch size, we keep it for reuse.
+                // This is to avoid allocating a new buffer for every batch.
+                bufferSupplier.release(currentBatch.builder.buffer());
+            }
+
 
             currentBatch = null;
         }
@@ -856,10 +874,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             long currentTimeMs
         ) {
             if (currentBatch == null) {
-                LogConfig logConfig = partitionWriter.config(tp);
-                int maxBatchSize = logConfig.maxMessageSize();
                 long prevLastWrittenOffset = coordinator.lastWrittenOffset();
-                ByteBuffer buffer = bufferSupplier.get(maxBatchSize);
+                ByteBuffer buffer = bufferSupplier.get(minBufferSize);
 
                 MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                     buffer,
@@ -1907,11 +1923,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
         }
     }
-
-    /**
-     * 16KB. Used for initial buffer size for write operations.
-     */
-    static final int MIN_BUFFER_SIZE = 16384;
 
     /**
      * The log prefix.
