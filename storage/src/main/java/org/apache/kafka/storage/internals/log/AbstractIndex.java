@@ -32,7 +32,9 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.util.Objects;
 import java.util.OptionalInt;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static org.apache.kafka.server.util.LockUtils.inLock;
 import static org.apache.kafka.server.util.LockUtils.inLockThrows;
@@ -49,6 +51,7 @@ public abstract class AbstractIndex implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(AbstractIndex.class);
 
     protected final ReentrantLock lock = new ReentrantLock();
+    protected final ReentrantReadWriteLock resizeLock = new ReentrantReadWriteLock();
 
     private final long baseOffset;
     private final int maxIndexSize;
@@ -189,28 +192,33 @@ public abstract class AbstractIndex implements Closeable {
      */
     public boolean resize(int newSize) throws IOException {
         return inLockThrows(lock, () -> {
-            int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
+            resizeLock.writeLock().lock();
+            try {
+                int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
-            if (length == roundedNewSize) {
-                log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
-                return false;
-            } else {
-                RandomAccessFile raf = new RandomAccessFile(file, "rw");
-                try {
-                    int position = mmap.position();
+                if (length == roundedNewSize) {
+                    log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
+                    return false;
+                } else {
+                    RandomAccessFile raf = new RandomAccessFile(file, "rw");
+                    try {
+                        int position = mmap.position();
 
-                    safeForceUnmap();
-                    raf.setLength(roundedNewSize);
-                    this.length = roundedNewSize;
-                    mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
-                    this.maxEntries = mmap.limit() / entrySize();
-                    mmap.position(position);
-                    log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
-                            mmap.position(), mmap.limit());
-                    return true;
-                } finally {
-                    Utils.closeQuietly(raf, "index file " + file.getName());
+                        safeForceUnmap();
+                        raf.setLength(roundedNewSize);
+                        this.length = roundedNewSize;
+                        mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
+                        this.maxEntries = mmap.limit() / entrySize();
+                        mmap.position(position);
+                        log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
+                                mmap.position(), mmap.limit());
+                        return true;
+                    } finally {
+                        Utils.closeQuietly(raf, "index file " + file.getName());
+                    }
                 }
+            } finally {
+                resizeLock.writeLock().unlock();
             }
         });
     }
@@ -405,6 +413,15 @@ public abstract class AbstractIndex implements Closeable {
     protected void truncateToEntries0(int entries) {
         this.entries = entries;
         mmap.position(entries * entrySize());
+    }
+
+    protected final <T, E extends Exception> T inResizeLock(Lock lock, StorageAction<T, E> action) throws E {
+        lock.lock();
+        try {
+            return action.execute();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
