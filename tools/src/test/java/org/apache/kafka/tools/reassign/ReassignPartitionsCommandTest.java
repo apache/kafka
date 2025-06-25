@@ -799,7 +799,7 @@ public class ReassignPartitionsCommandTest {
      */
     private void removeReplicationThrottleForPartitions(TopicPartition part) {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            removePartitionReplicaThrottles(admin, new HashSet<>(Set.of(part)));
+            removePartitionReplicaThrottles(admin, Set.of(part));
             assertDoesNotThrow(() -> throttleAllBrokersReplication(admin, List.of(0, 1, 2, 3), Integer.MAX_VALUE));
         }
     }
