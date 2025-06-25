@@ -212,7 +212,7 @@ class ShareCoordinatorServiceTest {
 
         HashSet<WriteShareGroupStateResponseData.WriteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<WriteShareGroupStateResponseData.WriteStateResult> expectedResult = new HashSet<>(List.of(
+        Set<WriteShareGroupStateResponseData.WriteStateResult> expectedResult = Set.of(
             new WriteShareGroupStateResponseData.WriteStateResult()
                 .setTopicId(topicId2)
                 .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
@@ -220,15 +220,15 @@ class ShareCoordinatorServiceTest {
             new WriteShareGroupStateResponseData.WriteStateResult()
                 .setTopicId(topicId1)
                 .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
-                    .setPartition(partition1)))));
+                    .setPartition(partition1))));
         assertEquals(expectedResult, result);
         verify(time, times(2)).hiResClockMs();
-        Set<MetricName> expectedMetrics = new HashSet<>(List.of(
+        Set<MetricName> expectedMetrics = Set.of(
             metrics.metricName("write-latency-avg", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-latency-max", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-rate", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-total", ShareCoordinatorMetrics.METRICS_GROUP)
-        ));
+        );
         expectedMetrics.forEach(metric -> assertTrue(metrics.metrics().containsKey(metric)));
     }
 
@@ -329,9 +329,9 @@ class ShareCoordinatorServiceTest {
 
         HashSet<ReadShareGroupStateResponseData.ReadStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<ReadShareGroupStateResponseData.ReadStateResult> expectedResult = new HashSet<>(List.of(
+        Set<ReadShareGroupStateResponseData.ReadStateResult> expectedResult = Set.of(
             topicData1,
-            topicData2));
+            topicData2);
         assertEquals(expectedResult, result);
     }
 
@@ -411,9 +411,9 @@ class ShareCoordinatorServiceTest {
 
         HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> expectedResult = new HashSet<>(List.of(
+        Set<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> expectedResult = Set.of(
             topicData1,
-            topicData2));
+            topicData2);
         assertEquals(expectedResult, result);
     }
 
@@ -488,7 +488,7 @@ class ShareCoordinatorServiceTest {
 
         HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> expectedResult = new HashSet<>(List.of(
+        Set<DeleteShareGroupStateResponseData.DeleteStateResult> expectedResult = Set.of(
             new DeleteShareGroupStateResponseData.DeleteStateResult()
                 .setTopicId(topicId2)
                 .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
@@ -496,7 +496,7 @@ class ShareCoordinatorServiceTest {
             new DeleteShareGroupStateResponseData.DeleteStateResult()
                 .setTopicId(topicId1)
                 .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
-                    .setPartition(partition1)))));
+                    .setPartition(partition1))));
         assertEquals(expectedResult, result);
     }
 
@@ -573,7 +573,7 @@ class ShareCoordinatorServiceTest {
 
         HashSet<InitializeShareGroupStateResponseData.InitializeStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<InitializeShareGroupStateResponseData.InitializeStateResult> expectedResult = new HashSet<>(List.of(
+        Set<InitializeShareGroupStateResponseData.InitializeStateResult> expectedResult = Set.of(
             new InitializeShareGroupStateResponseData.InitializeStateResult()
                 .setTopicId(topicId2)
                 .setPartitions(List.of(new InitializeShareGroupStateResponseData.PartitionResult()
@@ -582,7 +582,7 @@ class ShareCoordinatorServiceTest {
                 .setTopicId(topicId1)
                 .setPartitions(List.of(new InitializeShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)))
-        ));
+        );
         assertEquals(expectedResult, result);
     }
 
@@ -890,7 +890,7 @@ class ShareCoordinatorServiceTest {
 
         HashSet<WriteShareGroupStateResponseData.WriteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<WriteShareGroupStateResponseData.WriteStateResult> expectedResult = new HashSet<>(List.of(
+        Set<WriteShareGroupStateResponseData.WriteStateResult> expectedResult = Set.of(
             new WriteShareGroupStateResponseData.WriteStateResult()
                 .setTopicId(topicId2)
                 .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
@@ -902,7 +902,7 @@ class ShareCoordinatorServiceTest {
                 .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                    .setErrorMessage("Share coordinator is not available.")))));
+                    .setErrorMessage("Share coordinator is not available."))));
         assertEquals(expectedResult, result);
     }
 
@@ -954,7 +954,7 @@ class ShareCoordinatorServiceTest {
 
         HashSet<ReadShareGroupStateResponseData.ReadStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<ReadShareGroupStateResponseData.ReadStateResult> expectedResult = new HashSet<>(List.of(
+        Set<ReadShareGroupStateResponseData.ReadStateResult> expectedResult = Set.of(
             new ReadShareGroupStateResponseData.ReadStateResult()
                 .setTopicId(topicId2)
                 .setPartitions(List.of(new ReadShareGroupStateResponseData.PartitionResult()
@@ -966,7 +966,7 @@ class ShareCoordinatorServiceTest {
                 .setPartitions(List.of(new ReadShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                    .setErrorMessage("Share coordinator is not available.")))));
+                    .setErrorMessage("Share coordinator is not available."))));
         assertEquals(expectedResult, result);
     }
 
@@ -1018,7 +1018,7 @@ class ShareCoordinatorServiceTest {
 
         HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> expectedResult = new HashSet<>(List.of(
+        Set<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> expectedResult = Set.of(
             new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
                 .setTopicId(topicId2)
                 .setPartitions(List.of(new ReadShareGroupStateSummaryResponseData.PartitionResult()
@@ -1030,7 +1030,7 @@ class ShareCoordinatorServiceTest {
                 .setPartitions(List.of(new ReadShareGroupStateSummaryResponseData.PartitionResult()
                     .setPartition(partition1)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                    .setErrorMessage("Share coordinator is not available.")))));
+                    .setErrorMessage("Share coordinator is not available."))));
         assertEquals(expectedResult, result);
     }
 
@@ -1080,7 +1080,7 @@ class ShareCoordinatorServiceTest {
 
         HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> expectedResult = new HashSet<>(List.of(
+        Set<DeleteShareGroupStateResponseData.DeleteStateResult> expectedResult = Set.of(
             new DeleteShareGroupStateResponseData.DeleteStateResult()
                 .setTopicId(topicId2)
                 .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
@@ -1092,7 +1092,7 @@ class ShareCoordinatorServiceTest {
                 .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                    .setErrorMessage("Share coordinator is not available.")))));
+                    .setErrorMessage("Share coordinator is not available."))));
         assertEquals(expectedResult, result);
     }
 
@@ -1141,7 +1141,7 @@ class ShareCoordinatorServiceTest {
 
         HashSet<InitializeShareGroupStateResponseData.InitializeStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
 
-        HashSet<InitializeShareGroupStateResponseData.InitializeStateResult> expectedResult = new HashSet<>(List.of(
+        Set<InitializeShareGroupStateResponseData.InitializeStateResult> expectedResult = Set.of(
             new InitializeShareGroupStateResponseData.InitializeStateResult()
                 .setTopicId(topicId2)
                 .setPartitions(List.of(new InitializeShareGroupStateResponseData.PartitionResult()
@@ -1153,7 +1153,7 @@ class ShareCoordinatorServiceTest {
                 .setPartitions(List.of(new InitializeShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                    .setErrorMessage("Share coordinator is not available.")))));
+                    .setErrorMessage("Share coordinator is not available."))));
         assertEquals(expectedResult, result);
     }
 
@@ -2158,10 +2158,12 @@ class ShareCoordinatorServiceTest {
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.COMPRESSION_TYPE_CONFIG,
             TopicConfig.SEGMENT_BYTES_CONFIG,
-            TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
+            TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
+            TopicConfig.RETENTION_MS_CONFIG
         );
         Properties actual = service.shareGroupStateTopicConfigs();
-        propNames.forEach(actual::contains);
+        propNames.forEach(actual::remove);
+        assertTrue(actual.isEmpty());
 
         service.shutdown();
     }
@@ -2249,12 +2251,12 @@ class ShareCoordinatorServiceTest {
     }
 
     private void checkMetrics(Metrics metrics) {
-        Set<MetricName> usualMetrics = new HashSet<>(List.of(
+        Set<MetricName> usualMetrics = Set.of(
             metrics.metricName("write-latency-avg", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-latency-max", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-rate", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-total", ShareCoordinatorMetrics.METRICS_GROUP)
-        ));
+        );
 
         usualMetrics.forEach(metric -> assertTrue(metrics.metrics().containsKey(metric)));
     }

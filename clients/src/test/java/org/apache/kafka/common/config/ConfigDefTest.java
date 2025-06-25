@@ -135,12 +135,9 @@ public class ConfigDefTest {
             Map<String, Object> m = new HashMap<>();
             m.put("name", value);
             ConfigDef def = new ConfigDef().define("name", type, Importance.HIGH, "docs");
-            try {
-                def.parse(m);
-                fail("Expected a config exception on bad input for value " + value);
-            } catch (ConfigException e) {
-                // this is good
-            }
+            assertThrows(ConfigException.class,
+                () -> def.parse(m),
+                "Expected a config exception on bad input for value " + value);
         }
     }
 
@@ -416,7 +413,7 @@ public class ConfigDefTest {
                 .define("a", Type.STRING, Importance.LOW, "docs")
                 .define("b", Type.STRING, Importance.LOW, "docs");
         Set<String> names = configDef.names();
-        assertEquals(new HashSet<>(Arrays.asList("a", "b")), names);
+        assertEquals(Set.of("a", "b"), names);
         // should be unmodifiable
         try {
             names.add("new");
@@ -439,13 +436,13 @@ public class ConfigDefTest {
         // Creating a ConfigDef based on another should compute the correct number of configs with no parent, even
         // if the base ConfigDef has already computed its parentless configs
         final ConfigDef baseConfigDef = new ConfigDef().define("a", Type.STRING, Importance.LOW, "docs");
-        assertEquals(new HashSet<>(singletonList("a")), baseConfigDef.getConfigsWithNoParent());
+        assertEquals(Set.of("a"), baseConfigDef.getConfigsWithNoParent());
 
         final ConfigDef configDef = new ConfigDef(baseConfigDef)
                 .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"))
                 .define("child", Type.STRING, Importance.HIGH, "docs");
 
-        assertEquals(new HashSet<>(Arrays.asList("a", "parent")), configDef.getConfigsWithNoParent());
+        assertEquals(Set.of("a", "parent"), configDef.getConfigsWithNoParent());
     }
 
 
@@ -486,12 +483,9 @@ public class ConfigDefTest {
         for (Object value : badValues) {
             Map<String, Object> m = new HashMap<>();
             m.put("name", value);
-            try {
-                def.parse(m);
-                fail("Expected a config exception due to invalid value " + value);
-            } catch (ConfigException e) {
-                // this is good
-            }
+            assertThrows(ConfigException.class,
+                () -> def.parse(m),
+                "Expected a config exception due to invalid value " + value);
         }
     }
 

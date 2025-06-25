@@ -259,6 +259,10 @@ public class RecordCollectorImpl implements RecordCollector {
 
         final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 
+        // As many records could be in-flight,
+        // freeing raw records in the context to reduce memory pressure
+        freeRawInputRecordFromContext(context);
+
         streamsProducer.send(serializedRecord, (metadata, exception) -> {
             try {
                 // if there's already an exception record, skip logging offsets or new exceptions
@@ -309,6 +313,12 @@ public class RecordCollectorImpl implements RecordCollector {
                 sendException.set(new StreamsException("Producer.send `Callback` failed", fatal));
             }
         });
+    }
+
+    private static void freeRawInputRecordFromContext(final InternalProcessorContext<Void, Void> context) {
+        if (context != null && context.recordContext() != null) {
+            context.recordContext().freeRawRecord();
+        }
     }
 
     private <K, V> void handleException(final ProductionExceptionHandler.SerializationExceptionOrigin origin,
@@ -388,7 +398,9 @@ public class RecordCollectorImpl implements RecordCollector {
                 recordContext.headers(),
                 processorNodeId,
                 taskId,
-                recordContext.timestamp()
+                recordContext.timestamp(),
+                context.recordContext().sourceRawKey(),
+                context.recordContext().sourceRawValue()
             ) :
             new DefaultErrorHandlerContext(
                 context,
@@ -398,7 +410,9 @@ public class RecordCollectorImpl implements RecordCollector {
                 new RecordHeaders(),
                 processorNodeId,
                 taskId,
-                -1L
+                -1L,
+                null,
+                null
             );
     }
 

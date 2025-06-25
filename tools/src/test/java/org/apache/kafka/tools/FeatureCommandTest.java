@@ -121,8 +121,16 @@ public class FeatureCommandTest {
                         "disable", "--feature", "metadata.version"))
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
-        assertEquals("Could not disable metadata.version. The update failed for all features since the following " +
-                "feature had an error: Invalid update version 0 for feature metadata.version. Local controller 3000 only supports versions 7-28", commandOutput);
+        assertEquals(
+            String.format(
+                "Could not disable metadata.version. The update failed for all features since the " +
+                "following feature had an error: Invalid update version 0 for feature " +
+                "metadata.version. Local controller 3000 only supports versions %s-%s",
+                MetadataVersion.MINIMUM_VERSION.featureLevel(),
+                MetadataVersion.latestTesting().featureLevel()
+            ),
+            commandOutput
+        );
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
@@ -450,7 +458,7 @@ public class FeatureCommandTest {
 
         assertEquals("Unknown release version '2.9-IV2'." +
             " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-            " to " + MetadataVersion.LATEST_PRODUCTION, exception1.getMessage());
+            " to " + MetadataVersion.latestTesting().version(), exception1.getMessage());
 
         namespace.put("release_version", "invalid");
 
@@ -460,7 +468,7 @@ public class FeatureCommandTest {
 
         assertEquals("Unknown release version 'invalid'." +
             " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-            " to " + MetadataVersion.LATEST_PRODUCTION, exception2.getMessage());
+            " to " + MetadataVersion.latestTesting().version(), exception2.getMessage());
     }
 
     @Test

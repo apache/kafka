@@ -68,6 +68,7 @@ import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
@@ -2791,11 +2792,19 @@ class KafkaApis(val requestChannel: RequestChannel,
               if (responseData.status() == null) {
                 responseData.setStatus(new util.ArrayList());
               }
-              responseData.status().add(
-                new StreamsGroupHeartbeatResponseData.Status()
-                  .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-                  .setStatusDetail("Unauthorized to CREATE on topics " + createTopicUnauthorized.mkString(",") + ".")
-              )
+              val missingInternalTopicStatus =
+                responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
+              if (missingInternalTopicStatus.isPresent) {
+                missingInternalTopicStatus.get().setStatusDetail(
+                  missingInternalTopicStatus.get().statusDetail() + "; Unauthorized to CREATE on topics " + createTopicUnauthorized.mkString(", ") + "."
+                )
+              } else {
+                responseData.status().add(
+                  new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+                    .setStatusDetail("Unauthorized to CREATE on topics " + createTopicUnauthorized.mkString(", ") + ".")
+                )
+              }
             } else {
               autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext);
             }

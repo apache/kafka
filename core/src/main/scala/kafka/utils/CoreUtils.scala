@@ -23,7 +23,6 @@ import java.lang.management.ManagementFactory
 import com.typesafe.scalalogging.Logger
 
 import javax.management.ObjectName
-import scala.collection._
 import scala.collection.Seq
 import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.Endpoint
@@ -122,7 +121,7 @@ object CoreUtils {
 
   def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.writeLock)(fun)
 
-  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[Endpoint] = {
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol]): Seq[Endpoint] = {
     listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
 
@@ -131,7 +130,7 @@ object CoreUtils {
     require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
   }
 
-  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[Endpoint] = {
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[Endpoint] = {
     def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean =
       (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
         (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
@@ -186,7 +185,7 @@ object CoreUtils {
     }
 
     val endPoints = try {
-      SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap.asJava).asScala
+      SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap).asScala
     } catch {
       case e: Exception =>
         throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)

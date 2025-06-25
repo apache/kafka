@@ -21,7 +21,6 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -35,7 +34,7 @@ import static org.mockito.Mockito.when;
 public class TaskExecutionMetadataTest {
     static final String TOPOLOGY1 = "topology1";
     static final String TOPOLOGY2 = "topology2";
-    static final Set<String> NAMED_TOPOLOGIES = new HashSet<>(Arrays.asList(TOPOLOGY1, TOPOLOGY2));
+    static final Set<String> NAMED_TOPOLOGIES = Set.of(TOPOLOGY1, TOPOLOGY2);
     static final int TIME_ZERO = 0;
     static final int CONSTANT_BACKOFF_MS = 5000;
 

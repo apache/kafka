@@ -115,8 +115,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
@@ -129,8 +127,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -143,7 +139,6 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
@@ -161,6 +156,7 @@ import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
@@ -200,6 +196,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -237,7 +234,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
@@ -252,6 +248,7 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPA
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.SHARE_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.STREAMS_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.hasAssignedPartitionsChanged;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord;
@@ -260,7 +257,6 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord;
-import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
@@ -407,8 +403,10 @@ public class GroupMetadataManager {
     /**
      * The minimum amount of time between two consecutive refreshes of
      * the regular expressions within a single group.
+     *
+     * Package private for setting the lower limit of the refresh interval.
      */
-    private static final long REGEX_BATCH_REFRESH_INTERVAL_MS = 10_000L;
+    static final long REGEX_BATCH_REFRESH_MIN_INTERVAL_MS = 10_000L;
 
     /**
      * The log context.
@@ -1673,6 +1671,34 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Validates that the requested tasks exist in the configured topology and partitions are valid.
+     * If tasks is null, does nothing. If an invalid task is found, throws InvalidRequestException.
+     *
+     * @param subtopologySortedMap The configured topology.
+     * @param tasks                The list of requested tasks.
+     */
+    private static void throwIfRequestContainsInvalidTasks(
+        SortedMap<String, ConfiguredSubtopology> subtopologySortedMap,
+        List<StreamsGroupHeartbeatRequestData.TaskIds> tasks
+    ) {
+        if (tasks == null || tasks.isEmpty()) return;
+        for (StreamsGroupHeartbeatRequestData.TaskIds task : tasks) {
+            String subtopologyId = task.subtopologyId();
+            ConfiguredSubtopology subtopology = subtopologySortedMap.get(subtopologyId);
+            if (subtopology == null) {
+                throw new InvalidRequestException("Subtopology " + subtopologyId + " does not exist in the topology.");
+            }
+            int numTasks = subtopology.numberOfTasks();
+            for (Integer partition : task.partitions()) {
+                if (partition < 0 || partition >= numTasks) {
+                    throw new InvalidRequestException("Task " + partition + " for subtopology " + subtopologyId +
+                        " is invalid. Number of tasks for this subtopology: " + numTasks);
+                }
+            }
+        }
+    }
+
+    /**
      * Validates if the received classic member protocols are supported by the group.
      *
      * @param group         The ConsumerGroup.
@@ -1894,43 +1920,49 @@ public class GroupMetadataManager {
         StreamsTopology updatedTopology = maybeUpdateTopology(groupId, memberId, topology, group, records);
         maybeSetTopologyStaleStatus(group, updatedMember, returnedStatus);
 
-        // 3. Determine the partition metadata and any internal topics if needed.
+        // 3. Determine any internal topics if needed.
         ConfiguredTopology updatedConfiguredTopology;
-        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> updatedPartitionMetadata;
         boolean reconfigureTopology = group.topology().isEmpty();
-        if (reconfigureTopology || group.hasMetadataExpired(currentTimeMs)) {
+        long metadataHash = group.metadataHash();
+        if (reconfigureTopology || group.configuredTopology().isEmpty() || group.hasMetadataExpired(currentTimeMs)) {
 
-            updatedPartitionMetadata = group.computePartitionMetadata(
-                metadataImage.topics(),
+            metadataHash = group.computeMetadataHash(
+                metadataImage,
+                topicHashCache,
                 updatedTopology
             );
 
-            if (!updatedPartitionMetadata.equals(group.partitionMetadata())) {
-                log.info("[GroupId {}][MemberId {}] Computed new partition metadata: {}.",
-                    groupId, memberId, updatedPartitionMetadata);
+            if (metadataHash != group.metadataHash()) {
+                log.info("[GroupId {}][MemberId {}] Computed new metadata hash: {}.",
+                    groupId, memberId, metadataHash);
                 bumpGroupEpoch = true;
                 reconfigureTopology = true;
-                records.add(newStreamsGroupPartitionMetadataRecord(groupId, updatedPartitionMetadata));
-                group.setPartitionMetadata(updatedPartitionMetadata);
             }
 
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology);
-                updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, updatedTopology, updatedPartitionMetadata);
+                updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, metadataHash, updatedTopology, metadataImage.topics());
+                group.setConfiguredTopology(updatedConfiguredTopology);
             } else {
                 updatedConfiguredTopology = group.configuredTopology().get();
             }
         } else {
             updatedConfiguredTopology = group.configuredTopology().get();
-            updatedPartitionMetadata = group.partitionMetadata();
+        }
+
+        if (updatedConfiguredTopology.isReady()) {
+            SortedMap<String, ConfiguredSubtopology> subtopologySortedMap = updatedConfiguredTopology.subtopologies().get();
+            throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedActiveTasks);
+            throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedStandbyTasks);
+            throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedWarmupTasks);
         }
 
         // Actually bump the group epoch
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, 0));
-            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {}.", groupId, memberId, groupEpoch);
+            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash));
+            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {}.", groupId, memberId, groupEpoch, metadataHash);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
         }
@@ -1946,7 +1978,7 @@ public class GroupMetadataManager {
                 groupEpoch,
                 updatedMember,
                 updatedConfiguredTopology,
-                updatedPartitionMetadata,
+                metadataImage,
                 records
             );
             targetAssignmentEpoch = groupEpoch;
@@ -2111,7 +2143,7 @@ public class GroupMetadataManager {
                 final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
                 responseEndpoint.setHost(endpoint.host());
                 responseEndpoint.setPort(endpoint.port());
-                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
+                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group, metadataImage);
                 endpointToPartitionsList.add(endpointToPartitions);
             }
         }
@@ -2545,18 +2577,18 @@ public class GroupMetadataManager {
         ) || initializedAssignmentPending(group);
 
         int groupEpoch = group.groupEpoch();
-        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+        Map<String, SubscriptionCount> subscribedTopicNamesMap = group.subscribedTopicNames();
         SubscriptionType subscriptionType = group.subscriptionType();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
-            Map<String, SubscriptionCount> subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-            subscriptionMetadata = group.computeSubscriptionMetadata(
+            subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
+            long groupMetadataHash = ModernGroup.computeMetadataHash(
                 subscribedTopicNamesMap,
-                metadataImage.topics(),
-                metadataImage.cluster()
+                topicHashCache,
+                metadataImage
             );
 
             int numMembers = group.numMembers();
@@ -2569,17 +2601,17 @@ public class GroupMetadataManager {
                 numMembers
             );
 
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
+            if (groupMetadataHash != group.metadataHash()) {
+                log.info("[GroupId {}] Computed new metadata hash: {}.",
+                    groupId, groupMetadataHash);
                 bumpGroupEpoch = true;
-                records.add(newShareGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
 
             if (bumpGroupEpoch) {
                 groupEpoch += 1;
-                records.add(newShareGroupEpochRecord(groupId, groupEpoch, 0));
-                log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+                records.add(newShareGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
+                log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
+                metrics.record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
             }
 
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -2635,7 +2667,7 @@ public class GroupMetadataManager {
             records,
             Map.entry(
                 response,
-                maybeCreateInitializeShareGroupStateRequest(groupId, groupEpoch, subscriptionMetadata, records)
+                maybeCreateInitializeShareGroupStateRequest(groupId, groupEpoch, subscribedTopicNamesMap.keySet(), records)
             )
         );
     }
@@ -2668,13 +2700,13 @@ public class GroupMetadataManager {
      * Computes the diff between the subscribed metadata and the initialized share topic
      * partitions corresponding to a share group.
      *
-     * @param groupId               The share group id for which diff is being calculated
-     * @param subscriptionMetadata  The subscription metadata corresponding to the share group.
+     * @param groupId                 The share group id for which diff is being calculated
+     * @param subscriptionTopicNames  The subscription topic names to the share group.
      * @return  A map of topic partitions which are subscribed by the share group but not initialized yet.
      */
     // Visibility for testing
-    Map<Uuid, InitMapValue> subscribedTopicsChangeMap(String groupId, Map<String, TopicMetadata> subscriptionMetadata) {
-        if (subscriptionMetadata == null || subscriptionMetadata.isEmpty()) {
+    Map<Uuid, InitMapValue> subscribedTopicsChangeMap(String groupId, Set<String> subscriptionTopicNames) {
+        if (subscriptionTopicNames == null || subscriptionTopicNames.isEmpty()) {
             return Map.of();
         }
 
@@ -2693,18 +2725,20 @@ public class GroupMetadataManager {
                     .filter(entry -> curTimestamp - entry.getValue().timestamp() < delta)
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
             );
-
         // Here will add any topics which are subscribed but not initialized and initializing
         // topics whose timestamp indicates that they are older than delta elapsed.
-        subscriptionMetadata.forEach((topicName, topicMetadata) -> {
-            Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicMetadata.id()) ? alreadyInitialized.get(topicMetadata.id()).partitions() : Set.of();
-            if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.numPartitions()) {
-                Set<Integer> partitionSet = IntStream.range(0, topicMetadata.numPartitions()).boxed().collect(Collectors.toSet());
-                partitionSet.removeAll(alreadyInitializedPartSet);
-                // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
-                // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
-                // are also updating the timestamp here which means, old initializing will not be included repeatedly.
-                topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> new InitMapValue(topicMetadata.name(), partitionSet, curTimestamp));
+        subscriptionTopicNames.forEach(topicName -> {
+            TopicImage topicImage = metadataImage.topics().getTopic(topicName);
+            if (topicImage != null) {
+                Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicImage.id()) ? alreadyInitialized.get(topicImage.id()).partitions() : Set.of();
+                if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicImage.partitions().size()) {
+                    Set<Integer> partitionSet = IntStream.range(0, topicImage.partitions().size()).boxed()
+                        .filter(p -> !alreadyInitializedPartSet.contains(p)).collect(Collectors.toSet());
+                    // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
+                    // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
+                    // are also updating the timestamp here which means, old initializing will not be included repeatedly.
+                    topicPartitionChangeMap.computeIfAbsent(topicImage.id(), k -> new InitMapValue(topicImage.name(), partitionSet, curTimestamp));
+                }
             }
         });
         return topicPartitionChangeMap;
@@ -2714,22 +2748,22 @@ public class GroupMetadataManager {
      * Based on the diff between the subscribed topic partitions and the initialized topic partitions,
      * created initialize request for the non-initialized ones.
      *
-     * @param groupId               The share group id for which partitions need to be initialized.
-     * @param groupEpoch            The group epoch of the share group.
-     * @param subscriptionMetadata  The subscription metadata for the share group.
+     * @param groupId                 The share group id for which partitions need to be initialized.
+     * @param groupEpoch              The group epoch of the share group.
+     * @param subscriptionTopicNames  The subscription topic names for the share group.
      * @return An optional representing the persister initialize request.
      */
     private Optional<InitializeShareGroupStateParameters> maybeCreateInitializeShareGroupStateRequest(
         String groupId,
         int groupEpoch,
-        Map<String, TopicMetadata> subscriptionMetadata,
+        Set<String> subscriptionTopicNames,
         List<CoordinatorRecord> records
     ) {
-        if (subscriptionMetadata == null || subscriptionMetadata.isEmpty() || metadataImage.isEmpty()) {
+        if (subscriptionTopicNames == null || subscriptionTopicNames.isEmpty() || metadataImage.isEmpty()) {
             return Optional.empty();
         }
 
-        Map<Uuid, InitMapValue> topicPartitionChangeMap = subscribedTopicsChangeMap(groupId, subscriptionMetadata);
+        Map<Uuid, InitMapValue> topicPartitionChangeMap = subscribedTopicsChangeMap(groupId, subscriptionTopicNames);
 
         // Nothing to initialize.
         if (topicPartitionChangeMap.isEmpty()) {
@@ -3046,6 +3080,7 @@ public class GroupMetadataManager {
         ConsumerGroupMember updatedMember,
         List<CoordinatorRecord> records
     ) {
+        final long currentTimeMs = time.milliseconds();
         String groupId = group.groupId();
         String memberId = updatedMember.memberId();
         String oldSubscribedTopicRegex = member.subscribedTopicRegex();
@@ -3083,11 +3118,12 @@ public class GroupMetadataManager {
         }
 
         // Conditions to trigger a refresh:
-        // 0. The group is subscribed to regular expressions.
-        // 1. There is no ongoing refresh for the group.
-        // 2. The last refresh is older than 10s.
-        // 3. The group has unresolved regular expressions.
-        // 4. The metadata image has new topics.
+        // 0.   The group is subscribed to regular expressions.
+        // 1.   There is no ongoing refresh for the group.
+        // 2.   The last refresh is older than 10s.
+        // 3.1  The group has unresolved regular expressions.
+        // 3.2  Or the metadata image has new topics.
+        // 3.3  Or the last refresh is older than the batch refresh max interval.
 
         // 0. The group is subscribed to regular expressions. We also take the one
         //    that the current may have just introduced.
@@ -3104,11 +3140,11 @@ public class GroupMetadataManager {
         // 2. The last refresh is older than 10s. If the group does not have any regular
         //    expressions but the current member just brought a new one, we should continue.
         long lastRefreshTimeMs = group.lastResolvedRegularExpressionRefreshTimeMs();
-        if (time.milliseconds() <= lastRefreshTimeMs + REGEX_BATCH_REFRESH_INTERVAL_MS) {
+        if (currentTimeMs <= lastRefreshTimeMs + REGEX_BATCH_REFRESH_MIN_INTERVAL_MS) {
             return bumpGroupEpoch;
         }
 
-        // 3. The group has unresolved regular expressions.
+        // 3.1 The group has unresolved regular expressions.
         Map<String, Integer> subscribedRegularExpressions = new HashMap<>(group.subscribedRegularExpressions());
         if (isNotEmpty(oldSubscribedTopicRegex)) {
             subscribedRegularExpressions.compute(oldSubscribedTopicRegex, Utils::decValue);
@@ -3119,8 +3155,11 @@ public class GroupMetadataManager {
 
         requireRefresh |= subscribedRegularExpressions.size() != group.numResolvedRegularExpressions();
 
-        // 4. The metadata has new topics that we must consider.
+        // 3.2 The metadata has new topics that we must consider.
         requireRefresh |= group.lastResolvedRegularExpressionVersion() < lastMetadataImageWithNewTopics;
+
+        // 3.3 The last refresh is older than the batch refresh max interval.
+        requireRefresh |= currentTimeMs > lastRefreshTimeMs + config.consumerGroupRegexRefreshIntervalMs();
 
         if (requireRefresh && !subscribedRegularExpressions.isEmpty()) {
             Set<String> regexes = Collections.unmodifiableSet(subscribedRegularExpressions.keySet());
@@ -3770,8 +3809,13 @@ public class GroupMetadataManager {
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
 
-            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+            if (log.isDebugEnabled()) {
+                log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
+                    group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+            } else {
+                log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms.",
+                    group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs);
+            }
 
             records.addAll(assignmentResult.records());
 
@@ -3790,12 +3834,12 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Updates the target assignment according to the updated member and subscription metadata.
+     * Updates the target assignment according to the updated member and metadata image.
      *
      * @param group                The StreamsGroup.
      * @param groupEpoch           The group epoch.
      * @param updatedMember        The updated member.
-     * @param subscriptionMetadata The subscription metadata.
+     * @param metadataImage        The metadata image.
      * @param records              The list to accumulate any new records.
      * @return The new target assignment.
      */
@@ -3804,7 +3848,7 @@ public class GroupMetadataManager {
         int groupEpoch,
         StreamsGroupMember updatedMember,
         ConfiguredTopology configuredTopology,
-        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata,
+        MetadataImage metadataImage,
         List<CoordinatorRecord> records
     ) {
         TaskAssignor assignor = streamsGroupAssignor(group.groupId());
@@ -3820,7 +3864,7 @@ public class GroupMetadataManager {
                 .withMembers(group.members())
                 .withTopology(configuredTopology)
                 .withStaticMembers(group.staticMembers())
-                .withPartitionMetadata(subscriptionMetadata)
+                .withMetadataImage(metadataImage)
                 .withTargetAssignment(group.targetAssignment())
                 .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
@@ -4077,21 +4121,20 @@ public class GroupMetadataManager {
         records.add(newShareGroupMemberSubscriptionTombstoneRecord(group.groupId(), member.memberId()));
 
         // We update the subscription metadata without the leaving member.
-        Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+        long groupMetadataHash = ModernGroup.computeMetadataHash(
             group.computeSubscribedTopicNames(member, null),
-            metadataImage.topics(),
-            metadataImage.cluster()
+            topicHashCache,
+            metadataImage
         );
 
-        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-            log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                group.groupId(), subscriptionMetadata);
-            records.add(newShareGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
+        if (groupMetadataHash != group.metadataHash()) {
+            log.info("[GroupId {}] Computed new metadata hash: {}.",
+                group.groupId(), groupMetadataHash);
         }
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, 0));
+        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
 
         cancelGroupSessionTimeout(group.groupId(), member.memberId());
 
@@ -5277,6 +5320,7 @@ public class GroupMetadataManager {
         if (value != null) {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
             streamsGroup.setGroupEpoch(value.epoch());
+            streamsGroup.setMetadataHash(value.metadataHash());
         } else {
             StreamsGroup streamsGroup;
             try {
@@ -5297,38 +5341,6 @@ public class GroupMetadataManager {
             removeGroup(groupId);
         }
 
-    }
-
-    /**
-     * Replays StreamsGroupPartitionMetadataKey/Value to update the hard state of
-     * the streams group. It updates the subscription metadata of the streams
-     * group.
-     *
-     * @param key   A StreamsGroupPartitionMetadataKey key.
-     * @param value A StreamsGroupPartitionMetadataValue record.
-     */
-    public void replay(
-        StreamsGroupPartitionMetadataKey key,
-        StreamsGroupPartitionMetadataValue value
-    ) {
-        String groupId = key.groupId();
-        StreamsGroup streamsGroup;
-        try {
-            streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, value != null);
-        } catch (GroupIdNotFoundException ex) {
-            // If the group does not exist, we can ignore the tombstone.
-            return;
-        }
-
-        if (value != null) {
-            Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> partitionMetadata = new HashMap<>();
-            value.topics().forEach(topicMetadata -> {
-                partitionMetadata.put(topicMetadata.topicName(), org.apache.kafka.coordinator.group.streams.TopicMetadata.fromRecord(topicMetadata));
-            });
-            streamsGroup.setPartitionMetadata(partitionMetadata);
-        } else {
-            streamsGroup.setPartitionMetadata(Map.of());
-        }
     }
 
     /**
@@ -5387,6 +5399,7 @@ public class GroupMetadataManager {
         if (value != null) {
             ShareGroup shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, true);
             shareGroup.setGroupEpoch(value.epoch());
+            shareGroup.setMetadataHash(value.metadataHash());
         } else {
             ShareGroup shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, false);
             if (!shareGroup.members().isEmpty()) {
@@ -5564,32 +5577,6 @@ public class GroupMetadataManager {
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
                 .build();
             streamsGroup.updateMember(newMember);
-        }
-    }
-
-    /**
-     * Replays ShareGroupPartitionMetadataKey/Value to update the hard state of
-     * the share group. It updates the subscription metadata of the share
-     * group.
-     *
-     * @param key   A ShareGroupPartitionMetadataKey key.
-     * @param value A ShareGroupPartitionMetadataValue record.
-     */
-    public void replay(
-        ShareGroupPartitionMetadataKey key,
-        ShareGroupPartitionMetadataValue value
-    ) {
-        String groupId = key.groupId();
-        ShareGroup group = getOrMaybeCreatePersistedShareGroup(groupId, false);
-
-        if (value != null) {
-            Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-            value.topics().forEach(topicMetadata ->
-                subscriptionMetadata.put(topicMetadata.topicName(), TopicMetadata.fromRecord(topicMetadata))
-            );
-            group.setSubscriptionMetadata(subscriptionMetadata);
-        } else {
-            group.setSubscriptionMetadata(Map.of());
         }
     }
 
@@ -8129,7 +8116,7 @@ public class GroupMetadataManager {
     ) {
         final long currentTimeMs = time.milliseconds();
         Group group = groups.get(groupId);
-        List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic> alterShareGroupOffsetsResponseTopics = new ArrayList<>();
+        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection alterShareGroupOffsetsResponseTopics = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection();
 
         Map<Uuid, InitMapValue> initializingTopics = new HashMap<>();
         Map<Uuid, Map<Integer, Long>> offsetByTopicPartitions = new HashMap<>();
