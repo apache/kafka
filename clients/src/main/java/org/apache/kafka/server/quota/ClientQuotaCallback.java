@@ -21,7 +21,6 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Quota callback interface for brokers and controllers that enables customization of client quota computation.
