@@ -93,6 +93,9 @@ public class LogSegment implements Closeable {
     // NOTED: the offset is the last offset of batch having the max timestamp.
     private volatile TimestampOffset maxTimestampAndOffsetSoFar = TimestampOffset.UNKNOWN;
 
+    // Lock for maxTimestampAndOffsetSoFar to ensure that it will be initialized only once
+    private final Object maxTimestampAndOffsetLock = new Object();
+
     private long created;
 
     /* the number of bytes since we last added an entry in the offset index */
@@ -177,7 +180,7 @@ public class LogSegment implements Closeable {
     public void sanityCheck(boolean timeIndexFileNewlyCreated) throws IOException {
         if (offsetIndexFile().exists()) {
             // Resize the time index file to 0 if it is newly created.
-            if (timeIndexFileNewlyCreated) 
+            if (timeIndexFileNewlyCreated)
                 timeIndex().resize(0);
             // Sanity checks for time index and offset index are skipped because
             // we will recover the segments above the recovery point in recoverLog()
@@ -192,8 +195,17 @@ public class LogSegment implements Closeable {
      * the time index).
      */
     public TimestampOffset readMaxTimestampAndOffsetSoFar() throws IOException {
-        if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN)
-            maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
+        if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
+            // As stated in LogSegment class javadoc, this class is not thread-safe so basically we assume that
+            // methods are called within UnifiedLog#lock.
+            // However, there's exceptional paths where this method can be called outside of the lock,
+            // so we need lock here to prevent multiple threads trying to modify maxTimestampAndOffsetSoFar
+            synchronized (maxTimestampAndOffsetLock) {
+                if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
+                    maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
+                }
+            }
+        }
         return maxTimestampAndOffsetSoFar;
     }
 

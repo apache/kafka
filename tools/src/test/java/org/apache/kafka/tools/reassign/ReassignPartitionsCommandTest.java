@@ -315,7 +315,7 @@ public class ReassignPartitionsCommandTest {
     }
 
     @ClusterTest
-    public void testCancellationWithAddingReplicaInIsr() throws Exception {
+    public void testCancellationWithAddingAndRemovingReplicaInIsr() throws Exception {
         createTopics();
         TopicPartition foo0 = new TopicPartition("foo", 0);
         produceMessages(foo0.topic(), foo0.partition(), 200);
@@ -341,6 +341,42 @@ public class ReassignPartitionsCommandTest {
                         return isr.containsAll(Arrays.asList(0, 1, 2, 3));
                     },
                     "Timed out while waiting for replica 3 to join the ISR"
+            );
+        }
+
+        // Now cancel the assignment and verify that the partition is removed from cancelled replicas
+        assertEquals(new AbstractMap.SimpleImmutableEntry<>(singleton(foo0), Collections.emptySet()), runCancelAssignment(assignment, true, true));
+        verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 3));
+        verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 4));
+    }
+
+    @ClusterTest
+    public void testCancellationWithAddingReplicaInIsr() throws Exception {
+        createTopics();
+        TopicPartition foo0 = new TopicPartition("foo", 0);
+        produceMessages(foo0.topic(), foo0.partition(), 200);
+
+        // The reassignment will bring replicas 3 and 4 into the replica set.
+        String assignment = "{\"version\":1,\"partitions\":" +
+            "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,2,3,4],\"log_dirs\":[\"any\",\"any\",\"any\",\"any\",\"any\"]}" +
+            "]}";
+
+        // We will throttle replica 4 so that only replica 3 joins the ISR
+        setReplicationThrottleForPartitions(foo0);
+
+        // Execute the assignment and wait for replica 3 (only) to join the ISR
+        runExecuteAssignment(false, assignment, -1L, -1L);
+        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            TestUtils.waitForCondition(
+                () -> {
+                    Set<Integer> isr = admin.describeTopics(Collections.singleton(foo0.topic()))
+                        .allTopicNames().get().get(foo0.topic()).partitions().stream()
+                        .filter(p -> p.partition() == foo0.partition())
+                        .flatMap(p -> p.isr().stream())
+                        .map(Node::id).collect(Collectors.toSet());
+                    return isr.containsAll(Arrays.asList(0, 1, 2, 3));
+                },
+                "Timed out while waiting for replica 3 to join the ISR"
             );
         }
 

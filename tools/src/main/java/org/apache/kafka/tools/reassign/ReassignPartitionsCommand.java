@@ -1240,7 +1240,7 @@ public class ReassignPartitionsCommand {
         Set<TopicPartition> targetPartsSet = targetParts.stream().map(t -> t.getKey()).collect(Collectors.toSet());
         Set<TopicPartition> curReassigningParts = new HashSet<>();
         adminClient.listPartitionReassignments(targetPartsSet).reassignments().get().forEach((part, reassignment) -> {
-            if (reassignment.addingReplicas().isEmpty() || !reassignment.removingReplicas().isEmpty())
+            if (!reassignment.addingReplicas().isEmpty() || !reassignment.removingReplicas().isEmpty())
                 curReassigningParts.add(part);
         });
         if (!curReassigningParts.isEmpty()) {
@@ -1409,7 +1409,7 @@ public class ReassignPartitionsCommand {
         }
 
         OptionSpec<?> action = allActions.get(0);
-        
+
         if (opts.options.has(opts.bootstrapServerOpt) && opts.options.has(opts.bootstrapControllerOpt))
             CommandLineUtils.printUsageAndExit(opts.parser, "Please don't specify both --bootstrap-server and --bootstrap-controller");
         else if (!opts.options.has(opts.bootstrapServerOpt) && !opts.options.has(opts.bootstrapControllerOpt))

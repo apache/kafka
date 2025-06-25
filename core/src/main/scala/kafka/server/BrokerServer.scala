@@ -405,7 +405,7 @@ class BrokerServer(
         config,
         "heartbeat",
         s"broker-${config.nodeId}-",
-        config.brokerSessionTimeoutMs / 2 // KAFKA-14392
+        config.brokerHeartbeatIntervalMs
       )
       lifecycleManager.start(
         () => sharedServer.loader.lastAppliedOffset(),
