@@ -759,6 +759,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
             // Release the buffer.
+            int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
             if (currentBatch.builder.buffer().capacity() > maxBatchSize) {
                 // If the buffer exceeds the maxBatchSize, we should revert to using the original smaller buffer to avoid retaining the larger one.
                 bufferSupplier.release(currentBatch.buffer);
