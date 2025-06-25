@@ -771,10 +771,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
             // Release the buffer.
             if (currentBatch.builder.buffer().capacity() > maxBatchSize) {
+                If the buffer exceeds the maxBatchSize, we should revert to using the original smaller buffer to avoid retaining the larger one.
                 bufferSupplier.release(currentBatch.buffer);
             } else {
-                // If the buffer is smaller than the max batch size, we keep it for reuse.
-                // This is to avoid allocating a new buffer for every batch.
                 bufferSupplier.release(currentBatch.builder.buffer());
             }
 
