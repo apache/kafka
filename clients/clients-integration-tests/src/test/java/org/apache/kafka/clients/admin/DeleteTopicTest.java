@@ -25,7 +25,6 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -37,6 +36,7 @@ import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -202,6 +202,7 @@ public class DeleteTopicTest {
             waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic " + DEFAULT_TOPIC + " not created.");
         }
     }
+
     @ClusterTest
     public void testDeleteNonExistingTopic(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
@@ -220,7 +221,7 @@ public class DeleteTopicTest {
             cluster.waitForTopic(topic, 0);
 
             waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic test not created.");
-            TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, DEFAULT_TOPIC, 0, 1000);
+            cluster.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, DEFAULT_TOPIC, 0, 1000);
         }
     }
 
