@@ -18,6 +18,7 @@
 package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.controller.QuorumFeatures;
 import org.apache.kafka.metadata.VersionRange;
@@ -49,7 +50,7 @@ public final class NodeMetrics implements AutoCloseable {
                 METRIC_GROUP_NAME,
                 featureName
             ),
-            (config, now) -> {
+            (Gauge<Short>) (config, now) -> {
                 if (metricName.equals(MAXIMUM_SUPPORTED_LEVEL_NAME)) {
                     return supportedFeatureRanges.get(featureName).max();
                 } else {
