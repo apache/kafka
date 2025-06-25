@@ -556,7 +556,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         throwIfNotNullOrEmpty(request.warmupTasks(), "WarmupTasks are not supported yet.");
         if (request.topology() != null) {
             for (StreamsGroupHeartbeatRequestData.Subtopology subtopology : request.topology().subtopologies()) {
-                throwIfNotEmptyCollection(subtopology.sourceTopicRegex(), "Regular expressions for source topics is not supported yet.");
+                throwIfNotEmptyCollection(subtopology.sourceTopicRegex(), "Regular expressions for source topics are not supported yet.");
             }
         }
     }

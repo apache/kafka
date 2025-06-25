@@ -645,7 +645,7 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("Regular expressions for source topics is not supported yet."),
+                    .setErrorMessage("Regular expressions for source topics are not supported yet."),
                 Map.of()
             ),
             service.streamsGroupHeartbeat(
