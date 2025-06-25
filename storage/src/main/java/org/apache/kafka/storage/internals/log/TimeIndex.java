@@ -70,10 +70,8 @@ public class TimeIndex extends AbstractIndex {
 
         this.lastEntry = lastEntryFromIndexFile();
 
-        inLock(lock, () -> {
-            log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}",
-                file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastEntry.offset, mmap().position());
-        });
+        log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}",
+            file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastEntry.offset, mmap().position());
     }
 
     @Override
