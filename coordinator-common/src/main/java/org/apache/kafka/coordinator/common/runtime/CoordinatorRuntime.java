@@ -69,6 +69,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static java.lang.Math.min;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorWriteEvent.NOT_QUEUED;
 
 /**
@@ -866,7 +867,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 LogConfig logConfig = partitionWriter.config(tp);
                 int maxBatchSize = logConfig.maxMessageSize();
                 long prevLastWrittenOffset = coordinator.lastWrittenOffset();
-                ByteBuffer buffer = bufferSupplier.get(MIN_BUFFER_SIZE);
+                ByteBuffer buffer = bufferSupplier.get(min(MIN_BUFFER_SIZE, maxBatchSize));
 
                 MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                     buffer,
