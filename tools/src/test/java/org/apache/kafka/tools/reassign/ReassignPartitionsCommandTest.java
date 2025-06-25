@@ -331,10 +331,10 @@ public class ReassignPartitionsCommandTest {
 
         // Execute the assignment and wait for replica 3 (only) to join the ISR
         runExecuteAssignment(false, assignment, -1L, -1L);
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             TestUtils.waitForCondition(
                     () -> {
-                        Set<Integer> isr = admin.describeTopics(Collections.singleton(foo0.topic()))
+                        Set<Integer> isr = admin.describeTopics(Set.of(foo0.topic()))
                                 .allTopicNames().get().get(foo0.topic()).partitions().stream()
                                 .filter(p -> p.partition() == foo0.partition())
                                 .flatMap(p -> p.isr().stream())
@@ -346,7 +346,7 @@ public class ReassignPartitionsCommandTest {
         }
 
         // Now cancel the assignment and verify that the partition is removed from cancelled replicas
-        assertEquals(new AbstractMap.SimpleImmutableEntry<>(singleton(foo0), Collections.emptySet()), runCancelAssignment(assignment, true, true));
+        assertEquals(Map.entry(singleton(foo0), Set.of()), runCancelAssignment(assignment, true, true));
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 3));
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 4));
     }
@@ -382,7 +382,7 @@ public class ReassignPartitionsCommandTest {
         }
 
         // Now cancel the assignment and verify that the partition is removed from cancelled replicas
-        assertEquals(new AbstractMap.SimpleImmutableEntry<>(singleton(foo0), Collections.emptySet()), runCancelAssignment(assignment, true, true));
+        assertEquals(Map.entry(singleton(foo0), Set.of()), runCancelAssignment(assignment, true, true));
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 3));
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 4));
     }
@@ -768,7 +768,7 @@ public class ReassignPartitionsCommandTest {
                 "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
                 "{\"topic\":\"baz\",\"partition\":1,\"replicas\":[0,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
                 "]}";
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             assertEquals(unthrottledBrokerConfigs,
                     describeBrokerLevelThrottles(admin, unthrottledBrokerConfigs.keySet()));
             long interBrokerThrottle = 1L;
@@ -783,13 +783,13 @@ public class ReassignPartitionsCommandTest {
             // Verify that the reassignment is running.  The very low throttle should keep it
             // from completing before this runs.
             waitForVerifyAssignment(admin, assignment, true,
-                    new VerifyAssignmentResult(partStates, true, Collections.emptyMap(), false));
+                    new VerifyAssignmentResult(partStates, true, Map.of(), false));
             // Cancel the reassignment.
-            assertEquals(new AbstractMap.SimpleImmutableEntry<>(Set.of(foo0, baz1), Collections.emptySet()), runCancelAssignment(assignment, true, useBootstrapServer));
+            assertEquals(Map.entry(Set.of(foo0, baz1), Set.of()), runCancelAssignment(assignment, true, useBootstrapServer));
             // Broker throttles are still active because we passed --preserve-throttles
             waitForInterBrokerThrottle(admin, asList(0, 1, 2, 3), interBrokerThrottle);
             // Cancelling the reassignment again should reveal nothing to cancel.
-            assertEquals(new AbstractMap.SimpleImmutableEntry<>(Collections.emptySet(), Collections.emptySet()), runCancelAssignment(assignment, false, useBootstrapServer));
+            assertEquals(Map.entry(Set.of(), Set.of()), runCancelAssignment(assignment, false, useBootstrapServer));
             // This time, the broker throttles were removed.
             waitForBrokerLevelThrottles(admin, unthrottledBrokerConfigs);
             // Verify that there are no ongoing reassignments.
