@@ -217,7 +217,7 @@
         Migration between the classic consumer group protocol and the Streams Rebalance Protocol is not supported in
         either direction. An application using this protocol must use a new <code>application.id</code> that has not
         been used by any application on the classic protocol. Furthermore, this ID must not be in use as a
-        <code>group.id</code> by any consumer application.
+        <code>group.id</code> by any consumer ("classic" or "consumer") not share-group application.
     </p>
 
     <p>
