@@ -23,12 +23,10 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
-import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -502,8 +500,8 @@ public class SharePartition {
 
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    logError(String.format("Failed to initialize the share partition: %s-%s. Exception occurred: %s.",
-                        groupId, topicIdPartition, partitionData), ex);
+                    maybeLogError(String.format("Failed to initialize the share partition: %s-%s. Exception occurred: %s.",
+                        groupId, topicIdPartition, partitionData), Errors.forCode(partitionData.errorCode()), ex);
                     throwable = ex;
                     return;
                 }
@@ -1491,7 +1489,7 @@ public class SharePartition {
                 String.format("Share partition failed to load %s-%s", groupId, topicIdPartition));
             case INITIALIZING -> throw new LeaderNotAvailableException(
                 String.format("Share partition is already initializing %s-%s", groupId, topicIdPartition));
-            case FENCED -> throw new FencedStateEpochException(
+            case FENCED -> throw new LeaderNotAvailableException(
                 String.format("Share partition is fenced %s-%s", groupId, topicIdPartition));
             case EMPTY ->
                 // The share partition is not yet initialized.
@@ -2325,8 +2323,8 @@ public class SharePartition {
                 PartitionErrorData partitionData = state.partitions().get(0);
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    logError(String.format("Failed to write the share group state for share partition: %s-%s due to exception",
-                        groupId, topicIdPartition), ex);
+                    maybeLogError(String.format("Failed to write the share group state for share partition: %s-%s due to exception",
+                        groupId, topicIdPartition), Errors.forCode(partitionData.errorCode()), ex);
                     future.completeExceptionally(ex);
                     return;
                 }
@@ -2344,12 +2342,8 @@ public class SharePartition {
                 new GroupIdNotFoundException(errorMessage);
             case UNKNOWN_TOPIC_OR_PARTITION ->
                 new UnknownTopicOrPartitionException(errorMessage);
-            case FENCED_STATE_EPOCH ->
-                new FencedStateEpochException(errorMessage);
-            case FENCED_LEADER_EPOCH ->
+            case FENCED_LEADER_EPOCH, FENCED_STATE_EPOCH ->
                 new NotLeaderOrFollowerException(errorMessage);
-            case NETWORK_EXCEPTION ->
-                new NetworkException(errorMessage);
             default ->
                 new UnknownServerException(errorMessage);
         };
@@ -2578,11 +2572,11 @@ public class SharePartition {
         return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
     }
 
-    private void logError(String message, Throwable e) {
-        if (e instanceof NetworkException) {
-            log.debug(message, e);
+    private void maybeLogError(String message, Errors receivedError, Throwable wrappedException) {
+        if (receivedError == Errors.NETWORK_EXCEPTION) {
+            log.debug(message, wrappedException);
         } else {
-            log.error(message, e);
+            log.error(message, wrappedException);
         }
     }
 
