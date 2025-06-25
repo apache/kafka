@@ -318,9 +318,7 @@ public class TransactionManager {
                     .setTransactionalId(transactionalId)
                     .setTransactionTimeoutMs(transactionTimeoutMs)
                     .setProducerId(producerIdAndEpoch.producerId)
-                    .setProducerEpoch(producerIdAndEpoch.epoch)
-                    .setEnable2Pc(enable2PC)
-                    .setKeepPreparedTxn(keepPreparedTxn);
+                    .setProducerEpoch(producerIdAndEpoch.epoch);
 
             InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
                     isEpochBump);
