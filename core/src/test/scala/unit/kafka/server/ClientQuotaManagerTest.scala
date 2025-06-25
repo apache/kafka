@@ -29,7 +29,7 @@ import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, Cl
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import java.util.{Collections, Map, HashMap, Set}
+import java.util.{Collections, Map, HashMap}
 
 class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = new ClientQuotaManagerConfig()
@@ -598,9 +598,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
 
-      override def getActiveQuotasEntities: Set[ClientQuotaEntity] =
-        quotas.keySet().asInstanceOf[Set[ClientQuotaEntity]]
-
       override def close(): Unit = {}
     }
     val clientQuotaManager = new ClientQuotaManager(
@@ -617,37 +614,24 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(QuotaTypes.CustomQuotas, clientQuotaManager.quotaTypesEnabled)
       assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should be true with custom callback")
 
-      // Add a client-id quota, quotaTypesEnabled should be QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.CustomQuotas
+      // Add a client-id quota, quotaTypesEnabled should remain QuotaTypes.CustomQuotas
       clientQuotaManager.updateQuota(None, Some(ClientQuotaManager.ClientIdEntity("client1")), Some(new Quota(12, true)))
-      assertEquals(QuotaTypes.CustomQuotas | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.quotaTypesEnabled)
-      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
+      assertEquals(QuotaTypes.CustomQuotas, clientQuotaManager.quotaTypesEnabled)
 
-      // Add a user quota, quotaTypesEnabled should be QuotaTypes.CustomQuotas | QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled
+      // Add a user quota, quotaTypesEnabled quotaTypesEnabled should remain QuotaTypes.CustomQuotas
       clientQuotaManager.updateQuota(Some(ClientQuotaManager.UserEntity("userA")), None, Some(new Quota(12, true)))
-      assertEquals(QuotaTypes.CustomQuotas | QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.quotaTypesEnabled)
+      assertEquals(QuotaTypes.CustomQuotas, clientQuotaManager.quotaTypesEnabled)
       assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
 
-      // Add a duplicate client-id quota, quotaTypesEnabled should remain unchanged
-      clientQuotaManager.updateQuota(None, Some(ClientQuotaManager.ClientIdEntity("client2")), Some(new Quota(12, true)))
-      assertEquals(QuotaTypes.CustomQuotas | QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.quotaTypesEnabled)
-      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
-
-      // Update a duplicate client-id quota, quotaTypesEnabled should remain unchanged
-      clientQuotaManager.updateQuota(None, Some(ClientQuotaManager.ClientIdEntity("client2")), Some(new Quota(10, true)))
-      assertEquals(QuotaTypes.CustomQuotas | QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled, clientQuotaManager.quotaTypesEnabled)
-      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
-
-      // Add a user-client-id quota, quotaTypesEnabled should be QuotaTypes.CustomQuotas | QuotaTypes.UserClientIdQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserQuotaEnabled
+      // Add a user-client-id quota,  quotaTypesEnabled should remain QuotaTypes.CustomQuotas
       clientQuotaManager.updateQuota(Some(ClientQuotaManager.UserEntity("userA")), Some(ClientQuotaManager.ClientIdEntity("client1")), Some(new Quota(12, true)))
-      assertEquals(QuotaTypes.CustomQuotas | QuotaTypes.UserQuotaEnabled | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserClientIdQuotaEnabled, clientQuotaManager.quotaTypesEnabled)
+      assertEquals(QuotaTypes.CustomQuotas, clientQuotaManager.quotaTypesEnabled)
       assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
 
       // Remove all quotas, quotaTypesEnabled should be QuotaTypes.CustomQuotas
       clientQuotaManager.updateQuota(Some(ClientQuotaManager.UserEntity("userA")), Some(ClientQuotaManager.ClientIdEntity("client1")), None)
-
       clientQuotaManager.updateQuota(Some(ClientQuotaManager.UserEntity("userA")), None, None)
       clientQuotaManager.updateQuota(None, Some(ClientQuotaManager.ClientIdEntity("client1")), None)
-      clientQuotaManager.updateQuota(None, Some(ClientQuotaManager.ClientIdEntity("client2")), None)
       assertEquals(QuotaTypes.CustomQuotas, clientQuotaManager.quotaTypesEnabled)
       assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
     } finally {

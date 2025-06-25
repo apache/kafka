@@ -156,11 +156,6 @@ public class CustomQuotaCallbackTest {
         }
 
         @Override
-        public Set<ClientQuotaEntity> getActiveQuotasEntities() {
-            return Set.of();
-        }
-
-        @Override
         public void close() {
 
         }

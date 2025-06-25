@@ -464,6 +464,16 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    */
   private def updateQuotaTypes(quotaEntity: KafkaQuotaEntity, shouldAdd: Boolean): Unit = {
 
+    if (quotaTypesEnabled == QuotaTypes.CustomQuotas) {
+      // If custom quotas are enabled, we do not need to update quota types
+      return
+    }
+
+    val isActive =  quotaCallback match {
+      case callback: DefaultQuotaCallback => callback.getActiveQuotasEntities.contains(quotaEntity)
+      case _ => true
+    }
+
     val activeQuotaType = quotaEntity match {
       case KafkaQuotaEntity(Some(_), Some(_)) => QuotaTypes.UserClientIdQuotaEnabled
       case KafkaQuotaEntity(Some(_), None) => QuotaTypes.UserQuotaEnabled
@@ -471,7 +481,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       case _ => QuotaTypes.NoQuotas
     }
 
-    val isActive = quotaCallback.getActiveQuotasEntities.contains(quotaEntity)
     if (shouldAdd && !isActive) {
       activeQuotaEntities.compute(activeQuotaType, (_, currentValue) => if (currentValue == 0) 1 else currentValue + 1)
       quotaTypesEnabled |= activeQuotaType
@@ -690,8 +699,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       Map(DefaultTags.User -> userTag, DefaultTags.ClientId -> clientIdTag)
     }
 
-    override def getActiveQuotasEntities: util.Set[ClientQuotaEntity] = {
-      overriddenQuotas.keySet().asScala.toSet.asJava
+    def getActiveQuotasEntities: util.Set[ClientQuotaEntity] = {
+      overriddenQuotas.keySet()
     }
     override def close(): Unit = {}
   }

@@ -108,14 +108,6 @@ public interface ClientQuotaCallback extends Configurable {
     boolean updateClusterMetadata(Cluster cluster);
 
     /**
-     * Return a set of active client quota entities, which represent the quotas currently in effect and applicable.
-     * If the callback does not track active client quotas, it may return an empty set.
-     *
-     * @return a set of active client quota entities
-     */
-    Set<ClientQuotaEntity> getActiveQuotasEntities();
-
-    /**
      * Closes this instance.
      */
     void close();

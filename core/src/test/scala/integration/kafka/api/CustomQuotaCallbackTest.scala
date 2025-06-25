@@ -479,8 +479,6 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
 
   override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = customQuotasUpdated(quotaType).getAndSet(false)
 
-  override def getActiveQuotasEntities: util.Set[ClientQuotaEntity] = Set.empty[ClientQuotaEntity].asJava
-
   def close(): Unit = {}
 
   private def userGroup(quotaEntity: ClientQuotaEntity): String = {
