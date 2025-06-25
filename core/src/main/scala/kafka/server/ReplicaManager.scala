@@ -261,7 +261,6 @@ class ReplicaManager(val config: KafkaConfig,
       config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests))
 
   /* epoch of the controller that last changed the leader */
-  @volatile private[server] var controllerEpoch: Int = 0
   protected val localBrokerId = config.brokerId
   protected val allPartitions = new ConcurrentHashMap[TopicPartition, HostedPartition]
   private val replicaStateChangeLock = new Object
