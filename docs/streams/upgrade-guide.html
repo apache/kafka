@@ -208,7 +208,8 @@
     </ul>
 
     <p>
-        To enable the protocol, set <code>unstable.feature.versions.enable=true</code> for controllers and brokers, and
+        Enabling the protocol requires the brokers and clients are running Apache Kafka 4.1.
+        Set <code>unstable.feature.versions.enable=true</code> for controllers and brokers, and
         set <code>unstable.api.versions.enable=true</code> on the brokers as well. In your Kafka Streams application
         configuration, set <code>group.protocol=streams</code>.
     </p>
@@ -218,10 +219,14 @@
         either direction. An application using this protocol must use a new <code>application.id</code> that has not
         been used by any application on the classic protocol. Furthermore, this ID must not be in use as a
         <code>group.id</code> by any consumer ("classic" or "consumer") not share-group application.
+        It is also possible to delete the previous consumer group using <code>kafka-consumer-groups.sh</code> before
+        starting the application with the new protocol, which will however also delete all offsets for that group.
     </p>
 
     <p>
-        Please provide feedback on this feature via the Kafka mailing lists or by filing JIRA issues.
+        Please provide feedback on this feature via the
+        <a href="https://kafka.apache.org/contact">Kafka mailing lists</a> or by filing
+        <a href="https://kafka.apache.org/contributing">JIRA issues</a>.
     </p>
 
     <h4>Other changes</h4>
