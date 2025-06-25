@@ -154,7 +154,8 @@ public final class RemoteLogManagerConfig {
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_MS = -2L;
 
     public static final String LOG_LOCAL_RETENTION_BYTES_PROP = "log.local.retention.bytes";
-    public static final String LOG_LOCAL_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it gets eligible for deletion. " +
+    public static final String LOG_LOCAL_RETENTION_BYTES_DOC = "The desired maximum size of local log segments that can grow for a partition before it gets eligible for deletion. " +
+            "Old log segments will be discarded to free up space so the partition size will remain at least this value. " +
             "Default value is -2, it represents `log.retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `log.retention.bytes` value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;

@@ -64,9 +64,10 @@ public class TopicConfig {
         "background flush capabilities as it is more efficient.";
 
     public static final String RETENTION_BYTES_CONFIG = "retention.bytes";
-    public static final String RETENTION_BYTES_DOC = "This configuration controls the maximum size a partition " +
-        "(which consists of log segments) can grow to before we will discard old log segments to free up space if we " +
-        "are using the \"delete\" retention policy. By default there is no size limit only a time limit. " +
+    public static final String RETENTION_BYTES_DOC = "This configuration controls the desired maximum size of partition " +
+        "(which consists of log segments). Old log segments will be discarded to free up space so the partition size " + 
+        "will remain at least this value if we are using the \"delete\" retention policy. " +
+        "By default there is no size limit only a time limit. " +
         "Since this limit is enforced at the partition level, multiply it by the number of partitions to compute " +
         "the topic retention in bytes. Additionally, retention.bytes configuration " +
         "operates independently of \"segment.ms\" and \"segment.bytes\" configurations. " +
@@ -91,8 +92,9 @@ public class TopicConfig {
             "to `retention.ms` value.";
 
     public static final String LOCAL_LOG_RETENTION_BYTES_CONFIG = "local.retention.bytes";
-    public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
-            "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
+    public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The desired maximum size of local log segments that can grow for a partition. " +
+            "Old log segments will be discarded to free up space so the partition size will remain at least this value. " +
+            "Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `retention.bytes` value.";
 
     public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
