@@ -2480,11 +2480,6 @@ class ReplicaManagerTest {
     produceResult
   }
 
-  /**
-   * This method assumes that the test using created ReplicaManager calls
-   * ReplicaManager.becomeLeaderOrFollower() once with LeaderAndIsrRequest containing
-   * 'leaderEpochInLeaderAndIsr' leader epoch for partition 'topicPartition'.
-   */
   private def prepareReplicaManagerAndLogManager(timer: MockTimer,
                                                  topicPartition: Int,
                                                  leaderEpochInLeaderAndIsr: Int,
