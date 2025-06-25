@@ -374,7 +374,7 @@ public class FeatureCommand {
         } catch (IllegalArgumentException e) {
             throw new TerseException("Unknown release version '" + releaseVersion + "'." +
                 " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-                " to " + MetadataVersion.LATEST_PRODUCTION);
+                " to " + MetadataVersion.latestTesting().version());
         }
     }
 

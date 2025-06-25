@@ -503,15 +503,16 @@ public class MeteredTimestampedKeyValueStoreTest {
         when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
         init();
 
-        final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
-
-        assertThat(oldestIteratorTimestampMetric.metricValue(), nullValue());
+        KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, nullValue());
 
         KeyValueIterator<String, ValueAndTimestamp<String>> second = null;
         final long secondTimestamp;
         try {
             try (final KeyValueIterator<String, ValueAndTimestamp<String>> unused = metered.all()) {
+                oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+                assertThat(oldestIteratorTimestampMetric, not(nullValue()));
+
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
                 mockTime.sleep(100);
@@ -531,6 +532,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             }
         }
 
-        assertThat((Integer) oldestIteratorTimestampMetric.metricValue(), nullValue());
+        oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, nullValue());
     }
 }
