@@ -4075,6 +4075,90 @@ public class TransactionManagerTest {
         assertEquals(epoch, preparedState.epoch());
     }
 
+    @Test
+    public void testInitPidResponse2PCWithOngoingTransaction() {
+        // Initialize transaction manager with 2PC enabled
+        initializeTransactionManager(Optional.of(transactionalId), true, true);
+        
+        // Start initializeTransactions with keepPreparedTxn=true
+        TransactionalRequestResult result = transactionManager.initializeTransactions(true);
+        
+        // Prepare coordinator response
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        
+        // Simulate InitProducerId response with ongoing transaction
+        long ongoingPid = 12345L;
+        short ongoingEpoch = 5;
+        prepareInitPidResponse(
+            Errors.NONE,
+            false,
+            producerId,
+            epoch,
+            true,
+            true,
+            ongoingPid,
+            ongoingEpoch
+        );
+        
+        runUntil(transactionManager::hasProducerId);
+        transactionManager.maybeUpdateTransactionV2Enabled(true);
+        
+        result.await();
+        assertTrue(result.isSuccessful());
+        
+        // Verify transaction manager transitioned to PREPARED_TRANSACTION state
+        assertTrue(transactionManager.isPrepared());
+        
+        // Verify preparedTxnState was set with ongoing producer ID and epoch
+        PreparedTxnState preparedState = transactionManager.preparedTransactionState();
+        assertNotNull(preparedState);
+        assertEquals(ongoingPid, preparedState.producerId());
+        assertEquals(ongoingEpoch, preparedState.epoch());
+        assertEquals(ongoingPid + ":" + ongoingEpoch, preparedState.toString());
+    }
+
+    @Test
+    public void testInitPidResponse2PCWithoutOngoingTransaction() {
+        // Initialize transaction manager with 2PC enabled
+        initializeTransactionManager(Optional.of(transactionalId), true, true);
+        
+        // Start initializeTransactions with keepPreparedTxn=true
+        TransactionalRequestResult result = transactionManager.initializeTransactions(true);
+        
+        // Prepare coordinator response
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        
+        // Simulate InitProducerId response without ongoing transaction
+        prepareInitPidResponse(
+            Errors.NONE,
+            false,
+            producerId,
+            epoch,
+            true,
+            true,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH
+        );
+        
+        runUntil(transactionManager::hasProducerId);
+        transactionManager.maybeUpdateTransactionV2Enabled(true);
+        
+        result.await();
+        assertTrue(result.isSuccessful());
+        
+        // Verify transaction manager transitioned to READY state (not PREPARED_TRANSACTION)
+        assertFalse(transactionManager.isPrepared());
+        assertTrue(transactionManager.isReady());
+        
+        // Verify preparedTxnState was not set or is empty
+        PreparedTxnState preparedState = transactionManager.preparedTransactionState();
+        if (preparedState != null) {
+            assertFalse(preparedState.hasTransaction());
+        }
+    }
+
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
         AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);
         AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(0);
