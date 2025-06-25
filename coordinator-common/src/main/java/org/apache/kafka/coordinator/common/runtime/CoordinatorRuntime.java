@@ -43,6 +43,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -600,12 +601,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorBatch currentBatch;
 
         /**
-         * 16KB. Used for initial buffer size for write operations.
+         * Used for initial buffer size for write operations.
          */
         final int minBufferSize;
 
         /**
-         * 1GB. The max batch size
+         * The max batch size
          */
         final int maxBatchSize;
 
@@ -636,8 +637,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 defaultWriteTimeout
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
-            this.minBufferSize = 512 * 1024; // 512 KB
-            this.maxBatchSize = 1024 * 1024 * 1024; // 1 GB
+            this.minBufferSize = 16384; // 16KB
+            this.maxBatchSize = partitionWriter.config(tp).maxMessageSize();
         }
 
         /**
