@@ -601,16 +601,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorBatch currentBatch;
 
         /**
-         * Used for initial buffer size for write operations.
-         */
-        final int minBufferSize;
-
-        /**
-         * The max batch size
-         */
-        final int maxBatchSize;
-
-        /**
          * Constructor.
          *
          * @param tp The topic partition of the coordinator.
@@ -637,7 +627,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 defaultWriteTimeout
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
-            this.minBufferSize = 16384; // 16KB
             this.maxBatchSize = partitionWriter.config(tp).maxMessageSize();
         }
 
@@ -874,8 +863,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             long currentTimeMs
         ) {
             if (currentBatch == null) {
+                LogConfig logConfig = partitionWriter.config(tp);
+                int maxBatchSize = logConfig.maxMessageSize();
                 long prevLastWrittenOffset = coordinator.lastWrittenOffset();
-                ByteBuffer buffer = bufferSupplier.get(minBufferSize);
+                ByteBuffer buffer = bufferSupplier.get(MIN_BUFFER_SIZE);
 
                 MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                     buffer,
@@ -1923,6 +1914,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
         }
     }
+
+    /**
+     * 16KB. Used for initial buffer size for write operations.
+     */
+    static final int MIN_BUFFER_SIZE = 16384;
 
     /**
      * The log prefix.
