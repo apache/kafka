@@ -426,16 +426,17 @@ public class MeteredVersionedKeyValueStoreTest {
         when(inner.query(any(), any(), any())).thenReturn(
                 QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
 
-        final KafkaMetric oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
-
-        assertThat(oldestIteratorTimestampMetric.metricValue(), nullValue());
+        KafkaMetric oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, nullValue());
 
         final QueryResult<VersionedRecordIterator<String>> first = store.query(query, bound, config);
         VersionedRecordIterator<String> secondIterator = null;
         final long secondTime;
         try {
             try (final VersionedRecordIterator<String> unused = first.getResult()) {
+                oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
+                assertThat(oldestIteratorTimestampMetric, not(nullValue()));
+
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
                 mockTime.sleep(100);
@@ -457,7 +458,8 @@ public class MeteredVersionedKeyValueStoreTest {
             }
         }
 
-        assertThat((Integer) oldestIteratorTimestampMetric.metricValue(), nullValue());
+        oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, nullValue());
     }
 
     private KafkaMetric getMetric(final String name) {

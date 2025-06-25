@@ -459,13 +459,12 @@ public class ResetStreamsGroupOffsetTest {
 
         // assert that the internal topics are deleted
         if (specifiedInternalTopics.length > 0) {
-            Set<String> internalTopicsAfterReset = getInternalTopics(appId);
-
             TestUtils.waitForCondition(
-                () -> internalTopicsAfterReset.size() == allInternalTopics.size(),
+                () -> getInternalTopics(appId).size() == allInternalTopics.size(),
                 30_000, "Internal topics were not deleted as expected after reset"
             );
-
+            // verify that the specified internal topics were deleted
+            Set<String> internalTopicsAfterReset = getInternalTopics(appId);
             specifiedInternalTopicsList.forEach(topic -> {
                 assertFalse(internalTopicsAfterReset.contains(topic),
                     "Internal topic '" + topic + "' was not deleted as expected after reset");
