@@ -192,7 +192,7 @@ public class LogCompactionTester {
                     total++;
                 }
 
-                System.out.printf("Validated %d values, %d mismatches.", total, mismatched);
+                System.out.printf("Validated %d values, %d mismatches.%n", total, mismatched);
                 require(!produced.hasNext(), "Additional values produced not found in consumer log.");
                 require(!consumed.hasNext(), "Additional values consumed not found in producer log.");
                 require(mismatched == 0, "Non-zero number of row mismatches.");
