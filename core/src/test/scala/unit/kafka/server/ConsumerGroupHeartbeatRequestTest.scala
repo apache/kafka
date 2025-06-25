@@ -302,6 +302,48 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest
+  def testEmptyConsumerGroupId(): Unit = {
+    val admin = cluster.admin()
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      // Heartbeat request to join the group. Note that the member subscribes
+      // to an nonexistent topic.
+      val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+        new ConsumerGroupHeartbeatRequestData()
+          .setGroupId("")
+          .setMemberId(Uuid.randomUuid().toString)
+          .setMemberEpoch(0)
+          .setRebalanceTimeoutMs(5 * 60 * 1000)
+          .setSubscribedTopicNames(List("foo").asJava)
+          .setTopicPartitions(List.empty.asJava),
+        true
+      ).build()
+
+      // Send the request until receiving a successful response. There is a delay
+      // here because the group coordinator is loaded in the background.
+      var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+        consumerGroupHeartbeatResponse.data.errorCode == Errors.INVALID_REQUEST.code
+      }, msg = s"Did not receive the expected error. Last response $consumerGroupHeartbeatResponse.")
+
+      // Verify the response.
+      assertEquals(Errors.INVALID_REQUEST.code, consumerGroupHeartbeatResponse.data.errorCode)
+      assertEquals("GroupId can't be empty.", consumerGroupHeartbeatResponse.data.errorMessage)
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest
   def testConsumerGroupHeartbeatWithEmptySubscription(): Unit = {
     val admin = cluster.admin()
 

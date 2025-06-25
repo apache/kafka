@@ -149,6 +149,17 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         )
       )
 
+      // Join with an empty group id.
+      verifyJoinGroupResponseDataEquals(
+        new JoinGroupResponseData()
+          .setErrorCode(Errors.INVALID_GROUP_ID.code)
+          .setProtocolName(if (version >= 7) null else ""),
+        sendJoinRequest(
+          groupId = "",
+          version = version.toShort
+        )
+      )
+
       // Join with an inconsistent protocolType.
       verifyJoinGroupResponseDataEquals(
         new JoinGroupResponseData()

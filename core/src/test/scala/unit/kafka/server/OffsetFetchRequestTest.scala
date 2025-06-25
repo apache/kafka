@@ -269,6 +269,39 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           )
         )
 
+        // Fetch with empty group id.
+        assertEquals(
+          new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("")
+            .setTopics(List(
+              new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(List(
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(0)
+                    .setCommittedOffset(-1L),
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(1)
+                    .setCommittedOffset(-1L),
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(5)
+                    .setCommittedOffset(-1L)
+                ).asJava)
+            ).asJava),
+          fetchOffsets(
+            groupId = "",
+            memberId = memberId,
+            memberEpoch = memberEpoch,
+            partitions = List(
+              new TopicPartition("foo", 0),
+              new TopicPartition("foo", 1),
+              new TopicPartition("foo", 5) // This one does not exist.
+            ),
+            requireStable = requireStable,
+            version = version.toShort
+          )
+        )
+
         // Fetch with stale member epoch.
         assertEquals(
           new OffsetFetchResponseData.OffsetFetchResponseGroup()

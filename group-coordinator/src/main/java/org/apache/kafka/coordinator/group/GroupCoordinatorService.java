@@ -636,7 +636,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             } else {
                 futures.add(CompletableFuture.completedFuture(Collections.singletonList(
                     new ConsumerGroupDescribeResponseData.DescribedGroup()
-                        .setGroupId(null)
+                        .setGroupId("")
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                 )));
             }
@@ -687,7 +687,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             } else {
                 futures.add(CompletableFuture.completedFuture(Collections.singletonList(
                     new ShareGroupDescribeResponseData.DescribedGroup()
-                        .setGroupId(null)
+                        .setGroupId("")
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                 )));
             }
@@ -736,7 +736,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             if (groupId == null) {
                 futures.add(CompletableFuture.completedFuture(Collections.singletonList(
                     new DescribeGroupsResponseData.DescribedGroup()
-                        .setGroupId(null)
+                        .setGroupId("")
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                 )));
             } else {

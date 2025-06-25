@@ -1038,7 +1038,7 @@ public class GroupCoordinatorServiceTest {
             .setGroupId("");
         List<DescribeGroupsResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new DescribeGroupsResponseData.DescribedGroup()
-                .setGroupId(null)
+                .setGroupId("")
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             describedGroup
         );
@@ -1470,11 +1470,11 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> partitionCount);
 
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
-            .setGroupId(null)
+            .setGroupId("")
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new ConsumerGroupDescribeResponseData.DescribedGroup()
-                .setGroupId(null)
+                .setGroupId("")
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             describedGroup
         );
@@ -2347,11 +2347,11 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> partitionCount);
 
         ShareGroupDescribeResponseData.DescribedGroup describedGroup = new ShareGroupDescribeResponseData.DescribedGroup()
-            .setGroupId(null)
+            .setGroupId("")
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
         List<ShareGroupDescribeResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new ShareGroupDescribeResponseData.DescribedGroup()
-                .setGroupId(null)
+                .setGroupId("")
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             describedGroup
         );
