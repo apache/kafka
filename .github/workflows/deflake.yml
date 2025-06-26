@@ -54,7 +54,7 @@ jobs:
         with:
           java-version: ${{ inputs.java-version }}
           gradle-cache-read-only: true
-          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+          develocity-access-key: ${{ secrets.KAFKA_DEVELOCITY_ACCESS_KEY }}
 
       - name: Test
         timeout-minutes: 60

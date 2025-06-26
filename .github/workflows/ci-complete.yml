@@ -69,7 +69,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+          develocity-access-key: ${{ secrets.KAFKA_DEVELOCITY_ACCESS_KEY }}
       - name: Download build scan archive
         id: download-build-scan
         uses: actions/download-artifact@v4
