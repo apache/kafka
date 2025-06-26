@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -154,8 +153,8 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
 
         // Clear the entries by creating unmodifiable empty maps.
         // Practically, we do not use the same instances that are closed.
-        idToPartitionDeleteMetadata = Collections.emptyMap();
-        idToRemoteLogMetadataCache = Collections.emptyMap();
+        idToPartitionDeleteMetadata = Map.of();
+        idToRemoteLogMetadataCache = Map.of();
     }
 
     @Override

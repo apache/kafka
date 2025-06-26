@@ -31,9 +31,8 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.MetadataImage;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -49,7 +48,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -125,9 +123,7 @@ public class ServerSideAssignorBenchmark {
 
     private List<String> allTopicNames = Collections.emptyList();
 
-    private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
-
-    private TopicsImage topicsImage = TopicsImage.EMPTY;
+    private MetadataImage metadataImage = MetadataImage.EMPTY;
 
     private TopicIds.TopicResolver topicResolver;
 
@@ -151,16 +147,11 @@ public class ServerSideAssignorBenchmark {
         allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
         int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
-        subscriptionMetadata = AssignorBenchmarkUtils.createSubscriptionMetadata(
-            allTopicNames,
-            partitionsPerTopic
-        );
 
-        topicsImage = AssignorBenchmarkUtils.createTopicsImage(subscriptionMetadata);
-        topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
+        metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionsPerTopic);
+        topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
 
-        Map<Uuid, TopicMetadata> topicMetadata = AssignorBenchmarkUtils.createTopicMetadata(subscriptionMetadata);
-        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(topicMetadata);
+        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }
 
     private Map<String, ConsumerGroupMember> createMembers() {
@@ -192,18 +183,6 @@ public class ServerSideAssignorBenchmark {
 
     private Optional<String> rackId(int memberIndex) {
         return isRackAware ? Optional.of("rack" + memberIndex % NUMBER_OF_RACKS) : Optional.empty();
-    }
-
-    private static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(Arrays.asList(
-                "rack" + i % NUMBER_OF_RACKS,
-                "rack" + (i + 1) % NUMBER_OF_RACKS,
-                "rack" + (i + 2) % NUMBER_OF_RACKS
-            )));
-        }
-        return partitionRacks;
     }
 
     private void simulateIncrementalRebalance() {

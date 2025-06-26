@@ -50,10 +50,10 @@ class DynamicTopicClusterQuotaPublisher (
     newImage: MetadataImage,
   ): Unit = {
     try {
-      quotaManagers.clientQuotaCallback().ifPresent(clientQuotaCallback => {
+      quotaManagers.clientQuotaCallbackPlugin().ifPresent(plugin => {
         if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
           val cluster = MetadataCache.toCluster(clusterId, newImage)
-          if (clientQuotaCallback.updateClusterMetadata(cluster)) {
+          if (plugin.get().updateClusterMetadata(cluster)) {
             quotaManagers.fetch.updateQuotaMetricConfigs()
             quotaManagers.produce.updateQuotaMetricConfigs()
             quotaManagers.request.updateQuotaMetricConfigs()

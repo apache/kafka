@@ -74,22 +74,24 @@ public final class TransactionLogConfig {
             // Configuration for testing only as default value should be sufficient for typical usage
             .defineInternal(PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG, INT, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, atLeast(1), LOW, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DOC);
 
-    private final AbstractConfig config;
     private final int transactionTopicMinISR;
     private final int transactionLoadBufferSize;
     private final short transactionTopicReplicationFactor;
     private final int transactionTopicPartitions;
     private final int transactionTopicSegmentBytes;
     private final int producerIdExpirationCheckIntervalMs;
+    private final boolean transactionPartitionVerificationEnable;
+    private final int producerIdExpirationMs;
 
     public TransactionLogConfig(AbstractConfig config) {
-        this.config = config;
         this.transactionTopicMinISR = config.getInt(TRANSACTIONS_TOPIC_MIN_ISR_CONFIG);
         this.transactionLoadBufferSize = config.getInt(TRANSACTIONS_LOAD_BUFFER_SIZE_CONFIG);
         this.transactionTopicReplicationFactor = config.getShort(TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG);
         this.transactionTopicPartitions = config.getInt(TRANSACTIONS_TOPIC_PARTITIONS_CONFIG);
         this.transactionTopicSegmentBytes = config.getInt(TRANSACTIONS_TOPIC_SEGMENT_BYTES_CONFIG);
         this.producerIdExpirationCheckIntervalMs = config.getInt(PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG);
+        this.transactionPartitionVerificationEnable = config.getBoolean(TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
+        this.producerIdExpirationMs = config.getInt(PRODUCER_ID_EXPIRATION_MS_CONFIG);
     }
 
     public int transactionTopicMinISR() {
@@ -118,11 +120,11 @@ public final class TransactionLogConfig {
 
     // This is a broker dynamic config used for DynamicProducerStateManagerConfig
     public boolean transactionPartitionVerificationEnable() {
-        return config.getBoolean(TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
+        return transactionPartitionVerificationEnable;
     }
 
     // This is a broker dynamic config used for DynamicProducerStateManagerConfig
     public int producerIdExpirationMs() {
-        return config.getInt(PRODUCER_ID_EXPIRATION_MS_CONFIG);
+        return producerIdExpirationMs;
     }
 }

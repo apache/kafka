@@ -26,7 +26,6 @@ import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,7 +49,7 @@ public final class ExpectUserTopicMappedToMetadataPartitionsAction implements Ti
     @Override
     public void doExecute(TieredStorageTestContext context) throws InterruptedException, ExecutionException {
         String metadataTopic = TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME;
-        Map<String, TopicDescription> descriptions = describeTopics(context, Arrays.asList(topic, metadataTopic));
+        Map<String, TopicDescription> descriptions = describeTopics(context, List.of(topic, metadataTopic));
         int metadataTopicPartitionCount = descriptions.get(metadataTopic).partitions().size();
         RemoteLogMetadataTopicPartitioner partitioner =
                 new RemoteLogMetadataTopicPartitioner(metadataTopicPartitionCount);

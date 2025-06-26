@@ -22,10 +22,8 @@ import org.apache.kafka.common.message.DeleteRecordsRequestData.DeleteRecordsTop
 import org.apache.kafka.common.message.DeleteRecordsResponseData;
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class DeleteRecordsRequest extends AbstractRequest {
 
@@ -79,7 +77,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
         return new DeleteRecordsResponse(result);
     }
 
-    public static DeleteRecordsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteRecordsRequest(new DeleteRecordsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DeleteRecordsRequest parse(Readable readable, short version) {
+        return new DeleteRecordsRequest(new DeleteRecordsRequestData(readable, version), version);
     }
 }

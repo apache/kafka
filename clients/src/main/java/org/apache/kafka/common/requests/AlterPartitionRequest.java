@@ -21,10 +21,9 @@ import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -54,8 +53,8 @@ public class AlterPartitionRequest extends AbstractRequest {
             .setErrorCode(Errors.forException(e).code()));
     }
 
-    public static AlterPartitionRequest parse(ByteBuffer buffer, short version) {
-        return new AlterPartitionRequest(new AlterPartitionRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static AlterPartitionRequest parse(Readable readable, short version) {
+        return new AlterPartitionRequest(new AlterPartitionRequestData(readable, version), version);
     }
 
     public static class Builder extends AbstractRequest.Builder<AlterPartitionRequest> {

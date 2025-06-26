@@ -24,8 +24,6 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -46,7 +44,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testPositionSetCorrectlyWhenOpened() throws IOException {
-        List<AbortedTxn> abortedTxns = new ArrayList<>(Arrays.asList(
+        List<AbortedTxn> abortedTxns = new ArrayList<>(List.of(
                 new AbortedTxn(0L, 0, 10, 11),
                 new AbortedTxn(1L, 5, 15, 13),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -63,7 +61,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testSanityCheck() throws IOException {
-        List<AbortedTxn> abortedTxns = Arrays.asList(
+        List<AbortedTxn> abortedTxns = List.of(
                 new AbortedTxn(0L, 0, 10, 11),
                 new AbortedTxn(1L, 5, 15, 13),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -93,7 +91,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testCollectAbortedTransactions() {
-        List<AbortedTxn> abortedTransactions = Arrays.asList(
+        List<AbortedTxn> abortedTransactions = List.of(
                 new AbortedTxn(0L, 0, 10, 11),
                 new AbortedTxn(1L, 5, 15, 13),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -128,7 +126,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testTruncate() throws IOException {
-        List<AbortedTxn> abortedTransactions = Arrays.asList(
+        List<AbortedTxn> abortedTransactions = List.of(
                 new AbortedTxn(0L, 0, 10, 2),
                 new AbortedTxn(1L, 5, 15, 16),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -143,7 +141,7 @@ public class TransactionIndexTest {
         assertEquals(abortedTransactions.subList(0, 3), index.collectAbortedTxns(0L, 100L).abortedTransactions);
 
         index.reset();
-        assertEquals(Collections.emptyList(), index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(List.of(), index.collectAbortedTxns(0L, 100L).abortedTransactions);
     }
 
     @Test

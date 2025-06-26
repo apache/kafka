@@ -30,12 +30,15 @@ import java.util.Collections
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
-@ClusterTestDefaults(types = Array(Type.KRAFT))
-class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(serverProperties = Array(
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
+  )
+)
+class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+  @ClusterTest
   def testHeartbeatWithOldConsumerGroupProtocol(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
@@ -174,6 +177,15 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         memberId = leaderMemberId,
         generationId = -1,
         expectedError = Errors.UNKNOWN_MEMBER_ID,
+        version = version.toShort
+      )
+
+      // Heartbeat with empty group id.
+      heartbeat(
+        groupId = "",
+        memberId = leaderMemberId,
+        generationId = -1,
+        expectedError = Errors.INVALID_GROUP_ID,
         version = version.toShort
       )
     }

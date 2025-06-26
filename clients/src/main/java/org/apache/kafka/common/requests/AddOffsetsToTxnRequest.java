@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class AddOffsetsToTxnRequest extends AbstractRequest {
 
@@ -64,7 +62,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
                                                .setThrottleTimeMs(throttleTimeMs));
     }
 
-    public static AddOffsetsToTxnRequest parse(ByteBuffer buffer, short version) {
-        return new AddOffsetsToTxnRequest(new AddOffsetsToTxnRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static AddOffsetsToTxnRequest parse(Readable readable, short version) {
+        return new AddOffsetsToTxnRequest(new AddOffsetsToTxnRequestData(readable, version), version);
     }
 }

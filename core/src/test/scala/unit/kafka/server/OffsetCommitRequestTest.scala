@@ -16,30 +16,27 @@
  */
 package kafka.server
 
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 
-@ClusterTestDefaults(types = Array(Type.KRAFT))
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+  )
+)
 class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
+  @ClusterTest
   def testOffsetCommitWithNewConsumerGroupProtocol(): Unit = {
     testOffsetCommit(true)
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
+  @ClusterTest
   def testOffsetCommitWithOldConsumerGroupProtocol(): Unit = {
     testOffsetCommit(false)
   }
@@ -50,7 +47,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -59,7 +56,6 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     // a session long enough for the duration of the test.
     val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
 
-    // Start from version 1 because version 0 goes to ZK.
     for (version <- ApiKeys.OFFSET_COMMIT.oldestVersion to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       // Commit offset.
       commitOffset(
@@ -67,6 +63,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         memberId = memberId,
         memberEpoch = memberEpoch,
         topic = "foo",
+        topicId = topicId,
         partition = 0,
         offset = 100L,
         expectedError = if (useNewProtocol && version < 9) Errors.UNSUPPORTED_VERSION else Errors.NONE,
@@ -79,6 +76,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         memberId = memberId,
         memberEpoch = memberEpoch,
         topic = "foo",
+        topicId = topicId,
         partition = 0,
         offset = 100L,
         expectedError =
@@ -93,6 +91,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         memberId = memberId,
         memberEpoch = memberEpoch,
         topic = "foo",
+        topicId = topicId,
         partition = 0,
         offset = 100L,
         expectedError =
@@ -107,6 +106,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         memberId = "",
         memberEpoch = memberEpoch,
         topic = "foo",
+        topicId = topicId,
         partition = 0,
         offset = 100L,
         expectedError = Errors.UNKNOWN_MEMBER_ID,
@@ -119,6 +119,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         memberId = memberId,
         memberEpoch = memberEpoch + 1,
         topic = "foo",
+        topicId = topicId,
         partition = 0,
         offset = 100L,
         expectedError =
@@ -135,11 +136,27 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         memberId = "",
         memberEpoch = -1,
         topic = "foo",
+        topicId = topicId,
         partition = 0,
         offset = 100L,
         expectedError = Errors.NONE,
         version = version.toShort
       )
+
+      // Commit offset to a group with an unknown topic id.
+      if (version >= 10) {
+        commitOffset(
+          groupId = "grp",
+          memberId = memberId,
+          memberEpoch = memberEpoch,
+          topic = "bar",
+          topicId = Uuid.randomUuid(),
+          partition = 0,
+          offset = 100L,
+          expectedError = Errors.UNKNOWN_TOPIC_ID,
+          version = version.toShort
+        )
+      }
     }
   }
 }

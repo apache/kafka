@@ -26,7 +26,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -36,9 +35,9 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestUtils;
@@ -253,7 +252,7 @@ public class MetadataLoaderTest {
                             100,
                             4000,
                             10,
-                            List.of(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                            List.of(ControlRecord.of(new SnapshotHeaderRecord()))
                         ),
                         Batch.data(0, 0, 0, 0,
                             List.of(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -386,7 +385,7 @@ public class MetadataLoaderTest {
                     100,
                     4000,
                     10,
-                    List.of(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                    List.of(ControlRecord.of(new SnapshotHeaderRecord()))
                 )
             )
         );
@@ -485,7 +484,7 @@ public class MetadataLoaderTest {
                         100,
                         4000,
                         10,
-                        List.of(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                        List.of(ControlRecord.of(new SnapshotHeaderRecord()))
                     )
                 )
             ).setTime(time);

@@ -35,9 +35,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.kafka.connect.json.JsonConverterConfig.SCHEMAS_ENABLE_CONFIG;
@@ -277,7 +277,7 @@ public class KafkaStatusBackingStoreFormatTest {
         assertEquals(secondTopicStatus, store.parseTopicStatus(valueCaptor.getValue()));
         assertEquals(firstTopicStatus, store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
         assertEquals(secondTopicStatus, store.getTopic(FOO_CONNECTOR, BAR_TOPIC));
-        assertEquals(new HashSet<>(Arrays.asList(firstTopicStatus, secondTopicStatus)), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
+        assertEquals(Set.of(firstTopicStatus, secondTopicStatus), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
     }
 
 }

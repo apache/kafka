@@ -17,8 +17,9 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.Config;
@@ -225,7 +226,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     Set<String> findConsumerGroups()
             throws InterruptedException, ExecutionException {
         List<String> filteredGroups = listConsumerGroups().stream()
-                .map(ConsumerGroupListing::groupId)
+                .map(GroupListing::groupId)
                 .filter(this::shouldReplicateByGroupFilter)
                 .collect(Collectors.toList());
 
@@ -252,10 +253,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
         return checkpointGroups;
     }
 
-    Collection<ConsumerGroupListing> listConsumerGroups()
+    Collection<GroupListing> listConsumerGroups()
             throws InterruptedException, ExecutionException {
         return adminCall(
-                () -> sourceAdminClient.listConsumerGroups().valid().get(),
+                () -> sourceAdminClient.listGroups(ListGroupsOptions.forConsumerGroups()).valid().get(),
                 () -> "list consumer groups on " + config.sourceClusterAlias() + " cluster"
         );
     }

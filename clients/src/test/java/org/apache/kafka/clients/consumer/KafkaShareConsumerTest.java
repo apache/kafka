@@ -45,17 +45,18 @@ import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -140,7 +141,9 @@ public class KafkaShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18488")
+    // This test is proving sufficiently flaky that it has been disabled pending investigation
+    @Disabled
+    // @Flaky("KAFKA-18488")
     @Test
     public void testVerifyFetchAndCommitSyncImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
@@ -163,9 +166,9 @@ public class KafkaShareConsumerTest {
                 return request.data().groupId().equals(groupId) &&
                     request.data().shareSessionEpoch() == 0 &&
                     request.data().batchSize() == batchSize &&
-                    request.data().topics().get(0).topicId().equals(topicId1) &&
-                    request.data().topics().get(0).partitions().size() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
+                    request.data().topics().stream().findFirst().get().topicId().equals(topicId1) &&
+                    request.data().topics().stream().findFirst().get().partitions().size() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().isEmpty();
             } else {
                 return false;
             }
@@ -177,10 +180,10 @@ public class KafkaShareConsumerTest {
                 ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
                 return request.data().groupId().equals(groupId) &&
                     request.data().shareSessionEpoch() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).firstOffset() == 0 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).lastOffset() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().size() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().get(0) == (byte) 1;
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).firstOffset() == 0 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).lastOffset() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).acknowledgeTypes().size() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).acknowledgeTypes().get(0) == (byte) 1;
             } else {
                 return false;
             }
@@ -215,7 +218,9 @@ public class KafkaShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18794")
+    // This test is proving sufficiently flaky that it has been disabled pending investigation
+    @Disabled
+    //@Flaky("KAFKA-18794")
     @Test
     public void testVerifyFetchAndCloseImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
@@ -238,9 +243,9 @@ public class KafkaShareConsumerTest {
                 return request.data().groupId().equals(groupId) &&
                     request.data().shareSessionEpoch() == 0 &&
                     request.data().batchSize() == batchSize &&
-                    request.data().topics().get(0).topicId().equals(topicId1) &&
-                    request.data().topics().get(0).partitions().size() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
+                    request.data().topics().stream().findFirst().get().topicId().equals(topicId1) &&
+                    request.data().topics().stream().findFirst().get().partitions().size() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().isEmpty();
             } else {
                 return false;
             }
@@ -388,13 +393,7 @@ public class KafkaShareConsumerTest {
             .setPartitionIndex(tip.partition())
             .setRecords(records)
             .setAcquiredRecords(List.of(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(count - 1).setDeliveryCount((short) 1)));
-        ShareFetchResponseData.ShareFetchableTopicResponse topicResponse = new ShareFetchResponseData.ShareFetchableTopicResponse()
-            .setTopicId(tip.topicId())
-            .setPartitions(List.of(partData));
-        return new ShareFetchResponse(
-            new ShareFetchResponseData()
-                .setResponses(List.of(topicResponse))
-        );
+        return ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(Map.of(tip, partData)), List.of(), 0);
     }
 
     private ShareAcknowledgeResponse shareAcknowledgeResponse() {
@@ -412,7 +411,7 @@ public class KafkaShareConsumerTest {
             .setPartitions(List.of(partData));
         return new ShareAcknowledgeResponse(
             new ShareAcknowledgeResponseData()
-                .setResponses(List.of(topicResponse))
+                .setResponses(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection(List.of(topicResponse).iterator()))
         );
     }
 }

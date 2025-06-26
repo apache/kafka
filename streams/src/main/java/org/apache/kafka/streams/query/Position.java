@@ -104,15 +104,11 @@ public class Position {
         } else {
             for (final Entry<String, ConcurrentHashMap<Integer, Long>> entry : other.position.entrySet()) {
                 final String topic = entry.getKey();
-                final Map<Integer, Long> partitionMap =
-                    position.computeIfAbsent(topic, k -> new ConcurrentHashMap<>());
+
                 for (final Entry<Integer, Long> partitionOffset : entry.getValue().entrySet()) {
                     final Integer partition = partitionOffset.getKey();
                     final Long offset = partitionOffset.getValue();
-                    if (!partitionMap.containsKey(partition)
-                        || partitionMap.get(partition) < offset) {
-                        partitionMap.put(partition, offset);
-                    }
+                    withComponent(topic, partition, offset);
                 }
             }
             return this;

@@ -53,7 +53,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
@@ -103,9 +102,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
             if (schema == null || keySchema.type() == Schema.Type.STRING) {
                 if (!value.isObject())
                     throw new DataException("Maps with string fields should be encoded as JSON objects, but found " + value.getNodeType());
-                Iterator<Map.Entry<String, JsonNode>> fieldIt = value.fields();
-                while (fieldIt.hasNext()) {
-                    Map.Entry<String, JsonNode> entry = fieldIt.next();
+                for (Map.Entry<String, JsonNode> entry : value.properties()) {
                     result.put(entry.getKey(), convertToConnect(valueSchema, entry.getValue(), config));
                 }
             } else {
@@ -540,9 +537,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
         JsonNode schemaParamsNode = jsonSchema.get(JsonSchema.SCHEMA_PARAMETERS_FIELD_NAME);
         if (schemaParamsNode != null && schemaParamsNode.isObject()) {
-            Iterator<Map.Entry<String, JsonNode>> paramsIt = schemaParamsNode.fields();
-            while (paramsIt.hasNext()) {
-                Map.Entry<String, JsonNode> entry = paramsIt.next();
+            for (Map.Entry<String, JsonNode> entry : schemaParamsNode.properties()) {
                 JsonNode paramValue = entry.getValue();
                 if (!paramValue.isTextual())
                     throw new DataException("Schema parameters must have string values.");

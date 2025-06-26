@@ -47,10 +47,10 @@ class BrokerRegistrationRequestTest {
         def node: Option[Node] = Some(new Node(
           clusterInstance.anyControllerSocketServer().config.nodeId,
           "127.0.0.1",
-          clusterInstance.anyControllerSocketServer().boundPort(clusterInstance.controllerListenerName().get()),
+          clusterInstance.anyControllerSocketServer().boundPort(clusterInstance.controllerListenerName()),
         ))
 
-        def listenerName: ListenerName = clusterInstance.controllerListenerName().get()
+        def listenerName: ListenerName = clusterInstance.controllerListenerName()
 
         val securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
 

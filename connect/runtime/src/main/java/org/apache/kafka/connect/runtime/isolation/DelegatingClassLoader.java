@@ -241,7 +241,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 .filter(pluginDesc -> pluginDesc.location().equals("classpath"))
                 .map(PluginDesc::version)
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
 
         if (classpathPlugins.size() > 1) {
             throw new VersionedPluginLoadingException(String.format(

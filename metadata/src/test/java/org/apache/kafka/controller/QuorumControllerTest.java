@@ -97,18 +97,17 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.RecordTestUtils.ImageDeltaPair;
 import org.apache.kafka.metadata.RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper;
-import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.metalog.LocalLogManager;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.snapshot.FileRawSnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
@@ -144,7 +143,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static java.util.function.Function.identity;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -376,7 +374,6 @@ public class QuorumControllerTest {
         }
     }
 
-    @Flaky("KAFKA-18845")
     @Test
     public void testUncleanShutdownBrokerElrEnabled() throws Throwable {
         List<Integer> allBrokers = List.of(1, 2, 3);
@@ -663,7 +660,7 @@ public class QuorumControllerTest {
                 ).iterator()));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
-                new HashSet<>(List.of("foo", "bar"))).get();
+                Set.of("foo", "bar")).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("bar").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
@@ -1409,11 +1406,6 @@ public class QuorumControllerTest {
         }
     }
 
-    private static final Uuid FOO_ID = Uuid.fromString("igRktLOnR8ektWHr79F8mw");
-
-    private static final Map<Integer, Long> ALL_ZERO_BROKER_EPOCHS =
-        IntStream.of(0, 1, 2, 3).boxed().collect(Collectors.toMap(identity(), __ -> 0L));
-
     @Test
     public void testFatalMetadataReplayErrorOnActive() throws Throwable {
         try (
@@ -1473,13 +1465,6 @@ public class QuorumControllerTest {
                 );
                 controlEnv.ignoreFatalFaults();
             }
-        }
-    }
-
-    private static void assertInitialLoadFuturesNotComplete(List<StandardAuthorizer> authorizers) {
-        for (int i = 0; i < authorizers.size(); i++) {
-            assertFalse(authorizers.get(i).initialLoadFuture().isDone(),
-                "authorizer " + i + " should not have completed loading.");
         }
     }
 

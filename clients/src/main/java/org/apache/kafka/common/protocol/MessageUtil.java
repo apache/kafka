@@ -204,13 +204,13 @@ public final class MessageUtil {
         }
     }
 
-    public static ByteBuffer toByteBuffer(final Message message, final short version) {
+    public static ByteBufferAccessor toByteBufferAccessor(final Message message, final short version) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int messageSize = message.size(cache, version);
         ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize));
         message.write(bytes, cache, version);
         bytes.flip();
-        return bytes.buffer();
+        return bytes;
     }
 
     public static ByteBuffer toVersionPrefixedByteBuffer(final short version, final Message message) {
