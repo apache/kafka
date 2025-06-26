@@ -2921,9 +2921,9 @@ public class CoordinatorRuntimeTest {
         int maxBatchSize = writer.config(TP).maxMessageSize();
         assertTrue(maxBatchSize > MIN_BUFFER_SIZE);
 
-        // Generate enough records to create a batch that has 16KB < batchSize < maxBatchSize
+        // Generate enough records to create a batch that has 512KB < batchSize < maxBatchSize
         List<String> records = new ArrayList<>();
-        for (int i = 0; i < 3000; i++) {
+        for (int i = 0; i < 50000; i++) {
             records.add("record-" + i);
         }
 
