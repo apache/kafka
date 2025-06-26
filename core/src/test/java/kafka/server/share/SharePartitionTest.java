@@ -6499,7 +6499,7 @@ public class SharePartitionTest {
         // Return a future which will be completed later, so the batch state has ongoing transition.
         CompletableFuture<WriteShareGroupStateResult> future = new CompletableFuture<>();
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(future);
-        // Acknoweldge batch to create ongoing transition.
+        // Acknowledge batch to create ongoing transition.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(21, 30, List.of(AcknowledgeType.ACCEPT.id))));
 
         // Assert the start offset has not moved and batch has ongoing transition.
@@ -6511,7 +6511,7 @@ public class SharePartitionTest {
         assertFalse(sharePartition.canMoveStartOffset());
         assertEquals(-1, sharePartition.findLastOffsetAcknowledged());
 
-        // Complete the future so acknowldege API can be completed, which updates the cache.
+        // Complete the future so acknowledge API can be completed, which updates the cache.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
@@ -6544,7 +6544,7 @@ public class SharePartitionTest {
         // Return a future which will be completed later, so the batch state has ongoing transition.
         CompletableFuture<WriteShareGroupStateResult> future = new CompletableFuture<>();
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(future);
-        // Acknoweldge offsets to create ongoing transition.
+        // Acknowledge offsets to create ongoing transition.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(21, 23, List.of(AcknowledgeType.ACCEPT.id))));
 
         // Assert the start offset has not moved and offset state is now maintained. Offset state should
@@ -6563,7 +6563,7 @@ public class SharePartitionTest {
         assertFalse(sharePartition.canMoveStartOffset());
         assertEquals(-1, sharePartition.findLastOffsetAcknowledged());
 
-        // Complete the future so acknowldege API can be completed, which updates the cache.
+        // Complete the future so acknowledge API can be completed, which updates the cache.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
