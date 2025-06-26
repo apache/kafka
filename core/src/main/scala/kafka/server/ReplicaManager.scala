@@ -1580,8 +1580,15 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
-   * Returns [[LogReadResult]] with error if a task for RemoteStorageFetchInfo could not be scheduled successfully
-   * else returns [[None]].
+   * Initiates an asynchronous remote storage fetch operation for the given remote fetch information.
+   *
+   * This method schedules a remote fetch task with the remote log manager and sets up the necessary
+   * completion handling for the operation. The remote fetch result will be used to populate the
+   * delayed remote fetch purgatory when completed.
+   *
+   * @param remoteFetchInfo The remote storage fetch information
+   *
+   * @return A tuple containing the remote fetch task and the remote fetch result
    */
   private def processRemoteFetch(remoteFetchInfo: RemoteStorageFetchInfo): (Future[Void], CompletableFuture[RemoteLogReadResult]) = {
     val key = new TopicPartitionOperationKey(remoteFetchInfo.topicIdPartition)
@@ -1598,21 +1605,20 @@ class ReplicaManager(val config: KafkaConfig,
         // Store the error in RemoteLogReadResult if any in scheduling the remote fetch task.
         // It will be sent back to the client in DelayedRemoteFetch along with other successful remote fetch results.
         remoteFetchResult.complete(new RemoteLogReadResult(Optional.empty, Optional.of(e)))
+        delayedRemoteFetchPurgatory.checkAndComplete(key)
     }
 
     (remoteFetchTask, remoteFetchResult)
   }
 
   /**
-   * Process multiple remote fetches by creating multiple async read tasks and handling them collectively.
-   * This method schedules all remote fetches and creates a single DelayedRemoteFetch operation to handle them.
+   * Process all remote fetches by creating async read tasks and handling them in DelayedRemoteFetch collectively.
    */
-  private def processMultipleRemoteFetches(remoteFetchInfos: util.HashMap[TopicIdPartition, RemoteStorageFetchInfo],
-                                           params: FetchParams,
-                                           responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
-                                           logReadResults: Seq[(TopicIdPartition, LogReadResult)],
-                                           remoteFetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Unit = {
-    // For now, process each remote fetch individually but collect all errors
+  private def processRemoteFetches(remoteFetchInfos: util.HashMap[TopicIdPartition, RemoteStorageFetchInfo],
+                                   params: FetchParams,
+                                   responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
+                                   logReadResults: Seq[(TopicIdPartition, LogReadResult)],
+                                   remoteFetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Unit = {
     val remoteFetchTasks = new util.HashMap[TopicIdPartition, Future[Void]]
     val remoteFetchResults = new util.HashMap[TopicIdPartition, CompletableFuture[RemoteLogReadResult]]
     
@@ -1648,7 +1654,7 @@ class ReplicaManager(val config: KafkaConfig,
     var bytesReadable: Long = 0
     var errorReadingData = false
 
-    // All topic-partitions that have to be read from remote storage
+    // topic-partitions that have to be read from remote storage
     val remoteFetchInfos = new util.HashMap[TopicIdPartition, RemoteStorageFetchInfo]()
 
     var hasDivergingEpoch = false
@@ -1696,7 +1702,7 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       if (!remoteFetchInfos.isEmpty) {
-        processMultipleRemoteFetches(remoteFetchInfos, params, responseCallback, logReadResults, fetchPartitionStatus.toSeq)
+        processRemoteFetches(remoteFetchInfos, params, responseCallback, logReadResults, fetchPartitionStatus.toSeq)
       } else {
         // If there is not enough data to respond and there is no remote data, we will let the fetch request
         // wait for new data.
