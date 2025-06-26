@@ -53,7 +53,7 @@ public final class ClientQuotaImage {
     }
 
     public Map<String, Double> quotaMap() {
-        return Collections.unmodifiableMap(quotas);
+        return this.quotas;
     }
 
     public void write(
