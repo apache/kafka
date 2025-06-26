@@ -43,7 +43,7 @@ import org.apache.kafka.common.metrics.Monitorable
 import org.apache.kafka.common.metrics.PluginMetrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.PartitionState
+import org.apache.kafka.common.{PartitionState => JPartitionState}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
@@ -2660,8 +2660,8 @@ class ReplicaManagerTest {
                                          leaderEpoch: Int,
                                          leaderBrokerId: Int,
                                          aliveBrokerIds: Seq[Integer],
-                                         isNew: Boolean = false): PartitionState = {
-    new PartitionState()
+                                         isNew: Boolean = false): JPartitionState = {
+    new JPartitionState()
       .setTopicName(topic)
       .setPartitionIndex(topicPartition.partition)
       .setLeader(leaderBrokerId)
