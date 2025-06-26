@@ -17,17 +17,18 @@
 package org.apache.kafka.clients.consumer;
 
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.ClientsTestUtils.TestConsumerReassignmentListener;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
@@ -48,6 +49,7 @@ import static org.apache.kafka.clients.ClientsTestUtils.awaitRebalance;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.ensureNoRebalance;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
+import static org.apache.kafka.clients.ClientsTestUtils.waitForPollThrowException;
 import static org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
@@ -503,14 +505,7 @@ public class PlaintextConsumerPollTest {
 
             // continuous poll should eventually fail because there is no offset reset strategy set
             // (fail only when resetting positions after coordinator is known)
-            TestUtils.waitForCondition(() -> {
-                try {
-                    consumer.poll(Duration.ZERO);
-                    return false;
-                } catch (NoOffsetForPartitionException e) {
-                    return true;
-                }
-            }, "Continuous poll not fail");
+            waitForPollThrowException(consumer, NoOffsetForPartitionException.class);
         }
     }
 
@@ -565,10 +560,11 @@ public class PlaintextConsumerPollTest {
 
             // Subscribe to different topic. This will trigger the delayed revocation exceeding rebalance timeout and get fenced
             consumer.subscribe(List.of(otherTopic), listener);
-            TestUtils.waitForCondition(() -> {
-                consumer.poll(Duration.ofMillis(100));
-                return rebalanceTimeoutExceeded.get();
-            }, "Timeout waiting for delayed callback to complete");
+            ClientsTestUtils.pollUntilTrue(
+                consumer,
+                rebalanceTimeoutExceeded::get,
+                "Timeout waiting for delayed callback to complete"
+            );
 
             // Verify consumer recovers after being fenced, being able to continue consuming.
             // (The member should automatically rejoin on the next poll, with the new topic as subscription)

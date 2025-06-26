@@ -44,7 +44,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
@@ -112,6 +111,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     protected final Optional<String> groupInstanceId;
 
+    private final Optional<String> rackId;
+
     /**
      * Rebalance timeout. To be used as time limit for the commit request issued
      * when a new assignment is received, that is retried until it succeeds, fails with a
@@ -140,6 +141,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
 
     public ConsumerMembershipManager(String groupId,
                                      Optional<String> groupInstanceId,
+                                     Optional<String> rackId,
                                      int rebalanceTimeoutMs,
                                      Optional<String> serverAssignor,
                                      SubscriptionState subscriptions,
@@ -152,6 +154,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      boolean autoCommitEnabled) {
         this(groupId,
             groupInstanceId,
+            rackId,
             rebalanceTimeoutMs,
             serverAssignor,
             subscriptions,
@@ -167,6 +170,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     // Visible for testing
     ConsumerMembershipManager(String groupId,
                               Optional<String> groupInstanceId,
+                              Optional<String> rackId,
                               int rebalanceTimeoutMs,
                               Optional<String> serverAssignor,
                               SubscriptionState subscriptions,
@@ -185,6 +189,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             metricsManager,
             autoCommitEnabled);
         this.groupInstanceId = groupInstanceId;
+        this.rackId = rackId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.serverAssignor = serverAssignor;
         this.commitRequestManager = commitRequestManager;
@@ -197,6 +202,10 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
+    }
+
+    public Optional<String> rackId() {
+        return rackId;
     }
 
     /**
@@ -405,7 +414,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(partitionsToRevoke);
         if (!revokePausedPartitions.isEmpty()) {
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", revokePausedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+            log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
         }
     }
 

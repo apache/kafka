@@ -46,7 +46,7 @@
       "about": "The time in milliseconds for which the acquired records are locked." },
     { "name": "Responses", "type": "[]ShareFetchableTopicResponse", "versions": "0+",
       "about": "The response topics.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+",
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "mapKey": true,
         "about": "The unique topic ID." },
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
         "about": "The topic partitions.", "fields": [

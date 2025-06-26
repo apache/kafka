@@ -65,7 +65,7 @@ public class KafkaRaftClientPreVoteTest {
         if (hasFetchedFromLeader) {
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -350,7 +350,7 @@ public class KafkaRaftClientPreVoteTest {
         if (hasFetchedFromLeader) {
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -654,7 +654,7 @@ public class KafkaRaftClientPreVoteTest {
         // After fetching successfully from the leader once, follower will no longer grant PreVotes
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),

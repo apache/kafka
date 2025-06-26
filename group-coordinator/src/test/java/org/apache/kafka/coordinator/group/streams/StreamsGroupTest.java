@@ -977,6 +977,8 @@ public class StreamsGroupTest {
             ));
         streamsGroup.setTopology(topology);
 
+        streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember("member-id"));
+
         assertFalse(streamsGroup.isSubscribedToTopic("test-topic1"));
         assertFalse(streamsGroup.isSubscribedToTopic("test-topic2"));
         assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
@@ -990,6 +992,12 @@ public class StreamsGroupTest {
 
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic1"));
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic2"));
+        assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
+
+        streamsGroup.removeMember("member-id");
+
+        assertFalse(streamsGroup.isSubscribedToTopic("test-topic1"));
+        assertFalse(streamsGroup.isSubscribedToTopic("test-topic2"));
         assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
     }
 
