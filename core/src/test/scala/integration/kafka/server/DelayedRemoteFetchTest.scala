@@ -62,13 +62,21 @@ class DelayedRemoteFetchTest {
 
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
     future.complete(null)
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null)
     val highWatermark = 100
     val leaderLogStartOffset = 10
     val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
 
-    val delayedRemoteFetch = new DelayedRemoteFetch(null, future, fetchInfo, remoteFetchMaxWaitMs,
-      Seq(topicIdPartition -> fetchStatus), fetchParams, Seq(topicIdPartition -> logReadInfo), replicaManager, callback)
+    val delayedRemoteFetch = new DelayedRemoteFetch(
+      java.util.Collections.emptyMap[TopicIdPartition, Future[Void]](),
+      java.util.Collections.singletonMap(topicIdPartition, future),
+      java.util.Collections.singletonMap(topicIdPartition, fetchInfo),
+      remoteFetchMaxWaitMs,
+      Seq(topicIdPartition -> fetchStatus),
+      fetchParams,
+      Seq(topicIdPartition -> logReadInfo),
+      replicaManager,
+      callback)
 
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition))
       .thenReturn(mock(classOf[Partition]))
@@ -98,13 +106,22 @@ class DelayedRemoteFetchTest {
 
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
     future.complete(null)
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null)
     val highWatermark = 100
     val leaderLogStartOffset = 10
     val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
     val fetchParams = buildFetchParams(replicaId = 1, maxWaitMs = 500)
-    assertThrows(classOf[IllegalStateException], () => new DelayedRemoteFetch(null, future, fetchInfo, remoteFetchMaxWaitMs,
-      Seq(topicIdPartition -> fetchStatus), fetchParams, Seq(topicIdPartition -> logReadInfo), replicaManager, callback))
+
+    assertThrows(classOf[IllegalStateException], () => new DelayedRemoteFetch(
+      java.util.Collections.emptyMap[TopicIdPartition, Future[Void]](),
+      java.util.Collections.singletonMap(topicIdPartition, future),
+      java.util.Collections.singletonMap(topicIdPartition, fetchInfo),
+      remoteFetchMaxWaitMs,
+      Seq(topicIdPartition -> fetchStatus),
+      fetchParams,
+      Seq(topicIdPartition -> logReadInfo),
+      replicaManager,
+      callback))
   }
 
   @Test
@@ -123,12 +140,20 @@ class DelayedRemoteFetchTest {
       .thenThrow(new NotLeaderOrFollowerException(s"Replica for $topicIdPartition not available"))
 
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null)
 
     val logReadInfo = buildReadResult(Errors.NONE)
 
-    val delayedRemoteFetch = new DelayedRemoteFetch(null, future, fetchInfo, remoteFetchMaxWaitMs,
-      Seq(topicIdPartition -> fetchStatus), fetchParams, Seq(topicIdPartition -> logReadInfo), replicaManager, callback)
+    val delayedRemoteFetch =  new DelayedRemoteFetch(
+      java.util.Collections.emptyMap[TopicIdPartition, Future[Void]](),
+      java.util.Collections.singletonMap(topicIdPartition, future),
+      java.util.Collections.singletonMap(topicIdPartition, fetchInfo),
+      remoteFetchMaxWaitMs,
+      Seq(topicIdPartition -> fetchStatus),
+      fetchParams,
+      Seq(topicIdPartition -> logReadInfo),
+      replicaManager,
+      callback)
 
     // delayed remote fetch should still be able to complete
     assertTrue(delayedRemoteFetch.tryComplete())
@@ -153,13 +178,21 @@ class DelayedRemoteFetchTest {
 
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
     future.complete(null)
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null)
 
     // build a read result with error
     val logReadInfo = buildReadResult(Errors.FENCED_LEADER_EPOCH)
 
-    val delayedRemoteFetch = new DelayedRemoteFetch(null, future, fetchInfo, remoteFetchMaxWaitMs,
-      Seq(topicIdPartition -> fetchStatus), fetchParams, Seq(topicIdPartition -> logReadInfo), replicaManager, callback)
+    val delayedRemoteFetch = new DelayedRemoteFetch(
+      java.util.Collections.emptyMap[TopicIdPartition, Future[Void]](),
+      java.util.Collections.singletonMap(topicIdPartition, future),
+      java.util.Collections.singletonMap(topicIdPartition, fetchInfo),
+      remoteFetchMaxWaitMs,
+      Seq(topicIdPartition -> fetchStatus),
+      fetchParams,
+      Seq(topicIdPartition -> logReadInfo),
+      replicaManager,
+      callback)
 
     assertTrue(delayedRemoteFetch.tryComplete())
     assertTrue(delayedRemoteFetch.isCompleted)
@@ -184,11 +217,19 @@ class DelayedRemoteFetchTest {
 
     val remoteFetchTask = mock(classOf[Future[Void]])
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null)
     val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
 
-    val delayedRemoteFetch = new DelayedRemoteFetch(remoteFetchTask, future, fetchInfo, remoteFetchMaxWaitMs,
-      Seq(topicIdPartition -> fetchStatus), fetchParams, Seq(topicIdPartition -> logReadInfo), replicaManager, callback)
+    val delayedRemoteFetch = new DelayedRemoteFetch(
+      java.util.Collections.singletonMap(topicIdPartition, remoteFetchTask),
+      java.util.Collections.singletonMap(topicIdPartition, future),
+      java.util.Collections.singletonMap(topicIdPartition, fetchInfo),
+      remoteFetchMaxWaitMs,
+      Seq(topicIdPartition -> fetchStatus),
+      fetchParams,
+      Seq(topicIdPartition -> logReadInfo),
+      replicaManager,
+      callback)
 
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition))
       .thenReturn(mock(classOf[Partition]))

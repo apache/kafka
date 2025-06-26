@@ -37,9 +37,9 @@ import scala.collection._
  * A remote fetch operation that can be created by the replica manager and watched
  * in the remote fetch operation purgatory
  */
-class DelayedRemoteFetch(remoteFetchTasks: util.HashMap[TopicIdPartition, Future[Void]],
-                         remoteFetchResults: util.HashMap[TopicIdPartition, CompletableFuture[RemoteLogReadResult]],
-                         remoteFetchInfos: util.HashMap[TopicIdPartition, RemoteStorageFetchInfo],
+class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Void]],
+                         remoteFetchResults: util.Map[TopicIdPartition, CompletableFuture[RemoteLogReadResult]],
+                         remoteFetchInfos: util.Map[TopicIdPartition, RemoteStorageFetchInfo],
                          remoteFetchMaxWaitMs: Long,
                          fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)],
                          fetchParams: FetchParams,
