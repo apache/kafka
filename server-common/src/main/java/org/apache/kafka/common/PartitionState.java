@@ -27,7 +27,6 @@ import java.util.Objects;
 public class PartitionState {
     String topicName;
     int partitionIndex;
-    int controllerEpoch;
     int leader;
     int leaderEpoch;
     List<Integer> isr;
@@ -41,7 +40,6 @@ public class PartitionState {
     public PartitionState() {
         this.topicName = "";
         this.partitionIndex = 0;
-        this.controllerEpoch = 0;
         this.leader = 0;
         this.leaderEpoch = 0;
         this.isr = new ArrayList<>(0);
@@ -58,7 +56,6 @@ public class PartitionState {
         if (o == null || getClass() != o.getClass()) return false;
         PartitionState that = (PartitionState) o;
         return partitionIndex == that.partitionIndex &&
-                controllerEpoch == that.controllerEpoch &&
                 leader == that.leader &&
                 leaderEpoch == that.leaderEpoch &&
                 partitionEpoch == that.partitionEpoch &&
@@ -73,7 +70,7 @@ public class PartitionState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicName, partitionIndex, controllerEpoch, leader, leaderEpoch, isr, partitionEpoch,
+        return Objects.hash(topicName, partitionIndex, leader, leaderEpoch, isr, partitionEpoch,
                 replicas, addingReplicas, removingReplicas, isNew, leaderRecoveryState);
     }
 
@@ -82,7 +79,6 @@ public class PartitionState {
         return "PartitionState("
                 + "topicName='" + topicName + "'"
                 + ", partitionIndex=" + partitionIndex
-                + ", controllerEpoch=" + controllerEpoch
                 + ", leader=" + leader
                 + ", leaderEpoch=" + leaderEpoch
                 + ", isr=" + MessageUtil.deepToString(isr.iterator())
@@ -101,10 +97,6 @@ public class PartitionState {
 
     public int partitionIndex() {
         return this.partitionIndex;
-    }
-
-    public int controllerEpoch() {
-        return this.controllerEpoch;
     }
 
     public int leader() {
@@ -150,11 +142,6 @@ public class PartitionState {
 
     public PartitionState setPartitionIndex(int v) {
         this.partitionIndex = v;
-        return this;
-    }
-
-    public PartitionState setControllerEpoch(int v) {
-        this.controllerEpoch = v;
         return this;
     }
 

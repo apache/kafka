@@ -415,7 +415,6 @@ public class PartitionRegistration {
         return new PartitionState().
             setTopicName(tp.topic()).
             setPartitionIndex(tp.partition()).
-            setControllerEpoch(-1).
             setLeader(leader).
             setLeaderEpoch(leaderEpoch).
             setIsr(Replicas.toList(isr)).

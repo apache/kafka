@@ -43,7 +43,7 @@ import org.apache.kafka.common.metrics.Monitorable
 import org.apache.kafka.common.metrics.PluginMetrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.{PartitionState => JPartitionState}
+import org.apache.kafka.common.PartitionState
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
@@ -134,7 +134,6 @@ class ReplicaManagerTest {
 
   // Constants defined for readability
   private val zkVersion = 0
-  private val controllerEpoch = 0
   private val brokerEpoch = 0L
 
   // These metrics are static and once we remove them after each test, they won't be created and verified anymore
@@ -2661,11 +2660,10 @@ class ReplicaManagerTest {
                                          leaderEpoch: Int,
                                          leaderBrokerId: Int,
                                          aliveBrokerIds: Seq[Integer],
-                                         isNew: Boolean = false): JPartitionState = {
-    new JPartitionState()
+                                         isNew: Boolean = false): PartitionState = {
+    new PartitionState()
       .setTopicName(topic)
       .setPartitionIndex(topicPartition.partition)
-      .setControllerEpoch(controllerEpoch)
       .setLeader(leaderBrokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(aliveBrokerIds.asJava)

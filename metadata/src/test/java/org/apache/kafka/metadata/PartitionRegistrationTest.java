@@ -115,7 +115,6 @@ public class PartitionRegistrationTest {
         assertEquals(new PartitionState().
                 setTopicName("foo").
                 setPartitionIndex(1).
-                setControllerEpoch(-1).
                 setLeader(1).
                 setLeaderEpoch(123).
                 setIsr(List.of(1, 2)).
@@ -128,7 +127,6 @@ public class PartitionRegistrationTest {
         assertEquals(new PartitionState().
                 setTopicName("bar").
                 setPartitionIndex(0).
-                setControllerEpoch(-1).
                 setLeader(2).
                 setLeaderEpoch(234).
                 setIsr(List.of(2, 3, 4)).
