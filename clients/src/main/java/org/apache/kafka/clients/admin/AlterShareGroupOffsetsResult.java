@@ -20,12 +20,10 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.protocol.Errors;
 
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * The result of the {@link Admin#alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)} call.
@@ -35,9 +33,9 @@ import java.util.stream.Collectors;
 @InterfaceStability.Evolving
 public class AlterShareGroupOffsetsResult {
 
-    private final KafkaFuture<Map<TopicPartition, Errors>> future;
+    private final KafkaFuture<Map<TopicPartition, ApiException>> future;
 
-    AlterShareGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future) {
+    AlterShareGroupOffsetsResult(KafkaFuture<Map<TopicPartition, ApiException>> future) {
         this.future = future;
     }
 
@@ -54,11 +52,11 @@ public class AlterShareGroupOffsetsResult {
                 result.completeExceptionally(new IllegalArgumentException(
                     "Alter offset for partition \"" + partition + "\" was not attempted"));
             } else {
-                final Errors error = topicPartitions.get(partition);
-                if (error == Errors.NONE) {
+                final ApiException exception = topicPartitions.get(partition);
+                if (exception == null) {
                     result.complete(null);
                 } else {
-                    result.completeExceptionally(error.exception());
+                    result.completeExceptionally(exception);
                 }
             }
         });
@@ -70,20 +68,13 @@ public class AlterShareGroupOffsetsResult {
      * Return a future which succeeds if all the alter offsets succeed.
      */
     public KafkaFuture<Void> all() {
-        return this.future.thenApply(topicPartitionErrorsMap ->  {
-            List<TopicPartition> partitionsFailed = topicPartitionErrorsMap.entrySet()
-                .stream()
-                .filter(e -> e.getValue() != Errors.NONE)
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-            for (Errors error : topicPartitionErrorsMap.values()) {
-                if (error != Errors.NONE) {
-                    throw error.exception(
-                        "Failed altering share group offsets for the following partitions: " + partitionsFailed);
+        return this.future.thenApply(topicPartitionErrorsMap -> {
+            for (ApiException exception : topicPartitionErrorsMap.values()) {
+                if (exception != null) {
+                    throw exception;
                 }
             }
             return null;
         });
     }
-
 }

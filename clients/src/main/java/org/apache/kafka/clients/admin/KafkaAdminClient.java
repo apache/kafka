@@ -3805,7 +3805,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> future = AlterShareGroupOffsetsHandler.newFuture(groupId);
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, ApiException>> future = AlterShareGroupOffsetsHandler.newFuture(groupId);
         AlterShareGroupOffsetsHandler handler = new AlterShareGroupOffsetsHandler(groupId, offsets, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new AlterShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)));
