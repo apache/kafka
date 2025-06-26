@@ -27,7 +27,8 @@ import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.{FetchRequest, LeaderAndIsrRequest}
+import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.{PartitionState => JPartitionState}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
@@ -142,7 +143,7 @@ class PartitionLockTest extends Logging {
     val replicaToCheck = 3
     val firstReplicaSet = util.List.of[Integer](3, 4, 5)
     val secondReplicaSet = util.List.of[Integer](1, 2, 3)
-    def partitionState(replicas: util.List[Integer]) = new LeaderAndIsrRequest.PartitionState()
+    def partitionState(replicas: util.List[Integer]) = new JPartitionState()
       .setControllerEpoch(1)
       .setLeader(replicas.get(0))
       .setLeaderEpoch(1)
@@ -349,7 +350,7 @@ class PartitionLockTest extends Logging {
     val isr = replicas
     replicas.forEach(replicaId => when(metadataCache.getAliveBrokerEpoch(replicaId)).thenReturn(Optional.of(1L)))
 
-    assertTrue(partition.makeLeader(new LeaderAndIsrRequest.PartitionState()
+    assertTrue(partition.makeLeader(new JPartitionState()
       .setControllerEpoch(controllerEpoch)
       .setLeader(brokerId)
       .setLeaderEpoch(leaderEpoch)
