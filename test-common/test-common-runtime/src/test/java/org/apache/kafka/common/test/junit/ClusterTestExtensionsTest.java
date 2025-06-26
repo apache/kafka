@@ -44,7 +44,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.AutoStart;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -302,7 +301,7 @@ public class ClusterTestExtensionsTest {
             producer.flush();
             consumer.subscribe(List.of(topic));
             List<ConsumerRecord<String, String>> records = new ArrayList<>();
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100)).forEach(records::add);
                 return records.size() == 1;
             }, "Failed to receive message");
@@ -330,7 +329,7 @@ public class ClusterTestExtensionsTest {
             producer.flush();
             consumer.subscribe(List.of(topic));
             List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100)).forEach(records::add);
                 return records.size() == 1;
             }, "Failed to receive message");
@@ -407,7 +406,7 @@ public class ClusterTestExtensionsTest {
         }
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
             consumer.subscribe(List.of(topic));
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
                 return records.count() == 1;
             }, "Failed to receive message");
@@ -438,7 +437,7 @@ public class ClusterTestExtensionsTest {
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(nonAdminConfig)) {
             consumer.subscribe(List.of(topic));
             AtomicBoolean hasException = new AtomicBoolean(false);
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 if (hasException.get()) {
                     return true;
                 }
@@ -476,7 +475,7 @@ public class ClusterTestExtensionsTest {
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(unknownUserConfig)) {
             consumer.subscribe(List.of(topic));
             AtomicBoolean hasException = new AtomicBoolean(false);
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 if (hasException.get()) {
                     return true;
                 }
