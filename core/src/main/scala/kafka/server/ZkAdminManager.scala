@@ -172,8 +172,22 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val resolvedNumPartitions = if (topic.numPartitions == NO_NUM_PARTITIONS)
           defaultNumPartitions else topic.numPartitions
-        val resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
+        var resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
           defaultReplicationFactor else topic.replicationFactor
+
+        val minIsrConfig = topic.configs().find(KafkaConfig.MinInSyncReplicasProp);
+        val minIsr = if (minIsrConfig != null) {
+          minIsrConfig.value().toShort
+        } else {
+          kafka.server.Defaults.MinInSyncReplicas.toShort
+        }
+        // The replication factor must be at least the sum of
+        // (config.controlledShutdownSafetyCheckRedundancyFactor + minIsr + 1) to be able to safely shut down the broker.
+        val minRF = config.controlledShutdownSafetyCheckRedundancyFactor + minIsr + 1
+
+        if (resolvedReplicationFactor < minRF) {
+          resolvedReplicationFactor = minRF.toShort
+        }
 
         val assignments = if (topic.assignments.isEmpty) {
           adminZkClient.assignReplicasToAvailableBrokers(
@@ -185,7 +199,13 @@ class ZkAdminManager(val config: KafkaConfig,
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
           // this follows the existing logic in TopicCommand
+
           topic.assignments.forEach { assignment =>
+            if (assignment.brokerIds().size() < minRF) {
+              throw new InvalidReplicaAssignmentException(
+                s"Topic ${topic.name} has ${assignment.brokerIds().size()} replicas assigned for partition " +
+                  s"${assignment.partitionIndex}, which is less than the required replication factor $minRF.")
+            }
             assignments(assignment.partitionIndex) = assignment.brokerIds.asScala.map(a => a: Int)
           }
           assignments

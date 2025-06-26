@@ -1695,7 +1695,7 @@ class KafkaController(val config: KafkaConfig,
         val atRisk = remainingLiveReplicasInIsr < (minISR + config.controlledShutdownSafetyCheckRedundancyFactor)
         if (atRisk) {
           // Consider this topic-partition at-risk if removing one broker will result in the ISR shrinking below minISR
-          info(s"$partition has min.insync.replicas=$minISR and a redundancy factor of ${config.controlledShutdownSafetyCheckRedundancyFactor}. Removing broker $id will leave $remainingLiveReplicasInIsr live replicas in the ISR.")
+          warn(s"$partition has min.insync.replicas=$minISR and a redundancy factor of ${config.controlledShutdownSafetyCheckRedundancyFactor}. Removing broker $id will leave $remainingLiveReplicasInIsr live replicas in the ISR.")
         }
         atRisk
       }
@@ -1749,7 +1749,7 @@ class KafkaController(val config: KafkaConfig,
     if (config.controlledShutdownSafetyCheckEnable && !safeToShutdown(id, actualBrokerEpoch)) {
       passedAllShutdown = false
       if (!shouldSkipShutdownSafetyCheck) {
-        info(s"Controlled shutdown safety has prevented broker $id (broker epoch $actualBrokerEpoch) from shutting down.")
+        warn(s"Controlled shutdown safety has prevented broker $id (broker epoch $actualBrokerEpoch) from shutting down.")
         throw new NotEnoughReplicasException(s"Broker id $id cannot initiate shutdown without an impact on topic availability.")
       }
     }

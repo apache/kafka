@@ -91,7 +91,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     topic
   }
 
-  protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
+  protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest, expectedReplicationFactor: Option[Short] = None): Unit = {
     val response = sendCreateTopicRequest(request)
 
     assertFalse(response.errorCounts().keySet().asScala.exists(_.code() > 0),
@@ -108,10 +108,18 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
         else
           topic.numPartitions
 
-        val replication = if (!topic.assignments().isEmpty)
-          topic.assignments().iterator().next().brokerIds().size()
-        else
-          topic.replicationFactor
+        val minIsr = if (topic.configs != null && topic.configs.find(KafkaConfig.MinInSyncReplicasProp) != null) {
+          topic.configs.find(KafkaConfig.MinInSyncReplicasProp).value().toInt
+        } else {
+          Defaults.MinInSyncReplicas.toShort
+        }
+
+        val replication = if (expectedReplicationFactor.isDefined)
+                            expectedReplicationFactor.get
+                          else if (!topic.assignments().isEmpty)
+                            topic.assignments().iterator().next().brokerIds().size()
+                          else
+                            Math.max(topic.replicationFactor, minIsr + Defaults.ControlledShutdownSafetyCheckRedundancyFactor + 1)
 
         if (request.data.validateOnly) {
           assertNotNull(metadataForTopic, s"Topic $topic should be created")
@@ -127,12 +135,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
             assertEquals(partitions, metadataForTopic.partitionMetadata.size, "The topic should have the correct number of partitions")
           }
 
-          if (replication == -1) {
-            assertEquals(configs.head.defaultReplicationFactor,
-              metadataForTopic.partitionMetadata.asScala.head.replicaIds.size, "The topic should have the default replication factor")
-          } else {
-            assertEquals(replication, metadataForTopic.partitionMetadata.asScala.head.replicaIds.size, "The topic should have the correct replication factor")
-          }
+          assertEquals(replication, metadataForTopic.partitionMetadata.asScala.head.replicaIds.size, "The topic should have the correct replication factor")
         }
       }
 
