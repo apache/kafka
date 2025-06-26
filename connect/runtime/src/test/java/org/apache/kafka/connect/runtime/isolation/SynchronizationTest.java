@@ -457,7 +457,6 @@ public class SynchronizationTest {
         }
     }
 
-    @SuppressWarnings("removal")
     private static ThreadFactory threadFactoryWithNamedThreads(String threadPrefix) {
         AtomicInteger threadNumber = new AtomicInteger(1);
         return r -> {

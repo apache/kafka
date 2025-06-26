@@ -23,11 +23,12 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClientTestContext;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.junit.jupiter.api.Test;
 
@@ -111,7 +112,7 @@ public final class SnapshotWriterReaderTest {
             assertEquals((recordsPerBatch * batches) + delimiterCount, recordCount);
             assertDataSnapshot(expected, reader);
 
-            assertEquals(magicTimestamp, Snapshots.lastContainedLogTimestamp(snapshot));
+            assertEquals(magicTimestamp, Snapshots.lastContainedLogTimestamp(snapshot, new LogContext()));
         }
     }
 
@@ -195,7 +196,8 @@ public final class SnapshotWriterReaderTest {
             context.serde,
             BufferSupplier.create(),
             maxBatchSize,
-            true
+            true,
+            new LogContext()
         );
     }
 
@@ -249,7 +251,14 @@ public final class SnapshotWriterReaderTest {
     public static void assertDataSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
         assertDataSnapshot(
             batches,
-            RecordsSnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE, true)
+            RecordsSnapshotReader.of(
+                reader,
+                new StringSerde(),
+                BufferSupplier.create(),
+                Integer.MAX_VALUE,
+                true,
+                new LogContext()
+            )
         );
     }
 

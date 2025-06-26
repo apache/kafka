@@ -920,8 +920,8 @@ public class StreamsProducerTest {
             METADATA_WAIT_TIME;
         assertThat(eosStreamsProducer.totalBlockedTime(), equalTo(expectedTotalBlocked));
         final long closeStart = 1L;
-        final long clodeDelay = 1L;
-        when(mockTime.nanoseconds()).thenReturn(closeStart).thenReturn(closeStart + clodeDelay);
+        final long closeDelay = 1L;
+        when(mockTime.nanoseconds()).thenReturn(closeStart).thenReturn(closeStart + closeDelay);
         eosStreamsProducer.resetProducer(eosMockProducer);
         setProducerMetrics(
             eosMockProducer,
@@ -937,7 +937,7 @@ public class StreamsProducerTest {
 
         assertThat(
             eosStreamsProducer.totalBlockedTime(),
-            closeTo(2 * expectedTotalBlocked + clodeDelay, 0.01)
+            closeTo(2 * expectedTotalBlocked + closeDelay, 0.01)
         );
     }
 

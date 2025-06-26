@@ -97,8 +97,8 @@ public class MirrorClientTest {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
             "source1.heartbeats", "source2.source1.heartbeats", "source3.heartbeats"));
         Set<String> heartbeatTopics = client.heartbeatTopics();
-        assertEquals(heartbeatTopics, new HashSet<>(Arrays.asList("heartbeats", "source1.heartbeats",
-            "source2.source1.heartbeats", "source3.heartbeats")));
+        assertEquals(heartbeatTopics, Set.of("heartbeats", "source1.heartbeats",
+            "source2.source1.heartbeats", "source3.heartbeats"));
     }
 
     @Test
@@ -106,8 +106,8 @@ public class MirrorClientTest {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "checkpoints.internal",
             "source1.checkpoints.internal", "source2.source1.checkpoints.internal", "source3.checkpoints.internal"));
         Set<String> checkpointTopics = client.checkpointTopics();
-        assertEquals(new HashSet<>(Arrays.asList("source1.checkpoints.internal",
-            "source2.source1.checkpoints.internal", "source3.checkpoints.internal")), checkpointTopics);
+        assertEquals(Set.of("source1.checkpoints.internal",
+            "source2.source1.checkpoints.internal", "source3.checkpoints.internal"), checkpointTopics);
     }
 
     @Test

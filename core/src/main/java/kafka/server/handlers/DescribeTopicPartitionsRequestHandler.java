@@ -32,7 +32,6 @@ import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.metadata.MetadataCache;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -96,7 +95,7 @@ public class DescribeTopicPartitionsRequestHandler {
             if (!fetchAllTopics && !isAuthorized) {
                 // We should not return topicId when on unauthorized error, so we return zero uuid.
                 unauthorizedForDescribeTopicMetadata.add(describeTopicPartitionsResponseTopic(
-                    Errors.TOPIC_AUTHORIZATION_FAILED, topicName, Uuid.ZERO_UUID, false, Collections.emptyList())
+                    Errors.TOPIC_AUTHORIZATION_FAILED, topicName, Uuid.ZERO_UUID, false, List.of())
                 );
             }
             return isAuthorized;
