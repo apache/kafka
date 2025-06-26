@@ -60,11 +60,15 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       topicReq("topic14", replicationFactor = -1, numPartitions = 2))))
     validateValidCreateTopicsRequests(topicsReq(Seq(
       topicReq("topic15", replicationFactor = 3, numPartitions = 2))), Option(3))
-    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic16",
-      numPartitions = 5, replicationFactor = 2, config = Map("min.insync.replicas" -> "2")))), Option(4))
-    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic17",
-      numPartitions = 5, replicationFactor = 4, config = Map("min.insync.replicas" -> "1")))), Option(4))
+    validateValidCreateTopicsRequests(topicsReq(Seq(
+      topicReq("topic16", replicationFactor = 1, numPartitions = 2))), Option(3))
+    validateValidCreateTopicsRequests(topicsReq(Seq(
+      topicReq("topic17", replicationFactor = 4, numPartitions = 2))), Option(4))
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic18",
+      numPartitions = 5, replicationFactor = 2, config = Map("min.insync.replicas" -> "2")))), Option(4))
+    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic19",
+      numPartitions = 5, replicationFactor = 4, config = Map("min.insync.replicas" -> "1")))), Option(4))
+    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic20",
       numPartitions = 5, replicationFactor = 3, config = Map("min.insync.replicas" -> "1")))), Option(3))
   }
 
