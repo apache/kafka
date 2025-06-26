@@ -557,7 +557,7 @@ listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.p
                     <p>See <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
                         <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
                         <a href="#security_sasl_scram_brokerconfig">SCRAM</a>, or
-                        <a href="#security_sasl_oauthbearer_non_production_brokerconfig">non-production</a>/<a href="#security_sasl_oauthbearer_non_production_brokerconfig">production</a> OAUTHBEARER for example broker configurations.</p></li>
+                        <a href="#security_sasl_oauthbearer_non_production_brokerconfig">non-production</a>/<a href="#security_sasl_oauthbearer_production_brokerconfig">production</a> OAUTHBEARER for example broker configurations.</p></li>
 
                 <li><h5><a id="security_jaas_client"
                            href="#security_jaas_client">JAAS configuration for Kafka clients</a></h5>
@@ -580,7 +580,7 @@ listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.p
                             <p>See <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
                                 <a href="#security_sasl_plain_clientconfig">PLAIN</a>,
                                 <a href="#security_sasl_scram_clientconfig">SCRAM</a>, or
-                                <a href="#security_sasl_oauthbearer_non_production_clientconfig">non-production</a>/<a href="#security_sasl_oauthbearer_production_clientconfig">production</a> OAUTHBEARER for example configurations.</p></li>
+                                <a href="#security_sasl_oauthbearer_non_production_clientconfig">non-production</a>/<a href="#security_sasl_oauthbearer_production_clientconfig">production</a> OAUTHBEARER for example client configurations.</p></li>
 
                         <li><h6 class="anchor-heading"><a id="security_client_staticjaas" class="anchor-link"></a><a href="#security_client_staticjaas">JAAS configuration using static config file</a></h6>
                             To configure SASL authentication on the clients using static JAAS config file:
@@ -968,7 +968,7 @@ sasl.enabled.mechanisms=OAUTHBEARER</code></pre></li>
                         <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
                             <pre><code class="language-text">KafkaServer {
     org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ;
-};</code></pre>
+};</code></pre></li>
                         <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
                             <pre><code class="language-bash">-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
                         <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
