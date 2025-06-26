@@ -31,6 +31,9 @@
     <li>
         The <code>remote.log.manager.thread.pool.size</code> config was deprecated. Please use the <code>remote.log.manager.follower.thread.pool.size</code> instead.
     </li>
+    <li>The <code>KafkaPrincipalBuilder</code> now extends <code>KafkaPrincipalSerde</code>. Force developer to implement <code>KafkaPrincipalSerde</code> interface for custom <code>KafkaPrincipalBuilder</code>.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/1gq9F">KIP-1157</a>.
+    </li>
 </ul>
 
 

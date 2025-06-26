@@ -835,7 +835,7 @@ object RequestQuotaTest {
     }
   }
 
-  class TestPrincipalBuilder extends KafkaPrincipalBuilder with KafkaPrincipalSerde {
+  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       principal
     }
