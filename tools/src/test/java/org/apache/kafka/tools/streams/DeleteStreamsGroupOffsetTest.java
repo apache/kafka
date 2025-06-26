@@ -89,7 +89,7 @@ public class DeleteStreamsGroupOffsetTest {
     }
 
     @AfterEach
-    public void deleteTopics() {
+    public void deleteTopicsAndGroups() {
         try (final Admin adminClient = cluster.createAdminClient()) {
             // delete all topics
             final Set<String> topics = adminClient.listTopics().names().get();
