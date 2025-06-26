@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
 
 public class OffsetFetchRequest extends AbstractRequest {
 
+    public static final short TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION = 2;
+
     private static final Logger log = LoggerFactory.getLogger(OffsetFetchRequest.class);
 
     private static final List<OffsetFetchRequestTopic> ALL_TOPIC_PARTITIONS = null;
