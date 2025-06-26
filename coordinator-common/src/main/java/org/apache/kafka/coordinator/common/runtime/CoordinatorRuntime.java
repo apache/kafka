@@ -49,9 +49,11 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -68,6 +70,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.lang.Math.min;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorWriteEvent.NOT_QUEUED;
@@ -759,15 +762,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             // Cancel the linger timeout.
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
-            // Release the buffer.
+            // Release the buffer only if it is not larger than the maxBatchSize.
             int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
-            if (currentBatch.builder.buffer().capacity() > maxBatchSize) {
-                // If the buffer exceeds the maxBatchSize, we should revert to using the original smaller buffer to avoid retaining the larger one.
-                bufferSupplier.release(currentBatch.buffer);
-            } else {
-                bufferSupplier.release(currentBatch.builder.buffer());
-            }
-
+            Stream.of(currentBatch.builder.buffer(), currentBatch.buffer)
+                .filter(buf -> buf.capacity() <= maxBatchSize)
+                .max(Comparator.comparing(Buffer::capacity))
+                .ifPresent(bufferSupplier::release);
 
             currentBatch = null;
         }
