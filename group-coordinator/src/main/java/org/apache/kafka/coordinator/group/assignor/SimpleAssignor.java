@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
@@ -86,26 +85,8 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             return new SimpleHomogeneousAssignmentBuilder(groupSpec, subscribedTopicDescriber).build();
         } else {
             log.debug("Detected that the members are subscribed to different sets of topics, invoking the heterogeneous assignment algorithm");
-            return assignHeterogeneous(groupSpec, subscribedTopicDescriber);
+            return new SimpleHeterogeneousAssignmentBuilder(groupSpec, subscribedTopicDescriber).build();
         }
-    }
-
-    private GroupAssignment assignHeterogeneous(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
-        Map<String, List<TopicIdPartition>> memberToPartitionsSubscription = new HashMap<>();
-        for (String memberId : groupSpec.memberIds()) {
-            MemberSubscription spec = groupSpec.memberSubscription(memberId);
-            if (spec.subscribedTopicIds().isEmpty())
-                continue;
-
-            // Subscribed topic partitions for the share group member.
-            List<TopicIdPartition> targetPartitions = AssignorHelpers.computeTargetPartitions(groupSpec, spec.subscribedTopicIds(), subscribedTopicDescriber);
-            memberToPartitionsSubscription.put(memberId, targetPartitions);
-        }
-
-        // The current assignment from topic partition to members.
-        Map<TopicIdPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
-
-        return newAssignmentHeterogeneous(groupSpec, memberToPartitionsSubscription, currentAssignment);
     }
 
     /**
