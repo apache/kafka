@@ -104,14 +104,8 @@ public class GroupCoordinatorMetricsTest {
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Map.of("protocol", Group.GroupType.SHARE.toString())),
-            metrics.metricName(
-                "rebalance-rate",
-                GroupCoordinatorMetrics.METRICS_GROUP,
-                Map.of("protocol", Group.GroupType.SHARE.toString())),
-            metrics.metricName(
-                "rebalance-count",
-                GroupCoordinatorMetrics.METRICS_GROUP,
-                Map.of("protocol", Group.GroupType.SHARE.toString())),
+            metrics.metricName("share-group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("share-group-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName(
                 "share-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
@@ -304,16 +298,14 @@ public class GroupCoordinatorMetricsTest {
 
         shard.record(SHARE_GROUP_REBALANCES_SENSOR_NAME, 50);
         assertMetricValue(metrics, metrics.metricName(
-            "rebalance-rate",
+            "share-group-rebalance-rate",
             GroupCoordinatorMetrics.METRICS_GROUP,
-            "The rate of share group rebalances",
-            "protocol", "share"
+            "The rate of share group rebalances"
         ), 5.0 / 3.0);
         assertMetricValue(metrics, metrics.metricName(
-            "rebalance-count",
+            "share-group-rebalance-count",
             GroupCoordinatorMetrics.METRICS_GROUP,
-            "The total number of share group rebalances",
-            "protocol", "share"
+            "The total number of share group rebalances"
         ), 50);
 
         shard.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME, 50);
