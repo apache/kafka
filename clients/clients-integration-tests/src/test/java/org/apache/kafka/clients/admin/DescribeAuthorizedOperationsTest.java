@@ -69,8 +69,10 @@ public class DescribeAuthorizedOperationsTest {
         return List.of(
             ClusterConfig.defaultBuilder()
                 .setTypes(Set.of(Type.KRAFT))
-                .setServerProperties(Map.of(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1"))
-                .setServerProperties(Map.of(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1"))
+                .setServerProperties(Map.of(
+                    GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1",
+                    GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1"
+                ))
                 .setBrokerSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)
                 .setControllerSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)
                 .build()

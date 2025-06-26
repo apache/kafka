@@ -41,6 +41,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -57,6 +58,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,7 +70,11 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class LogSegmentTest {
@@ -854,6 +863,42 @@ public class LogSegmentTest {
         assertEquals(2, segment.timeIndex().entries());
         assertEquals(new TimestampOffset(1, 0), segment.timeIndex().entry(0));
         assertEquals(new TimestampOffset(2, 2), segment.timeIndex().entry(1));
+    }
+
+    @Test
+    @Timeout(30)
+    public void testConcurrentAccessToMaxTimestampSoFar() throws Exception {
+        int numThreads = 16;
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+        TimeIndex mockTimeIndex = mock(TimeIndex.class);
+        when(mockTimeIndex.lastEntry()).thenReturn(new TimestampOffset(RecordBatch.NO_TIMESTAMP, 0L));
+
+        try {
+            // to reproduce race, we iterate test for certain duration
+            long remainingDurationNanos = Duration.ofSeconds(1).toNanos();
+            while (remainingDurationNanos > 0) {
+                long t0 = System.nanoTime();
+                clearInvocations(mockTimeIndex);
+                try (LogSegment seg = spy(LogTestUtils.createSegment(0, logDir, 10, Time.SYSTEM))) {
+                    when(seg.timeIndex()).thenReturn(mockTimeIndex);
+                    List<Future<?>> futures = new ArrayList<>();
+                    for (int i = 0; i < numThreads; i++) {
+                        futures.add(executor.submit(() -> assertDoesNotThrow(seg::maxTimestampSoFar)));
+                    }
+                    for (Future<?> future : futures) {
+                        future.get();
+                    }
+                    // timeIndex.lastEntry should be called once if no race
+                    verify(mockTimeIndex, times(1)).lastEntry();
+
+                    long elapsedNanos = System.nanoTime() - t0;
+                    remainingDurationNanos -= elapsedNanos;
+                }
+            }
+        } finally {
+            executor.shutdown();
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+        }
     }
 
     private ProducerStateManager newProducerStateManager() throws IOException {
