@@ -82,8 +82,8 @@ class BaseStreamsTest(Test):
 
         self.assert_consume(client_id, test_state, streams_sink_topic, num_messages, timeout_sec)
 
-    def assert_produce(self, topic, test_state, num_messages=5, timeout_sec=60):
-        producer = self.get_producer(topic, num_messages)
+    def assert_produce(self, topic, test_state, num_messages=5, timeout_sec=60, repeating_keys=None):
+        producer = self.get_producer(topic, num_messages, repeating_keys=repeating_keys)
         producer.start()
 
         wait_until(lambda: producer.num_acked >= num_messages,

@@ -253,10 +253,12 @@ public class ShareCoordinatorService implements ShareCoordinator {
     @Override
     public Properties shareGroupStateTopicConfigs() {
         Properties properties = new Properties();
-        properties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE); // as defined in KIP-932
+        // As defined in KIP-932.
+        properties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
         properties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
         properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.shareCoordinatorStateTopicSegmentBytes());
         properties.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.shareCoordinatorStateTopicMinIsr());
+        properties.put(TopicConfig.RETENTION_MS_CONFIG, -1);
         return properties;
     }
 

@@ -184,7 +184,7 @@ object StorageTool extends Logging {
     } catch {
       case e: IllegalArgumentException =>
         throw new TerseFailure(s"Unknown release version '$releaseVersion'. Supported versions are: " +
-          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}")
+          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.latestTesting().version()}")
     }
   }
 
