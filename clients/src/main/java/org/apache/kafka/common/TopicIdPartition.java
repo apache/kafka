@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.utils.Utils;
-
 import java.util.Objects;
 
 /**
@@ -78,24 +76,6 @@ public class TopicIdPartition {
      */
     public TopicPartition topicPartition() {
         return topicPartition;
-    }
-
-    /**
-     * Checking if TopicIdPartition meant to be the same reference to this TopicIdPartition's object but
-     * doesn't have all the data.
-     * If topic name is empty then the method will rely on topic id only
-     * otherwise the method will rely on topic name.
-     * @return true if topic has same topicId and partition index when topic name is empty or
-     *              if topic name and index are same while topic id is empty.
-    */
-    public boolean same(TopicIdPartition tpId) {
-        if (Utils.isBlank(tpId.topic())) {
-            return topicId.equals(tpId.topicId) &&
-                    topicPartition.partition() == tpId.partition();
-        } else {
-            return topicPartition.topic().equals(tpId.topic()) &&
-                    topicPartition.partition() == tpId.partition();
-        }
     }
 
     @Override

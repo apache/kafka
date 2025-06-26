@@ -166,7 +166,7 @@ public class ProducerSendWhileDeletionTest {
     @Timeout(90)
     @ClusterTest
     public void testSendWhileTopicGetRecreated() {
-        int maxNumRecreatTopicAttempts = 5;
+        int maxNumRecreatTopicAttempts = 10;
         List<Uuid> topicIds = new CopyOnWriteArrayList<>();
         var recreateTopicFuture = CompletableFuture.runAsync(() -> {
             for (int i = 1; i <= maxNumRecreatTopicAttempts; i++) {
@@ -324,6 +324,7 @@ public class ProducerSendWhileDeletionTest {
             return Uuid.ZERO_UUID;
         }
     }
+
     private void assertLeader(TopicPartition topicPartition, Integer expectedLeaderOpt) throws InterruptedException {
         try (var admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {

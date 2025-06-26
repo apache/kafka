@@ -27,7 +27,6 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -566,7 +565,7 @@ public class Sender implements Runnable {
     /**
      * Handle a produce response
      */
-    private void handleProduceResponse(ClientResponse response, Map<TopicIdPartition, ProducerBatch> batches, long now) {
+    private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, Map<Uuid, String> topicNames, long now) {
         RequestHeader requestHeader = response.requestHeader();
         int correlationId = requestHeader.correlationId();
         if (response.wasTimedOut()) {
@@ -607,17 +606,18 @@ public class Sender implements Runnable {
                                 .collect(Collectors.toList()),
                             p.errorMessage(),
                             p.currentLeader());
+
                     // Version 13 drop topic name and add support to topic id.
                     // We need to find batch based on topic id and partition index only as
-                    // topic name in the response might be empty.
-                    TopicIdPartition tpId = new TopicIdPartition(r.topicId(), p.index(), r.name());
-                    ProducerBatch batch = batches.entrySet().stream()
-                            .filter(entry -> entry.getKey().same(tpId))
-                            .map(Map.Entry::getValue).findFirst().orElse(null);
+                    // topic name in the response will be empty.
+                    // For older versions, topic id is zero and we will find the batch based on the topic name.
+                    TopicPartition tp = r.topicId() != Uuid.ZERO_UUID ?
+                            new TopicPartition(topicNames.get(r.topicId()), p.index()) :
+                            new TopicPartition(r.name(), p.index());
 
+                    ProducerBatch batch = batches.get(tp);
                     if (batch == null) {
-                        throw new IllegalStateException("batch created for " + tpId + " can't be found, " +
-                                "topic might be recreated after the batch creation.");
+                        throw new IllegalStateException("batch created for " + tp  + " can't be found.");
                     }
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
                 }));
@@ -864,7 +864,7 @@ public class Sender implements Runnable {
         if (batches.isEmpty())
             return;
 
-        final Map<TopicIdPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
+        final Map<TopicPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
         Map<String, Uuid> topicIds = topicIdsForBatches(batches);
 
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
@@ -883,7 +883,7 @@ public class Sender implements Runnable {
             tpData.partitionData().add(new ProduceRequestData.PartitionProduceData()
                     .setIndex(tp.partition())
                     .setRecords(records));
-            recordsByPartition.put(new TopicIdPartition(topicId, tp), batch);
+            recordsByPartition.put(tp, batch);
         }
 
         String transactionalId = null;
@@ -901,7 +901,7 @@ public class Sender implements Runnable {
                         .setTopicData(tpd),
                 useTransactionV1Version
         );
-        RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
+        RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, metadata.topicNames(), time.milliseconds());
 
         String nodeId = Integer.toString(destination);
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
