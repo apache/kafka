@@ -42,7 +42,7 @@ import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCac
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
-import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard,PartitionListener}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.replica.Replica
@@ -56,40 +56,6 @@ import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
 import scala.jdk.javaapi.OptionConverters
 
-/**
- * Listener receives notification from an Online Partition.
- *
- * A listener can be (re-)registered to an Online partition only. The listener
- * is notified as long as the partition remains Online. When the partition fails
- * or is deleted, respectively `onFailed` or `onDeleted` are called once. No further
- * notifications are sent after this point on.
- *
- * Note that the callbacks are executed in the thread that triggers the change
- * AND that locks may be held during their execution. They are meant to be used
- * as notification mechanism only.
- */
-trait PartitionListener {
-  /**
-   * Called when the Log increments its high watermark.
-   */
-  def onHighWatermarkUpdated(partition: TopicPartition, offset: Long): Unit = {}
-
-  /**
-   * Called when the Partition (or replica) on this broker has a failure (e.g. goes offline).
-   */
-  def onFailed(partition: TopicPartition): Unit = {}
-
-  /**
-   * Called when the Partition (or replica) on this broker is deleted. Note that it does not mean
-   * that the partition was deleted but only that this broker does not host a replica of it any more.
-   */
-  def onDeleted(partition: TopicPartition): Unit = {}
-
-  /**
-   * Called when the Partition on this broker is transitioned to follower.
-   */
-  def onBecomingFollower(partition: TopicPartition): Unit = {}
-}
 
 trait AlterPartitionListener {
   def markIsrExpand(): Unit

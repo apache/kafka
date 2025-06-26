@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.cluster.PartitionListener;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
@@ -59,6 +58,7 @@ import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
+import org.apache.kafka.storage.internals.log.PartitionListener;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.slf4j.Logger;
