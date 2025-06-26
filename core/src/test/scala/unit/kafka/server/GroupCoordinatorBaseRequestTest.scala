@@ -31,15 +31,17 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.server.IntegrationTestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.net.Socket
+import java.util
 import java.util.{Comparator, Properties}
 import java.util.stream.Collectors
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
+
 
 class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   private def brokers(): Seq[KafkaBroker] = cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).asScala.toSeq
@@ -131,7 +133,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         replicationFactor = replicationFactor,
         topicConfig = topicConfig
       )
-      partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds(topic), new TopicPartition(topic, partition)) -> leader }
+      partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds.get(topic), new TopicPartition(topic, partition)) -> leader }
     } finally {
       admin.close()
     }
@@ -141,8 +143,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     cluster.brokers.values.stream.allMatch(b => b.config.unstableApiVersionsEnabled)
   }
 
-  protected def getTopicIds: Map[String, Uuid] = {
-    cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
+  protected def getTopicIds: util.Map[String, Uuid] = {
+    cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get()
   }
 
   protected def getBrokers: Seq[KafkaBroker] = {
@@ -900,42 +902,30 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def connectAny(): Socket = {
-    val socket: Socket = IntegrationTestUtils.connect(
-      cluster.anyBrokerSocketServer(),
-      cluster.clientListener()
-    )
+    val socket: Socket = IntegrationTestUtils.connect(cluster.boundPorts().get(0))
     openSockets += socket
     socket
   }
 
   protected def connect(destination: Int): Socket = {
-    val socket: Socket = IntegrationTestUtils.connect(
-      brokerSocketServer(destination),
-      cluster.clientListener()
-    )
+    val socket = IntegrationTestUtils.connect(brokerSocketServer(destination).boundPort(cluster.clientListener()))
     openSockets += socket
     socket
   }
 
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
-  )(implicit classTag: ClassTag[T]): T = {
-    IntegrationTestUtils.connectAndReceive[T](
-      request,
-      cluster.anyBrokerSocketServer(),
-      cluster.clientListener()
-    )
+  ): T = {
+    IntegrationTestUtils.connectAndReceive[T](request, cluster.boundPorts().get(0))
   }
 
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest,
     destination: Int
-  )(implicit classTag: ClassTag[T]): T = {
-    IntegrationTestUtils.connectAndReceive[T](
-      request,
-      brokerSocketServer(destination),
-      cluster.clientListener()
-    )
+  ): T = {
+    val socketServer = brokerSocketServer(destination)
+    val listenerName = cluster.clientListener()
+    IntegrationTestUtils.connectAndReceive[T](request, socketServer.boundPort(listenerName))
   }
 
   private def brokerSocketServer(brokerId: Int): SocketServer = {

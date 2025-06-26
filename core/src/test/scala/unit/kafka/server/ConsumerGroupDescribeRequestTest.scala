@@ -207,6 +207,20 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
         )
 
         assertEquals(expected, actual)
+
+        val unknownGroupResponse = consumerGroupDescribe(
+          groupIds = List("grp-unknown"),
+          includeAuthorizedOperations = true,
+          version = version.toShort,
+        )
+        assertEquals(Errors.GROUP_ID_NOT_FOUND.code, unknownGroupResponse.head.errorCode())
+
+        val emptyGroupResponse = consumerGroupDescribe(
+          groupIds = List(""),
+          includeAuthorizedOperations = true,
+          version = version.toShort,
+        )
+        assertEquals(Errors.INVALID_GROUP_ID.code, emptyGroupResponse.head.errorCode())
       }
     } finally {
       admin.close()
