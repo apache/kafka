@@ -203,6 +203,7 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPA
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.SHARE_GROUP_REBALANCES_SENSOR_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -19699,6 +19700,7 @@ public class GroupMetadataManagerTest {
                     .setMemberId(Uuid.randomUuid().toString())
                     .setMemberEpoch(1)
                     .setSubscribedTopicNames(List.of("foo", "bar"))));
+        verify(context.metrics, times(0)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
@@ -19785,6 +19787,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of("foo", "bar"))));
+        verify(context.metrics, times(0)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
@@ -22306,6 +22309,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(Map.of(t1Uuid, Set.of(0, 1), t2Uuid, Set.of(0, 1)), context.groupMetadataManager.initializedShareGroupPartitions(groupId));
+        verify(context.metrics, times(2)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
@@ -22415,6 +22419,7 @@ public class GroupMetadataManagerTest {
             2,
             true
         );
+        verify(context.metrics, times(2)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test

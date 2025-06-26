@@ -25,6 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -143,6 +144,7 @@ import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRES
 import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
 import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.THROTTLING_QUOTA_EXCEEDED;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.QUOTA_EXCEEDED_IN_TEST_MSG;
@@ -918,6 +920,34 @@ public class ReplicationControlManagerTest {
         ctx.createTestTopic("baz", new int[][] {new int[] {2, 1, 0}},
             Map.of(SEGMENT_BYTES_CONFIG, "12300000"), NONE.code());
         ctx.createTestTopic("quux", new int[][] {new int[] {1, 2, 0}}, POLICY_VIOLATION.code());
+    }
+
+    @Test
+    public void testCreateTopicsWithPolicyUnexpectedException() {
+        CreateTopicPolicy policy = new CreateTopicPolicy() {
+            @Override
+            public void validate(RequestMetadata requestMetadata) throws PolicyViolationException {
+                if (requestMetadata.topic().equals("known_error")) {
+                    throw new InvalidTopicException("Known client-server errors");
+                }
+
+                throw new RuntimeException("Unknown client-server errors");
+            }
+
+            @Override
+            public void close() throws Exception { /* Nothing to do */ }
+
+            @Override
+            public void configure(Map<String, ?> configs) { /* Nothing to do */ }
+        };
+
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
+                setCreateTopicPolicy(policy).
+                build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        ctx.createTestTopic("known_error", 2, (short) 2, INVALID_TOPIC_EXCEPTION.code());
+        ctx.createTestTopic("blah_error", 2, (short) 2, UNKNOWN_SERVER_ERROR.code());
     }
 
     @Test
