@@ -18,6 +18,7 @@ package kafka.coordinator.transaction
 
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
+import java.util
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
 import javax.management.ObjectName
 import kafka.server.ReplicaManager
@@ -49,7 +50,6 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{atLeastOnce, mock, reset, times, verify, when}
 
-import java.util.Collections
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -72,7 +72,7 @@ class TransactionStateManagerTest {
   when(metadataCache.features()).thenReturn {
     new FinalizedFeatures(
       MetadataVersion.latestTesting(),
-      Collections.singletonMap(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
+      util.Map.of(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
       0)
   }
   
@@ -1354,7 +1354,7 @@ class TransactionStateManagerTest {
     when(metadataCache.features()).thenReturn {
       new FinalizedFeatures(
         MetadataVersion.latestTesting(),
-        Collections.singletonMap(TransactionVersion.FEATURE_NAME, transactionVersion.featureLevel()),
+        util.Map.of(TransactionVersion.FEATURE_NAME, transactionVersion.featureLevel()),
         0)
     }
     val transactionManager = new TransactionStateManager(0, scheduler,
