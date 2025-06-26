@@ -208,7 +208,8 @@
     </ul>
 
     <p>
-        Enabling the protocol requires the brokers and clients are running Apache Kafka 4.1.
+        Enabling the protocol requires the brokers and clients are running Apache Kafka 4.1. It should be enabled
+        only on new clusters for testing purposes.
         Set <code>unstable.feature.versions.enable=true</code> for controllers and brokers, and
         set <code>unstable.api.versions.enable=true</code> on the brokers as well. In your Kafka Streams application
         configuration, set <code>group.protocol=streams</code>.
