@@ -410,13 +410,10 @@ public class PluginUtils {
      */
     public static String prunedName(PluginDesc<?> plugin) {
         // It's currently simpler to switch on type than do pattern matching.
-        switch (plugin.type()) {
-            case SOURCE:
-            case SINK:
-                return prunePluginName(plugin, "Connector");
-            default:
-                return prunePluginName(plugin, plugin.type().simpleName());
-        }
+        return switch (plugin.type()) {
+            case SOURCE, SINK -> prunePluginName(plugin, "Connector");
+            default -> prunePluginName(plugin, plugin.type().simpleName());
+        };
     }
 
     private static String prunePluginName(PluginDesc<?> plugin, String suffix) {

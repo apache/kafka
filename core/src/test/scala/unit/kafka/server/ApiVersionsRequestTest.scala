@@ -50,8 +50,8 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   @ClusterTest(types = Array(Type.KRAFT))
   def testApiVersionsRequestThroughControllerListener(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.controllerListenerName.get())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName.get(), enableUnstableLastVersion = true)
+    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.controllerListenerName())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName(), enableUnstableLastVersion = true)
   }
 
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT))
@@ -82,8 +82,8 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   @ClusterTest(types = Array(Type.KRAFT))
   def testApiVersionsRequestValidationV0ThroughControllerListener(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.controllerListenerName.get())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName.get(), apiVersion = 0, enableUnstableLastVersion = true)
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.controllerListenerName())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName(), apiVersion = 0, enableUnstableLastVersion = true)
   }
 
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT))

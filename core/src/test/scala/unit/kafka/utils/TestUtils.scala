@@ -33,7 +33,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ConnectionMode, ListenerName}
@@ -72,7 +72,7 @@ import java.time.Duration
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, mutable}
 import scala.concurrent.duration.FiniteDuration
@@ -181,7 +181,7 @@ object TestUtils extends Logging {
     listenerName: ListenerName
   ): String = {
     brokers.map { s =>
-      val listener = s.config.effectiveAdvertisedBrokerListeners.find(_.listenerName == listenerName).getOrElse(
+      val listener = s.config.effectiveAdvertisedBrokerListeners.find(_.listener == listenerName.value).getOrElse(
         sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")
@@ -339,7 +339,7 @@ object TestUtils extends Logging {
     topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
 
     val result = if (replicaAssignment.isEmpty) {
-      admin.createTopics(Collections.singletonList(new NewTopic(
+      admin.createTopics(util.List.of(new NewTopic(
         topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
     } else {
       val assignment = new util.HashMap[Integer, util.List[Integer]]()
@@ -348,7 +348,7 @@ object TestUtils extends Logging {
         v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
         assignment.put(k.asInstanceOf[Integer], replicas)
       }
-      admin.createTopics(Collections.singletonList(new NewTopic(
+      admin.createTopics(util.List.of(new NewTopic(
         topic, assignment).configs(configsMap)))
     }
 
@@ -410,7 +410,7 @@ object TestUtils extends Logging {
     topic: String
   ): TopicDescription = {
     val describedTopics = admin.describeTopics(
-      Collections.singleton(topic)
+      util.Set.of(topic)
     ).allTopicNames().get()
     describedTopics.get(topic)
   }
@@ -466,7 +466,7 @@ object TestUtils extends Logging {
     controllers: Seq[ControllerServer]
   ): Unit = {
     try {
-      admin.deleteTopics(Collections.singletonList(topic)).all().get()
+      admin.deleteTopics(util.List.of(topic)).all().get()
     } catch {
       case e: ExecutionException if e.getCause != null &&
         e.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
@@ -589,7 +589,7 @@ object TestUtils extends Logging {
     newLeaderOpt: Option[Int] = None
   ): Int = {
     def getPartitionLeader(topic: String, partition: Int): Option[Int] = {
-      admin.describeTopics(Collections.singletonList(topic)).allTopicNames().get().get(topic).partitions().asScala.
+      admin.describeTopics(util.List.of(topic)).allTopicNames().get().get(topic).partitions().asScala.
         find(_.partition() == partition).
         flatMap { p =>
           if (p.leader().id() == Node.noNode().id()) {
@@ -821,7 +821,7 @@ object TestUtils extends Logging {
     waitUntilTrue(
       () => brokers.forall { broker =>
         if (expectedNumPartitions == 0) {
-          broker.metadataCache.numPartitions(topic).isEmpty()
+          broker.metadataCache.numPartitions(topic).isEmpty
         } else {
           broker.metadataCache.numPartitions(topic).orElse(null) == expectedNumPartitions
         }
@@ -941,16 +941,6 @@ object TestUtils extends Logging {
       for (_ <- 0 until size)
         outputStream.write(random.nextInt(255))
     } finally outputStream.close()
-  }
-
-  // Note: Call this method in the test itself, rather than the @AfterEach method.
-  // Because of the assert, if assertNoNonDaemonThreads fails, nothing after would be executed.
-  def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
-    val nonDaemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
-      !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
-    }
-    val threadCount = nonDaemonThreads.size
-    assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
   }
 
   /**
@@ -1099,16 +1089,16 @@ object TestUtils extends Logging {
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.containsKey(tp))
     }), "Cleaner offset for deleted partition should have been removed")
     waitUntilTrue(() => brokers.forall(broker =>
-      broker.config.logDirs.forall { logDir =>
+      broker.config.logDirs.stream().allMatch { logDir =>
         topicPartitions.forall { tp =>
           !new File(logDir, tp.topic + "-" + tp.partition).exists()
         }
       }
     ), "Failed to soft-delete the data to a delete directory")
     waitUntilTrue(() => brokers.forall(broker =>
-      broker.config.logDirs.forall { logDir =>
+      broker.config.logDirs.stream().allMatch { logDir =>
         topicPartitions.forall { tp =>
-          !util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryNames =>
+          !util.List.of(new File(logDir).list()).asScala.exists { partitionDirectoryNames =>
             partitionDirectoryNames.exists { directoryName =>
               directoryName.startsWith(tp.topic + "-" + tp.partition) &&
                 directoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)
@@ -1132,16 +1122,22 @@ object TestUtils extends Logging {
   }
 
   def waitAndVerifyAcls(expected: Set[AccessControlEntry],
-                        authorizer: JAuthorizer,
+                        authorizerPlugin: Plugin[JAuthorizer],
                         resource: ResourcePattern,
                         accessControlEntryFilter: AccessControlEntryFilter = AccessControlEntryFilter.ANY): Unit = {
-    val newLine = scala.util.Properties.lineSeparator
+    waitAndVerifyAcls(expected, authorizerPlugin.get, resource, accessControlEntryFilter)
+  }
 
+  def waitAndVerifyAcls(expected: Set[AccessControlEntry],
+                        authorizer: JAuthorizer,
+                        resource: ResourcePattern,
+                        accessControlEntryFilter: AccessControlEntryFilter): Unit = {
+    val newLine = scala.util.Properties.lineSeparator
     val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
     waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
         s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
-        45000)
+      45000)
   }
 
   def consumeTopicRecords[K, V, B <: KafkaBroker](
@@ -1159,7 +1155,7 @@ object TestUtils extends Logging {
       securityProtocol = securityProtocol,
       trustStoreFile = trustStoreFile)
     try {
-      consumer.subscribe(Collections.singleton(topic))
+      consumer.subscribe(util.Set.of(topic))
       consumeRecords(consumer, numMessages, waitTime)
     } finally consumer.close()
   }
@@ -1257,7 +1253,7 @@ object TestUtils extends Logging {
       else
         abortedValue
     }
-    new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, key, value, Collections.singleton(header))
+    new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, key, value, util.Set.of(header))
   }
 
   def producerRecordWithExpectedTransactionStatus(topic: String, partition: Integer, key: String, value: String, willBeCommitted: Boolean): ProducerRecord[Array[Byte], Array[Byte]] = {
@@ -1280,7 +1276,7 @@ object TestUtils extends Logging {
       if (committed.contains(topicPartition))
         consumer.seek(topicPartition, committed(topicPartition))
       else
-        consumer.seekToBeginning(Collections.singletonList(topicPartition))
+        consumer.seekToBeginning(util.List.of(topicPartition))
     }
   }
 
@@ -1297,7 +1293,7 @@ object TestUtils extends Logging {
         (resource, configEntries)
       }.toMap.asJava
     } else {
-      Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> configEntries).asJava
+      util.Map.of(new ConfigResource(ConfigResource.Type.BROKER, ""), configEntries)
     }
     adminClient.incrementalAlterConfigs(configs)
   }
@@ -1326,7 +1322,7 @@ object TestUtils extends Logging {
     val partitionId = topicPartition.partition
 
     def currentLeader: Try[Option[Int]] = Try {
-      val topicDescription = client.describeTopics(List(topic).asJava).allTopicNames.get.get(topic)
+      val topicDescription = client.describeTopics(util.List.of(topic)).allTopicNames.get.get(topic)
       topicDescription.partitions.asScala
         .find(_.partition == partitionId)
         .flatMap(partitionState => Option(partitionState.leader))
@@ -1360,7 +1356,7 @@ object TestUtils extends Logging {
   }
 
   def currentIsr(admin: Admin, partition: TopicPartition): Set[Int] = {
-    val description = admin.describeTopics(Set(partition.topic).asJava)
+    val description = admin.describeTopics(util.Set.of(partition.topic))
       .allTopicNames
       .get
       .asScala
@@ -1441,12 +1437,12 @@ object TestUtils extends Logging {
     controllers: Seq[ControllerServer],
   ): JAuthorizer = {
     if (controllers.isEmpty) {
-      brokers.head.authorizer.get
+      brokers.head.authorizerPlugin.get.get
     } else {
       var result: JAuthorizer = null
       TestUtils.retry(120000) {
         val active = controllers.filter(_.controller.isActive).head
-        result = active.authorizer.get
+        result = active.authorizerPlugin.get.get
       }
       result
     }

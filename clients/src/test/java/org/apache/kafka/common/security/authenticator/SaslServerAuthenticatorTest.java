@@ -30,6 +30,7 @@ import org.apache.kafka.common.network.DefaultChannelMetadataRegistry;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -127,7 +128,7 @@ public class SaslServerAuthenticatorTest {
             return headerBuffer.remaining();
         });
 
-        assertThrows(InvalidRequestException.class, () -> authenticator.authenticate());
+        assertThrows(InvalidRequestException.class, authenticator::authenticate);
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 
@@ -155,7 +156,7 @@ public class SaslServerAuthenticatorTest {
             return headerBuffer.remaining();
         });
 
-        assertThrows(InvalidRequestException.class, () -> authenticator.authenticate());
+        assertThrows(InvalidRequestException.class, authenticator::authenticate);
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 
@@ -198,7 +199,7 @@ public class SaslServerAuthenticatorTest {
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(new ByteBufferAccessor(secondResponseSent), (short) 2);
             assertEquals(tokenExpirationDuration.toMillis(), response.sessionLifetimeMs());
         }
     }
@@ -231,7 +232,7 @@ public class SaslServerAuthenticatorTest {
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(new ByteBufferAccessor(secondResponseSent), (short) 2);
             assertEquals(maxReauthMs, response.sessionLifetimeMs());
         }
     }
@@ -264,7 +265,7 @@ public class SaslServerAuthenticatorTest {
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(new ByteBufferAccessor(secondResponseSent), (short) 2);
             assertEquals(tokenExpiryShorterThanMaxReauth.toMillis(), response.sessionLifetimeMs());
         }
     }

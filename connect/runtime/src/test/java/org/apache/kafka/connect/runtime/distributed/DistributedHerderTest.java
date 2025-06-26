@@ -1031,7 +1031,7 @@ public class DistributedHerderTest {
         // tasks are revoked
         TopicStatus fooStatus = new TopicStatus(FOO_TOPIC, CONN1, 0, time.milliseconds());
         TopicStatus barStatus = new TopicStatus(BAR_TOPIC, CONN1, 0, time.milliseconds());
-        when(statusBackingStore.getAllTopics(eq(CONN1))).thenReturn(new HashSet<>(Arrays.asList(fooStatus, barStatus)));
+        when(statusBackingStore.getAllTopics(eq(CONN1))).thenReturn(Set.of(fooStatus, barStatus));
         doNothing().when(statusBackingStore).deleteTopic(eq(CONN1), eq(FOO_TOPIC));
         doNothing().when(statusBackingStore).deleteTopic(eq(CONN1), eq(BAR_TOPIC));
 
@@ -1348,6 +1348,7 @@ public class DistributedHerderTest {
             return true;
         }).when(worker).startConnector(eq(CONN1), any(), any(), eq(herder), any(), stateCallback.capture());
         doNothing().when(member).wakeup();
+        when(worker.connectorVersion(any())).thenReturn(null);
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1378,6 +1379,7 @@ public class DistributedHerderTest {
         doNothing().when(statusBackingStore).put(eq(status));
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any())).thenReturn(true);
+        when(worker.taskVersion(any())).thenReturn(null);
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1419,6 +1421,8 @@ public class DistributedHerderTest {
         doNothing().when(statusBackingStore).put(eq(taskStatus));
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any())).thenReturn(true);
+        when(worker.taskVersion(any())).thenReturn(null);
+        when(worker.connectorVersion(any())).thenReturn(null);
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1670,6 +1674,7 @@ public class DistributedHerderTest {
         when(member.memberId()).thenReturn("member");
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
         when(worker.isSinkConnector(CONN1)).thenReturn(Boolean.TRUE);
+        when(worker.connectorVersion(CONN1)).thenReturn(null);
 
         WorkerConfigTransformer configTransformer = mock(WorkerConfigTransformer.class);
         // join
@@ -3227,7 +3232,7 @@ public class DistributedHerderTest {
         taskConfigGenerations.put(CONN1, 3);
         taskConfigGenerations.put(CONN2, 4);
         taskConfigGenerations.put(conn3, 2);
-        Set<String> pendingFencing = new HashSet<>(Arrays.asList(CONN1, CONN2, conn3));
+        Set<String> pendingFencing = Set.of(CONN1, CONN2, conn3);
         ClusterConfigState configState = exactlyOnceSnapshot(
                 sessionKey,
                 TASK_CONFIGS_MAP,

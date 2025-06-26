@@ -30,6 +30,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -513,7 +514,7 @@ public class MockLog implements ReplicatedLog {
             );
         }
 
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata().offset();
+        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                 String.format(

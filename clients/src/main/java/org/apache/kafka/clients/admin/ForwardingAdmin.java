@@ -159,6 +159,8 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    @Deprecated
+    @SuppressWarnings("removal")
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         return delegate.listConsumerGroups(options);
     }
@@ -299,6 +301,12 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+        return delegate.listConfigResources(configResourceTypes, options);
+    }
+
+    @SuppressWarnings({"deprecation", "removal"})
+    @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
         return delegate.listClientMetricsResources(options);
     }
@@ -331,6 +339,11 @@ public class ForwardingAdmin implements Admin {
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs, ListShareGroupOffsetsOptions options) {
         return delegate.listShareGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options) {
+        return delegate.deleteShareGroupOffsets(groupId, topics, options);
     }
 
     @Override

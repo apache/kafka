@@ -36,10 +36,13 @@ import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -57,7 +60,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -66,6 +68,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -115,9 +118,7 @@ public interface ClusterInstance {
     /**
      * The listener for the kraft cluster controller configured by controller.listener.names.
      */
-    default Optional<ListenerName> controllerListenerName() {
-        return Optional.empty();
-    }
+    ListenerName controllerListenerName();
 
     /**
      * The broker connect string which can be used by clients for bootstrapping
@@ -244,7 +245,7 @@ public interface ClusterInstance {
         if (brokers().values().stream().allMatch(b -> b.dataPlaneRequestProcessor().isConsumerGroupProtocolEnabled())) {
             return Set.of(CLASSIC, CONSUMER);
         } else {
-            return Collections.singleton(CLASSIC);
+            return Set.of(CLASSIC);
         }
     }
 
@@ -278,11 +279,28 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
     }
-    
+
     default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
+        createTopic(topicName, partitions, replicas, Map.of());
+    }
+
+    default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
-            admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));
+            admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
             waitForTopic(topicName, partitions);
+        }
+    }
+
+    /**
+     * Deletes a topic and waits for the deletion to complete.
+     *
+     * @param topicName The name of the topic to delete
+     * @throws InterruptedException If the operation is interrupted
+     */
+    default void deleteTopic(String topicName) throws InterruptedException {
+        try (Admin admin = admin()) {
+            admin.deleteTopics(List.of(topicName));
+            waitTopicDeletion(topicName);
         }
     }
 
@@ -307,7 +325,7 @@ public interface ClusterInstance {
         if (partitions == 0) {
             List<TopicPartition> topicPartitions = IntStream.range(0, 1)
                 .mapToObj(partition -> new TopicPartition(topic, partition))
-                .collect(Collectors.toList());
+                .toList();
 
             // Ensure that the topic-partition has been deleted from all brokers' replica managers
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
@@ -337,14 +355,14 @@ public interface ClusterInstance {
 
             // Ensure that the topic directories are soft-deleted
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                    CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                    broker.config().logDirs().stream().allMatch(logDir ->
                         topicPartitions.stream().noneMatch(tp ->
                             new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
                 "Failed to soft-delete the data to a delete directory");
 
             // Ensure that the topic directories are hard-deleted
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                broker.config().logDirs().stream().allMatch(logDir ->
                     topicPartitions.stream().allMatch(tp ->
                         Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
                             partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
@@ -357,11 +375,11 @@ public interface ClusterInstance {
     default List<Authorizer> authorizers() {
         List<Authorizer> authorizers = new ArrayList<>();
         authorizers.addAll(brokers().values().stream()
-                .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .filter(server -> server.authorizerPlugin().isDefined())
+                .map(server -> server.authorizerPlugin().get().get()).toList());
         authorizers.addAll(controllers().values().stream()
-                .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .filter(server -> server.authorizerPlugin().isDefined())
+                .map(server -> server.authorizerPlugin().get().get()).toList());
         return authorizers;
     }
 
@@ -391,5 +409,56 @@ public interface ClusterInstance {
                     .findFirst()
                     .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
+    }
+
+    /**
+     * Wait for a leader to be elected or changed using the provided admin client.
+     */
+    default int waitUntilLeaderIsElectedOrChangedWithAdmin(Admin admin,
+                                                           String topic,
+                                                           int partitionNumber,
+                                                           long timeoutMs) throws Exception {
+        long startTime = System.currentTimeMillis();
+        TopicPartition topicPartition = new TopicPartition(topic, partitionNumber);
+
+        while (System.currentTimeMillis() < startTime + timeoutMs) {
+            try {
+                TopicDescription topicDescription = admin.describeTopics(List.of(topic))
+                        .allTopicNames().get().get(topic);
+
+                Optional<Integer> leader = topicDescription.partitions().stream()
+                        .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
+                        .findFirst()
+                        .map(partitionInfo -> {
+                            int leaderId = partitionInfo.leader().id();
+                            return leaderId == Node.noNode().id() ? null : leaderId;
+                        });
+
+                if (leader.isPresent()) {
+                    return leader.get();
+                }
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof UnknownTopicOrPartitionException ||
+                        cause instanceof LeaderNotAvailableException) {
+                    continue;
+                } else {
+                    throw e;
+                }
+            }
+
+            TimeUnit.MILLISECONDS.sleep(Math.min(100L, timeoutMs));
+        }
+
+        throw new AssertionError("Timing out after " + timeoutMs +
+                " ms since a leader was not elected for partition " + topicPartition);
+    }
+
+    default List<Integer> boundPorts() {
+        return brokers().values().stream()
+                .map(KafkaBroker::socketServer)
+                .map(s -> s.boundPort(clientListener()))
+                .toList();
+
     }
 }

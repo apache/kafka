@@ -19,7 +19,7 @@ package kafka.api
 
 import com.yammer.metrics.core.Gauge
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.ExecutionException
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.utils._
@@ -45,6 +45,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -175,7 +176,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def testProduceConsumeViaAssign(groupProtocol: String): Unit = {
     setAclsAndProduce(tp)
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumeRecords(consumer, numRecords)
     confirmReauthenticationMetrics()
   }
@@ -204,7 +205,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def testProduceConsumeViaSubscribe(groupProtocol: String): Unit = {
     setAclsAndProduce(tp)
     val consumer = createConsumer()
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     consumeRecords(consumer, numRecords)
     confirmReauthenticationMetrics()
   }
@@ -216,7 +217,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
     val consumer = createConsumer()
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     consumeRecords(consumer, numRecords)
     confirmReauthenticationMetrics()
   }
@@ -228,7 +229,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
     val consumer = createConsumer()
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     consumeRecords(consumer, numRecords)
     confirmReauthenticationMetrics()
   }
@@ -240,30 +241,30 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val tp2 = new TopicPartition("topic2", 0)
     setAclsAndProduce(tp2)
     val consumer = createConsumer()
-    consumer.assign(List(tp2).asJava)
+    consumer.assign(java.util.List.of(tp2))
     consumeRecords(consumer, numRecords, topic = tp2.topic)
     confirmReauthenticationMetrics()
   }
 
   private def setWildcardResourceAcls(): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
-    superuserAdminClient.createAcls(List(AclWildcardTopicWrite, AclWildcardTopicCreate, AclWildcardTopicDescribe, AclWildcardTopicRead).asJava).values
-    superuserAdminClient.createAcls(List(AclWildcardGroupRead).asJava).values
+    superuserAdminClient.createAcls(java.util.List.of(AclWildcardTopicWrite, AclWildcardTopicCreate, AclWildcardTopicDescribe, AclWildcardTopicRead)).values
+    superuserAdminClient.createAcls(java.util.List.of(AclWildcardGroupRead)).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardTopicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardGroupResource)
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, wildcardTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, wildcardGroupResource)
     }
   }
 
   private def setPrefixedResourceAcls(): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
-    superuserAdminClient.createAcls(List(AclPrefixedTopicWrite, AclPrefixedTopicCreate, AclPrefixedTopicDescribe, AclPrefixedTopicRead).asJava).values
-    superuserAdminClient.createAcls(List(AclPrefixedGroupRead).asJava).values
+    superuserAdminClient.createAcls(java.util.List.of(AclPrefixedTopicWrite, AclPrefixedTopicCreate, AclPrefixedTopicDescribe, AclPrefixedTopicRead)).values
+    superuserAdminClient.createAcls(java.util.List.of(AclPrefixedGroupRead)).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, prefixedTopicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, prefixedGroupResource)
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, prefixedTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, prefixedGroupResource)
     }
   }
 
@@ -271,14 +272,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val topicResource = new ResourcePattern(TOPIC, tp.topic, LITERAL)
     val superuserAdminClient = createSuperuserAdminClient()
 
-    superuserAdminClient.createAcls(List(AclTopicWrite(topicResource), AclTopicCreate(topicResource), AclTopicDescribe(topicResource)).asJava).values
-    superuserAdminClient.createAcls(List(AclTopicRead(topicResource)).asJava).values
-    superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
+    superuserAdminClient.createAcls(java.util.List.of(AclTopicWrite(topicResource), AclTopicCreate(topicResource), AclTopicDescribe(topicResource))).values
+    superuserAdminClient.createAcls(java.util.List.of(AclTopicRead(topicResource))).values
+    superuserAdminClient.createAcls(java.util.List.of(AclGroupRead)).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get,
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get,
         new ResourcePattern(TOPIC, tp.topic, LITERAL))
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
   }
 
@@ -290,9 +291,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   private def setConsumerGroupAcls(): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
-    superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
+    superuserAdminClient.createAcls(java.util.List.of(AclGroupRead)).values
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
   }
 
@@ -319,10 +320,10 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer, numRecords, topic = tp.topic))
     val adminClient = createAdminClient()
-    val e1 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(Set(topic).asJava).allTopicNames().get())
+    val e1 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(java.util.Set.of(topic)).allTopicNames().get())
     assertTrue(e1.getCause.isInstanceOf[TopicAuthorizationException], "Unexpected exception " + e1.getCause)
 
     // Verify successful produce/consume/describe on another topic using the same producer, consumer and adminClient
@@ -338,22 +339,22 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       producer
 
     sendRecords(producer2, numRecords, tp2)
-    consumer.assign(List(tp2).asJava)
+    consumer.assign(java.util.List.of(tp2))
     consumeRecords(consumer, numRecords, topic = topic2)
-    val describeResults = adminClient.describeTopics(Set(topic, topic2).asJava).topicNameValues()
+    val describeResults = adminClient.describeTopics(java.util.Set.of(topic, topic2)).topicNameValues()
     assertEquals(1, describeResults.get(topic2).get().partitions().size())
 
-    val e2 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(Set(topic).asJava).allTopicNames().get())
+    val e2 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(java.util.Set.of(topic)).allTopicNames().get())
     assertTrue(e2.getCause.isInstanceOf[TopicAuthorizationException], "Unexpected exception " + e2.getCause)
 
     // Verify that consumer manually assigning both authorized and unauthorized topic doesn't consume
     // from the unauthorized topic and throw; since we can now return data during the time we are updating
     // metadata / fetching positions, it is possible that the authorized topic record is returned during this time.
-    consumer.assign(List(tp, tp2).asJava)
+    consumer.assign(java.util.List.of(tp, tp2))
     sendRecords(producer2, numRecords, tp2)
     var topic2RecordConsumed = false
     def verifyNoRecords(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {
-      assertEquals(Collections.singleton(tp2), records.partitions(), "Consumed records with unexpected partitions: " + records)
+      assertEquals(util.Set.of(tp2), records.partitions(), "Consumed records with unexpected partitions: " + records)
       topic2RecordConsumed = true
       false
     }
@@ -367,7 +368,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
     sendRecords(producer2, numRecords, tp)
     consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = 0, topic)
-    val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).topicNameValues
+    val describeResults2 = adminClient.describeTopics(java.util.Set.of(topic, topic2)).topicNameValues
     assertEquals(1, describeResults2.get(topic).get().partitions().size())
     assertEquals(1, describeResults2.get(topic2).get().partitions().size())
   }
@@ -379,10 +380,10 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   ))
   def testNoProduceWithDescribeAcl(isIdempotenceEnabled:Boolean): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
-    superuserAdminClient.createAcls(List(AclTopicDescribe()).asJava).values
+    superuserAdminClient.createAcls(java.util.List.of(AclTopicDescribe())).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
     }
 
     val prop = new Properties()
@@ -394,7 +395,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       assertThrows(classOf[KafkaException], () => sendRecords(producer, numRecords, tp))
     } else {
       val e = assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
-      assertEquals(Set(topic).asJava, e.unauthorizedTopics())
+      assertEquals(java.util.Set.of(topic), e.unauthorizedTopics())
     }
     confirmReauthenticationMetrics()
   }
@@ -408,7 +409,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def testNoConsumeWithoutDescribeAclViaAssign(groupProtocol: String): Unit = {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     // the exception is expected when the consumer attempts to lookup offsets
     assertThrows(classOf[KafkaException], () => consumeRecords(consumer))
     confirmReauthenticationMetrics()
@@ -419,18 +420,18 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def testNoConsumeWithoutDescribeAclViaSubscribe(groupProtocol: String): Unit = {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     // this should timeout since the consumer will not be able to fetch any metadata for the topic
     assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer, timeout = 3000))
 
     // Verify that no records are consumed even if one of the requested topics is authorized
     setReadAndWriteAcls(tp)
-    consumer.subscribe(List(topic, "topic2").asJava)
+    consumer.subscribe(java.util.List.of(topic, "topic2"))
     assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer, timeout = 3000))
 
     // Verify that records are consumed if all topics are authorized
-    consumer.subscribe(List(topic).asJava)
-    if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
+    consumer.subscribe(java.util.List.of(topic))
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
       consumeRecordsIgnoreOneAuthorizationException(consumer)
     } else {
       TestUtils.waitUntilTrue(() => {
@@ -446,23 +447,23 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   private def noConsumeWithoutDescribeAclSetup(): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
-    superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
-    superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
+    superuserAdminClient.createAcls(java.util.List.of(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe())).values
+    superuserAdminClient.createAcls(java.util.List.of(AclGroupRead)).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
 
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
 
-    superuserAdminClient.deleteAcls(List(AclTopicDescribe().toFilter).asJava).values
-    superuserAdminClient.deleteAcls(List(AclTopicWrite().toFilter).asJava).values
+    superuserAdminClient.deleteAcls(java.util.List.of(AclTopicDescribe().toFilter)).values
+    superuserAdminClient.deleteAcls(java.util.List.of(AclTopicWrite().toFilter)).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
   }
 
@@ -471,10 +472,10 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def testNoConsumeWithDescribeAclViaAssign(groupProtocol: String): Unit = {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     val e = assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
-    assertEquals(Set(topic).asJava, e.unauthorizedTopics())
+    assertEquals(java.util.Set.of(topic), e.unauthorizedTopics())
     confirmReauthenticationMetrics()
   }
 
@@ -483,21 +484,21 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def testNoConsumeWithDescribeAclViaSubscribe(groupProtocol: String): Unit = {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
 
     val e = assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
-    assertEquals(Set(topic).asJava, e.unauthorizedTopics())
+    assertEquals(java.util.Set.of(topic), e.unauthorizedTopics())
     confirmReauthenticationMetrics()
   }
 
   private def noConsumeWithDescribeAclSetup(): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
-    superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
-    superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
+    superuserAdminClient.createAcls(java.util.List.of(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe())).values
+    superuserAdminClient.createAcls(java.util.List.of(AclGroupRead)).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -511,15 +512,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testNoGroupAcl(groupProtocol: String): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
-    superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
+    superuserAdminClient.createAcls(java.util.List.of(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe())).values
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
     }
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
 
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     val e = assertThrows(classOf[GroupAuthorizationException], () => consumeRecords(consumer))
     assertEquals(group, e.groupId())
     confirmReauthenticationMetrics()

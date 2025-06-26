@@ -1199,7 +1199,7 @@ public class ExactlyOnceSourceIntegrationTest {
                 .mapToObj(i -> transactionalProducer(
                         "simulated-task-producer-" + CONNECTOR_NAME + "-" + i,
                         Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, i)
-                )).collect(Collectors.toList());
+                )).toList();
 
         producers.forEach(KafkaProducer::initTransactions);
 

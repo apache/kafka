@@ -107,10 +107,9 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
                 "collect_default": True}
             }
 
-    def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 max_messages=-1, acknowledgement_mode="auto", offset_reset_strategy="",
-                 version=DEV_BRANCH, stop_timeout_sec=60, log_level="INFO", jaas_override_variables=None,
-                 on_record_consumed=None):
+    def __init__(self, context, num_nodes, kafka, topic, group_id, max_messages=-1, 
+                 acknowledgement_mode="auto", version=DEV_BRANCH, stop_timeout_sec=60, 
+                 log_level="INFO", jaas_override_variables=None, on_record_consumed=None):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
         """
@@ -119,7 +118,6 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         self.kafka = kafka
         self.topic = topic
         self.group_id = group_id
-        self.offset_reset_strategy = offset_reset_strategy
         self.max_messages = max_messages
         self.acknowledgement_mode = acknowledgement_mode
         self.prop_file = ""
@@ -134,7 +132,6 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         self.total_records_acknowledged_failed = 0
         self.consumed_records_offsets = set()
         self.acknowledged_records_offsets = set()
-        self.is_offset_reset_strategy_set = False
 
         for node in self.nodes:
             node.version = version
@@ -186,8 +183,6 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
                         self._update_global_consumed(event)
                     elif name == "record_data" and self.on_record_consumed:
                         self.on_record_consumed(event, node)
-                    elif name == "offset_reset_strategy_set":
-                        self._on_offset_reset_strategy_set()
                     else:
                         self.logger.debug("%s: ignoring unknown event: %s" % (str(node.account), event))
 
@@ -213,9 +208,6 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
                 if key not in self.consumed_records_offsets:
                     self.consumed_records_offsets.add(key)
 
-    def _on_offset_reset_strategy_set(self):
-        self.is_offset_reset_strategy_set = True
-
     def start_cmd(self, node):
         cmd = ""
         cmd += "export LOG_DIR=%s;" % VerifiableShareConsumer.LOG_DIR
@@ -226,8 +218,6 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
             cmd += " --verbose"
 
         cmd += " --acknowledgement-mode %s" % self.acknowledgement_mode
-
-        cmd += " --offset-reset-strategy %s" % self.offset_reset_strategy
 
         cmd += " --bootstrap-server %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
 
@@ -314,10 +304,6 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
     def total_failed_acknowledged_for_a_share_consumer(self, node):
         with self.lock:
             return self.event_handlers[node].total_acknowledged_failed
-
-    def offset_reset_strategy_set(self):
-        with self.lock:
-            return self.is_offset_reset_strategy_set
 
     def dead_nodes(self):
         with self.lock:

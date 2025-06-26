@@ -420,7 +420,7 @@ public class ClassicGroupTest {
 
         group.initNextGeneration();
 
-        Set<String> expectedTopics = new HashSet<>(Set.of("foo"));
+        Set<String> expectedTopics = Set.of("foo");
         assertEquals(expectedTopics, group.subscribedTopics().get());
 
         group.transitionTo(PREPARING_REBALANCE);
@@ -1124,7 +1124,7 @@ public class ClassicGroupTest {
         long currentTimestamp = 30000L;
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
-        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty(), Uuid.ZERO_UUID);
         MockTime time = new MockTime();
         long currentStateTimestamp = time.milliseconds();
         ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, time);
@@ -1275,14 +1275,14 @@ public class ClassicGroupTest {
 
 
         group.transitionTo(COMPLETING_REBALANCE);
-        assertTrue(group.isInStates(new HashSet<>(List.of("completingrebalance")), 0));
+        assertTrue(group.isInStates(Set.of("completingrebalance"), 0));
 
         group.transitionTo(STABLE);
         assertTrue(group.isInStates(Set.of("stable"), 0));
         assertFalse(group.isInStates(Set.of("empty"), 0));
 
         group.transitionTo(DEAD);
-        assertTrue(group.isInStates(new HashSet<>(List.of("dead", " ")), 0));
+        assertTrue(group.isInStates(Set.of("dead", " "), 0));
     }
 
     @Test

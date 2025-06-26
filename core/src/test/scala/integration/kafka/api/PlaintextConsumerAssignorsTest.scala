@@ -25,7 +25,6 @@ import java.util
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
 
 /**
  * Integration tests for the consumer that covers assignors logic (client and server side assignors)
@@ -52,7 +51,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     assertEquals(0, consumer.assignment().size)
 
     // subscribe to two topics
-    consumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
     awaitAssignment(consumer, expectedAssignment)
 
     // add one more topic with 2 partitions
@@ -60,11 +59,11 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     createTopicAndSendRecords(producer, topic3, 2, 100)
 
     val newExpectedAssignment = expectedAssignment ++ Set(new TopicPartition(topic3, 0), new TopicPartition(topic3, 1))
-    consumer.subscribe(List(topic1, topic2, topic3).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2, topic3))
     awaitAssignment(consumer, newExpectedAssignment)
 
     // remove the topic we just added
-    consumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
     awaitAssignment(consumer, expectedAssignment)
 
     consumer.unsubscribe()
@@ -251,7 +250,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     assertEquals(0, consumer.assignment().size)
 
     // subscribe to two topics
-    consumer.subscribe(List(topic1).asJava)
+    consumer.subscribe(java.util.List.of(topic1))
 
     val e: UnsupportedAssignorException = assertThrows(
       classOf[UnsupportedAssignorException],
@@ -282,7 +281,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     assertEquals(0, consumer.assignment().size)
 
     // subscribe to two topics
-    consumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
     awaitAssignment(consumer, expectedAssignment)
 
     // add one more topic with 2 partitions
@@ -290,11 +289,11 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     val additionalAssignment = createTopicAndSendRecords(producer, topic3, 2, 100)
 
     val newExpectedAssignment = expectedAssignment ++ additionalAssignment
-    consumer.subscribe(List(topic1, topic2, topic3).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2, topic3))
     awaitAssignment(consumer, newExpectedAssignment)
 
     // remove the topic we just added
-    consumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
     awaitAssignment(consumer, expectedAssignment)
 
     consumer.unsubscribe()

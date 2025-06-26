@@ -43,14 +43,14 @@ import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
-import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.Json;
 import org.apache.kafka.server.util.json.DecodeJson;
 import org.apache.kafka.server.util.json.JsonObject;
 import org.apache.kafka.server.util.json.JsonValue;
+import org.apache.kafka.tools.AdminCommandFailedException;
+import org.apache.kafka.tools.AdminOperationException;
 import org.apache.kafka.tools.TerseException;
 import org.apache.kafka.tools.ToolsUtils;
 
@@ -581,7 +581,7 @@ public class ReassignPartitionsCommand {
      * Calculate the new partition assignments to suggest in --generate.
      *
      * @param currentAssignment  The current partition assignments.
-     * @param brokers            The rack information for each broker.
+     * @param usableBrokers      The rack information for each broker.
      *
      * @return                   A map from partitions to the proposed assignments for each.
      */
@@ -1271,7 +1271,7 @@ public class ReassignPartitionsCommand {
         Set<TopicPartition> targetPartsSet = targetParts.stream().map(t -> t.getKey()).collect(Collectors.toSet());
         Set<TopicPartition> curReassigningParts = new HashSet<>();
         adminClient.listPartitionReassignments(targetPartsSet).reassignments().get().forEach((part, reassignment) -> {
-            if (reassignment.addingReplicas().isEmpty() || !reassignment.removingReplicas().isEmpty())
+            if (!reassignment.addingReplicas().isEmpty() || !reassignment.removingReplicas().isEmpty())
                 curReassigningParts.add(part);
         });
         if (!curReassigningParts.isEmpty()) {
@@ -1440,7 +1440,7 @@ public class ReassignPartitionsCommand {
         }
 
         OptionSpec<?> action = allActions.get(0);
-        
+
         if (opts.options.has(opts.bootstrapServerOpt) && opts.options.has(opts.bootstrapControllerOpt))
             CommandLineUtils.printUsageAndExit(opts.parser, "Please don't specify both --bootstrap-server and --bootstrap-controller");
         else if (!opts.options.has(opts.bootstrapServerOpt) && !opts.options.has(opts.bootstrapControllerOpt))

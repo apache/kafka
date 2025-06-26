@@ -138,7 +138,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     }
 
     @Override
-    public final String toString() {
+    public String toString() {
         return toString(true);
     }
 
@@ -316,8 +316,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return PushTelemetryRequest.parse(readable, apiVersion);
             case ASSIGN_REPLICAS_TO_DIRS:
                 return AssignReplicasToDirsRequest.parse(readable, apiVersion);
-            case LIST_CLIENT_METRICS_RESOURCES:
-                return ListClientMetricsResourcesRequest.parse(readable, apiVersion);
+            case LIST_CONFIG_RESOURCES:
+                return ListConfigResourcesRequest.parse(readable, apiVersion);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsRequest.parse(readable, apiVersion);
             case SHARE_GROUP_HEARTBEAT:

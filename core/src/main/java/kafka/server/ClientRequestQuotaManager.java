@@ -19,6 +19,7 @@ package kafka.server;
 import kafka.network.RequestChannel;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
@@ -49,8 +50,13 @@ public class ClientRequestQuotaManager extends ClientQuotaManager {
     // Visible for testing
     private final Sensor exemptSensor;
 
-    public ClientRequestQuotaManager(ClientQuotaManagerConfig config, Metrics metrics, Time time, String threadNamePrefix, Optional<ClientQuotaCallback> quotaCallback) {
-        super(config, metrics, QuotaType.REQUEST, time, threadNamePrefix, OptionConverters.toScala(quotaCallback));
+    public ClientRequestQuotaManager(
+            ClientQuotaManagerConfig config, 
+            Metrics metrics, Time time, 
+            String threadNamePrefix, 
+            Optional<Plugin<ClientQuotaCallback>> quotaCallbackPlugin
+    ) {
+        super(config, metrics, QuotaType.REQUEST, time, threadNamePrefix, OptionConverters.toScala(quotaCallbackPlugin));
         this.maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(config.quotaWindowSizeSeconds);
         this.metrics = metrics;
         this.exemptMetricName = metrics.metricName("exempt-request-time", QuotaType.REQUEST.toString(), "Tracking exempt-request-time utilization percentage");

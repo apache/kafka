@@ -47,6 +47,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
+import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -656,6 +657,31 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(0, shareConsumeRequestManager.requestStates(0).getSyncRequestQueue().peek().getIncompleteAcknowledgementsCount(tip0));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"FENCED_LEADER_EPOCH", "NOT_LEADER_OR_FOLLOWER", "UNKNOWN_TOPIC_OR_PARTITION"})
+    public void testFatalErrorsAcknowledgementResponse(Errors error) {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(Collections.singleton(tp0));
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
+                calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+        client.prepareResponse(fullAcknowledgeResponse(tip0, error));
+        networkClientDelegate.poll(time.timer(0));
+
+        // Assert these errors are not retried even if they are retriable. They are treated as fatal and a metadata update is triggered.
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getIncompleteAcknowledgementsCount(tip0));
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+    }
+
     @Test
     public void testRetryAcknowledgementsMultipleCommitAsync() {
         buildRequestManager();
@@ -969,12 +995,14 @@ public class ShareConsumeRequestManagerTest {
 
         // Verify the builder data for node0.
         assertEquals(1, builder1.data().topics().size());
-        assertEquals(tip0.topicId(), builder1.data().topics().get(0).topicId());
-        assertEquals(1, builder1.data().topics().get(0).partitions().size());
-        assertEquals(0, builder1.data().topics().get(0).partitions().get(0).partitionIndex());
-        assertEquals(1, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().size());
-        assertEquals(0L, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).firstOffset());
-        assertEquals(2L, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).lastOffset());
+        ShareFetchRequestData.FetchTopic fetchTopic = builder1.data().topics().stream().findFirst().get();
+        assertEquals(tip0.topicId(), fetchTopic.topicId());
+        assertEquals(1, fetchTopic.partitions().size());
+        ShareFetchRequestData.FetchPartition fetchPartition = fetchTopic.partitions().stream().findFirst().get();
+        assertEquals(0, fetchPartition.partitionIndex());
+        assertEquals(1, fetchPartition.acknowledgementBatches().size());
+        assertEquals(0L, fetchPartition.acknowledgementBatches().get(0).firstOffset());
+        assertEquals(2L, fetchPartition.acknowledgementBatches().get(0).lastOffset());
 
         assertEquals(1, builder1.data().forgottenTopicsData().size());
         assertEquals(tip0.topicId(), builder1.data().forgottenTopicsData().get(0).topicId());
@@ -983,9 +1011,10 @@ public class ShareConsumeRequestManagerTest {
 
         // Verify the builder data for node1.
         assertEquals(1, builder2.data().topics().size());
-        assertEquals(tip1.topicId(), builder2.data().topics().get(0).topicId());
-        assertEquals(1, builder2.data().topics().get(0).partitions().size());
-        assertEquals(1, builder2.data().topics().get(0).partitions().get(0).partitionIndex());
+        fetchTopic = builder2.data().topics().stream().findFirst().get();
+        assertEquals(tip1.topicId(), fetchTopic.topicId());
+        assertEquals(1, fetchTopic.partitions().size());
+        assertEquals(1, fetchTopic.partitions().stream().findFirst().get().partitionIndex());
     }
 
     @Test
@@ -1024,9 +1053,10 @@ public class ShareConsumeRequestManagerTest {
         ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
 
         assertEquals(1, builder.data().topics().size());
-        assertEquals(tip1.topicId(), builder.data().topics().get(0).topicId());
-        assertEquals(1, builder.data().topics().get(0).partitions().size());
-        assertEquals(1, builder.data().topics().get(0).partitions().get(0).partitionIndex());
+        ShareFetchRequestData.FetchTopic fetchTopic = builder.data().topics().stream().findFirst().get();
+        assertEquals(tip1.topicId(), fetchTopic.topicId());
+        assertEquals(1, fetchTopic.partitions().size());
+        assertEquals(1, fetchTopic.partitions().stream().findFirst().get().partitionIndex());
         assertEquals(0, builder.data().forgottenTopicsData().size());
     }
 

@@ -24,13 +24,13 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MockQuorumStateStore;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 import org.apache.kafka.raft.ReplicaKey;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
