@@ -18,6 +18,7 @@
 package kafka.metrics
 
 import java.lang.management.ManagementFactory
+import java.util
 import java.util.Properties
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricPredicate
@@ -124,7 +125,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   def testUpdateJMXFilter(): Unit = {
     // verify previously exposed metrics are removed and existing matching metrics are added
     brokers.foreach(broker => broker.kafkaYammerMetrics.reconfigure(
-      Map(JmxReporter.EXCLUDE_CONFIG -> "kafka.controller:type=KafkaController,name=ActiveControllerCount").asJava
+      util.Map.of(JmxReporter.EXCLUDE_CONFIG, "kafka.controller:type=KafkaController,name=ActiveControllerCount")
     ))
     assertFalse(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
@@ -150,9 +151,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @Test
   def testWindowsStyleTagNames(): Unit = {
     val path = "C:\\windows-path\\kafka-logs"
-    val tags = Map("dir" -> path)
-    val expectedMBeanName = Set(tags.keySet.head, ObjectName.quote(path)).mkString("=")
-    val metric = new KafkaMetricsGroup(this.getClass).metricName("test-metric", tags.asJava)
+    val tags = util.Map.of("dir", path)
+    val expectedMBeanName = Set(tags.keySet().iterator().next(), ObjectName.quote(path)).mkString("=")
+    val metric = new KafkaMetricsGroup(this.getClass).metricName("test-metric", tags)
     assert(metric.getMBeanName.endsWith(expectedMBeanName))
   }
 
