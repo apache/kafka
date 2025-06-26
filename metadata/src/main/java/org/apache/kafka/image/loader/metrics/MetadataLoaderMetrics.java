@@ -18,7 +18,6 @@
 package org.apache.kafka.image.loader.metrics;
 
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
@@ -96,15 +95,6 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
                 return handleLoadSnapshotCount();
             }
         }));
-        for (var featureName : Feature.PRODUCTION_FEATURE_NAMES) {
-            finalizedFeatureLevels.put(featureName, (short) 0);
-            addFinalizedFeatureLevelMetric(featureName);
-        }
-        finalizedFeatureLevels.put(
-            MetadataVersion.FEATURE_NAME,
-            MetadataVersion.MINIMUM_VERSION.featureLevel()
-        );
-        addFinalizedFeatureLevelMetric(MetadataVersion.FEATURE_NAME);
     }
 
     private void addFinalizedFeatureLevelMetric(String featureName) {
@@ -185,10 +175,26 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         return this.handleLoadSnapshotCount.get();
     }
 
-    public void setFinalizedFeatureLevel(String featureName, short featureLevel) {
-        finalizedFeatureLevels.put(featureName, featureLevel);
+    /**
+     * Record the finalized feature level and ensure the metric is registered.
+     * 
+     * @param featureName The name of the feature
+     * @param featureLevel The finalized level for the feature
+     */
+    public void recordFinalizedFeatureLevel(String featureName, short featureLevel) {
+        if (finalizedFeatureLevels.putIfAbsent(featureName, featureLevel) == null) {
+            addFinalizedFeatureLevelMetric(featureName);
+        } else {
+            finalizedFeatureLevels.put(featureName, featureLevel);
+        }
     }
 
+    /**
+     * Get the finalized feature level for a feature.
+     * 
+     * @param featureName The name of the feature
+     * @return The finalized level for the feature, or 0 if not found
+     */
     public short finalizedFeatureLevel(String featureName) {
         return finalizedFeatureLevels.getOrDefault(featureName, (short) 0);
     }

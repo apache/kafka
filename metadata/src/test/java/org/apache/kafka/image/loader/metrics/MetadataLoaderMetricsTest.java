@@ -19,7 +19,6 @@ package org.apache.kafka.image.loader.metrics;
 
 import org.apache.kafka.controller.metrics.ControllerMetricsTestUtils;
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import com.yammer.metrics.core.Gauge;
@@ -34,7 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MetadataLoaderMetricsTest {
@@ -72,14 +70,20 @@ public class MetadataLoaderMetricsTest {
                     Set.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
+                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
+                    ));
+
+                // Record some feature levels and verify their metrics are registered
+                fakeMetrics.metrics.recordFinalizedFeatureLevel("metadata.version", (short) 3);
+                fakeMetrics.metrics.recordFinalizedFeatureLevel("kraft.version", (short) 4);
+
+                ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
+                    Set.of(
+                        "kafka.server:type=MetadataLoader,name=CurrentControllerId",
+                        "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=transactionVersion",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=groupVersion",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=eligibleLeaderReplicasVersion",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=shareVersion",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=streamsVersion"
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion"
                     ));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
@@ -122,7 +126,7 @@ public class MetadataLoaderMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         try {
             try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
-                fakeMetrics.metrics.setCurrentMetadataVersion(MINIMUM_VERSION);
+                fakeMetrics.metrics.setCurrentMetadataVersion(MetadataVersion.IBP_3_7_IV0);
                 fakeMetrics.metrics.incrementHandleLoadSnapshotCount();
                 fakeMetrics.metrics.incrementHandleLoadSnapshotCount();
 
@@ -130,7 +134,7 @@ public class MetadataLoaderMetricsTest {
                 Gauge<Integer> currentMetadataVersion = (Gauge<Integer>) registry
                     .allMetrics()
                     .get(metricName("MetadataLoader", "CurrentMetadataVersion"));
-                assertEquals(MINIMUM_VERSION.featureLevel(),
+                assertEquals(MetadataVersion.IBP_3_7_IV0.featureLevel(),
                     currentMetadataVersion.value().shortValue());
 
                 @SuppressWarnings("unchecked")
@@ -166,23 +170,39 @@ public class MetadataLoaderMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         try {
             try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
+                // Initially no finalized level metrics should be registered
+                ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
+                    Set.of(
+                        "kafka.server:type=MetadataLoader,name=CurrentControllerId",
+                        "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
+                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
+                    ));
+
+                // Record metadata version and verify its metric
+                fakeMetrics.metrics.recordFinalizedFeatureLevel("metadata.version", (short) 5);
                 @SuppressWarnings("unchecked")
                 Gauge<Short> finalizedMetadataVersion = (Gauge<Short>) registry
                     .allMetrics()
                     .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=metadataVersion"));
+                assertEquals((short) 5, finalizedMetadataVersion.value());
+
+                // Record KRaft version and verify its metric
+                fakeMetrics.metrics.recordFinalizedFeatureLevel("kraft.version", (short) 3);
                 @SuppressWarnings("unchecked")
                 Gauge<Short> finalizedKRaftVersion = (Gauge<Short>) registry
                     .allMetrics()
                     .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=kraftVersion"));
+                assertEquals((short) 3, finalizedKRaftVersion.value());
 
-                assertEquals(MINIMUM_VERSION.featureLevel(), finalizedMetadataVersion.value());
-                assertEquals((short) 0, finalizedKRaftVersion.value());
-
-                fakeMetrics.metrics.setFinalizedFeatureLevel(MetadataVersion.FEATURE_NAME, MetadataVersion.LATEST_PRODUCTION.featureLevel());
-                assertEquals(MetadataVersion.LATEST_PRODUCTION.featureLevel(), finalizedMetadataVersion.value());
-
-                fakeMetrics.metrics.setFinalizedFeatureLevel(KRaftVersion.FEATURE_NAME, KRaftVersion.LATEST_PRODUCTION.featureLevel());
-                assertEquals(KRaftVersion.LATEST_PRODUCTION.featureLevel(), finalizedKRaftVersion.value());
+                // Verify both metrics are registered
+                ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
+                    Set.of(
+                        "kafka.server:type=MetadataLoader,name=CurrentControllerId",
+                        "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
+                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion"
+                    ));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
                 Set.of());

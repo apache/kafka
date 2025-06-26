@@ -33,6 +33,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -348,16 +349,21 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         metrics.updateLastAppliedImageProvenance(image.provenance());
         MetadataVersion metadataVersion = image.features().metadataVersionOrThrow();
         metrics.setCurrentMetadataVersion(metadataVersion);
-        metrics.setFinalizedFeatureLevel(
+
+        // Set the metadata version feature level, since it is handled separately from other features
+        metrics.recordFinalizedFeatureLevel(
             MetadataVersion.FEATURE_NAME,
             metadataVersion.featureLevel()
         );
-        for (var finalizedFeatureEntry : image.features().finalizedVersions().entrySet()) {
-            metrics.setFinalizedFeatureLevel(
-                finalizedFeatureEntry.getKey(),
-                finalizedFeatureEntry.getValue()
+
+        // Set all production feature levels from the image, defaulting to their minimum production values
+        for (var feature : Feature.PRODUCTION_FEATURES) {
+            metrics.recordFinalizedFeatureLevel(
+                feature.featureName(),
+                image.features().finalizedVersions().getOrDefault(feature.featureName(), feature.minimumProduction())
             );
         }
+
         if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }
