@@ -281,6 +281,22 @@ public class Utils {
     }
 
     /**
+     * Throws an InvalidRequestException if the value is not null and non-empty.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNotNullOrEmpty(
+        Collection<?> value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null && !value.isEmpty()) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
      * Throws an InvalidRequestException if the value is non-null.
      *
      * @param value The value.
