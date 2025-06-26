@@ -151,7 +151,6 @@ public class PartitionMakeFollowerBenchmark {
     @Benchmark
     public boolean testMakeFollower() {
         PartitionState partitionState = new PartitionState()
-            .setControllerEpoch(0)
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(replicas)

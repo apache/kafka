@@ -167,7 +167,6 @@ public class ReplicaFetcherThreadBenchmark {
 
             List<Integer> replicas = Arrays.asList(0, 1, 2);
             PartitionState partitionState = new PartitionState()
-                    .setControllerEpoch(0)
                     .setLeader(0)
                     .setLeaderEpoch(0)
                     .setIsr(replicas)

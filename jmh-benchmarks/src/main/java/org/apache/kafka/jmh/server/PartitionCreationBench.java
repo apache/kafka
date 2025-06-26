@@ -196,7 +196,6 @@ public class PartitionCreationBench {
             inSync.add(2);
 
             PartitionState partitionState = new PartitionState()
-                    .setControllerEpoch(0)
                     .setLeader(0)
                     .setLeaderEpoch(0)
                     .setIsr(inSync)
