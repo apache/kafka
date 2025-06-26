@@ -20,13 +20,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
-import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -66,16 +64,6 @@ public class DescribeTopicPartitionsResponse extends AbstractResponse {
             updateErrorCounts(errorCounts, Errors.forCode(topicResponse.errorCode()));
         });
         return errorCounts;
-    }
-
-    public static DescribeTopicPartitionsResponse prepareResponse(
-        int throttleTimeMs,
-        List<DescribeTopicPartitionsResponseTopic> topics
-    ) {
-        DescribeTopicPartitionsResponseData responseData = new DescribeTopicPartitionsResponseData();
-        responseData.setThrottleTimeMs(throttleTimeMs);
-        topics.forEach(topicResponse -> responseData.topics().add(topicResponse));
-        return new DescribeTopicPartitionsResponse(responseData);
     }
 
     public static DescribeTopicPartitionsResponse parse(Readable readable, short version) {
