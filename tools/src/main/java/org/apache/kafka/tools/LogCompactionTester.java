@@ -346,9 +346,9 @@ public class LogCompactionTester {
      * Wait for condition to be true for at most 15 seconds, checking every 100ms
      */
     private static void waitUntilTrue(Supplier<Boolean> condition, Supplier<String> timeoutMessage) throws InterruptedException {
-        final long DEFAULT_MAX_WAIT_MS = 15000; // 15 seconds
-        final long DEFAULT_POLL_INTERVAL_MS = 100; // 100ms
-        long endTime = System.currentTimeMillis() + DEFAULT_MAX_WAIT_MS;
+        final long defaultMaxWaitMs = 15000; // 15 seconds
+        final long defaultPollIntervalMs = 100; // 100ms
+        long endTime = System.currentTimeMillis() + defaultMaxWaitMs;
 
         while (System.currentTimeMillis() < endTime) {
             try {
@@ -358,7 +358,7 @@ public class LogCompactionTester {
             } catch (Exception e) {
                 // Continue trying until timeout
             }
-            Thread.sleep(DEFAULT_POLL_INTERVAL_MS);
+            Thread.sleep(Math.min(defaultPollIntervalMs, defaultMaxWaitMs));
         }
 
         throw new RuntimeException(timeoutMessage.get());
