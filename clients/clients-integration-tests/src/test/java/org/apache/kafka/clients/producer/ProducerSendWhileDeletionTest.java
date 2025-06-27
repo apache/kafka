@@ -45,11 +45,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
@@ -62,7 +62,6 @@ import static org.apache.kafka.server.config.ReplicationConfigs.DEFAULT_REPLICAT
 import static org.apache.kafka.server.config.ServerLogConfigs.NUM_PARTITIONS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
@@ -167,15 +166,20 @@ public class ProducerSendWhileDeletionTest {
     @Timeout(90)
     @ClusterTest
     public void testSendWhileTopicGetRecreated() {
-        int maxNumRecreatTopicAttempts = 10;
-        List<Uuid> topicIds = new CopyOnWriteArrayList<>();
-        var recreateTopicFuture = CompletableFuture.runAsync(() -> {
-            for (int i = 1; i <= maxNumRecreatTopicAttempts; i++) {
-                Uuid topicId = recreateTopic();
-                if (topicId != Uuid.ZERO_UUID) {
-                    topicIds.add(topicId);
+        int maxNumTopicRecreationAttempts = 10;
+        var recreateTopicFuture = CompletableFuture.supplyAsync(() -> {
+            var topicIds = new HashSet<Uuid>();
+            while (topicIds.size() < maxNumTopicRecreationAttempts) {
+                try (var admin = cluster.admin()) {
+                    if (admin.listTopics().names().get().contains(topic)) {
+                        admin.deleteTopics(List.of(topic)).all().get();
+                    }
+                    topicIds.add(admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).topicId(topic).get());
+                } catch (Exception e) {
+                    // ignore
                 }
             }
+            return topicIds;
         });
 
         AtomicInteger numSuccess = new AtomicInteger(0);
@@ -188,16 +192,16 @@ public class ProducerSendWhileDeletionTest {
                                     numSuccess.incrementAndGet();
                                 }
                             }).get();
-                    assertEquals(resp.topic(), topic);
+                    assertEquals(topic, resp.topic());
                 }
             } catch (Exception e) {
                 // ignore
             }
         });
-        recreateTopicFuture.join();
+        var topicIds = recreateTopicFuture.join();
         producerFuture.join();
-        assertTrue(Math.abs(maxNumRecreatTopicAttempts - topicIds.size()) <= 5);
-        assertEquals(10, numSuccess.intValue());
+        assertEquals(maxNumTopicRecreationAttempts, topicIds.size());
+        assertEquals(numRecords, numSuccess.intValue());
     }
 
     @ClusterTest
@@ -311,18 +315,6 @@ public class ProducerSendWhileDeletionTest {
                     .get()
                     .get(topic);
             
-        }
-    }
-
-    private Uuid recreateTopic() {
-        try (var admin = cluster.admin()) {
-            if (admin.listTopics().names().get().contains(topic)) {
-                admin.deleteTopics(List.of(topic)).all().get();
-            }
-            return admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).topicId(topic).get();
-        } catch (Exception e) {
-            // ignore
-            return Uuid.ZERO_UUID;
         }
     }
 

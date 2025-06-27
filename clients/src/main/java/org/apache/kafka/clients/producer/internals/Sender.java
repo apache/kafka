@@ -610,8 +610,8 @@ public class Sender implements Runnable {
                     // Version 13 drop topic name and add support to topic id.
                     // We need to find batch based on topic id and partition index only as
                     // topic name in the response will be empty.
-                    // For older versions, topic id is zero and we will find the batch based on the topic name.
-                    TopicPartition tp = r.topicId() != Uuid.ZERO_UUID ?
+                    // For older versions, topic id is zero, and we will find the batch based on the topic name.
+                    TopicPartition tp = (!r.topicId().equals(Uuid.ZERO_UUID) && topicNames.containsKey(r.topicId())) ?
                             new TopicPartition(topicNames.get(r.topicId()), p.index()) :
                             new TopicPartition(r.name(), p.index());
 
