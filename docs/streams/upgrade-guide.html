@@ -220,7 +220,7 @@
         either direction. An application using this protocol must use a new <code>application.id</code> that has not
         been used by any application on the classic protocol. Furthermore, this ID must not be in use as a
         <code>group.id</code> by any consumer ("classic" or "consumer") not share-group application.
-        It is also possible to delete the previous consumer group using <code>kafka-consumer-groups.sh</code> before
+        It is also possible to delete a previous consumer group using <code>kafka-consumer-groups.sh</code> before
         starting the application with the new protocol, which will however also delete all offsets for that group.
     </p>
 
