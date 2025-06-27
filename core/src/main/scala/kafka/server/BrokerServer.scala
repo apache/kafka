@@ -96,8 +96,6 @@ class BrokerServer(
 
   private var assignmentsManager: AssignmentsManager = _
 
-  private val isShuttingDown = new AtomicBoolean(false)
-
   val lock: ReentrantLock = new ReentrantLock()
   val awaitShutdownCond: Condition = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
@@ -172,10 +170,7 @@ class BrokerServer(
       info(s"Transition from $status to $to")
 
       status = to
-      if (to == SHUTTING_DOWN) {
-        isShuttingDown.set(true)
-      } else if (to == SHUTDOWN) {
-        isShuttingDown.set(false)
+      if (to == SHUTDOWN) {
         awaitShutdownCond.signalAll()
       }
     } finally {
@@ -820,8 +815,6 @@ class BrokerServer(
 
       if (persister != null)
         CoreUtils.swallow(persister.stop(), this)
-
-      isShuttingDown.set(false)
 
       if (lifecycleManager != null)
         CoreUtils.swallow(lifecycleManager.close(), this)
