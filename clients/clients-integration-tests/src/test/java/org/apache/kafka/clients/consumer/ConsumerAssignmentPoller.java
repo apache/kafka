@@ -31,7 +31,6 @@ import java.util.Set;
 public class ConsumerAssignmentPoller extends ShutdownableThread {
     private final Consumer<byte[], byte[]> consumer;
     private final Set<TopicPartition> partitionsToAssign;
-    private final ConsumerRebalanceListener userRebalanceListener;
     private volatile Optional<Throwable> thrownException = Optional.empty();
     private volatile int receivedMessages = 0;
     private final Set<TopicPartition> partitionAssignment = Collections.synchronizedSet(new HashSet<>());
@@ -54,7 +53,6 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         super("daemon-consumer-assignment", false);
         this.consumer = consumer;
         this.partitionsToAssign = partitionsToAssign;
-        this.userRebalanceListener = userRebalanceListener;
         this.topicsSubscription = topicsToSubscribe;
 
         this.rebalanceListener = new ConsumerRebalanceListener() {
