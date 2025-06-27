@@ -45,10 +45,11 @@ import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
+
   def handleDescribeConfigsRequest(
-                                    request: RequestChannel.Request,
-                                    authHelper: AuthHelper
-                                  ): DescribeConfigsResponseData = {
+    request: RequestChannel.Request,
+    authHelper: AuthHelper
+  ): DescribeConfigsResponseData = {
     val describeConfigsRequest = request.body[DescribeConfigsRequest]
     val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.partition { resource =>
       ConfigResource.Type.forId(resource.resourceType) match {
