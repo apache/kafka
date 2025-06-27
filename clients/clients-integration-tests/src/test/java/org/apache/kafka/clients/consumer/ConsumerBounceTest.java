@@ -409,6 +409,7 @@ public class ConsumerBounceTest {
         String topic = "fatal-exception-test";
 
         Map<String, String> consumerConfig = new HashMap<>();
+        int numPartition = Integer.parseInt(MAX_GROUP_SIZE);
 
         consumerConfig.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000");
         if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
@@ -447,7 +448,7 @@ public class ConsumerBounceTest {
         assertInstanceOf(GroupMaxSizeReachedException.class, rejectedConsumer.getThrownException().get());
 
         // assert group continues to live
-        ClientsTestUtils.sendRecordsToTopic(clusterInstance, topic, Integer.parseInt(MAX_GROUP_SIZE), 0, Integer.parseInt(MAX_GROUP_SIZE) * 100);
+        ClientsTestUtils.sendRecordsToTopic(clusterInstance, topic, numPartition, 0, numPartition * 100);
 
         TestUtils.waitForCondition(
                 () -> consumerPollers.stream().allMatch(p -> p.receivedMessages() >= 100),
