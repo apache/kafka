@@ -38,25 +38,19 @@ public final class NodeMetrics implements AutoCloseable {
         this.metrics = metrics;
         this.supportedFeatureRanges = QuorumFeatures.defaultSupportedFeatureMap(enableUnstableVersions);
         supportedFeatureRanges.forEach((featureName, versionRange) -> {
-            addSupportedLevelMetric(MAXIMUM_SUPPORTED_LEVEL_NAME, featureName);
-            addSupportedLevelMetric(MINIMUM_SUPPORTED_LEVEL_NAME, featureName);
+            addSupportedLevelMetric(MAXIMUM_SUPPORTED_LEVEL_NAME, featureName, versionRange.max());
+            addSupportedLevelMetric(MINIMUM_SUPPORTED_LEVEL_NAME, featureName, versionRange.min());
         });
     }
 
-    private void addSupportedLevelMetric(String metricName, String featureName) {
+    private void addSupportedLevelMetric(String metricName, String featureName, short value) {
         metrics.addMetric(
             getFeatureNameTagMetricName(
                 metricName,
                 METRIC_GROUP_NAME,
                 featureName
             ),
-            (Gauge<Short>) (config, now) -> {
-                if (metricName.equals(MAXIMUM_SUPPORTED_LEVEL_NAME)) {
-                    return supportedFeatureRanges.get(featureName).max();
-                } else {
-                    return supportedFeatureRanges.get(featureName).min();
-                }
-            }
+            (Gauge<Short>) (config, now) -> value
         );
     }
 
