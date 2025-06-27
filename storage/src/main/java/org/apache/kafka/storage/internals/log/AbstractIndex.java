@@ -430,7 +430,7 @@ public abstract class AbstractIndex implements Closeable {
         return LockUtils.inLockThrows(lock, () -> LockUtils.inLockThrows(remapLock.writeLock(), action));
     }
 
-    protected final <E extends Exception> void inRemapReadWriteLock(LockUtils.ThrowingRunnable action) throws E {
+    protected final <E extends Exception> void inRemapReadWriteLock(LockUtils.ThrowingRunnable<E> action) throws E {
         LockUtils.inLockThrows(lock, () -> LockUtils.inLockThrows(remapLock.writeLock(), action));
     }
 
