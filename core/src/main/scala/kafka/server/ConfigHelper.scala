@@ -22,7 +22,7 @@ import kafka.network.RequestChannel
 import java.util.{Collections, Properties}
 import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
+import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
@@ -34,6 +34,7 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
+import org.apache.kafka.server.ConfigHelperUtils.createResponseConfig
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
@@ -45,9 +46,9 @@ import scala.jdk.OptionConverters.RichOptional
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
   def handleDescribeConfigsRequest(
-    request: RequestChannel.Request,
-    authHelper: AuthHelper
-  ): DescribeConfigsResponseData = {
+                                    request: RequestChannel.Request,
+                                    authHelper: AuthHelper
+                                  ): DescribeConfigsResponseData = {
     val describeConfigsRequest = request.body[DescribeConfigsRequest]
     val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.partition { resource =>
       ConfigResource.Type.forId(resource.resourceType) match {
@@ -77,39 +78,6 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     new DescribeConfigsResponseData().setResults((authorizedConfigs ++ unauthorizedConfigs).asJava)
   }
 
-  private def buildDescribeConfigsResult(resource: DescribeConfigsResource,
-                                         configs: java.util.stream.Stream[java.util.Map.Entry[String, String]],
-                                         createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-    val configEntries = configs
-      .filter(entry =>
-        resource.configurationKeys == null ||
-          resource.configurationKeys.isEmpty ||
-          resource.configurationKeys.contains(entry.getKey)
-      )
-      .map[DescribeConfigsResponseData.DescribeConfigsResourceResult](entry => createConfigEntry(entry.getKey, entry.getValue))
-      .toList
-
-    new DescribeConfigsResponseData.DescribeConfigsResult()
-      .setErrorCode(Errors.NONE.code)
-      .setConfigs(configEntries)
-  }
-
-  private def createResponseConfig(resource: DescribeConfigsResource, configs: AbstractConfig,
-                           createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-    val nonInternalValues = configs.nonInternalValues // cache to avoid multiple calls
-    val nonInternalValuesStream = nonInternalValues.entrySet().stream()
-      .map(e => new java.util.AbstractMap.SimpleEntry[String, String](e.getKey, if (e.getValue == null) null else e.getValue.toString))
-    val originalsFilteredStream = configs.originals.entrySet.stream()
-      .filter(e => e.getValue != null && !nonInternalValues.containsKey(e.getKey)) // skip keys in nonInternalValues
-      .map(e => new java.util.AbstractMap.SimpleEntry[String, String](e.getKey, if (e.getValue == null) null else e.getValue.toString))
-    buildDescribeConfigsResult(resource, java.util.stream.Stream.concat(nonInternalValuesStream, originalsFilteredStream), createConfigEntry)
-  }
-
-  private def createResponseConfig(resource: DescribeConfigsResource, configs: java.util.Map[String, String],
-                           createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-    buildDescribeConfigsResult(resource, configs.entrySet().stream(), createConfigEntry)
-  }
-
   def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
                       includeSynonyms: Boolean,
                       includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
@@ -122,7 +90,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             if (metadataCache.contains(topic)) {
               val topicProps = configRepository.topicConfig(topic)
               val logConfig = LogConfig.fromProps(config.extractLogConfigMap, topicProps)
-              createResponseConfig(resource, logConfig, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
+              createResponseConfig(resource, logConfig, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation)(_, _))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
                 .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
@@ -131,10 +99,10 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
           case ConfigResource.Type.BROKER =>
             if (resource.resourceName == null || resource.resourceName.isEmpty)
               createResponseConfig(resource, config.dynamicConfig.currentDynamicDefaultConfigs.asJava,
-                createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation))
+                createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation)(_, _))
             else if (resourceNameToBrokerId(resource.resourceName) == config.brokerId)
               createResponseConfig(resource, config,
-                createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation))
+                createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation)(_, _))
             else
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received ${resource.resourceName}")
 
@@ -155,7 +123,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             } else {
               val clientMetricsProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resource.resourceName))
               val clientMetricsConfig = ClientMetricsConfigs.fromProps(ClientMetricsConfigs.defaultConfigsMap(), clientMetricsProps)
-              createResponseConfig(resource, clientMetricsConfig, createClientMetricsConfigEntry(clientMetricsConfig, clientMetricsProps, includeSynonyms, includeDocumentation))
+              createResponseConfig(resource, clientMetricsConfig, createClientMetricsConfigEntry(clientMetricsConfig, clientMetricsProps, includeSynonyms, includeDocumentation)(_, _))
             }
 
           case ConfigResource.Type.GROUP =>
@@ -165,7 +133,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             } else {
               val groupProps = configRepository.groupConfig(group)
               val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
-              createResponseConfig(resource, groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
+              createResponseConfig(resource, groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation)(_, _))
             }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
