@@ -621,8 +621,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
             int port = broker.boundPort(ListenerName.normalised(listenerName.value()));
             if (port <= 0) {
                 throw new RuntimeException("Broker " + brokerId + " does not yet " +
-                                           "have a bound port for " + listenerName + ".  Did you start " +
-                                           "the cluster yet?");
+                    "have a bound port for " + listenerName + ".  Did you start " +
+                    "the cluster yet?");
             }
             bld.append(prefix).append("localhost:").append(port);
             prefix = ",";
