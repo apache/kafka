@@ -25,31 +25,17 @@ import java.util.List;
 import java.util.Objects;
 
 public class PartitionState {
-    String topicName;
-    int partitionIndex;
-    int leader;
-    int leaderEpoch;
-    List<Integer> isr;
-    int partitionEpoch;
-    List<Integer> replicas;
-    List<Integer> addingReplicas;
-    List<Integer> removingReplicas;
-    boolean isNew;
-    byte leaderRecoveryState;
-
-    public PartitionState() {
-        this.topicName = "";
-        this.partitionIndex = 0;
-        this.leader = 0;
-        this.leaderEpoch = 0;
-        this.isr = new ArrayList<>(0);
-        this.partitionEpoch = 0;
-        this.replicas = new ArrayList<>(0);
-        this.addingReplicas = new ArrayList<>(0);
-        this.removingReplicas = new ArrayList<>(0);
-        this.isNew = false;
-        this.leaderRecoveryState = (byte) 0;
-    }
+    String topicName = "";
+    int partitionIndex = 0;
+    int leader = 0;
+    int leaderEpoch = 0;
+    List<Integer> isr = new ArrayList<>(0);
+    int partitionEpoch = 0;
+    List<Integer> replicas = new ArrayList<>(0);
+    List<Integer> addingReplicas = new ArrayList<>(0);
+    List<Integer> removingReplicas = new ArrayList<>(0);
+    boolean isNew = false;
+    byte leaderRecoveryState = (byte) 0;
 
     @Override
     public boolean equals(Object o) {
