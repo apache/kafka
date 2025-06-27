@@ -34,10 +34,10 @@ public class ConfigHelperUtils {
      */
     public static DescribeConfigsResponseData.DescribeConfigsResult createResponseConfig(
             DescribeConfigsRequestData.DescribeConfigsResource resource,
-            Map<String, ?> configs,
+            Map<String, ?> config,
             BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
 
-        return toDescribeConfigsResult(configs.entrySet().stream().map(e -> (Entry<String, ?>) e), resource, (k, v) -> createConfigEntry.apply(k, v));
+        return toDescribeConfigsResult(config.entrySet().stream().map(entry -> (Entry<String, ?>) entry), resource, createConfigEntry);
     }
 
     /**
@@ -49,19 +49,14 @@ public class ConfigHelperUtils {
             AbstractConfig config,
             BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
 
-        Map<String, ?> nonInternalValues = config.nonInternalValues();
-        return toDescribeConfigsResult(
-                Stream.concat(
-                        config.originals().entrySet().stream()
-                                .filter(entry -> entry.getValue() != null)
-                                .filter(entry -> !nonInternalValues.containsKey(entry.getKey()))
-                                .map(e -> (Entry<String, ?>) e),
-                        nonInternalValues.entrySet().stream()
-                                .map(e -> (Entry<String, ?>) e)
-                ),
-                resource,
-                createConfigEntry
+        Map<String, ?> nonInternalValues = config.nonInternalValues(); // cache to avoid multiple calls
+        Stream<Entry<String, ?>> allEntries = Stream.concat(
+                config.originals().entrySet().stream()
+                        .filter(entry -> entry.getValue() != null && !nonInternalValues.containsKey(entry.getKey()))
+                        .map(entry -> (Entry<String, ?>) entry), // explicit parameterized cast
+                nonInternalValues.entrySet().stream()
         );
+        return toDescribeConfigsResult(allEntries, resource, createConfigEntry);
     }
 
     /**
