@@ -49,11 +49,9 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -70,7 +68,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.lang.Math.min;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorWriteEvent.NOT_QUEUED;
@@ -764,10 +761,17 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
             // Release the buffer only if it is not larger than the maxBatchSize.
             int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
-            Stream.of(currentBatch.builder.buffer(), currentBatch.buffer)
-                .filter(buf -> buf.capacity() <= maxBatchSize)
-                .max(Comparator.comparing(Buffer::capacity))
-                .ifPresent(bufferSupplier::release);
+            ByteBuffer builderBuffer = currentBatch.builder.buffer();
+            ByteBuffer batchBuffer = currentBatch.buffer;
+
+            boolean builderUsable = builderBuffer.capacity() <= maxBatchSize;
+            boolean batchUsable = batchBuffer.capacity() <= maxBatchSize;
+
+            if (builderUsable && (!batchUsable || builderBuffer.capacity() >= batchBuffer.capacity())) {
+                bufferSupplier.release(builderBuffer);
+            } else if (batchUsable) {
+                bufferSupplier.release(batchBuffer);
+            }
 
             currentBatch = null;
         }
