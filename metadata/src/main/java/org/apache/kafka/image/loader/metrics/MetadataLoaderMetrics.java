@@ -182,7 +182,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
      * @param featureLevel The finalized level for the feature
      */
     public void recordFinalizedFeatureLevel(String featureName, short featureLevel) {
-        final var metricNotRegistered = finalizedFeatureLevels.putIfAbsent(featureName, featureLevel) == null;
+        final var metricNotRegistered = finalizedFeatureLevels.put(featureName, featureLevel) == null;
         if (metricNotRegistered) addFinalizedFeatureLevelMetric(featureName);
     }
 
