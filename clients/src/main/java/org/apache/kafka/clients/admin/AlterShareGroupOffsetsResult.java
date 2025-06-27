@@ -22,8 +22,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.protocol.Errors;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * The result of the {@link Admin#alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)} call.
@@ -66,12 +69,19 @@ public class AlterShareGroupOffsetsResult {
 
     /**
      * Return a future which succeeds if all the alter offsets succeed.
+     * If not, the first topic error shall be returned.
      */
     public KafkaFuture<Void> all() {
-        return this.future.thenApply(topicPartitionErrorsMap -> {
+        return this.future.thenApply(topicPartitionErrorsMap ->  {
+            List<TopicPartition> partitionsFailed = topicPartitionErrorsMap.entrySet()
+                .stream()
+                .filter(e -> e.getValue() != null)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
             for (ApiException exception : topicPartitionErrorsMap.values()) {
                 if (exception != null) {
-                    throw exception;
+                    throw Errors.forException(exception).exception(
+                        "Failed altering group offsets for the following partitions: " + partitionsFailed);
                 }
             }
             return null;
