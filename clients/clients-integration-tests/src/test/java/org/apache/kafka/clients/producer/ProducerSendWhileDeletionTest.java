@@ -36,6 +36,8 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
+import org.apache.kafka.test.MockProducerInterceptor;
+import org.apache.kafka.test.MockSerializer;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Timeout;
@@ -50,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -165,8 +166,8 @@ public class ProducerSendWhileDeletionTest {
 
     @Timeout(90)
     @ClusterTest
-    public void testSendWhileTopicGetRecreated() {
-        int maxNumTopicRecreationAttempts = 10;
+    public void testSendWhileTopicGetRecreated() throws InterruptedException {
+        int maxNumTopicRecreationAttempts = 5;
         var recreateTopicFuture = CompletableFuture.supplyAsync(() -> {
             var topicIds = new HashSet<Uuid>();
             while (topicIds.size() < maxNumTopicRecreationAttempts) {
@@ -182,26 +183,25 @@ public class ProducerSendWhileDeletionTest {
             return topicIds;
         });
 
-        AtomicInteger numSuccess = new AtomicInteger(0);
+        Map<String, Object> producerConfig = Map.of(
+                ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName(),
+                "mock.interceptor.append", "",
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName(),
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MockSerializer.class.getName());
+
         var producerFuture = CompletableFuture.runAsync(() -> {
-            try (var producer = cluster.producer()) {
+            try (var producer = cluster.producer(producerConfig)) {
                 for (int i = 1; i <= numRecords; i++) {
-                    var resp = producer.send(new ProducerRecord<>(topic, null, ("value" + i).getBytes()),
-                            (metadata, exception) -> {
-                                if (metadata != null) {
-                                    numSuccess.incrementAndGet();
-                                }
-                            }).get();
-                    assertEquals(topic, resp.topic());
+                    producer.send(new ProducerRecord<>(topic, String.valueOf(i), ("value" + i)));
                 }
-            } catch (Exception e) {
-                // ignore
             }
         });
         var topicIds = recreateTopicFuture.join();
         producerFuture.join();
         assertEquals(maxNumTopicRecreationAttempts, topicIds.size());
-        assertEquals(numRecords, numSuccess.intValue());
+        TestUtils.waitForCondition(() ->
+                        numRecords == MockProducerInterceptor.ON_SUCCESS_COUNT.intValue(),
+                "didn't produce all records");
     }
 
     @ClusterTest
