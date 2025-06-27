@@ -93,7 +93,7 @@ import java.io.{ByteArrayInputStream, File}
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.function.BiConsumer
 import java.util.stream.IntStream
@@ -2959,7 +2959,6 @@ class ReplicaManagerTest {
     propsModifier: Properties => Unit = _ => {},
     mockReplicaFetcherManager: Option[ReplicaFetcherManager] = None,
     mockReplicaAlterLogDirsManager: Option[ReplicaAlterLogDirsManager] = None,
-    isShuttingDown: AtomicBoolean = new AtomicBoolean(false),
     enableRemoteStorage: Boolean = false,
     shouldMockLog: Boolean = false,
     remoteLogManager: Option[RemoteLogManager] = None,
@@ -3044,7 +3043,6 @@ class ReplicaManagerTest {
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager,
       brokerTopicStats = brokerTopicStats,
-      isShuttingDown = isShuttingDown,
       delayedProducePurgatoryParam = Some(mockProducePurgatory),
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
@@ -4957,12 +4955,10 @@ class ReplicaManagerTest {
     val foo2 = new TopicPartition("foo", 2)
 
     val mockReplicaFetcherManager = mock(classOf[ReplicaFetcherManager])
-    val isShuttingDown = new AtomicBoolean(false)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
       mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
-      isShuttingDown = isShuttingDown,
       enableRemoteStorage = enableRemoteStorage
     )
 
@@ -5039,10 +5035,6 @@ class ReplicaManagerTest {
       }
 
       reset(mockReplicaFetcherManager)
-
-      // The broker transitions to SHUTTING_DOWN state. This should not have
-      // any impact in KRaft mode.
-      isShuttingDown.set(true)
 
       // The replica begins the controlled shutdown.
       replicaManager.beginControlledShutdown()
