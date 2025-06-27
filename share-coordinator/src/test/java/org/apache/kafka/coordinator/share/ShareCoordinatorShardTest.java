@@ -305,127 +305,6 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
-    public void testWriteStateSequentialRequestsWithHigherStateEpochCreateShareSnapshots() {
-        // Makes 3 requests. First 2 with same state epoch, and 3rd with incremented state epoch.
-        // The test config defines number of updates/snapshot as 50. So, this test proves that
-        // a higher state epoch in a request forces snapshot creation, even if number of share updates
-        // have not breached the updates/snapshots limit.
-
-        int stateEpoch = 1;
-        int snapshotEpoch = 0;
-
-        initSharePartition(shard, SHARE_PARTITION_KEY);
-
-        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
-                    .setPartition(PARTITION)
-                    .setStartOffset(0)
-                    .setStateEpoch(stateEpoch)
-                    .setLeaderEpoch(0)
-                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
-                        .setFirstOffset(0)
-                        .setLastOffset(10)
-                        .setDeliveryCount((short) 1)
-                        .setDeliveryState((byte) 0)))))));
-
-        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request);
-
-        shard.replay(0L, 0L, (short) 0, result.records().get(0));
-
-        snapshotEpoch++;    // Since state epoch increased.
-        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
-        List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), snapshotEpoch, TIME.milliseconds())
-        ));
-
-        assertEquals(1, shard.getShareStateMapValue(SHARE_PARTITION_KEY).snapshotEpoch());
-        assertEquals(expectedData, result.response());
-        assertEquals(expectedRecords, result.records());
-
-        assertEquals(groupOffset(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), snapshotEpoch, TIME.milliseconds())
-        ).value().message()), shard.getShareStateMapValue(SHARE_PARTITION_KEY));
-        assertEquals(0, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
-        verify(shard.getMetricsShard()).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
-
-        // State epoch stays same so share update.
-        request = new WriteShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
-                    .setPartition(PARTITION)
-                    .setStartOffset(0)
-                    .setStateEpoch(stateEpoch)
-                    .setLeaderEpoch(0)
-                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
-                        .setFirstOffset(0)
-                        .setLastOffset(10)
-                        .setDeliveryCount((short) 2)
-                        .setDeliveryState((byte) 0)))))));
-
-        result = shard.writeState(request);
-
-        shard.replay(0L, 0L, (short) 0, result.records().get(0));
-
-        expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
-        expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), snapshotEpoch, TIME.milliseconds())
-        ));
-
-        // Snapshot epoch did not increase
-        assertEquals(1, shard.getShareStateMapValue(SHARE_PARTITION_KEY).snapshotEpoch());
-        assertEquals(expectedData, result.response());
-        assertEquals(expectedRecords, result.records());
-
-        assertEquals(groupOffset(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), snapshotEpoch, TIME.milliseconds())
-        ).value().message()), shard.getShareStateMapValue(SHARE_PARTITION_KEY));
-        assertEquals(0, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
-        verify(shard.getMetricsShard(), times(2)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
-
-        // State epoch incremented so share snapshot.
-        request = new WriteShareGroupStateRequestData()
-            .setGroupId(GROUP_ID)
-            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
-                .setTopicId(TOPIC_ID)
-                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
-                    .setPartition(PARTITION)
-                    .setStartOffset(0)
-                    .setStateEpoch(stateEpoch + 1)   // incremented
-                    .setLeaderEpoch(0)
-                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
-                        .setFirstOffset(0)
-                        .setLastOffset(10)
-                        .setDeliveryCount((short) 2)
-                        .setDeliveryState((byte) 0)))))));
-
-        result = shard.writeState(request);
-
-        shard.replay(0L, 0L, (short) 0, result.records().get(0));
-
-        snapshotEpoch++;    // Since state epoch increased
-        expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
-        expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), snapshotEpoch, TIME.milliseconds())
-        ));
-
-        // Snapshot epoch increased.
-        assertEquals(2, shard.getShareStateMapValue(SHARE_PARTITION_KEY).snapshotEpoch());
-        assertEquals(expectedData, result.response());
-        assertEquals(expectedRecords, result.records());
-
-        assertEquals(groupOffset(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0), snapshotEpoch, TIME.milliseconds())
-        ).value().message()), shard.getShareStateMapValue(SHARE_PARTITION_KEY));
-        assertEquals(0, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
-        verify(shard.getMetricsShard(), times(3)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
-    }
-
-    @Test
     public void testSubsequentWriteStateSnapshotEpochUpdatesSuccessfully() {
         initSharePartition(shard, SHARE_PARTITION_KEY);
 
@@ -630,7 +509,7 @@ class ShareCoordinatorShardTest {
 
     @Test
     public void testWriteStateFencedStateEpochError() {
-        initSharePartition(shard, SHARE_PARTITION_KEY);
+        initSharePartition(shard, SHARE_PARTITION_KEY, 1);
 
         WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -666,16 +545,18 @@ class ShareCoordinatorShardTest {
 
         shard.replay(0L, 0L, (short) 0, result.records().get(0));
 
+        ShareGroupOffset expectedGroupOffset = ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), 0, 1, 0);
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
-        List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), 1, TIME.milliseconds())
-        ));
+        List<CoordinatorRecord> expectedRecords = List.of(
+            ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+                GROUP_ID, TOPIC_ID, PARTITION, expectedGroupOffset
+            )
+        );
 
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
 
-        assertEquals(groupOffset(expectedRecords.get(0).value().message()),
-            shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+        assertEquals(expectedGroupOffset, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
         assertEquals(5, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
 
         result = shard.writeState(request2);
@@ -1906,7 +1787,7 @@ class ShareCoordinatorShardTest {
         return ShareGroupOffset.fromRecord((ShareUpdateValue) record);
     }
 
-    private void initSharePartition(ShareCoordinatorShard shard, SharePartitionKey key) {
+    private void initSharePartition(ShareCoordinatorShard shard, SharePartitionKey key, int stateEpoch) {
         shard.replay(0L, 0L, (short) 0, CoordinatorRecord.record(
             new ShareSnapshotKey()
                 .setGroupId(key.groupId())
@@ -1914,11 +1795,15 @@ class ShareCoordinatorShardTest {
                 .setPartition(key.partition()),
             new ApiMessageAndVersion(
                 new ShareSnapshotValue()
-                    .setStateEpoch(0)
+                    .setStateEpoch(stateEpoch)
                     .setLeaderEpoch(-1)
                     .setStartOffset(-1),
                 (short) 0
             )
         ));
+    }
+
+    private void initSharePartition(ShareCoordinatorShard shard, SharePartitionKey key) {
+        initSharePartition(shard, key, 0);
     }
 }

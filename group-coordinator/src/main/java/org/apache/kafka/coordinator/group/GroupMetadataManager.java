@@ -272,6 +272,7 @@ import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasA
  */
 public class GroupMetadataManager {
     private static final int METADATA_REFRESH_INTERVAL_MS = Integer.MAX_VALUE;
+    static final int SHARE_GROUP_INIT_RETRY_INTERNAL_MS = 25_000;
 
     private static class UpdateSubscriptionMetadataResult {
         private final int groupEpoch;
@@ -2716,12 +2717,11 @@ public class GroupMetadataManager {
         // Any initializing topics which are older than delta and are part of the subscribed topics
         // must be returned so that they can be retried.
         long curTimestamp = time.milliseconds();
-        long delta = config.offsetCommitTimeoutMs() * 2L;
         Map<Uuid, InitMapValue> alreadyInitialized = info == null ? new HashMap<>() :
             combineInitMaps(
                 info.initializedTopics(),
                 info.initializingTopics().entrySet().stream()
-                    .filter(entry -> curTimestamp - entry.getValue().timestamp() < delta)
+                    .filter(entry -> curTimestamp - entry.getValue().timestamp() < SHARE_GROUP_INIT_RETRY_INTERNAL_MS)
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
             );
         // Here will add any topics which are subscribed but not initialized and initializing
@@ -7975,19 +7975,34 @@ public class GroupMetadataManager {
         // a retry for the same is possible. Since this is part of an admin operation
         // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
-        Map<Uuid, InitMapValue> deletingTopics = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics().stream()
-            .map(tid -> {
-                TopicImage image = metadataImage.topics().getTopic(tid);
-                return Map.entry(tid, new InitMapValue(image.name(), image.partitions().keySet(), -1));
-            })
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        // If a deleting topic id is not found in metadata image or the image is null
+        // or empty.
+        Map<Uuid, InitMapValue> deletingTopics = new HashMap<>();   // Topics in deleting and in metadata image.
+        Set<Uuid> assumedDeleted = new HashSet<>(); // Topics in deleting, but not in metadata image.
+        Set<Uuid> currentDeleting = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics();
+        if (metadataImage != null && !metadataImage.equals(MetadataImage.EMPTY)) {
+            for (Uuid topicId : currentDeleting) {
+                TopicImage image = metadataImage.topics().getTopic(topicId);
+                if (image == null) {
+                    assumedDeleted.add(topicId);
+                    continue;
+                }
+                deletingTopics.put(topicId, new InitMapValue(image.name(), image.partitions().keySet(), -1));
+            }
+        } else {
+            assumedDeleted.addAll(currentDeleting);
+        }
+
+        if (!assumedDeleted.isEmpty()) {
+            log.warn("Topic ids {} were not found in metadata image, assuming they were deleted.", assumedDeleted);
+        }
 
         if (!deletingTopics.isEmpty()) {
             log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deletingTopics);
             deleteCandidates = combineInitMaps(deleteCandidates, deletingTopics);
         }
 
-        if (deleteCandidates.isEmpty()) {
+        if (deleteCandidates.isEmpty() && assumedDeleted.isEmpty()) {
             return Optional.empty();
         }
 

@@ -183,6 +183,7 @@ import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_NUM_STANDBY
 import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.SHARE_GROUP_INIT_RETRY_INTERNAL_MS;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
@@ -21604,6 +21605,73 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testShareGroupDeleteRequestWithAlreadyDeletingTopicsBadMetadata() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        Uuid t2Uuid = Uuid.randomUuid();
+        Uuid t3Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        String t2Name = "t2";
+        String t3Name = "t3";
+
+        String groupId = "share-group";
+        ShareGroup shareGroup = mock(ShareGroup.class);
+        when(shareGroup.groupId()).thenReturn(groupId);
+        when(shareGroup.isEmpty()).thenReturn(false);
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .addTopic(t2Uuid, t2Name, 2)
+//            .addTopic(t3Uuid, t3Name, 2)  // Present in deleting but not in metadata
+            .build();
+
+        MetadataDelta delta = new MetadataDelta(image);
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
+
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(t1Uuid, new InitMapValue(t1Name, Set.of(0, 1), 1)),
+                Map.of(t2Uuid, new InitMapValue(t2Name, Set.of(0, 1), 1)),
+                Map.of(t3Uuid, t3Name)
+            )
+        );
+
+        context.commit();
+
+        Map<Uuid, Set<Integer>> expectedTopicPartitionMap = Map.of(
+            t1Uuid, Set.of(0, 1),
+            t2Uuid, Set.of(0, 1)
+        );
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of(t1Uuid, t1Name, t2Uuid, t2Name)  // Existing deleting topics should be included here.
+            )
+        );
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        Optional<DeleteShareGroupStateParameters> params = context.groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records);
+        verifyShareGroupDeleteRequest(
+            params,
+            expectedTopicPartitionMap,
+            groupId,
+            true
+        );
+        assertRecordsEquals(expectedRecords, records);
+    }
+
+    @Test
     public void testSharePartitionsEligibleForOffsetDeletionSuccess() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
@@ -22393,7 +22461,7 @@ public class GroupMetadataManagerTest {
                 .setDeletingTopics(List.of())
         );
 
-        long timeNow = time.milliseconds() + offsetWriteTimeout * 2 + 1;
+        long timeNow = time.milliseconds() + SHARE_GROUP_INIT_RETRY_INTERNAL_MS * 2 + 1;
         time.setCurrentTimeMs(timeNow);
         memberId = Uuid.randomUuid();
         result = context.shareGroupHeartbeat(
@@ -22656,7 +22724,7 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.onNewMetadataImage(metadataImage, new MetadataDelta(metadataImage));
 
         // Since t1 is initializing and t2 is initialized due to replay above.
-        timeNow = timeNow + 2 * offsetWriteTimeout + 1;
+        timeNow = timeNow + SHARE_GROUP_INIT_RETRY_INTERNAL_MS + 1;
         time.setCurrentTimeMs(timeNow);
         assertEquals(
             Map.of(

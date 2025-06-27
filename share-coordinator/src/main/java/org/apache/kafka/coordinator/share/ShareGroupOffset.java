@@ -131,9 +131,13 @@ public class ShareGroupOffset {
     }
 
     public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data, int snapshotEpoch, long timestamp) {
+        return fromRequest(data, snapshotEpoch, DEFAULT_EPOCH, timestamp);
+    }
+
+    public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data, int snapshotEpoch, int stateEpoch, long timestamp) {
         return new ShareGroupOffset(
             snapshotEpoch,
-            data.stateEpoch(),
+            stateEpoch,
             data.leaderEpoch(),
             data.startOffset(),
             data.stateBatches().stream()

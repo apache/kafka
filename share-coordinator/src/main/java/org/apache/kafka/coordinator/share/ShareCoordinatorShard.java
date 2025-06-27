@@ -207,6 +207,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     @Override
     public void onLoaded(MetadataImage newImage) {
+        this.metadataImage = newImage;
         coordinatorMetrics.activateMetricsShard(metricsShard);
     }
 
@@ -284,6 +285,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private void maybeUpdateLeaderEpochMap(SharePartitionKey mapKey, int leaderEpoch) {
         leaderEpochMap.putIfAbsent(mapKey, leaderEpoch);
         if (leaderEpochMap.get(mapKey) < leaderEpoch) {
+            log.debug("Updating leader epoch for partition key {}, from {} - to {}", mapKey, leaderEpochMap.get(mapKey), leaderEpoch);
             leaderEpochMap.put(mapKey, leaderEpoch);
         }
     }
@@ -291,6 +293,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private void maybeUpdateStateEpochMap(SharePartitionKey mapKey, int stateEpoch) {
         stateEpochMap.putIfAbsent(mapKey, stateEpoch);
         if (stateEpochMap.get(mapKey) < stateEpoch) {
+            log.debug("Updating state epoch for partition key {}, from {} - to {}", mapKey, stateEpochMap.get(mapKey), stateEpoch);
             stateEpochMap.put(mapKey, stateEpoch);
         }
     }
@@ -646,10 +649,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     ) {
         long timestamp = time.milliseconds();
         int updatesPerSnapshotLimit = config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot();
-        if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit || partitionData.stateEpoch() > shareStateMap.get(key).stateEpoch()) {
+        if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit) {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
             int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? currentState.leaderEpoch() : partitionData.leaderEpoch();
-            int newStateEpoch = partitionData.stateEpoch() == -1 ? currentState.stateEpoch() : partitionData.stateEpoch();
+            int newStateEpoch = currentState.stateEpoch();
             long newStartOffset = partitionData.startOffset() == -1 ? currentState.startOffset() : partitionData.startOffset();
 
             // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot
@@ -760,12 +763,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return Optional.of(getWriteErrorCoordinatorResult(Errors.FENCED_STATE_EPOCH, null, topicId, partitionId));
         }
         if (metadataImage == null) {
-            log.error("Metadata image is null");
+            log.warn("Metadata image is null");
             return Optional.of(getWriteErrorCoordinatorResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
         if (metadataImage.topics().getTopic(topicId) == null ||
             metadataImage.topics().getPartition(topicId, partitionId) == null) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.warn("Topic/TopicPartition not found in metadata image.");
             return Optional.of(getWriteErrorCoordinatorResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
@@ -806,13 +809,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         if (metadataImage == null) {
-            log.error("Metadata image is null");
+            log.warn("Metadata image is null");
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         }
 
         if (metadataImage.topics().getTopic(topicId) == null ||
             metadataImage.topics().getPartition(topicId, partitionId) == null) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.warn("Topic/TopicPartition not found in metadata image.");
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         }
 
@@ -839,13 +842,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         if (metadataImage == null) {
-            log.error("Metadata image is null");
+            log.warn("Metadata image is null");
             return Optional.of(ReadShareGroupStateSummaryResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         }
 
         if (metadataImage.topics().getTopic(topicId) == null ||
             metadataImage.topics().getPartition(topicId, partitionId) == null) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.warn("Topic/TopicPartition not found in metadata image.");
             return Optional.of(ReadShareGroupStateSummaryResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         }
 
@@ -870,13 +873,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         if (metadataImage == null) {
-            log.error("Metadata image is null");
+            log.warn("Metadata image is null");
             return Optional.of(getDeleteErrorCoordinatorResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
         if (metadataImage.topics().getTopic(topicId) == null ||
             metadataImage.topics().getPartition(topicId, partitionId) == null) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.warn("Topic/TopicPartition not found in metadata image.");
             return Optional.of(getDeleteErrorCoordinatorResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
@@ -907,13 +910,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         if (metadataImage == null) {
-            log.error("Metadata image is null");
+            log.warn("Metadata image is null");
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
         if (metadataImage.topics().getTopic(topicId) == null ||
             metadataImage.topics().getPartition(topicId, partitionId) == null) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.warn("Topic/TopicPartition not found in metadata image.");
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
