@@ -50,7 +50,7 @@ public abstract class AbstractIndex implements Closeable {
 
     // Serializes all index operations that mutate internal state
     private final ReentrantLock lock = new ReentrantLock();
-    // Allows concurrent read operations while ensuring exclusive access if the underlying file is changed
+    // Allows concurrent read operations while ensuring exclusive access if the underlying mmap is changed
     private final ReentrantReadWriteLock remapLock = new ReentrantReadWriteLock();
 
     private final long baseOffset;
@@ -191,7 +191,8 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
-        return LockUtils.inLockThrows(lock, () -> LockUtils.inLockThrows(remapLock.writeLock(), () -> {
+        return LockUtils.inLockThrows(lock, () ->
+                LockUtils.inLockThrows(remapLock.writeLock(), () -> {
             int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
             if (length == roundedNewSize) {
@@ -281,9 +282,10 @@ public abstract class AbstractIndex implements Closeable {
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-        LockUtils.inLockThrows(remapLock.writeLock(), () -> {
+        LockUtils.inLockThrows(lock, () ->
+                LockUtils.inLockThrows(remapLock.writeLock(), () -> {
             safeForceUnmap();
-        });
+        }));
     }
 
     /**
