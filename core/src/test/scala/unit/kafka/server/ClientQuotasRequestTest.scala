@@ -22,7 +22,7 @@ import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import org.apache.kafka.common.test.api.ClusterTest
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
+import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
@@ -33,7 +33,6 @@ import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Disabled
 
-import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
