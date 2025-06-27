@@ -192,31 +192,31 @@ public abstract class AbstractIndex implements Closeable {
      */
     public boolean resize(int newSize) throws IOException {
         return LockUtils.inLockThrows(lock, () ->
-                LockUtils.inLockThrows(remapLock.writeLock(), () -> {
-            int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
+                    LockUtils.inLockThrows(remapLock.writeLock(), () -> {
+                        int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
-            if (length == roundedNewSize) {
-                log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
-                return false;
-            } else {
-                RandomAccessFile raf = new RandomAccessFile(file, "rw");
-                try {
-                    int position = mmap.position();
+                        if (length == roundedNewSize) {
+                            log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
+                            return false;
+                        } else {
+                            RandomAccessFile raf = new RandomAccessFile(file, "rw");
+                            try {
+                                int position = mmap.position();
 
-                    safeForceUnmap();
-                    raf.setLength(roundedNewSize);
-                    this.length = roundedNewSize;
-                    mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
-                    this.maxEntries = mmap.limit() / entrySize();
-                    mmap.position(position);
-                    log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
-                            mmap.position(), mmap.limit());
-                    return true;
-                } finally {
-                    Utils.closeQuietly(raf, "index file " + file.getName());
-                }
-            }
-        }));
+                                safeForceUnmap();
+                                raf.setLength(roundedNewSize);
+                                this.length = roundedNewSize;
+                                mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
+                                this.maxEntries = mmap.limit() / entrySize();
+                                mmap.position(position);
+                                log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
+                                        mmap.position(), mmap.limit());
+                                return true;
+                            } finally {
+                                Utils.closeQuietly(raf, "index file " + file.getName());
+                            }
+                        }
+                    }));
     }
 
     /**
@@ -284,8 +284,8 @@ public abstract class AbstractIndex implements Closeable {
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
         LockUtils.inLockThrows(lock, () ->
                 LockUtils.inLockThrows(remapLock.writeLock(), () -> {
-            safeForceUnmap();
-        }));
+                    safeForceUnmap();
+                }));
     }
 
     /**
