@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.server.quota;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterClientQuotasOptions;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsResult;
@@ -39,6 +33,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.function.Executable;
 
 import java.net.InetAddress;
@@ -54,6 +49,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientQuotasRequestTest {
     private final ClusterInstance cluster;
