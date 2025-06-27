@@ -62,7 +62,6 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import java.time.Duration
 import java.util
 import java.util.Optional
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
