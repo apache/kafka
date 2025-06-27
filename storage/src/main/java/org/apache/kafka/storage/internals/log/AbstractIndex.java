@@ -192,7 +192,7 @@ public abstract class AbstractIndex implements Closeable {
      */
     public boolean resize(int newSize) throws IOException {
         return inLockThrows(() ->
-                inRemapReadLockThrows(() -> {
+                inRemapWriteLockThrows(() -> {
                     int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
                     if (length == roundedNewSize) {
@@ -283,7 +283,7 @@ public abstract class AbstractIndex implements Closeable {
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
         inLockThrows(() ->
-                inRemapReadLockThrows(() -> {
+                inRemapWriteLockThrows(() -> {
                     safeForceUnmap();
                 }));
     }
@@ -432,12 +432,12 @@ public abstract class AbstractIndex implements Closeable {
         return LockUtils.inLock(remapLock.readLock(), () -> action).get();
     }
 
-    protected final <T, E extends Exception> T inRemapReadLockThrows(LockUtils.ThrowingSupplier<T, E> action) throws E {
-        return LockUtils.inLockThrows(remapLock.readLock(), () -> action).get();
+    protected final <T, E extends Exception> T inRemapWriteLockThrows(LockUtils.ThrowingSupplier<T, E> action) throws E {
+        return LockUtils.inLockThrows(remapLock.writeLock(), () -> action).get();
     }
 
-    protected final <E extends Exception> void inRemapReadLockThrows(LockUtils.ThrowingRunnable<E> action) throws E {
-        LockUtils.inLockThrows(lock, () -> LockUtils.inLockThrows(remapLock.writeLock(), action));
+    protected final <E extends Exception> void inRemapWriteLockThrows(LockUtils.ThrowingRunnable<E> action) throws E {
+        LockUtils.inLockThrows(remapLock.writeLock(), action);
     }
 
     /**
