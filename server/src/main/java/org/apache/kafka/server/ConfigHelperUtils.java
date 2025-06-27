@@ -32,64 +32,59 @@ import java.util.stream.Stream;
 public class ConfigHelperUtils {
 
     /**
-     * Creates a DescribeConfigsResult from a Map of configs and a function to create config entries.
+     * Creates a DescribeConfigsResult from a Map of configs.
      */
     public static DescribeConfigsResponseData.DescribeConfigsResult createResponseConfig(
             DescribeConfigsRequestData.DescribeConfigsResource resource,
             Map<String, ?> configs,
             BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
 
-        List<DescribeConfigsResponseData.DescribeConfigsResourceResult> configEntries =
-                buildConfigEntries(configs.entrySet().stream().map(e -> (Entry<String, ?>) e), resource, (k, v) -> createConfigEntry.apply(k, v));
-
-        return new DescribeConfigsResponseData.DescribeConfigsResult()
-                .setErrorCode(Errors.NONE.code())
-                .setConfigs(configEntries);
+        return toDescribeConfigsResult(configs.entrySet().stream().map(e -> (Entry<String, ?>) e), resource, (k, v) -> createConfigEntry.apply(k, v));
     }
 
     /**
-     * Overloaded method that takes an AbstractConfig and extracts all configs from it.
-     * This method combines originals (filtered for non-null values) and nonInternalValues using streams.
-     * nonInternalValues take priority over originals - if a key exists in both, nonInternalValues wins.
+     * Creates a DescribeConfigsResult from an AbstractConfig.
+     * This method merges the config's originals (excluding nulls and keys present in nonInternalValues, which take priority).
      */
     public static DescribeConfigsResponseData.DescribeConfigsResult createResponseConfig(
             DescribeConfigsRequestData.DescribeConfigsResource resource,
             AbstractConfig config,
             BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
 
-        Map<String, ?> nonInternalValues = config.nonInternalValues(); // cache to avoid multiple calls
-        List<DescribeConfigsResponseData.DescribeConfigsResourceResult> configEntries =
-                buildConfigEntries(
-                        Stream.concat(
-                                config.originals().entrySet().stream()
-                                        .filter(entry -> entry.getValue() != null)
-                                        .filter(entry -> !nonInternalValues.containsKey(entry.getKey())) // skip keys in nonInternalValues
-                                        .map(e -> (Entry<String, ?>) e),
-                                nonInternalValues.entrySet().stream()
-                                        .map(e -> (Entry<String, ?>) e)
-                        ),
-                        resource,
-                        createConfigEntry
-                );
-
-        return new DescribeConfigsResponseData.DescribeConfigsResult()
-                .setErrorCode(Errors.NONE.code())
-                .setConfigs(configEntries);
+        Map<String, ?> nonInternalValues = config.nonInternalValues();
+        return toDescribeConfigsResult(
+                Stream.concat(
+                        config.originals().entrySet().stream()
+                                .filter(entry -> entry.getValue() != null)
+                                .filter(entry -> !nonInternalValues.containsKey(entry.getKey()))
+                                .map(e -> (Entry<String, ?>) e),
+                        nonInternalValues.entrySet().stream()
+                                .map(e -> (Entry<String, ?>) e)
+                ),
+                resource,
+                createConfigEntry
+        );
     }
 
     /**
-     * Helper method that builds config entries from a stream of config entries.
+     * Internal helper that builds a DescribeConfigsResult from a stream of config entries.
      */
-    private static List<DescribeConfigsResponseData.DescribeConfigsResourceResult> buildConfigEntries(
+    private static DescribeConfigsResponseData.DescribeConfigsResult toDescribeConfigsResult(
             Stream<Entry<String, ?>> configStream,
             DescribeConfigsRequestData.DescribeConfigsResource resource,
             BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
 
-        return configStream
-                .filter(entry -> resource.configurationKeys() == null ||
-                        resource.configurationKeys().isEmpty() ||
-                        resource.configurationKeys().contains(entry.getKey()))
-                .map(entry -> createConfigEntry.apply(entry.getKey(), entry.getValue()))
-                .toList();
+        var configKeys = resource.configurationKeys();
+        List<DescribeConfigsResponseData.DescribeConfigsResourceResult> configEntries =
+                configStream
+                        .filter(entry -> configKeys == null ||
+                                configKeys.isEmpty() ||
+                                configKeys.contains(entry.getKey()))
+                        .map(entry -> createConfigEntry.apply(entry.getKey(), entry.getValue()))
+                        .toList();
+
+        return new DescribeConfigsResponseData.DescribeConfigsResult()
+                .setErrorCode(Errors.NONE.code())
+                .setConfigs(configEntries);
     }
 }
