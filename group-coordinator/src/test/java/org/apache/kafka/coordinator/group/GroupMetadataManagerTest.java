@@ -183,7 +183,7 @@ import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_NUM_STANDBY
 import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.SHARE_GROUP_INIT_RETRY_INTERNAL_MS;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.SHARE_GROUP_INIT_RETRY_INTERVAL_MS;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
@@ -22461,7 +22461,7 @@ public class GroupMetadataManagerTest {
                 .setDeletingTopics(List.of())
         );
 
-        long timeNow = time.milliseconds() + SHARE_GROUP_INIT_RETRY_INTERNAL_MS * 2 + 1;
+        long timeNow = time.milliseconds() + SHARE_GROUP_INIT_RETRY_INTERVAL_MS * 2 + 1;
         time.setCurrentTimeMs(timeNow);
         memberId = Uuid.randomUuid();
         result = context.shareGroupHeartbeat(
@@ -22724,7 +22724,7 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.onNewMetadataImage(metadataImage, new MetadataDelta(metadataImage));
 
         // Since t1 is initializing and t2 is initialized due to replay above.
-        timeNow = timeNow + SHARE_GROUP_INIT_RETRY_INTERNAL_MS + 1;
+        timeNow = timeNow + SHARE_GROUP_INIT_RETRY_INTERVAL_MS + 1;
         time.setCurrentTimeMs(timeNow);
         assertEquals(
             Map.of(

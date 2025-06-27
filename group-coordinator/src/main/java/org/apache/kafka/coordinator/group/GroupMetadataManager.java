@@ -272,7 +272,7 @@ import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasA
  */
 public class GroupMetadataManager {
     private static final int METADATA_REFRESH_INTERVAL_MS = Integer.MAX_VALUE;
-    static final int SHARE_GROUP_INIT_RETRY_INTERNAL_MS = 25_000;
+    static final int SHARE_GROUP_INIT_RETRY_INTERVAL_MS = 25_000;
 
     private static class UpdateSubscriptionMetadataResult {
         private final int groupEpoch;
@@ -2721,7 +2721,7 @@ public class GroupMetadataManager {
             combineInitMaps(
                 info.initializedTopics(),
                 info.initializingTopics().entrySet().stream()
-                    .filter(entry -> curTimestamp - entry.getValue().timestamp() < SHARE_GROUP_INIT_RETRY_INTERNAL_MS)
+                    .filter(entry -> curTimestamp - entry.getValue().timestamp() < SHARE_GROUP_INIT_RETRY_INTERVAL_MS)
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
             );
         // Here will add any topics which are subscribed but not initialized and initializing
