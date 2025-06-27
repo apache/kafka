@@ -50,7 +50,7 @@ public abstract class AbstractIndex implements Closeable {
 
     // Serializes all index operations that mutate internal state
     private final ReentrantLock lock = new ReentrantLock();
-    // Allows concurrent read operations while ensuring exclusive access during index resizing
+    // Allows concurrent read operations while ensuring exclusive access if the underlying file is changed
     private final ReentrantReadWriteLock remapLock = new ReentrantReadWriteLock();
 
     private final long baseOffset;
