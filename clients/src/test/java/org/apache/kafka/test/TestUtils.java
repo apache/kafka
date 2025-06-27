@@ -23,6 +23,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -482,13 +483,13 @@ public class TestUtils {
             try {
                 runnable.call();
                 return;
-            } catch (final NoRetryException e) {
+            } catch (final NoRetryException | UnsupportedVersionException e) {
                 throw e;
             } catch (final AssertionError t) {
                 if (expectedEnd <= System.currentTimeMillis()) {
                     throw t;
                 }
-            } catch (final Exception e) {
+            } catch (final Throwable e) {
                 if (expectedEnd <= System.currentTimeMillis()) {
                     throw new AssertionError(String.format("Assertion failed with an exception after %s ms", timeoutMs), e);
                 }
@@ -588,8 +589,8 @@ public class TestUtils {
             // Enable strict type checking.
             // This ensures we're testing for the exact exception type, not its subclasses.
             assertEquals(
-                exceptionCauseClass, 
-                cause.getClass(), 
+                exceptionCauseClass,
+                cause.getClass(),
                 "Expected " + exceptionCauseClass.getSimpleName() + ", but got " + cause.getClass().getSimpleName()
             );
             return exceptionCauseClass.cast(cause);
