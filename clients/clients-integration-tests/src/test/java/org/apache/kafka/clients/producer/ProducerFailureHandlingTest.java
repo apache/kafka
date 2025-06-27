@@ -276,10 +276,7 @@ public class ProducerFailureHandlingTest {
 
         // create topic
         String topic10 = "topic10";
-        try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(topic10, brokerSize, (short) brokerSize).configs(topicConfig)));
-            clusterInstance.waitForTopic("topic10", brokerSize);
-        }
+        clusterInstance.createTopic(topic10, brokerSize, (short) brokerSize, topicConfig);
 
         // send a record that is too large for replication, but within the broker max message limit
         byte[] value = new byte[maxMessageSize - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD];
