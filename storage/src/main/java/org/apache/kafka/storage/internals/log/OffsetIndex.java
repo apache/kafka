@@ -95,7 +95,7 @@ public final class OffsetIndex extends AbstractIndex {
      *         the pair (baseOffset, 0) is returned.
      */
     public OffsetPosition lookup(long targetOffset) {
-        return inResizeReadLock(() -> {
+        return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, targetOffset, IndexSearchType.KEY);
             if (slot == -1)
@@ -111,7 +111,7 @@ public final class OffsetIndex extends AbstractIndex {
      * @return The offset/position pair at that entry
      */
     public OffsetPosition entry(int n) {
-        return inResizeReadLock(() -> {
+        return inRemapReadLock(() -> {
             if (n >= entries())
                 throw new IllegalArgumentException("Attempt to fetch the " + n + "th entry from index " +
                     file().getAbsolutePath() + ", which has size " + entries());
@@ -125,7 +125,7 @@ public final class OffsetIndex extends AbstractIndex {
      * such offset.
      */
     public Optional<OffsetPosition> fetchUpperBoundOffset(OffsetPosition fetchOffset, int fetchSize) {
-        return inResizeReadLock(() -> {
+        return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = smallestUpperBoundSlotFor(idx, fetchOffset.position + fetchSize, IndexSearchType.VALUE);
             if (slot == -1)

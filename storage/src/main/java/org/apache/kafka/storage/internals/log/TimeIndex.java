@@ -133,7 +133,7 @@ public class TimeIndex extends AbstractIndex {
      * @return The timestamp/offset pair at that entry
      */
     public TimestampOffset entry(int n) {
-        return inResizeReadLock(() -> {
+        return inRemapReadLock(() -> {
             if (n >= entries())
                 throw new IllegalArgumentException("Attempt to fetch the " + n + "th entry from time index "
                     + file().getAbsolutePath() + " which has size " + entries());
@@ -150,7 +150,7 @@ public class TimeIndex extends AbstractIndex {
      * @return The time index entry found.
      */
     public TimestampOffset lookup(long targetTimestamp) {
-        return inResizeReadLock(() -> {
+        return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, targetTimestamp, IndexSearchType.KEY);
             if (slot == -1)
