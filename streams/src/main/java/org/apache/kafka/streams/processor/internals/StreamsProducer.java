@@ -247,7 +247,7 @@ public class StreamsProducer {
         maybeBeginTransaction();
         try {
             producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
-        } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException error) {
+        } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException | InvalidPidMappingException error) {
             throw new TaskMigratedException(
                 formatException("Producer got fenced trying to add offsets to a transaction"),
                 error
