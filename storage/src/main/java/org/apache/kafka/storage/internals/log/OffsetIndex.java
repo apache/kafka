@@ -26,8 +26,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
-import static org.apache.kafka.server.util.LockUtils.inLock;
-
 /**
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
  * that is it may not hold an entry for all messages in the log.
@@ -97,7 +95,7 @@ public final class OffsetIndex extends AbstractIndex {
      *         the pair (baseOffset, 0) is returned.
      */
     public OffsetPosition lookup(long targetOffset) {
-        return inResizeLock(resizeLock.readLock(), () -> {
+        return inResizeReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, targetOffset, IndexSearchType.KEY);
             if (slot == -1)
@@ -113,7 +111,7 @@ public final class OffsetIndex extends AbstractIndex {
      * @return The offset/position pair at that entry
      */
     public OffsetPosition entry(int n) {
-        return inResizeLock(resizeLock.readLock(), () -> {
+        return inResizeReadLock(() -> {
             if (n >= entries())
                 throw new IllegalArgumentException("Attempt to fetch the " + n + "th entry from index " +
                     file().getAbsolutePath() + ", which has size " + entries());
@@ -127,7 +125,7 @@ public final class OffsetIndex extends AbstractIndex {
      * such offset.
      */
     public Optional<OffsetPosition> fetchUpperBoundOffset(OffsetPosition fetchOffset, int fetchSize) {
-        return inResizeLock(resizeLock.readLock(), () -> {
+        return inResizeReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = smallestUpperBoundSlotFor(idx, fetchOffset.position + fetchSize, IndexSearchType.VALUE);
             if (slot == -1)
@@ -143,7 +141,7 @@ public final class OffsetIndex extends AbstractIndex {
      * @throws InvalidOffsetException if provided offset is not larger than the last offset
      */
     public void append(long offset, int position) {
-        inLock(lock, () -> {
+        inLock(() -> {
             if (isFull())
                 throw new IllegalArgumentException("Attempt to append to a full index (size = " + entries() + ").");
 
@@ -163,7 +161,7 @@ public final class OffsetIndex extends AbstractIndex {
 
     @Override
     public void truncateTo(long offset) {
-        inLock(lock, () -> {
+        inLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, offset, IndexSearchType.KEY);
 
@@ -214,7 +212,7 @@ public final class OffsetIndex extends AbstractIndex {
      * Truncates index to a known number of entries.
      */
     private void truncateToEntries(int entries) {
-        inLock(lock, () -> {
+        inLock(() -> {
             super.truncateToEntries0(entries);
             this.lastOffset = lastEntry().offset;
             log.debug("Truncated index {} to {} entries; position is now {} and last offset is now {}",
@@ -226,7 +224,7 @@ public final class OffsetIndex extends AbstractIndex {
      * The last entry in the index
      */
     private OffsetPosition lastEntry() {
-        return inLock(lock, () -> {
+        return inLock(() -> {
             int entries = entries();
             if (entries == 0)
                 return new OffsetPosition(baseOffset(), 0);

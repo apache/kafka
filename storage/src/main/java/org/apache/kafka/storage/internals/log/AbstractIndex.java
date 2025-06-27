@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.utils.ByteBufferUnmapper;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.LockUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +33,9 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.util.Objects;
 import java.util.OptionalInt;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import static org.apache.kafka.server.util.LockUtils.inLock;
-import static org.apache.kafka.server.util.LockUtils.inLockThrows;
+import java.util.function.Supplier;
 
 /**
  * The abstract index class which holds entry format agnostic methods.
@@ -50,8 +48,10 @@ public abstract class AbstractIndex implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractIndex.class);
 
-    protected final ReentrantLock lock = new ReentrantLock();
-    protected final ReentrantReadWriteLock resizeLock = new ReentrantReadWriteLock();
+    // Serializes all index operations that mutate internal state
+    private final ReentrantLock lock = new ReentrantLock();
+    // Allows concurrent read operations while ensuring exclusive access during index resizing
+    private final ReentrantReadWriteLock remapLock = new ReentrantReadWriteLock();
 
     private final long baseOffset;
     private final int maxIndexSize;
@@ -191,8 +191,8 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
-        return inLockThrows(lock, () -> {
-            resizeLock.writeLock().lock();
+        return LockUtils.inLockThrows(lock, () -> {
+            remapLock.writeLock().lock();
             try {
                 int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
@@ -218,7 +218,7 @@ public abstract class AbstractIndex implements Closeable {
                     }
                 }
             } finally {
-                resizeLock.writeLock().unlock();
+                remapLock.writeLock().unlock();
             }
         });
     }
@@ -240,7 +240,7 @@ public abstract class AbstractIndex implements Closeable {
      * Flush the data in the index to disk
      */
     public void flush() {
-        inLock(lock, () -> {
+        LockUtils.inLock(lock, () -> {
             mmap.force();
         });
     }
@@ -262,7 +262,7 @@ public abstract class AbstractIndex implements Closeable {
      * the file.
      */
     public void trimToValidSize() throws IOException {
-        inLockThrows(lock, () -> {
+        LockUtils.inLockThrows(lock, () -> {
             if (mmap != null) {
                 resize(entrySize() * entries);
             }
@@ -286,7 +286,7 @@ public abstract class AbstractIndex implements Closeable {
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-        inLockThrows(lock, () -> {
+        LockUtils.inLockThrows(lock, () -> {
             safeForceUnmap();
         });
     }
@@ -415,12 +415,24 @@ public abstract class AbstractIndex implements Closeable {
         mmap.position(entries * entrySize());
     }
 
-    protected final <T, E extends Exception> T inResizeLock(Lock lock, StorageAction<T, E> action) throws E {
-        lock.lock();
+    protected final <T> T inLock(Supplier<T> action) {
+        return LockUtils.inLock(lock, () -> action).get();
+    }
+
+    protected final void inLock(Runnable action) {
+        LockUtils.inLock(lock, action);
+    }
+
+    protected final <T, E extends Exception> T inLockThrows(LockUtils.ThrowingSupplier<T, E> action) throws E {
+        return LockUtils.inLockThrows(lock, action);
+    }
+
+    protected final <T, E extends Exception> T inResizeReadLock(StorageAction<T, E> action) throws E {
+        remapLock.readLock().lock();
         try {
             return action.execute();
         } finally {
-            lock.unlock();
+            remapLock.readLock().unlock();
         }
     }
 
