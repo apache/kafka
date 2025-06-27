@@ -191,32 +191,31 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
-        return LockUtils.inLockThrows(lock, () ->
-                    LockUtils.inLockThrows(remapLock.writeLock(), () -> {
-                        int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
+        return inRemapReadWriteLock(() -> {
+            int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
-                        if (length == roundedNewSize) {
-                            log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
-                            return false;
-                        } else {
-                            RandomAccessFile raf = new RandomAccessFile(file, "rw");
-                            try {
-                                int position = mmap.position();
+            if (length == roundedNewSize) {
+                log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
+                return false;
+            } else {
+                RandomAccessFile raf = new RandomAccessFile(file, "rw");
+                try {
+                    int position = mmap.position();
 
-                                safeForceUnmap();
-                                raf.setLength(roundedNewSize);
-                                this.length = roundedNewSize;
-                                mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
-                                this.maxEntries = mmap.limit() / entrySize();
-                                mmap.position(position);
-                                log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
-                                        mmap.position(), mmap.limit());
-                                return true;
-                            } finally {
-                                Utils.closeQuietly(raf, "index file " + file.getName());
-                            }
-                        }
-                    }));
+                    safeForceUnmap();
+                    raf.setLength(roundedNewSize);
+                    this.length = roundedNewSize;
+                    mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
+                    this.maxEntries = mmap.limit() / entrySize();
+                    mmap.position(position);
+                    log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
+                            mmap.position(), mmap.limit());
+                    return true;
+                } finally {
+                    Utils.closeQuietly(raf, "index file " + file.getName());
+                }
+            }
+        });
     }
 
     /**
@@ -282,10 +281,9 @@ public abstract class AbstractIndex implements Closeable {
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-        LockUtils.inLockThrows(lock, () ->
-                LockUtils.inLockThrows(remapLock.writeLock(), () -> {
-                    safeForceUnmap();
-                }));
+        inRemapReadWriteLock(() -> {
+            safeForceUnmap();
+        });
     }
 
     /**
@@ -426,6 +424,14 @@ public abstract class AbstractIndex implements Closeable {
 
     protected final <T> T inRemapReadLock(Supplier<T> action) {
         return LockUtils.inLock(remapLock.readLock(), () -> action).get();
+    }
+
+    protected final <T, E extends Exception> T inRemapReadWriteLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
+        return LockUtils.inLockThrows(lock, () -> LockUtils.inLockThrows(remapLock.writeLock(), action));
+    }
+
+    protected final <E extends Exception> void inRemapReadWriteLock(LockUtils.ThrowingRunnable action) throws E {
+        LockUtils.inLockThrows(lock, () -> LockUtils.inLockThrows(remapLock.writeLock(), action));
     }
 
     /**
