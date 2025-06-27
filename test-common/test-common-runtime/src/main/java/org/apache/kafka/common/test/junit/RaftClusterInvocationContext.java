@@ -146,6 +146,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public String bootstrapServers(ListenerName listenerName) {
+            return clusterTestKit.bootstrapServers(listenerName);
+        }
+
+        @Override
         public String bootstrapControllers() {
             return clusterTestKit.bootstrapControllers();
         }

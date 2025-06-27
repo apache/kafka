@@ -606,20 +606,23 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public String bootstrapServers() {
+        return bootstrapServers(nodes.brokerListenerName());
+    }
+
+    public String bootstrapServers(ListenerName listenerName) {
         StringBuilder bld = new StringBuilder();
         String prefix = "";
         for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
             int brokerId = entry.getKey();
             BrokerServer broker = entry.getValue();
-            ListenerName listenerName = nodes.brokerListenerName();
             // The KafkaConfig#listeners method normalizes the listener name.
             // The result from TestKitNodes#brokerListenerName method should be normalized as well,
             // so that it matches the listener name in the KafkaConfig.
             int port = broker.boundPort(ListenerName.normalised(listenerName.value()));
             if (port <= 0) {
                 throw new RuntimeException("Broker " + brokerId + " does not yet " +
-                    "have a bound port for " + listenerName + ".  Did you start " +
-                    "the cluster yet?");
+                                           "have a bound port for " + listenerName + ".  Did you start " +
+                                           "the cluster yet?");
             }
             bld.append(prefix).append("localhost:").append(port);
             prefix = ",";

@@ -121,8 +121,16 @@ public interface ClusterInstance {
 
     /**
      * The broker connect string which can be used by clients for bootstrapping
+     * using the broker listenerName
      */
     String bootstrapServers();
+
+    /**
+     * The broker connect string which can be used by clients for bootstrapping
+     * using an alternate listener
+     * @throws org.apache.kafka.common.KafkaException if listenerName is not defined
+     */
+    String bootstrapServers(ListenerName listenerName);
 
     /**
      * The broker connect string which can be used by clients for bootstrapping to the controller quorum.
