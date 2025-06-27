@@ -29,7 +29,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -51,6 +50,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -145,7 +145,7 @@ public class LogCompactionTester {
             adminClient.createTopics(newTopics).all().get();
 
             final List<String> pendingTopics = new ArrayList<>();
-            TestUtils.waitForCondition(() -> {
+            waitUntilTrue(() -> {
                 try {
                     Set<String> allTopics = adminClient.listTopics().names().get();
                     pendingTopics.clear();
@@ -158,7 +158,7 @@ public class LogCompactionTester {
                 } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
                     throw new RuntimeException(e);
                 }
-            }, "timed out waiting for topics: " + pendingTopics);
+            }, () -> "timed out waiting for topics: " + pendingTopics);
         }
     }
 
@@ -340,5 +340,27 @@ public class LogCompactionTester {
         consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
         consumerProps.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaConsumer<>(consumerProps, new StringDeserializer(), new StringDeserializer());
+    }
+
+    /**
+     * Wait for condition to be true for at most 15 seconds, checking every 100ms
+     */
+    private static void waitUntilTrue(Supplier<Boolean> condition, Supplier<String> timeoutMessage) throws InterruptedException {
+        final long DEFAULT_MAX_WAIT_MS = 15000; // 15 seconds
+        final long DEFAULT_POLL_INTERVAL_MS = 100; // 100ms
+        long endTime = System.currentTimeMillis() + DEFAULT_MAX_WAIT_MS;
+
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                if (condition.get()) {
+                    return;
+                }
+            } catch (Exception e) {
+                // Continue trying until timeout
+            }
+            Thread.sleep(DEFAULT_POLL_INTERVAL_MS);
+        }
+
+        throw new RuntimeException(timeoutMessage.get());
     }
 }
