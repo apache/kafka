@@ -45,13 +45,13 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatcher;
 
 import java.nio.BufferOverflowException;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -68,7 +68,7 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.Coo
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.INITIAL;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.LOADING;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.HighWatermarkListener.NO_OFFSET;
-import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.MIN_BUFFER_SIZE;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.INITIAL_BUFFER_SIZE;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.endTransactionMarker;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.records;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.transactionalRecords;
@@ -2921,9 +2921,9 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
         int maxBatchSize = writer.config(TP).maxMessageSize();
-        assertTrue(maxBatchSize > MIN_BUFFER_SIZE);
+        assertTrue(maxBatchSize > INITIAL_BUFFER_SIZE);
 
-        // Generate enough records to create a batch that has 512KB < batchSize < maxBatchSize
+        // Generate enough records to create a batch that has INITIAL_BUFFER_SIZE < batchSize < maxBatchSize
         List<String> records = new ArrayList<>();
         for (int i = 0; i < 50000; i++) {
             records.add("record-" + i);
@@ -2939,7 +2939,7 @@ public class CoordinatorRuntimeTest {
         assertFalse(write1.isCompletedExceptionally());
 
         int batchSize = writer.entries(TP).get(0).sizeInBytes();
-        assertTrue(batchSize > MIN_BUFFER_SIZE && batchSize < maxBatchSize);
+        assertTrue(batchSize > INITIAL_BUFFER_SIZE && batchSize < maxBatchSize);
     }
 
     @Test
@@ -2948,9 +2948,9 @@ public class CoordinatorRuntimeTest {
         InMemoryPartitionWriter mockWriter = new InMemoryPartitionWriter(false) {
             @Override
             public LogConfig config(TopicPartition tp) {
-                var props = new Properties();
-                props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024)); // 1MB
-                return new LogConfig(props);
+                return new LogConfig(Map.of(
+                    TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024) // 1MB
+                ));
             }
         };
         StringSerializer serializer = new StringSerializer();
@@ -2992,7 +2992,7 @@ public class CoordinatorRuntimeTest {
         assertFalse(write1.isCompletedExceptionally());
 
         // Verify that the next buffer retrieved from the bufferSupplier is the initial small one, not the large buffer.
-        assertEquals(MIN_BUFFER_SIZE, ctx.bufferSupplier.get(1).capacity());
+        assertEquals(INITIAL_BUFFER_SIZE, ctx.bufferSupplier.get(1).capacity());
     }
 
     @Test
@@ -3001,9 +3001,9 @@ public class CoordinatorRuntimeTest {
         InMemoryPartitionWriter mockWriter = new InMemoryPartitionWriter(false) {
             @Override
             public LogConfig config(TopicPartition tp) {
-                var props = new Properties();
-                props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024 * 1024)); // 1GB
-                return new LogConfig(props);
+                return new LogConfig(Map.of(
+                    TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024 * 1024) // 1GB
+                ));
             }
         };
         StringSerializer serializer = new StringSerializer();
@@ -3032,7 +3032,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
-        // Generate enough records to create a batch that has MIN_BUFFER_SIZE < batchSize < maxBatchSize
+        // Generate enough records to create a batch that has INITIAL_BUFFER_SIZE < batchSize < maxBatchSize
         List<String> records = new ArrayList<>();
         for (int i = 0; i < 1000000; i++) {
             records.add("record-" + i);
@@ -3047,8 +3047,8 @@ public class CoordinatorRuntimeTest {
         // This will catch any exceptions thrown including RecordTooLargeException.
         assertFalse(write1.isCompletedExceptionally());
 
-        // Verify that the next buffer retrieved from the bufferSupplier is expanded buffer.
-        assertTrue(ctx.bufferSupplier.get(1).capacity() > MIN_BUFFER_SIZE);
+        // Verify that the next buffer retrieved from the bufferSupplier is the expanded buffer.
+        assertTrue(ctx.bufferSupplier.get(1).capacity() > INITIAL_BUFFER_SIZE);
     }
 
 

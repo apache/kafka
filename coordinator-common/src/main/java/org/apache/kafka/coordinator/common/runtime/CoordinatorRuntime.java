@@ -866,7 +866,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 LogConfig logConfig = partitionWriter.config(tp);
                 int maxBatchSize = logConfig.maxMessageSize();
                 long prevLastWrittenOffset = coordinator.lastWrittenOffset();
-                ByteBuffer buffer = bufferSupplier.get(min(MIN_BUFFER_SIZE, maxBatchSize));
+                ByteBuffer buffer = bufferSupplier.get(min(INITIAL_BUFFER_SIZE, maxBatchSize));
 
                 MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                     buffer,
@@ -1918,7 +1918,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * 512KB. Used for initial buffer size for write operations.
      */
-    static final int MIN_BUFFER_SIZE = 512 * 1024;
+    static final int INITIAL_BUFFER_SIZE = 512 * 1024;
 
     /**
      * The log prefix.
