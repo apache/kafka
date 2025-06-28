@@ -761,16 +761,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
             // Release the buffer only if it is not larger than the maxBatchSize.
             int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
-            ByteBuffer builderBuffer = currentBatch.builder.buffer();
-            ByteBuffer batchBuffer = currentBatch.buffer;
 
-            boolean builderUsable = builderBuffer.capacity() <= maxBatchSize;
-            boolean batchUsable = batchBuffer.capacity() <= maxBatchSize;
-
-            if (builderUsable && (!batchUsable || builderBuffer.capacity() >= batchBuffer.capacity())) {
-                bufferSupplier.release(builderBuffer);
-            } else if (batchUsable) {
-                bufferSupplier.release(batchBuffer);
+            if (currentBatch.builder.buffer().capacity() <= maxBatchSize) {
+                bufferSupplier.release(currentBatch.builder.buffer());
+            } else if (currentBatch.buffer.capacity() <= maxBatchSize) {
+                bufferSupplier.release(currentBatch.buffer);
             }
 
             currentBatch = null;
