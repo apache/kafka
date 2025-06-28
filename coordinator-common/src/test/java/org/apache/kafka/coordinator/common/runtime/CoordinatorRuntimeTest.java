@@ -2943,7 +2943,7 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
-    public void testCoordinatorDoNotRetainLargeBuffer() {
+    public void testCoordinatorDoNotRetainBufferLargeThanMaxMessageSize() {
         MockTimer timer = new MockTimer();
         InMemoryPartitionWriter mockWriter = new InMemoryPartitionWriter(false) {
             @Override
@@ -2996,7 +2996,7 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
-    public void testCoordinatorRetainExpandedBuffer() {
+    public void testCoordinatorRetainExpandedBufferLessOrEqualToMaxMessageSize() {
         MockTimer timer = new MockTimer();
         InMemoryPartitionWriter mockWriter = new InMemoryPartitionWriter(false) {
             @Override
