@@ -32,12 +32,17 @@ public class ConfigHelperUtils {
     /**
      * Creates a DescribeConfigsResult from a Map of configs.
      */
-    public static DescribeConfigsResponseData.DescribeConfigsResult createResponseConfig(
+    public static <V> DescribeConfigsResponseData.DescribeConfigsResult createResponseConfig(
             DescribeConfigsRequestData.DescribeConfigsResource resource,
-            Map<String, ?> config,
+            Map<String, V> config,
             BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
 
-        return toDescribeConfigsResult(config.entrySet().stream().map(entry -> (Entry<String, ?>) entry), resource, createConfigEntry);
+        return toDescribeConfigsResult(
+                config.entrySet().stream()
+                        .map(entry -> Map.entry(entry.getKey(), entry.getValue())),
+                resource,
+                createConfigEntry
+        );
     }
 
     /**
@@ -49,11 +54,13 @@ public class ConfigHelperUtils {
             AbstractConfig config,
             BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
 
-        Map<String, ?> nonInternalValues = config.nonInternalValues(); // cache to avoid multiple calls
-        Stream<Entry<String, ?>> allEntries = Stream.concat(
+        // Cast from Map<String, ?> to Map<String, Object> to eliminate wildcard types. Cached to avoid multiple calls.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> nonInternalValues = (Map<String, Object>) config.nonInternalValues();
+        Stream<Entry<String, Object>> allEntries = Stream.concat(
                 config.originals().entrySet().stream()
                         .filter(entry -> entry.getValue() != null && !nonInternalValues.containsKey(entry.getKey()))
-                        .map(entry -> (Entry<String, ?>) entry), // explicit parameterized cast
+                        .map(entry -> Map.entry(entry.getKey(), entry.getValue())),
                 nonInternalValues.entrySet().stream()
         );
         return toDescribeConfigsResult(allEntries, resource, createConfigEntry);
@@ -63,7 +70,7 @@ public class ConfigHelperUtils {
      * Internal helper that builds a DescribeConfigsResult from a stream of config entries.
      */
     private static DescribeConfigsResponseData.DescribeConfigsResult toDescribeConfigsResult(
-            Stream<Entry<String, ?>> configStream,
+            Stream<Entry<String, Object>> configStream,
             DescribeConfigsRequestData.DescribeConfigsResource resource,
             BiFunction<String, Object, DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntry) {
 

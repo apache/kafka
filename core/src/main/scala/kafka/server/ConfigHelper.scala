@@ -114,7 +114,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.resourceName}")
             else
               createResponseConfig(resource, LoggingController.loggers,
-                (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
+                (name: String, value: Object) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
 
