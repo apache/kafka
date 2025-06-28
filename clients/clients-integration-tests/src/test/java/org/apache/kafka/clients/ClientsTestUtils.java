@@ -190,16 +190,6 @@ public class ClientsTestUtils {
         consumeAndVerifyRecords(consumer, tp, numRecords, startingOffset, 0, 0, -1);
     }
 
-    public static void sendRecordsToTopic(ClusterInstance cluster, String topic, int numPartitions, int startIdx, int numRecors) {
-        int currIdx = startIdx;
-        try (Producer<byte[], byte[]> producer = cluster.producer()) {
-            for (int i = 0; i < numRecors; i++) {
-                sendRecord(producer, new TopicPartition(topic, currIdx), System.currentTimeMillis(), 1, -1);
-                currIdx = (currIdx + 1) % numPartitions;
-            }
-        }
-    }
-
     public static void sendRecords(
         ClusterInstance cluster,
         TopicPartition tp,

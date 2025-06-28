@@ -19,11 +19,12 @@ package org.apache.kafka.clients.consumer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.ClientsTestUtils;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -46,6 +47,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -61,6 +63,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import static  org.apache.kafka.test.TestUtils.SEEDED_RANDOM;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -377,7 +380,7 @@ public class ConsumerBounceTest {
         TestUtils.waitForCondition(() -> {
             FindCoordinatorResponse response = null;
             try {
-                response = IntegrationTestUtils.connectAndReceive(request, clusterInstance.anyBrokerSocketServer().boundPort(new ListenerName("EXTERNAL")));
+                response = IntegrationTestUtils.connectAndReceive(request, clusterInstance.boundPorts().get(0));
             } catch (IOException e) {
                 return false;
             }
@@ -447,8 +450,12 @@ public class ConsumerBounceTest {
 
         assertInstanceOf(GroupMaxSizeReachedException.class, rejectedConsumer.getThrownException().get());
 
-        // assert group continues to live
-        ClientsTestUtils.sendRecordsToTopic(clusterInstance, topic, numPartition, 0, numPartition * 100);
+        // assert group continues to live and the records to be distributed across all partitions.
+        var data = "data".getBytes(StandardCharsets.UTF_8);
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer()) {
+            IntStream.range(0, numPartition * 100).forEach(index ->
+                    producer.send(new ProducerRecord<>(topic, index % numPartition, data, data)));
+        }
 
         TestUtils.waitForCondition(
                 () -> consumerPollers.stream().allMatch(p -> p.receivedMessages() >= 100),
