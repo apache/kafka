@@ -309,7 +309,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--describe", "--all"));
         String message = captureStandardOut(run(command));
-        assertTrue(message.contains("streams.num.standby.replicas=0"));
+        assertTrue(message.contains("streams.num.standby.replicas=0"), "Message was not as expected: " + message);
 
         // Alter number of standby replicas
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -325,7 +325,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--describe"));
         message = captureStandardOut(run(command));
-        assertTrue(message.contains("streams.num.standby.replicas=1"));
+        assertTrue(message.contains("streams.num.standby.replicas=1"), "Message was not as expected: " + message);
     }
 
     private void verifyGroupConfigUpdate(List<String> alterOpts) throws Exception {

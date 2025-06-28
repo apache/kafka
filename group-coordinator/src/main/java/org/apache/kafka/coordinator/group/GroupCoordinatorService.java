@@ -83,6 +83,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
@@ -93,8 +95,6 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -112,7 +112,6 @@ import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -327,9 +326,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      * The metadata image to extract topic id to names map.
-     * This is initialised when the {@link GroupCoordinator#onNewMetadataImage(MetadataImage, MetadataDelta)} is called
+     * This is initialised when the {@link GroupCoordinator#onNewMetadataImage(CoordinatorMetadataImage, CoordinatorMetadataDelta)} is called
      */
-    private MetadataImage metadataImage = null;
+    private CoordinatorMetadataImage metadataImage = null;
 
     /**
      *
@@ -1673,29 +1672,30 @@ public class GroupCoordinatorService implements GroupCoordinator {
         List<ReadShareGroupStateSummaryRequestData.ReadStateSummaryData> readStateSummaryData = new ArrayList<>(requestData.topics().size());
         List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList = new ArrayList<>(requestData.topics().size());
         requestData.topics().forEach(topic -> {
-            Uuid topicId = metadataImage.topics().topicNameToIdView().get(topic.topicName());
-            if (topicId != null) {
-                requestTopicIdToNameMapping.put(topicId, topic.topicName());
-                readStateSummaryData.add(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
-                    .setTopicId(topicId)
-                    .setPartitions(
-                        topic.partitions().stream().map(
-                            partitionIndex -> new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partitionIndex)
-                        ).toList()
-                    ));
-            } else {
-                // If the topic does not exist, the start offset is returned as -1 (uninitialized offset).
-                // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
-                // It's treated as absence of data, rather than an error, unlike TOPIC_AUTHORIZATION_ERROR for example.
-                describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
-                    .setTopicName(topic.topicName())
-                    .setTopicId(Uuid.ZERO_UUID)
-                    .setPartitions(topic.partitions().stream().map(
-                        partition -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partition)
-                            .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
-                    ).toList()));
-            }
+            metadataImage.topicId(topic.topicName()).ifPresentOrElse(
+                topicId -> {
+                    requestTopicIdToNameMapping.put(topicId, topic.topicName());
+                    readStateSummaryData.add(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                        .setTopicId(topicId)
+                        .setPartitions(
+                            topic.partitions().stream().map(
+                                partitionIndex -> new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partitionIndex)
+                            ).toList()
+                        ));
+                },
+                () -> {
+                    // If the topic does not exist, the start offset is returned as -1 (uninitialized offset).
+                    // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
+                    // It's treated as absence of data, rather than an error, unlike TOPIC_AUTHORIZATION_ERROR for example.
+                    describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName())
+                        .setTopicId(Uuid.ZERO_UUID)
+                        .setPartitions(topic.partitions().stream().map(
+                            partition -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition)
+                                .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
+                        ).toList()));
+                });
         });
 
         // If the request for the persister is empty, just complete the operation right away.
@@ -1741,8 +1741,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             ReadShareGroupStateSummaryRequestData readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
                 .setGroupId(requestData.groupId());
             topicPartitionMap.forEach((topicId, partitionSet) -> {
-                String topicName = metadataImage.topics().topicIdToNameView().get(topicId);
-                if (topicName != null) {
+                metadataImage.topicName(topicId).ifPresent(topicName -> {
                     requestTopicIdToNameMapping.put(topicId, topicName);
                     readSummaryRequestData.topics().add(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(topicId)
@@ -1751,7 +1750,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                                 partitionIndex -> new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partitionIndex)
                             ).toList()
                         ));
-                }
+                });
             });
             return readShareGroupStateSummary(readSummaryRequestData, requestTopicIdToNameMapping, describeShareGroupOffsetsResponseTopicList);
         });
@@ -1914,14 +1913,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 errorTopicResponses.add(
                     new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                         .setTopicId(topicData.topicId())
-                        .setTopicName(metadataImage.topics().topicIdToNameView().get(topicData.topicId()))
+                        .setTopicName(metadataImage.topicName(topicData.topicId()).orElse("<UNKNOWN>"))
                         .setErrorMessage(Errors.forCode(errItem.get().errorCode()).message())
                         .setErrorCode(errItem.get().errorCode())
                 );
             } else {
                 successTopics.put(
                     topicData.topicId(),
-                    metadataImage.topics().topicIdToNameView().get(topicData.topicId())
+                    metadataImage.topicName(topicData.topicId()).orElse("<UNKNOWN>")
                 );
             }
         });
@@ -2132,7 +2131,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // At this point the metadata will not have been updated
         // with the deleted topics.
         Set<Uuid> topicIds = topicPartitions.stream()
-            .map(tp -> metadataImage.topics().getTopic(tp.topic()).id())
+            .map(tp -> metadataImage.topicId(tp.topic()).orElse(null))
             .collect(Collectors.toSet());
 
         CompletableFuture.allOf(
@@ -2181,12 +2180,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#onNewMetadataImage(MetadataImage, MetadataDelta)}.
+     * See {@link GroupCoordinator#onNewMetadataImage(CoordinatorMetadataImage, CoordinatorMetadataDelta)}.
      */
     @Override
     public void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+        CoordinatorMetadataImage newImage,
+        CoordinatorMetadataDelta delta
     ) {
         throwIfNotActive();
         metadataImage = newImage;

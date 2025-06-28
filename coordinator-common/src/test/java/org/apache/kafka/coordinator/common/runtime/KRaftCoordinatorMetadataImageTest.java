@@ -1,0 +1,172 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.coordinator.common.runtime;
+
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.ShareVersion;
+import org.junit.jupiter.api.Test;
+
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
+class KRaftCoordinatorMetadataImageTest {
+
+    @Test
+    void testKRaftCoordinatorMetadataImage() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "test-topic";
+        int partitionCount = 2;
+        Uuid topicId2 = Uuid.randomUuid();
+        String topicName2 = "test-topic2";
+        int partitionCount2 = 4;
+        Uuid noPartitionTopicId = Uuid.randomUuid();
+        String noPartitionTopic = "no-partition-topic";
+        long imageVersion = 123L;
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, partitionCount)
+            .addTopic(topicId2, topicName2, partitionCount2)
+            .addTopic(noPartitionTopicId, noPartitionTopic, 0)
+            .addRacks()
+            .build(imageVersion);
+
+        KRaftCoordinatorMetadataImage image = new KRaftCoordinatorMetadataImage(metadataImage);
+
+        assertEquals(Optional.of(topicName), image.topicName(topicId));
+        assertEquals(Optional.of(topicName2), image.topicName(topicId2));
+        assertEquals(Optional.empty(), image.topicName(Uuid.randomUuid()));
+
+        assertEquals(Optional.of(topicId), image.topicId(topicName));
+        assertEquals(Optional.of(topicId2), image.topicId(topicName2));
+        assertEquals(Optional.empty(), image.topicId("unknown"));
+
+        assertEquals(Optional.of(partitionCount), image.partitionCount(topicName));
+        assertEquals(Optional.of(partitionCount2), image.partitionCount(topicName2));
+        assertEquals(Optional.empty(), image.partitionCount("unknown"));
+
+        assertEquals(Set.of(topicName, topicName2, noPartitionTopic), image.topicNames());
+        assertEquals(Set.of(topicId, topicId2, noPartitionTopicId), image.topicIds());
+
+        image.topicMetadata(topicName).ifPresentOrElse(
+            topicMetadata -> {
+                assertEquals(topicName, topicMetadata.name());
+                assertEquals(topicId, topicMetadata.id());
+                assertEquals(partitionCount, topicMetadata.partitionCount());
+                Map<Integer, List<String>> racks = topicMetadata.partitionRacks();
+                assertEquals(2, racks.size());
+                assertEquals(2, racks.get(0).size());
+                assertEquals(2, racks.get(1).size());
+                assertEquals("rack0", racks.get(0).get(0));
+                assertEquals("rack1", racks.get(0).get(1));
+                assertEquals("rack1", racks.get(1).get(0));
+                assertEquals("rack2", racks.get(1).get(1));
+            },
+            () -> fail("Expected topic metadata for " + topicName)
+        );
+
+        image.topicMetadata(noPartitionTopic).ifPresentOrElse(
+            topicMetadata -> {
+                assertEquals(noPartitionTopic, topicMetadata.name());
+                assertEquals(noPartitionTopicId, topicMetadata.id());
+                assertEquals(0, topicMetadata.partitionCount());
+                Map<Integer, List<String>> racks = topicMetadata.partitionRacks();
+                assertEquals(0, racks.size());
+            },
+            () -> fail("Expected topic metadata for " + topicName)
+        );
+
+        assertNotNull(image.emptyDelta());
+
+        assertEquals(metadataImage.offset(), image.version());
+        assertEquals(imageVersion, image.version());
+
+        assertFalse(image.isEmpty());
+    }
+
+    @Test
+    public void testShareGroupsEnabled() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "test-topic";
+        int partitionCount = 2;
+        long imageVersion = 123L;
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, partitionCount)
+            .addRacks()
+            .build(imageVersion);
+
+        KRaftCoordinatorMetadataImage image = new KRaftCoordinatorMetadataImage(metadataImage);
+        assertFalse(image.shareGroupsEnabled());
+
+        MetadataDelta metadataDelta = new MetadataDelta(metadataImage);
+        metadataDelta.replay(new FeatureLevelRecord().setName(ShareVersion.FEATURE_NAME).setFeatureLevel(ShareVersion.SV_1.featureLevel()));
+        metadataImage = metadataDelta.apply(new MetadataProvenance(imageVersion, 0, 0L, true));
+
+        assertTrue(new KRaftCoordinatorMetadataImage(metadataImage).shareGroupsEnabled());
+
+        MetadataDelta metadataDeltaFeatureDisabled = new MetadataDelta(metadataImage);
+        metadataDeltaFeatureDisabled.replay(new FeatureLevelRecord().setName(ShareVersion.FEATURE_NAME).setFeatureLevel(ShareVersion.SV_0.featureLevel()));
+        metadataImage = metadataDeltaFeatureDisabled.apply(new MetadataProvenance(imageVersion, 0, 0L, true));
+        assertFalse(new KRaftCoordinatorMetadataImage(metadataImage).shareGroupsEnabled());
+    }
+
+    @Test
+    public void testEqualsAndHashcode() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "test-topic";
+        int partitionCount = 2;
+        Uuid topicId2 = Uuid.randomUuid();
+        String topicName2 = "test-topic2";
+        int partitionCount2 = 4;
+        long imageVersion = 123L;
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, partitionCount)
+            .addRacks()
+            .build(imageVersion);
+
+        KRaftCoordinatorMetadataImage coordinatorMetadataImage = new KRaftCoordinatorMetadataImage(metadataImage);
+        KRaftCoordinatorMetadataImage coordinatorMetadataImageCopy = new KRaftCoordinatorMetadataImage(metadataImage);
+
+        MetadataImage metadataImage2 = new MetadataImageBuilder()
+            .addTopic(topicId2, topicName2, partitionCount2)
+            .addRacks()
+            .build(imageVersion);
+
+        KRaftCoordinatorMetadataImage coordinatorMetadataImage2 = new KRaftCoordinatorMetadataImage(metadataImage2);
+
+        assertEquals(coordinatorMetadataImage, coordinatorMetadataImageCopy);
+        assertNotEquals(coordinatorMetadataImage, coordinatorMetadataImage2);
+
+        assertEquals(coordinatorMetadataImage.hashCode(), coordinatorMetadataImageCopy.hashCode());
+        assertNotEquals(coordinatorMetadataImage.hashCode(), coordinatorMetadataImage2.hashCode());
+    }
+}

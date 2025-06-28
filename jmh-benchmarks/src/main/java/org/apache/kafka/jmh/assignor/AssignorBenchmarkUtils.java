@@ -19,6 +19,8 @@ package org.apache.kafka.jmh.assignor;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -96,7 +98,7 @@ public class AssignorBenchmarkUtils {
      * @return A TopicsImage containing the topic ids, names and partition counts from the
      *         subscription metadata.
      */
-    public static MetadataImage createMetadataImage(
+    public static CoordinatorMetadataImage createMetadataImage(
         List<String> allTopicNames,
         int partitionsPerTopic
     ) {
@@ -111,7 +113,7 @@ public class AssignorBenchmarkUtils {
             );
         }
 
-        return delta.apply(MetadataProvenance.EMPTY);
+        return new KRaftCoordinatorMetadataImage(delta.apply(MetadataProvenance.EMPTY));
     }
 
     /**

@@ -38,19 +38,21 @@ import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
+import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
-import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
@@ -72,7 +74,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -96,13 +97,13 @@ class ShareCoordinatorShardTest {
         private final CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
         private final CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        private MetadataImage metadataImage = null;
+        private CoordinatorMetadataImage metadataImage = null;
         private Map<String, String> configOverrides = new HashMap<>();
         ShareCoordinatorOffsetsManager offsetsManager = mock(ShareCoordinatorOffsetsManager.class);
         private Time time;
 
         ShareCoordinatorShard build() {
-            if (metadataImage == null) metadataImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
+            if (metadataImage == null) metadataImage = mock(CoordinatorMetadataImage.class, RETURNS_DEEP_STUBS);
             if (config == null) {
                 config = ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap(configOverrides));
             }
@@ -116,8 +117,10 @@ class ShareCoordinatorShardTest {
                 offsetsManager,
                 time == null ? TIME : time
             );
-            when(metadataImage.topics().getTopic((Uuid) any())).thenReturn(mock(TopicImage.class));
-            when(metadataImage.topics().getPartition(any(), anyInt())).thenReturn(mock(PartitionRegistration.class));
+
+            var topicMetadata = mock(CoordinatorMetadataImage.TopicMetadata.class);
+            when(topicMetadata.partitionCount()).thenReturn(PARTITION + 1);
+            when(metadataImage.topicMetadata((Uuid) any())).thenReturn(Optional.of(topicMetadata));
             shard.onNewMetadataImage(metadataImage, null);
             return shard;
         }
@@ -1247,7 +1250,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testDeleteTopicIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1278,7 +1281,8 @@ class ShareCoordinatorShardTest {
     @Test
     public void testDeletePartitionIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        when(image.cluster()).thenReturn(mock(ClusterImage.class));
+        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1289,12 +1293,10 @@ class ShareCoordinatorShardTest {
 
         // topic id found in cache
         TopicsImage topicsImage = mock(TopicsImage.class);
-        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(
-            mock(TopicImage.class)
-        );
-        when(image.topics()).thenReturn(
-            topicsImage
-        );
+        TopicImage topicImage = mock(TopicImage.class);
+        when(topicImage.partitions()).thenReturn(Map.of());
+        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(topicImage);
+        when(image.topics()).thenReturn(topicsImage);
 
         // partition id not found
         when(topicsImage.getPartition(eq(TOPIC_ID), eq(0))).thenReturn(
@@ -1309,7 +1311,7 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
         verify(topicsImage, times(1)).getTopic(eq(TOPIC_ID));
-        verify(topicsImage, times(1)).getPartition(eq(TOPIC_ID), eq(0));
+        verify(topicImage, times(1)).partitions();
     }
 
     @Test
@@ -1421,7 +1423,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testInitializeTopicIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1450,7 +1452,8 @@ class ShareCoordinatorShardTest {
     @Test
     public void testInitializePartitionIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        when(image.cluster()).thenReturn(mock(ClusterImage.class));
+        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1462,8 +1465,10 @@ class ShareCoordinatorShardTest {
             ));
 
         // topic id found in cache
+        TopicImage topicImage = mock(TopicImage.class);
+        when(topicImage.partitions()).thenReturn(Map.of());
         TopicsImage topicsImage = mock(TopicsImage.class);
-        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(mock(TopicImage.class));
+        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(topicImage);
         when(image.topics()).thenReturn(topicsImage);
 
         // partition id not found
@@ -1477,13 +1482,13 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
         verify(topicsImage, times(1)).getTopic(eq(TOPIC_ID));
-        verify(topicsImage, times(1)).getPartition(eq(TOPIC_ID), eq(0));
+        verify(topicImage, times(1)).partitions();
     }
 
     @Test
     public void testSnapshotColdPartitionsNoEligiblePartitions() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1549,7 +1554,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsSnapshotUpdateNotConsidered() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1646,7 +1651,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsDoesNotPerpetuallySnapshot() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1720,7 +1725,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsPartialEligiblePartitions() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1834,7 +1839,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testOnTopicsDeletedTopicIds() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         int offset = 0;
         int producerId = 0;

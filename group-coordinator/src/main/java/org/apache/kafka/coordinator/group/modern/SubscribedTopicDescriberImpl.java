@@ -17,16 +17,15 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.metadata.BrokerRegistration;
-import org.apache.kafka.metadata.PartitionRegistration;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -37,9 +36,9 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     /**
      * The metadata image that contains the latest metadata information.
      */
-    private final MetadataImage metadataImage;
+    private final CoordinatorMetadataImage metadataImage;
 
-    public SubscribedTopicDescriberImpl(MetadataImage metadataImage) {
+    public SubscribedTopicDescriberImpl(CoordinatorMetadataImage metadataImage) {
         this.metadataImage = Objects.requireNonNull(metadataImage);
     }
 
@@ -52,8 +51,7 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public int numPartitions(Uuid topicId) {
-        TopicImage topicImage = this.metadataImage.topics().getTopic(topicId);
-        return topicImage == null ? -1 : topicImage.partitions().size();
+        return this.metadataImage.partitionCount(topicId).orElse(-1);
     }
 
     /**
@@ -66,22 +64,18 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
-        TopicImage topic = metadataImage.topics().getTopic(topicId);
-        if (topic != null) {
-            PartitionRegistration partitionRegistration = topic.partitions().get(partition);
-            if (partitionRegistration != null) {
-                Set<String> racks = new HashSet<>();
-                for (int replica : partitionRegistration.replicas) {
-                    // Only add the rack if it is available for the broker/replica.
-                    BrokerRegistration brokerRegistration = metadataImage.cluster().broker(replica);
-                    if (brokerRegistration != null) {
-                        brokerRegistration.rack().ifPresent(racks::add);
-                    }
-                }
-                return Collections.unmodifiableSet(racks);
-            }
+        Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(topicId);
+        if (topicMetadataOp.isEmpty()) {
+            return Collections.emptySet();
         }
-        return Set.of();
+
+        CoordinatorMetadataImage.TopicMetadata topicMetadata = topicMetadataOp.get();
+        List<String> racks = topicMetadata.partitionRacks().get(partition);
+        if (racks == null) {
+            return Collections.emptySet();
+        } else {
+            return new HashSet<>(racks);
+        }
     }
 
     @Override

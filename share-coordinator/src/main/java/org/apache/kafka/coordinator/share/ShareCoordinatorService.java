@@ -45,6 +45,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetrics;
@@ -52,9 +54,6 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSuppli
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
@@ -1096,7 +1095,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+    public void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
         throwIfNotActive();
         this.runtime.onNewMetadataImage(newImage, delta);
         boolean enabled = isShareGroupsEnabled(newImage);
@@ -1127,10 +1126,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
         }
     }
 
-    private boolean isShareGroupsEnabled(MetadataImage image) {
-        return shareGroupConfigEnabledSupplier.get() || ShareVersion.fromFeatureLevel(
-            image.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
-        ).supportsShareGroups();
+    private boolean isShareGroupsEnabled(CoordinatorMetadataImage image) {
+        return shareGroupConfigEnabledSupplier.get() || image.shareGroupsEnabled();
     }
 
     // Visibility for tests

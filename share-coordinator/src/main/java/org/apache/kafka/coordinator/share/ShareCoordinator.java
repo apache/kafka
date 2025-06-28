@@ -30,8 +30,8 @@ import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.server.share.SharePartitionKey;
 
 import java.util.OptionalInt;
@@ -139,7 +139,7 @@ public interface ShareCoordinator {
      * @param delta     The metadata delta.
      */
     void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+        CoordinatorMetadataImage newImage,
+        CoordinatorMetadataDelta delta
     );
 }
