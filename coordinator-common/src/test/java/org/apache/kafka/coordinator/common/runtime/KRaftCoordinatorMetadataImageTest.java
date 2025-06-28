@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 class KRaftCoordinatorMetadataImageTest {
 
     @Test
-    void testKRaftCoordinatorMetadataImage() {
+    public void testKRaftCoordinatorMetadataImage() {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "test-topic";
         int partitionCount = 2;

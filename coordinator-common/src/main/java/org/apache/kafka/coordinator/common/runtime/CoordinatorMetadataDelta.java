@@ -21,6 +21,10 @@ import org.apache.kafka.common.Uuid;
 import java.util.Collection;
 import java.util.Set;
 
+/**
+ * Provides metadata deltas to Coordinators (GroupCoordinator, ShareCoordinator, etc) such as changed topics and deleted topics
+ * Implementations should be immutable.
+ */
 public interface CoordinatorMetadataDelta {
 
     CoordinatorMetadataDelta EMPTY = emptyDelta();

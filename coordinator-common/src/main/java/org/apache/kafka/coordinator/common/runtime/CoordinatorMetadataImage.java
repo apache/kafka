@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Provides metadata to Coordinators (GroupCoordinator, ShareCoordinator, etc) such as topics, partitions, and their configurations.
@@ -69,6 +71,10 @@ public interface CoordinatorMetadataImage {
         Uuid id();
 
         int partitionCount();
+
+        default Set<Integer> partitionSet() {
+            return IntStream.range(0, partitionCount()).boxed().collect(Collectors.toSet());
+        }
 
         /**
          * Returns a map of partition ids to the list of racks that the partition is assigned to.
