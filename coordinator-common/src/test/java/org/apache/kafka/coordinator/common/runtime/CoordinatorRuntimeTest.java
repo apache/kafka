@@ -2952,15 +2952,6 @@ public class CoordinatorRuntimeTest {
                 props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024)); // 1MB
                 return new LogConfig(props);
             }
-
-            @Override
-            public long append(
-                TopicPartition tp,
-                VerificationGuard verificationGuard,
-                MemoryRecords batch
-            ) {
-                return super.append(tp, verificationGuard, batch);
-            }
         };
         StringSerializer serializer = new StringSerializer();
 
@@ -3013,15 +3004,6 @@ public class CoordinatorRuntimeTest {
                 var props = new Properties();
                 props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024 * 1024)); // 1GB
                 return new LogConfig(props);
-            }
-
-            @Override
-            public long append(
-                TopicPartition tp,
-                VerificationGuard verificationGuard,
-                MemoryRecords batch
-            ) {
-                return super.append(tp, verificationGuard, batch);
             }
         };
         StringSerializer serializer = new StringSerializer();
