@@ -17,7 +17,6 @@
 
 package kafka.coordinator.transaction
 
-import kafka.network.SocketServer
 import org.apache.kafka.server.IntegrationTestUtils
 import org.apache.kafka.clients.admin.{Admin, NewTopic, TransactionState}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords, OffsetAndMetadata}
@@ -27,7 +26,6 @@ import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import org.apache.kafka.common.message.InitProducerIdRequestData
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{InitProducerIdRequest, InitProducerIdResponse}
@@ -183,9 +181,9 @@ class ProducerIntegrationTest {
 
   private def verifyUniqueIds(clusterInstance: ClusterInstance): Unit = {
     // Request enough PIDs from each broker to ensure each broker generates two blocks
-    val ids = clusterInstance.brokerSocketServers().stream().flatMap( broker => {
-      IntStream.range(0, 1001).parallel().mapToObj( _ =>
-        nextProducerId(broker, clusterInstance.clientListener())
+    val ids = clusterInstance.brokers().values().stream().flatMap(broker => {
+      IntStream.range(0, 1001).parallel().mapToObj(_ =>
+        nextProducerId(broker.boundPort(clusterInstance.clientListener()))
       )}).collect(Collectors.toList[Long]).asScala.toSeq
 
     val brokerCount = clusterInstance.brokerIds.size
@@ -194,7 +192,7 @@ class ProducerIntegrationTest {
     assertEquals(expectedTotalCount, ids.distinct.size, "Found duplicate producer IDs")
   }
 
-  private def nextProducerId(broker: SocketServer, listener: ListenerName): Long = {
+  private def nextProducerId(port: Int): Long = {
     // Generating producer ids may fail while waiting for the initial block and also
     // when the current block is full and waiting for the prefetched block.
     val deadline = 5.seconds.fromNow
@@ -207,7 +205,6 @@ class ProducerIntegrationTest {
         .setTransactionalId(null)
         .setTransactionTimeoutMs(10)
       val request = new InitProducerIdRequest.Builder(data).build()
-      val port = broker.boundPort(listener)
       response = IntegrationTestUtils.connectAndReceive[InitProducerIdResponse](request, port)
       shouldRetry = response.data.errorCode == Errors.COORDINATOR_LOAD_IN_PROGRESS.code
     }
