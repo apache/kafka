@@ -592,8 +592,8 @@ public class ConsumerGroupCommand {
                         getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty(), Optional.empty())
                 );
             } else {
-                List<TopicPartition> topicPartitionsSorted = topicPartitions.stream().sorted(Comparator.comparingInt(TopicPartition::partition)).collect(Collectors.toList());
-                return describePartitions(group, coordinator, topicPartitionsSorted, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
+                List<TopicPartition> targetTopicPartitions = new ArrayList<>(topicPartitions);
+                return describePartitions(group, coordinator, targetTopicPartitions, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
             }
         }
 
@@ -619,7 +619,11 @@ public class ConsumerGroupCommand {
                     consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
-            return offsetsUtils.getLogEndOffsets(topicPartitions).entrySet().stream().map(logEndOffsetResult -> {
+            Set<TopicPartition> nonLeaderTopicPartitions = filterNoneLeaderPartitions(topicPartitions);
+
+            // prepare data for partitions with leaders
+            topicPartitions.removeAll(nonLeaderTopicPartitions);
+            List<PartitionAssignmentState> existLeaderAssignments = offsetsUtils.getLogEndOffsets(topicPartitions).entrySet().stream().map(logEndOffsetResult -> {
                 if (logEndOffsetResult.getValue() instanceof OffsetsUtils.LogOffset)
                     return getDescribePartitionResult.apply(
                         logEndOffsetResult.getKey(),
@@ -631,7 +635,34 @@ public class ConsumerGroupCommand {
                     return null;
 
                 throw new IllegalStateException("Unknown LogOffset subclass: " + logEndOffsetResult.getValue());
-            }).collect(Collectors.toList());
+            }).toList();
+
+            // prepare data for partitions without leaders
+            List<PartitionAssignmentState> noneLeaderAssignments = nonLeaderTopicPartitions.stream()
+                    .map(tp -> getDescribePartitionResult.apply(tp, Optional.empty())).toList();
+
+            // concat the data and then sort them
+            return Stream.concat(existLeaderAssignments.stream(), noneLeaderAssignments.stream())
+                    .sorted(Comparator.<PartitionAssignmentState, String>comparing(
+                            state -> state.topic.orElse(""), String::compareTo)
+                            .thenComparingInt(state -> state.partition.orElse(-1)))
+                    .collect(Collectors.toList());
+        }
+
+        private Set<TopicPartition> filterNoneLeaderPartitions(List<TopicPartition> topicPartitions) {
+            // collect all topics
+            Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+
+            try {
+                return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                        .stream()
+                        .flatMap(entry -> entry.getValue().partitions().stream()
+                                .filter(partitionInfo -> partitionInfo.leader() == null)
+                                .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                        .collect(Collectors.toSet());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
