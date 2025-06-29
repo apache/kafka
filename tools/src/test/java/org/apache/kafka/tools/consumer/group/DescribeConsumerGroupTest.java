@@ -47,6 +47,7 @@ import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1058,6 +1059,7 @@ public class DescribeConsumerGroupTest {
      * The config `OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG` needs to be set to a value greater than 1 to ensure the
      * normal invocation of APIs such as `FIND_COORDINATOR` when a broker has shutdown
      */
+    @Timeout(60)
     @ClusterTest(brokers = 3, serverProperties = {@ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")})
     public void testDescribeConsumerGroupWithoutLeaders(ClusterInstance clusterInstance) throws Exception {
         int brokerNum = 3;
@@ -1072,7 +1074,7 @@ public class DescribeConsumerGroupTest {
         }
 
         // append the command
-        List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--all-topics"));
+        List<String> cgcArgs = List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--all-topics");
 
         try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, topic, Map.of());
              ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]));
