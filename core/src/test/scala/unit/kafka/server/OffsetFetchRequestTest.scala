@@ -564,7 +564,8 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
 
   @ClusterTest
   def testGroupErrors(): Unit = {
-    for (version <- ApiKeys.OFFSET_FETCH.oldestVersion() to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
+    // Start from version 1 because version 0 goes to ZK.
+    for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
       assertEquals(
         if (version >= 2) {
           new OffsetFetchResponseData.OffsetFetchResponseGroup()
