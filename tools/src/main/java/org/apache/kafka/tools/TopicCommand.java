@@ -189,7 +189,7 @@ public abstract class TopicCommand {
 
     }
 
-    private static Integer getReplicationFactor(TopicPartitionInfo tpi, PartitionReassignment reassignment) {
+    private static int getReplicationFactor(TopicPartitionInfo tpi, PartitionReassignment reassignment) {
         return isReassignmentInProgress(tpi, reassignment) ?
             reassignment.replicas().size() - reassignment.addingReplicas().size() :
             tpi.replicas().size();
@@ -272,12 +272,12 @@ public abstract class TopicCommand {
     static class TopicDescription {
         private final String topic;
         private final Uuid topicId;
-        private final Integer numPartitions;
-        private final Integer replicationFactor;
+        private final int numPartitions;
+        private final int replicationFactor;
         private final Config config;
         private final boolean markedForDeletion;
 
-        public TopicDescription(String topic, Uuid topicId, Integer numPartitions, Integer replicationFactor, Config config, boolean markedForDeletion) {
+        public TopicDescription(String topic, Uuid topicId, int numPartitions, int replicationFactor, Config config, boolean markedForDeletion) {
             this.topic = topic;
             this.topicId = topicId;
             this.numPartitions = numPartitions;
@@ -321,7 +321,7 @@ public abstract class TopicCommand {
             this.reassignment = reassignment;
         }
 
-        public Integer minIsrCount() {
+        public int minIsrCount() {
             return Integer.parseInt(config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
         }
 
@@ -519,7 +519,7 @@ public abstract class TopicCommand {
             String topicName) {
             if (topic.hasReplicaAssignment()) {
                 try {
-                    Integer startPartitionId = topicsInfo.get(topicName).get().partitions().size();
+                    int startPartitionId = topicsInfo.get(topicName).get().partitions().size();
                     Map<Integer, List<Integer>> replicaMap = topic.replicaAssignment.entrySet().stream()
                         .skip(startPartitionId)
                         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
