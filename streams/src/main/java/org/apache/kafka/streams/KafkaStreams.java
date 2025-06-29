@@ -978,7 +978,7 @@ public class KafkaStreams implements AutoCloseable {
 
         // use client id instead of thread client id since this admin client may be shared among threads
         adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
-        
+
         metrics = createMetrics(applicationConfigs, time, clientId);
         final StreamsClientMetricsDelegatingReporter reporter = new StreamsClientMetricsDelegatingReporter(adminClient, clientId);
         metrics.addReporter(reporter);
@@ -1156,6 +1156,10 @@ public class KafkaStreams implements AutoCloseable {
      * The removed stream thread is gracefully shut down. This method does not specify which stream
      * thread is shut down.
      * <p>
+     * The consumer associated with the stream thread is closed using consumer.close() during the shutdown process.
+     * Note that this method does not guarantee immediate removal of the consumer from the consumer group.
+     * The consumer is only kicked off from the group after the stream thread completes its run function.
+     * <p>
      * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG}.
@@ -1168,10 +1172,9 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Removes one stream thread out of the running stream threads from this Kafka Streams client.
-     * <p>
-     * The removed stream thread is gracefully shut down. This method does not specify which stream
-     * thread is shut down.
+     * The consumer associated with the stream thread is closed using consumer.close() during the shutdown process.
+     * Note that this method does not guarantee immediate removal of the consumer from the consumer group.
+     * The consumer is only kicked off from the group after the stream thread completes its run function.
      * <p>
      * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
