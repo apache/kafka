@@ -1086,6 +1086,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
+            .define(CONFIG_PROVIDERS_CONFIG,
+                    Type.LIST,
+                    List.of(),
+                    Importance.LOW, 
+                    CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,
                     Type.BOOLEAN,
                     true,
