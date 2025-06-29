@@ -702,7 +702,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         ShareAcknowledgementMode.IMPLICIT.name(),
                                         new ShareAcknowledgementMode.Validator(),
                                         Importance.MEDIUM,
-                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC);
+                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG,
+                                        ConfigDef.Type.LIST,
+                                        List.of(),
+                                        ConfigDef.Importance.LOW,
+                                        CONFIG_PROVIDERS_DOC);
     }
 
     @Override
