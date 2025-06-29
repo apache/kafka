@@ -61,10 +61,11 @@ buildCache {
     remote(develocity.buildCache) {
         enabled = true
 
-        // Check for the presence of the DEVELOCITY_ACCESS_KEY environment variable as a proxy for whether this is a fork or not.
-        // Forks should not try to push to the remote cache as they will not have permission to do so.
+        // Check for the presence of the DEVELOCITY_ACCESS_KEY environment variable
+        // as a proxy for whether this is a fork or not. Forks should not try to push
+        // to the remote cache as they will not have permission to do so.
         def accessKey = System.getenv('DEVELOCITY_ACCESS_KEY')
-        push = isGithubActions
+        push = isGithubActions && accessKey
     }
 }
 

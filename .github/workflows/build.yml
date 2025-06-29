@@ -134,6 +134,7 @@ jobs:
       - name: Compile and validate
         env:
           SCAN_ARG: ${{ inputs.is-public-fork && '--no-scan' || '--scan' }}
+          DEVELOCITY_ACCESS_KEY: ${{ secrets.KAFKA_DEVELOCITY_ACCESS_KEY }}
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
