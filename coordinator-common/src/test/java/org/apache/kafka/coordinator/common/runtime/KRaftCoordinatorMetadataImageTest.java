@@ -22,8 +22,8 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.ShareVersion;
-import org.junit.jupiter.api.Test;
 
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;

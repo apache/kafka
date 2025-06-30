@@ -19,10 +19,11 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
-import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
