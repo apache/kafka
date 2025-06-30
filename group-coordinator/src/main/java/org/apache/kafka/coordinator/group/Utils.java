@@ -160,7 +160,7 @@ public class Utils {
      * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
      *
      * @param consumerProtocolAssignment The ConsumerProtocolAssignment.
-     * @param metadataImage              The TopicsImage.
+     * @param metadataImage              The Metadata image.
      * @return The converted map.
      */
     public static Map<Uuid, Set<Integer>> toTopicPartitionMap(
@@ -180,7 +180,7 @@ public class Utils {
      * Converts a ConsumerProtocolSubscription.TopicPartitionCollection to a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
      *
      * @param topicPartitionCollection The TopicPartitionCollection to convert.
-     * @param metadataImage            The TopicsImage.
+     * @param metadataImage            The Metadata image.
      * @return a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
      */
     public static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> toTopicPartitions(
@@ -410,12 +410,9 @@ public class Utils {
             .putString(topicMetadata.name())
             .putInt(topicMetadata.partitionCount());
 
-        Map<Integer, List<String>> racks = topicMetadata.partitionRacks();
         for (int i = 0; i < topicMetadata.partitionCount(); i++) {
             hasher = hasher.putInt(i);
-            List<String> partitionRacks = new ArrayList<>(racks.get(i));
-            // topicMetadata returns an unmodifiable list
-            Collections.copy(partitionRacks, racks.get(i));
+            List<String> partitionRacks = topicMetadata.partitionRacks(i);
             Collections.sort(partitionRacks);
 
             for (String rack : partitionRacks) {

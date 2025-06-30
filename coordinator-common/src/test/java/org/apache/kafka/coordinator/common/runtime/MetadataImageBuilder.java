@@ -79,4 +79,8 @@ public class MetadataImageBuilder {
     public CoordinatorMetadataImage buildCoordinatorMetadataImage() {
         return new KRaftCoordinatorMetadataImage(build());
     }
+
+    public CoordinatorMetadataImage buildCoordinatorMetadataImage(long version) {
+        return new KRaftCoordinatorMetadataImage(build(version));
+    }
 }

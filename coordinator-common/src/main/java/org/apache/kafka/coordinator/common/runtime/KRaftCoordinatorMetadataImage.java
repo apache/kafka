@@ -23,7 +23,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.server.common.ShareVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,8 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * An implementation of {@link CoordinatorMetadataImage} that wraps the KRaft MetadataImage.
@@ -93,10 +90,14 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
     }
 
     @Override
-    public boolean shareGroupsEnabled() {
-        return ShareVersion.fromFeatureLevel(
-            metadataImage.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
-        ).supportsShareGroups();
+    public Optional<TopicMetadata> topicMetadata(String topicName) {
+        TopicImage topicImage = metadataImage.topics().getTopic(topicName);
+        if (topicImage == null) return Optional.empty();
+
+        ClusterImage clusterImage = metadataImage.cluster();
+        if (clusterImage == null) return Optional.empty();
+
+        return Optional.of(new KraftTopicMetadata(topicImage, clusterImage));
     }
 
     @Override
@@ -105,7 +106,7 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
     }
 
     @Override
-    public Long version() {
+    public long version() {
         return metadataImage.offset();
     }
 
@@ -156,24 +157,20 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
         }
 
         @Override
-        public Map<Integer, List<String>> partitionRacks() {
-            Map<Integer, List<String>> partitionRacks = IntStream.range(0, partitionCount())
-                .mapToObj(partition -> {
-                    List<String> racks = new ArrayList<>();
-                    PartitionRegistration partitionRegistration = topicImage.partitions().get(partition);
-                    if (partitionRegistration != null) {
-                        for (int replicaId : partitionRegistration.replicas) {
-                            BrokerRegistration broker = clusterImage.broker(replicaId);
-                            if (broker != null) {
-                                broker.rack().ifPresent(racks::add);
-                            }
-                        }
-                        return Map.entry(partition, Collections.unmodifiableList(racks));
-                    } else {
-                        return Map.entry(partition, List.<String>of());
+        public List<String> partitionRacks(int partition) {
+            List<String> racks = new ArrayList<>();
+            PartitionRegistration partitionRegistration = topicImage.partitions().get(partition);
+            if (partitionRegistration != null) {
+                for (int replicaId : partitionRegistration.replicas) {
+                    BrokerRegistration broker = clusterImage.broker(replicaId);
+                    if (broker != null) {
+                        broker.rack().ifPresent(racks::add);
                     }
-                }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-            return partitionRacks;
+                }
+                return racks;
+            } else {
+                return List.of();
+            }
         }
     }
 }

@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.server.share.SharePartitionKey;
 
 import java.util.OptionalInt;
@@ -135,11 +136,12 @@ public interface ShareCoordinator {
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The metadata delta.
+     * @param newImage         The new metadata image.
+     * @param newFeaturesImage The features image.
+     * @param delta            The metadata delta.
      */
     void onNewMetadataImage(
         CoordinatorMetadataImage newImage,
-        CoordinatorMetadataDelta delta
+        FeaturesImage newFeaturesImage, CoordinatorMetadataDelta delta
     );
 }

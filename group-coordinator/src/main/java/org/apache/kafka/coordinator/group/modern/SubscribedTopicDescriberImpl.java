@@ -21,7 +21,6 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -66,13 +65,13 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     public Set<String> racksForPartition(Uuid topicId, int partition) {
         Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(topicId);
         if (topicMetadataOp.isEmpty()) {
-            return Collections.emptySet();
+            return Set.of();
         }
 
         CoordinatorMetadataImage.TopicMetadata topicMetadata = topicMetadataOp.get();
-        List<String> racks = topicMetadata.partitionRacks().get(partition);
+        List<String> racks = topicMetadata.partitionRacks(partition);
         if (racks == null) {
-            return Collections.emptySet();
+            return Set.of();
         } else {
             return new HashSet<>(racks);
         }

@@ -1921,14 +1921,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 errorTopicResponses.add(
                     new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                         .setTopicId(topicData.topicId())
-                        .setTopicName(metadataImage.topicName(topicData.topicId()).orElse("<UNKNOWN>"))
+                        .setTopicName(metadataImage.topicName(topicData.topicId()).orElse(null))
                         .setErrorMessage(Errors.forCode(errItem.get().errorCode()).message())
                         .setErrorCode(errItem.get().errorCode())
                 );
             } else {
                 successTopics.put(
                     topicData.topicId(),
-                    metadataImage.topicName(topicData.topicId()).orElse("<UNKNOWN>")
+                    metadataImage.topicName(topicData.topicId()).orElse(null)
                 );
             }
         });
@@ -2139,7 +2139,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // At this point the metadata will not have been updated
         // with the deleted topics.
         Set<Uuid> topicIds = topicPartitions.stream()
-            .map(tp -> metadataImage.topicId(tp.topic()).orElse(null))
+            .map(tp -> metadataImage.topicId(tp.topic()).orElse(Uuid.ZERO_UUID))
             .collect(Collectors.toSet());
 
         CompletableFuture.allOf(

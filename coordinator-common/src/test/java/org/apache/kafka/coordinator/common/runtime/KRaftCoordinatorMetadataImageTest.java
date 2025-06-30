@@ -17,16 +17,11 @@
 package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.server.common.ShareVersion;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -34,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 class KRaftCoordinatorMetadataImageTest {
@@ -80,14 +74,14 @@ class KRaftCoordinatorMetadataImageTest {
                 assertEquals(topicName, topicMetadata.name());
                 assertEquals(topicId, topicMetadata.id());
                 assertEquals(partitionCount, topicMetadata.partitionCount());
-                Map<Integer, List<String>> racks = topicMetadata.partitionRacks();
-                assertEquals(2, racks.size());
-                assertEquals(2, racks.get(0).size());
-                assertEquals(2, racks.get(1).size());
-                assertEquals("rack0", racks.get(0).get(0));
-                assertEquals("rack1", racks.get(0).get(1));
-                assertEquals("rack1", racks.get(1).get(0));
-                assertEquals("rack2", racks.get(1).get(1));
+                List<String> racks0 = topicMetadata.partitionRacks(0);
+                List<String> racks1 = topicMetadata.partitionRacks(1);
+                assertEquals(2, racks0.size());
+                assertEquals(2, racks1.size());
+                assertEquals("rack0", racks0.get(0));
+                assertEquals("rack1", racks0.get(1));
+                assertEquals("rack1", racks1.get(0));
+                assertEquals("rack2", racks1.get(1));
             },
             () -> fail("Expected topic metadata for " + topicName)
         );
@@ -97,7 +91,7 @@ class KRaftCoordinatorMetadataImageTest {
                 assertEquals(noPartitionTopic, topicMetadata.name());
                 assertEquals(noPartitionTopicId, topicMetadata.id());
                 assertEquals(0, topicMetadata.partitionCount());
-                Map<Integer, List<String>> racks = topicMetadata.partitionRacks();
+                List<String> racks = topicMetadata.partitionRacks(0);
                 assertEquals(0, racks.size());
             },
             () -> fail("Expected topic metadata for " + topicName)
@@ -109,33 +103,6 @@ class KRaftCoordinatorMetadataImageTest {
         assertEquals(imageVersion, image.version());
 
         assertFalse(image.isEmpty());
-    }
-
-    @Test
-    public void testShareGroupsEnabled() {
-        Uuid topicId = Uuid.randomUuid();
-        String topicName = "test-topic";
-        int partitionCount = 2;
-        long imageVersion = 123L;
-
-        MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(topicId, topicName, partitionCount)
-            .addRacks()
-            .build(imageVersion);
-
-        KRaftCoordinatorMetadataImage image = new KRaftCoordinatorMetadataImage(metadataImage);
-        assertFalse(image.shareGroupsEnabled());
-
-        MetadataDelta metadataDelta = new MetadataDelta(metadataImage);
-        metadataDelta.replay(new FeatureLevelRecord().setName(ShareVersion.FEATURE_NAME).setFeatureLevel(ShareVersion.SV_1.featureLevel()));
-        metadataImage = metadataDelta.apply(new MetadataProvenance(imageVersion, 0, 0L, true));
-
-        assertTrue(new KRaftCoordinatorMetadataImage(metadataImage).shareGroupsEnabled());
-
-        MetadataDelta metadataDeltaFeatureDisabled = new MetadataDelta(metadataImage);
-        metadataDeltaFeatureDisabled.replay(new FeatureLevelRecord().setName(ShareVersion.FEATURE_NAME).setFeatureLevel(ShareVersion.SV_0.featureLevel()));
-        metadataImage = metadataDeltaFeatureDisabled.apply(new MetadataProvenance(imageVersion, 0, 0L, true));
-        assertFalse(new KRaftCoordinatorMetadataImage(metadataImage).shareGroupsEnabled());
     }
 
     @Test

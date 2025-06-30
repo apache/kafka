@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.Uuid;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -47,18 +46,16 @@ public interface CoordinatorMetadataImage {
 
     Set<String> topicNames();
 
-    default Optional<TopicMetadata> topicMetadata(String topicName) {
-        var topicId = topicId(topicName);
-        return topicId.isEmpty() ? Optional.empty() : topicMetadata(topicId.get());
+    Optional<TopicMetadata> topicMetadata(String topicName);
+
+    default Optional<TopicMetadata> topicMetadata(Uuid topicId) {
+        var topicName = topicName(topicId);
+        return topicName.isEmpty() ? Optional.empty() : topicMetadata(topicName.get());
     }
-
-    Optional<TopicMetadata> topicMetadata(Uuid topicId);
-
-    boolean shareGroupsEnabled();
 
     CoordinatorMetadataDelta emptyDelta();
 
-    Long version();
+    long version();
 
     boolean isEmpty();
 
@@ -76,10 +73,7 @@ public interface CoordinatorMetadataImage {
             return IntStream.range(0, partitionCount()).boxed().collect(Collectors.toSet());
         }
 
-        /**
-         * Returns a map of partition ids to the list of racks that the partition is assigned to.
-         */
-        Map<Integer, List<String>> partitionRacks();
+        List<String> partitionRacks(int partitionId);
     }
 
     private static CoordinatorMetadataImage emptyImage() {
@@ -121,17 +115,12 @@ public interface CoordinatorMetadataImage {
             }
 
             @Override
-            public boolean shareGroupsEnabled() {
-                return false;
-            }
-
-            @Override
             public CoordinatorMetadataDelta emptyDelta() {
                 return CoordinatorMetadataDelta.EMPTY;
             }
 
             @Override
-            public Long version() {
+            public long version() {
                 return 0L;
             }
 
