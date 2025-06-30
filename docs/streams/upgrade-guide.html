@@ -141,6 +141,107 @@
 
     <h3><a id="streams_api_changes_410" href="#streams_api_changes_410">Streams API changes in 4.1.0</a></h3>
 
+    <h4>Early Access of the Streams Rebalance Protocol</h4>
+
+    <p>
+        The Streams Rebalance Protocol is a broker-driven rebalancing system designed specifically for Kafka
+        Streams applications. Following the pattern of KIP-848, which moved rebalance coordination of plain consumers
+        from clients to brokers, KIP-1071 extends this model to Kafka Streams workloads. Instead of clients
+        computing new assignments on the client during rebalance events involving all members of the group, assignments are
+        computed continuously on the broker. Instead of using a consumer group, the streams application registers as a
+        streams group with the broker, which manages and exposes all metadata required for coordination of the
+        streams application instances.
+    </p>
+
+    <p>
+        This Early Access release covers a subset of the functionality detailed in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">KIP-1071</a>.
+        Do not use the new protocol in production. The API is subject to change in future
+        releases.
+    </p>
+
+    <p><strong>What's Included in Early Access</strong></p>
+
+    <ul>
+        <li><strong>Core Streams Group Rebalance Protocol:</strong> The <code>group.protocol=streams</code> configuration
+            enables the dedicated streams rebalance protocol. This separates streams groups from consumer groups and
+            provides a streams-specific group membership lifecycle and metadata management on the broker.</li>
+        <li><strong>Sticky Task Assignor:</strong> A basic task assignment strategy that minimizes task movement
+            during rebalances is included.</li>
+        <li><strong>Interactive Query Support:</strong> IQ operations are compatible with the new streams protocol.</li>
+        <li><strong>New Admin RPC:</strong> The <code>StreamsGroupDescribe</code> RPC provides streams-specific metadata
+            separate from consumer group information, with corresponding access via the <code>Admin</code> client.</li>
+        <li><strong>CLI Integration:</strong> You can list, describe, and delete streams groups via the <code>kafka-streams-groups.sh</code> script.</li>
+    </ul>
+
+    <p><strong>What's Not Included in Early Access</strong></p>
+
+    <ul>
+        <li><strong>Static Membership:</strong> Setting a client `instance.id` will be rejected.</li>
+        <li><strong>Topology Updates:</strong> If a topology is changed significantly (e.g., by adding new source topics
+            or changing the number of sub-topologies), a new streams group must be created.</li>
+        <li><strong>High Availability Assignor:</strong> Only the sticky assignor is supported.</li>
+        <li><strong>Regular Expressions:</strong> Pattern-based topic subscription is not supported.</li>
+        <li><strong>Reset Operations:</strong> CLI offset reset operations are not supported.</li>
+        <li><strong>Protocol Migration:</strong> Group migration is not available between the classic and new streams protocols.</li>
+    </ul>
+
+    <p><strong>Why Use the Streams Rebalance Protocol?</strong></p>
+
+    <ul>
+        <li>
+            <strong>Broker-Driven Coordination:</strong>
+            Centralizes task assignment logic on brokers instead of the client. This provides consistent,
+            authoritative task assignment decisions from a single coordination point and reduces the potential for
+            split-brain scenarios.
+        </li>
+        <li>
+            <strong>Faster, More Stable Rebalances:</strong>
+            Reduces rebalance duration and impact by removing the global synchronization point. This minimizes
+            application downtime during membership changes or failures.
+        </li>
+        <li>
+            <strong>Better Observability:</strong>
+            Provides dedicated metrics and admin interfaces that separate streams from consumer groups, leading to
+            clearer troubleshooting with broker-side observability.
+        </li>
+    </ul>
+
+    <p>
+        Enabling the protocol requires the brokers and clients are running Apache Kafka 4.1. It should be enabled
+        only on new clusters for testing purposes.
+        Set <code>unstable.feature.versions.enable=true</code> for controllers and brokers, and
+        set <code>unstable.api.versions.enable=true</code> on the brokers as well. In your Kafka Streams application
+        configuration, set <code>group.protocol=streams</code>.
+    </p>
+
+    <p>
+        Migration between the classic consumer group protocol and the Streams Rebalance Protocol is not supported in
+        either direction. An application using this protocol must use a new <code>application.id</code> that has not
+        been used by any application on the classic protocol. Furthermore, this ID must not be in use as a
+        <code>group.id</code> by any consumer ("classic" or "consumer") nor share-group application.
+        It is also possible to delete a previous consumer group using <code>kafka-consumer-groups.sh</code> before
+        starting the application with the new protocol, which will however also delete all offsets for that group.
+    </p>
+
+    <p>
+        To operate the new streams groups, explore the options of <code>kafka-streams-groups.sh</code> to list,
+        describe, and delete streams groups. In the new protocol, <code>session.timeout.ms</code>,
+        <code>heartbeat.interval.ms</code> and <code>num.standby.replicas</code> are group-level configurations,
+        which are ignored when they are set on the client side. Use the <code>kafka-configs.sh</code> tool to set
+        these configurations, for example:
+        <code>kafka-configs.sh --bootstrap-server localhost:9092 --alter --entity-type groups
+            --entity-name wordcount --add-config streams.num.standby.replicas=1</code>.
+    </p>
+
+    <p>
+        Please provide feedback on this feature via the
+        <a href="https://kafka.apache.org/contact">Kafka mailing lists</a> or by filing
+        <a href="https://kafka.apache.org/contributing">JIRA issues</a>.
+    </p>
+
+    <h4>Other changes</h4>
+
     <p>
         The introduction of <a href="https://cwiki.apache.org/confluence/x/4Y_MEw">KIP-1111</a>
         enables you to enforce explicit naming for all internal resources of the topology, including internal topics (e.g., changelog and repartition topics) and their associated state stores.
