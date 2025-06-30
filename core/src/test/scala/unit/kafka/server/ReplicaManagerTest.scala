@@ -43,6 +43,7 @@ import org.apache.kafka.common.metrics.Monitorable
 import org.apache.kafka.common.metrics.PluginMetrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.{PartitionState => JPartitionState}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
@@ -92,7 +93,7 @@ import java.io.{ByteArrayInputStream, File}
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.function.BiConsumer
 import java.util.stream.IntStream
@@ -133,7 +134,6 @@ class ReplicaManagerTest {
 
   // Constants defined for readability
   private val zkVersion = 0
-  private val controllerEpoch = 0
   private val brokerEpoch = 0L
 
   // These metrics are static and once we remove them after each test, they won't be created and verified anymore
@@ -2480,11 +2480,6 @@ class ReplicaManagerTest {
     produceResult
   }
 
-  /**
-   * This method assumes that the test using created ReplicaManager calls
-   * ReplicaManager.becomeLeaderOrFollower() once with LeaderAndIsrRequest containing
-   * 'leaderEpochInLeaderAndIsr' leader epoch for partition 'topicPartition'.
-   */
   private def prepareReplicaManagerAndLogManager(timer: MockTimer,
                                                  topicPartition: Int,
                                                  leaderEpochInLeaderAndIsr: Int,
@@ -2665,11 +2660,10 @@ class ReplicaManagerTest {
                                          leaderEpoch: Int,
                                          leaderBrokerId: Int,
                                          aliveBrokerIds: Seq[Integer],
-                                         isNew: Boolean = false): LeaderAndIsrRequest.PartitionState = {
-    new LeaderAndIsrRequest.PartitionState()
+                                         isNew: Boolean = false): JPartitionState = {
+    new JPartitionState()
       .setTopicName(topic)
       .setPartitionIndex(topicPartition.partition)
-      .setControllerEpoch(controllerEpoch)
       .setLeader(leaderBrokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(aliveBrokerIds.asJava)
@@ -2965,7 +2959,6 @@ class ReplicaManagerTest {
     propsModifier: Properties => Unit = _ => {},
     mockReplicaFetcherManager: Option[ReplicaFetcherManager] = None,
     mockReplicaAlterLogDirsManager: Option[ReplicaAlterLogDirsManager] = None,
-    isShuttingDown: AtomicBoolean = new AtomicBoolean(false),
     enableRemoteStorage: Boolean = false,
     shouldMockLog: Boolean = false,
     remoteLogManager: Option[RemoteLogManager] = None,
@@ -3050,7 +3043,6 @@ class ReplicaManagerTest {
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager,
       brokerTopicStats = brokerTopicStats,
-      isShuttingDown = isShuttingDown,
       delayedProducePurgatoryParam = Some(mockProducePurgatory),
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
@@ -4963,12 +4955,10 @@ class ReplicaManagerTest {
     val foo2 = new TopicPartition("foo", 2)
 
     val mockReplicaFetcherManager = mock(classOf[ReplicaFetcherManager])
-    val isShuttingDown = new AtomicBoolean(false)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
       mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
-      isShuttingDown = isShuttingDown,
       enableRemoteStorage = enableRemoteStorage
     )
 
@@ -5045,10 +5035,6 @@ class ReplicaManagerTest {
       }
 
       reset(mockReplicaFetcherManager)
-
-      // The broker transitions to SHUTTING_DOWN state. This should not have
-      // any impact in KRaft mode.
-      isShuttingDown.set(true)
 
       // The replica begins the controlled shutdown.
       replicaManager.beginControlledShutdown()

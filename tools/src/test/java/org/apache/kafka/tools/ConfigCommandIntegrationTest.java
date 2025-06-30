@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import kafka.admin.ConfigCommand;
+import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
@@ -444,7 +445,7 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest
     public void testUpdateInvalidBrokerConfigs() {
         updateAndCheckInvalidBrokerConfig(Optional.empty());
-        updateAndCheckInvalidBrokerConfig(Optional.of(cluster.anyBrokerSocketServer().config().brokerId() + ""));
+        updateAndCheckInvalidBrokerConfig(Optional.of(String.valueOf((cluster.brokers().entrySet().iterator().next().getKey()))));
     }
 
     private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) {
@@ -506,7 +507,9 @@ public class ConfigCommandIntegrationTest {
                             "--entity-type", "brokers",
                             "--entity-default"))));
             kafka.utils.TestUtils.waitUntilTrue(
-                    () -> cluster.brokerSocketServers().stream().allMatch(broker -> broker.config().getInt("log.cleaner.threads") == 2),
+                    () -> cluster.brokers().values().stream()
+                        .map(KafkaBroker::config)
+                        .allMatch(config -> config.getInt("log.cleaner.threads") == 2),
                     () -> "Timeout waiting for topic config propagating to broker",
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                     100L);
