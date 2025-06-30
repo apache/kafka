@@ -18,14 +18,14 @@ package kafka.utils
 
 import java.lang.reflect.Method
 import java.util
-import java.util.{Collections, Optional}
+import java.util.Optional
 
 import org.junit.jupiter.api.TestInfo
 import org.apache.kafka.clients.consumer.GroupProtocol
 
 class EmptyTestInfo extends TestInfo {
   override def getDisplayName: String = ""
-  override def getTags: util.Set[String] = Collections.emptySet()
+  override def getTags: util.Set[String] = java.util.Set.of()
   override def getTestClass: Optional[Class[_]] = Optional.empty()
   override def getTestMethod: Optional[Method] = Optional.empty()
 }
@@ -33,10 +33,6 @@ class EmptyTestInfo extends TestInfo {
 object TestInfoUtils {
 
   final val TestWithParameterizedGroupProtocolNames = "{displayName}.groupProtocol={0}"
-
-  def isShareGroupTest(testInfo: TestInfo): Boolean = {
-    testInfo.getDisplayName.contains("kip932")
-  }
 
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
     if (testInfo.getDisplayName.contains("groupProtocol=classic"))

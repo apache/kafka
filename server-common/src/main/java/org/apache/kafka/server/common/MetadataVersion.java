@@ -112,13 +112,15 @@ public enum MetadataVersion {
     //
 
     // Enables ELR by default for new clusters (KIP-966).
+    // Share groups are preview in 4.1 (KIP-932).
+    // Streams groups are early access in 4.1 (KIP-1071).
     IBP_4_1_IV0(26, "4.1", "IV0", false),
 
-    // Enables share groups. Note, share groups are for preview only in 4.1. (KIP-932).
+    // Send FETCH version 18 in the replica fetcher (KIP-1166)
     IBP_4_1_IV1(27, "4.1", "IV1", false),
 
     // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of
-    // IBP_4_2_IV0 accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
+    // IBP_4_2_IVx accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
     // a placeholder.
 
     // Enables share groups by default for new clusters (KIP-932).
@@ -265,13 +267,15 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_9_IV0)) {
+        if (isAtLeast(IBP_4_1_IV1)) {
+            return 18;
+        } else if (isAtLeast(IBP_3_9_IV0)) {
             return 17;
-        } else if (this.isAtLeast(IBP_3_7_IV4)) {
+        } else if (isAtLeast(IBP_3_7_IV4)) {
             return 16;
-        } else if (this.isAtLeast(IBP_3_5_IV1)) {
+        } else if (isAtLeast(IBP_3_5_IV1)) {
             return 15;
-        } else if (this.isAtLeast(IBP_3_5_IV0)) {
+        } else if (isAtLeast(IBP_3_5_IV0)) {
             return 14;
         } else {
             return 13;

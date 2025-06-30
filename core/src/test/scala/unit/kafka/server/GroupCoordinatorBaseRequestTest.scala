@@ -31,15 +31,17 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.server.IntegrationTestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.net.Socket
+import java.util
 import java.util.{Comparator, Properties}
 import java.util.stream.Collectors
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
+
 
 class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   private def brokers(): Seq[KafkaBroker] = cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).asScala.toSeq
@@ -100,6 +102,20 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     }
   }
 
+  protected def deleteTopic(
+    topic: String
+  ): Unit = {
+    val admin = cluster.admin()
+    try {
+      admin
+        .deleteTopics(TopicCollection.ofTopicNames(List(topic).asJava))
+        .all()
+        .get()
+    } finally {
+      admin.close()
+    }
+  }
+
   protected def createTopicAndReturnLeaders(
     topic: String,
     numPartitions: Int = 1,
@@ -117,7 +133,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         replicationFactor = replicationFactor,
         topicConfig = topicConfig
       )
-      partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds(topic), new TopicPartition(topic, partition)) -> leader }
+      partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds.get(topic), new TopicPartition(topic, partition)) -> leader }
     } finally {
       admin.close()
     }
@@ -127,8 +143,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     cluster.brokers.values.stream.allMatch(b => b.config.unstableApiVersionsEnabled)
   }
 
-  protected def getTopicIds: Map[String, Uuid] = {
-    cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
+  protected def getTopicIds: util.Map[String, Uuid] = {
+    cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get()
   }
 
   protected def getBrokers: Seq[KafkaBroker] = {
@@ -337,32 +353,41 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def fetchOffsets(
-    groupId: String,
-    memberId: String,
-    memberEpoch: Int,
-    partitions: List[TopicPartition],
+    groups: List[OffsetFetchRequestData.OffsetFetchRequestGroup],
+    requireStable: Boolean,
+    version: Short
+  ): List[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    if (version < 8) {
+      fail(s"OffsetFetch API version $version cannot fetch multiple groups.")
+    }
+
+    val request = OffsetFetchRequest.Builder.forTopicIdsOrNames(
+      new OffsetFetchRequestData()
+        .setRequireStable(requireStable)
+        .setGroups(groups.asJava),
+      false,
+      true
+    ).build(version)
+
+    val response = connectAndReceive[OffsetFetchResponse](request)
+
+    // Sort topics and partitions within the response as their order is not guaranteed.
+    response.data.groups.asScala.foreach(sortTopicPartitions)
+
+    response.data.groups.asScala.toList
+  }
+
+  protected def fetchOffsets(
+    group: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean,
     version: Short
   ): OffsetFetchResponseData.OffsetFetchResponseGroup = {
-    val request = new OffsetFetchRequest.Builder(
+    val request = OffsetFetchRequest.Builder.forTopicIdsOrNames(
       new OffsetFetchRequestData()
         .setRequireStable(requireStable)
-        .setGroups(List(
-          new OffsetFetchRequestData.OffsetFetchRequestGroup()
-            .setGroupId(groupId)
-            .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch)
-            .setTopics(
-              if (partitions == null)
-                null
-              else
-                partitions.groupBy(_.topic).map { case (topic, partitions) =>
-                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName(topic)
-                    .setPartitionIndexes(partitions.map(_.partition).map(Int.box).asJava)
-                }.toList.asJava)
-        ).asJava),
-      false
+        .setGroups(List(group).asJava),
+      false,
+      true
     ).build(version)
 
     val response = connectAndReceive[OffsetFetchResponse](request)
@@ -371,11 +396,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     // same format to the caller.
     val groupResponse = if (version >= 8) {
       assertEquals(1, response.data.groups.size)
-      assertEquals(groupId, response.data.groups.get(0).groupId)
+      assertEquals(group.groupId, response.data.groups.get(0).groupId)
       response.data.groups.asScala.head
     } else {
       new OffsetFetchResponseData.OffsetFetchResponseGroup()
-        .setGroupId(groupId)
+        .setGroupId(group.groupId)
         .setErrorCode(response.data.errorCode)
         .setTopics(response.data.topics.asScala.map { topic =>
           new OffsetFetchResponseData.OffsetFetchResponseTopics()
@@ -395,43 +420,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     sortTopicPartitions(groupResponse)
 
     groupResponse
-  }
-
-  protected def fetchOffsets(
-    groups: Map[String, List[TopicPartition]],
-    requireStable: Boolean,
-    version: Short
-  ): List[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
-    if (version < 8) {
-      fail(s"OffsetFetch API version $version cannot fetch multiple groups.")
-    }
-
-    val request = new OffsetFetchRequest.Builder(
-      new OffsetFetchRequestData()
-        .setRequireStable(requireStable)
-        .setGroups(groups.map { case (groupId, partitions) =>
-          new OffsetFetchRequestData.OffsetFetchRequestGroup()
-            .setGroupId(groupId)
-            .setTopics(
-              if (partitions == null)
-                null
-              else
-                partitions.groupBy(_.topic).map { case (topic, partitions) =>
-                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName(topic)
-                    .setPartitionIndexes(partitions.map(_.partition).map(Int.box).asJava)
-                }.toList.asJava
-            )
-        }.toList.asJava),
-      false
-    ).build(version)
-
-    val response = connectAndReceive[OffsetFetchResponse](request)
-
-    // Sort topics and partitions within the response as their order is not guaranteed.
-    response.data.groups.asScala.foreach(sortTopicPartitions)
-
-    response.data.groups.asScala.toList
   }
 
   protected def deleteOffset(
@@ -913,42 +901,31 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedResponseData.results.asScala.toSet, deleteGroupsResponse.data.results.asScala.toSet)
   }
 
+  protected def connectAny(): Socket = {
+    val socket: Socket = IntegrationTestUtils.connect(cluster.boundPorts().get(0))
+    openSockets += socket
+    socket
+  }
+
+  protected def connect(destination: Int): Socket = {
+    val socket = IntegrationTestUtils.connect(brokerSocketServer(destination).boundPort(cluster.clientListener()))
+    openSockets += socket
+    socket
+  }
+
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
-  )(implicit classTag: ClassTag[T]): T = {
-    IntegrationTestUtils.connectAndReceive[T](
-      request,
-      cluster.anyBrokerSocketServer(),
-      cluster.clientListener()
-    )
+  ): T = {
+    IntegrationTestUtils.connectAndReceive[T](request, cluster.boundPorts().get(0))
   }
 
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest,
     destination: Int
-  )(implicit classTag: ClassTag[T]): T = {
-    IntegrationTestUtils.connectAndReceive[T](
-      request,
-      brokerSocketServer(destination),
-      cluster.clientListener()
-    )
-  }
-
-  protected def connectAndReceiveWithoutClosingSocket[T <: AbstractResponse](
-    request: AbstractRequest,
-    destination: Int
-  )(implicit classTag: ClassTag[T]): T = {
-    val socket = IntegrationTestUtils.connect(brokerSocketServer(destination), cluster.clientListener())
-    openSockets += socket
-    IntegrationTestUtils.sendAndReceive[T](request, socket)
-  }
-
-  protected def connectAndReceiveWithoutClosingSocket[T <: AbstractResponse](
-    request: AbstractRequest
-  )(implicit classTag: ClassTag[T]): T = {
-    val socket = IntegrationTestUtils.connect(cluster.anyBrokerSocketServer(), cluster.clientListener())
-    openSockets += socket
-    IntegrationTestUtils.sendAndReceive[T](request, socket)
+  ): T = {
+    val socketServer = brokerSocketServer(destination)
+    val listenerName = cluster.clientListener()
+    IntegrationTestUtils.connectAndReceive[T](request, socketServer.boundPort(listenerName))
   }
 
   private def brokerSocketServer(brokerId: Int): SocketServer = {

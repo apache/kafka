@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -376,8 +377,10 @@ public class RemoteIndexCacheTest {
         // close the cache properly
         cache.close();
         // verify that the thread is closed properly
-        threads = getRunningCleanerThread();
-        assertTrue(threads.isEmpty(), "Found unexpected " + threads.size() + " threads=" + threads.stream().map(Thread::getName).collect(Collectors.joining(", ")));
+        TestUtils.waitForCondition(
+                () -> getRunningCleanerThread().isEmpty(),
+                () -> "Failed while waiting for cleaner threads to shutdown. Remaining threads: " +
+                        getRunningCleanerThread().stream().map(Thread::getName).collect(Collectors.joining(", ")));
         // if the thread is correctly being shutdown it will not be running
         assertFalse(cache.cleanerScheduler().isStarted(), "Unexpected thread state=running. Check error logs.");
     }
@@ -758,6 +761,7 @@ public class RemoteIndexCacheTest {
     }
 
     @Test
+    @Flaky("KAFKA-19286")
     public void testConcurrentRemoveReadForCache1() throws IOException, InterruptedException, ExecutionException {
         // Create a spy Cache Entry
         RemoteIndexCache.Entry spyEntry = generateSpyCacheEntry();

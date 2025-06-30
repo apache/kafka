@@ -55,13 +55,13 @@ import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, DelegationTokenManager, ProcessRole}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.time.Duration
 import java.util
 import java.util.Optional
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
@@ -94,8 +94,6 @@ class BrokerServer(
   @volatile var lifecycleManager: BrokerLifecycleManager = _
 
   private var assignmentsManager: AssignmentsManager = _
-
-  private val isShuttingDown = new AtomicBoolean(false)
 
   val lock: ReentrantLock = new ReentrantLock()
   val awaitShutdownCond: Condition = lock.newCondition()
@@ -171,10 +169,7 @@ class BrokerServer(
       info(s"Transition from $status to $to")
 
       status = to
-      if (to == SHUTTING_DOWN) {
-        isShuttingDown.set(true)
-      } else if (to == SHUTDOWN) {
-        isShuttingDown.set(false)
+      if (to == SHUTDOWN) {
         awaitShutdownCond.signalAll()
       }
     } finally {
@@ -197,7 +192,7 @@ class BrokerServer(
 
       config.dynamicConfig.initialize(Some(clientMetricsReceiverPlugin))
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
-      DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers)
+      DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -259,7 +254,9 @@ class BrokerServer(
         Optional.of(clientMetricsManager)
       )
 
-      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupConfig.shareGroupMaxShareSessions())
+      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
+        config.shareGroupConfig.shareGroupMaxShareSessions()
+      )
 
       val connectionDisconnectListeners = Seq(
         clientMetricsManager.connectionDisconnectListener(),
@@ -351,7 +348,6 @@ class BrokerServer(
         logDirFailureChannel = logDirFailureChannel,
         alterPartitionManager = alterPartitionManager,
         brokerTopicStats = brokerTopicStats,
-        isShuttingDown = isShuttingDown,
         threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
@@ -409,7 +405,7 @@ class BrokerServer(
         config,
         "heartbeat",
         s"broker-${config.nodeId}-",
-        config.brokerSessionTimeoutMs / 2 // KAFKA-14392
+        config.brokerHeartbeatIntervalMs
       )
       lifecycleManager.start(
         () => sharedServer.loader.lastAppliedOffset(),
@@ -439,6 +435,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
+        config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong,
         persister,
         groupConfigManager,
         brokerTopicStats
@@ -481,6 +478,7 @@ class BrokerServer(
         groupCoordinator,
         transactionCoordinator,
         shareCoordinator,
+        sharePartitionManager,
         new DynamicConfigPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
@@ -657,6 +655,7 @@ class BrokerServer(
       .withWriter(writer)
       .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
       .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
+      .withShareGroupEnabledConfigSupplier(() => config.shareGroupConfig.isShareGroupEnabled)
       .build()
   }
 
@@ -696,10 +695,7 @@ class BrokerServer(
       val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
       val endpoint = if (listenerName != null) {
         Some(listenerInfo.listeners().values().stream
-          .filter(e =>
-            e.listenerName().isPresent &&
-              ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
-          )
+          .filter(e => ListenerName.normalised(e.listener()).equals(ListenerName.normalised(listenerName)))
           .findFirst()
           .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
             listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values())))
@@ -707,7 +703,7 @@ class BrokerServer(
         None
       }
 
-      val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
+      val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.get(0), clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).toJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>
@@ -818,8 +814,6 @@ class BrokerServer(
 
       if (persister != null)
         CoreUtils.swallow(persister.stop(), this)
-
-      isShuttingDown.set(false)
 
       if (lifecycleManager != null)
         CoreUtils.swallow(lifecycleManager.close(), this)

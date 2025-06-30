@@ -36,8 +36,7 @@ import org.apache.kafka.common.utils.ByteUtils
 import org.apache.kafka.common.{TopicPartition, Uuid, requests}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -118,9 +117,8 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testProduceRequestWithNullClientId(quorum: String): Unit = {
+  @Test
+  def testProduceRequestWithNullClientId(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val correlationId = -1
@@ -166,27 +164,23 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode), "There should be no error")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testHeaderOnlyRequest(quorum: String): Unit = {
+  @Test
+  def testHeaderOnlyRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, 1))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testInvalidApiKeyRequest(quorum: String): Unit = {
+  @Test
+  def testInvalidApiKeyRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(-1, 0))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testInvalidApiVersionRequest(quorum: String): Unit = {
+  @Test
+  def testInvalidApiVersionRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, -1))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testMalformedHeaderRequest(quorum: String): Unit = {
+  @Test
+  def testMalformedHeaderRequest(): Unit = {
     val serializedBytes = {
       // Only send apiKey and apiVersion
       val buffer = ByteBuffer.allocate(

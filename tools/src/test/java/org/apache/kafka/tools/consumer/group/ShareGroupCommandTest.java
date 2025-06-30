@@ -32,6 +32,7 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
 import org.apache.kafka.clients.admin.ShareMemberAssignment;
 import org.apache.kafka.clients.admin.ShareMemberDescription;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
@@ -119,7 +120,7 @@ public class ShareGroupCommandTest {
 
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(result);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
-            Set<String> expectedGroups = new HashSet<>(Arrays.asList(firstGroup, secondGroup));
+            Set<String> expectedGroups = Set.of(firstGroup, secondGroup);
 
             final Set[] foundGroups = new Set[]{Set.of()};
             TestUtils.waitForCondition(() -> {
@@ -144,13 +145,13 @@ public class ShareGroupCommandTest {
         )));
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(resultWithAllStates);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
-            Set<GroupListing> expectedListing = new HashSet<>(Arrays.asList(
+            Set<GroupListing> expectedListing = Set.of(
                 new GroupListing(firstGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.STABLE)),
-                new GroupListing(secondGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY))));
+                new GroupListing(secondGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY)));
 
             final Set[] foundListing = new Set[]{Set.of()};
             TestUtils.waitForCondition(() -> {
-                foundListing[0] = new HashSet<>(service.listShareGroupsInStates(new HashSet<>(Arrays.asList(GroupState.values()))));
+                foundListing[0] = new HashSet<>(service.listShareGroupsInStates(Set.of(GroupState.values())));
                 return Objects.equals(expectedListing, foundListing[0]);
             }, "Expected to show groups " + expectedListing + ", but found " + foundListing[0]);
 
@@ -191,7 +192,7 @@ public class ShareGroupCommandTest {
             ListShareGroupOffsetsResult listShareGroupOffsetsResult = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
                     firstGroup,
-                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), 0L))
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), new OffsetAndMetadata(0L, Optional.of(1), "")))
                 )
             );
 
@@ -208,7 +209,7 @@ public class ShareGroupCommandTest {
 
                     List<String> expectedValues;
                     if (describeType.contains("--verbose")) {
-                        expectedValues = List.of(firstGroup, "topic1", "0", "-", "0");
+                        expectedValues = List.of(firstGroup, "topic1", "0", "1", "0");
                     } else {
                         expectedValues = List.of(firstGroup, "topic1", "0", "0");
                     }
@@ -299,13 +300,13 @@ public class ShareGroupCommandTest {
             ListShareGroupOffsetsResult listShareGroupOffsetsResult1 = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
                     firstGroup,
-                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), 0L))
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), new OffsetAndMetadata(0, Optional.of(1), "")))
                 )
             );
             ListShareGroupOffsetsResult listShareGroupOffsetsResult2 = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
                     secondGroup,
-                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), 0L))
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), new OffsetAndMetadata(0, Optional.of(1), "")))
                 )
             );
 
@@ -333,8 +334,8 @@ public class ShareGroupCommandTest {
 
                     List<String> expectedValues1, expectedValues2;
                     if (describeType.contains("--verbose")) {
-                        expectedValues1 = List.of(firstGroup, "topic1", "0", "-", "0");
-                        expectedValues2 = List.of(secondGroup, "topic1", "0", "-", "0");
+                        expectedValues1 = List.of(firstGroup, "topic1", "0", "1", "0");
+                        expectedValues2 = List.of(secondGroup, "topic1", "0", "1", "0");
                     } else {
                         expectedValues1 = List.of(firstGroup, "topic1", "0", "0");
                         expectedValues2 = List.of(secondGroup, "topic1", "0", "0");

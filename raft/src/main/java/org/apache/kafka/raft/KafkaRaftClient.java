@@ -25,7 +25,6 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
@@ -86,6 +85,7 @@ import org.apache.kafka.raft.internals.RequestSendResult;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.raft.internals.UpdateVoterHandler;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.NotifyingRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -167,7 +167,8 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  */
 @SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity", "ParameterNumber", "NPathComplexity", "JavaNCSS" })
 public final class KafkaRaftClient<T> implements RaftClient<T> {
-    private static final int RETRY_BACKOFF_BASE_MS = 100;
+    // visible for testing
+    static final int RETRY_BACKOFF_BASE_MS = 50;
     private static final int MAX_NUMBER_OF_BATCHES = 10;
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
@@ -384,6 +385,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // records still held in memory directly to the listener
             appendPurgatory.maybeComplete(highWatermark.offset(), currentTimeMs);
 
+            // After updating the high-watermark, complete all of the deferred
+            // fetch requests. This is always correct because all fetch request
+            // deferred have a HWM less or equal to the previous leader's HWM.
+            fetchPurgatory.completeAll(currentTimeMs);
+
             // It is also possible that the high watermark is being updated
             // for the first time following the leader election, so we need
             // to give lagging listeners an opportunity to catch up as well
@@ -443,7 +449,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 serde,
                 BufferSupplier.create(),
                 MAX_BATCH_SIZE_BYTES,
-                true /* Validate batch CRC*/
+                true, /* Validate batch CRC*/
+                logContext
             )
         );
     }
@@ -738,7 +745,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void transitionToResigned(List<ReplicaKey> preferredSuccessors) {
         fetchPurgatory.completeAllExceptionally(
-            Errors.NOT_LEADER_OR_FOLLOWER.exception("Not handling request since this node is resigning"));
+            Errors.NOT_LEADER_OR_FOLLOWER.exception(
+                "Not handling request since this node is resigning"
+            )
+        );
         quorum.transitionToResigned(preferredSuccessors);
         resetConnections();
     }
@@ -750,12 +760,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         // After becoming a follower, we need to complete all pending fetches so that
         // they can be re-sent to the leader without waiting for their expirations
-        fetchPurgatory.completeAllExceptionally(new NotLeaderOrFollowerException(
-            "Cannot process the fetch request because the node is no longer the leader."));
+        fetchPurgatory.completeAllExceptionally(
+            Errors.NOT_LEADER_OR_FOLLOWER.exception(
+                "Cannot process the fetch request because the node is no longer the leader"
+            )
+        );
 
         // Clearing the append purgatory should complete all futures exceptionally since this node is no longer the leader
-        appendPurgatory.completeAllExceptionally(new NotLeaderOrFollowerException(
-            "Failed to receive sufficient acknowledgments for this append before leader change."));
+        appendPurgatory.completeAllExceptionally(
+            Errors.NOT_LEADER_OR_FOLLOWER.exception(
+                "Failed to receive sufficient acknowledgments for this append before leader change"
+            )
+        );
     }
 
     private void transitionToFollower(
@@ -1015,20 +1031,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      */
     private void maybeHandleElectionLoss(NomineeState state, long currentTimeMs) {
         if (state instanceof CandidateState candidate) {
-            if (candidate.epochElection().isVoteRejected() && !candidate.isBackingOff()) {
+            if (candidate.epochElection().isVoteRejected()) {
                 logger.info(
-                    "Insufficient remaining votes to become leader. We will backoff before retrying election again. " +
-                    "Current epoch election state is {}.",
+                    "Insufficient remaining votes to become leader. Candidate will wait the remaining election " +
+                        "timeout ({}) before transitioning back to Prospective. Current epoch election state is {}.",
+                    candidate.remainingElectionTimeMs(currentTimeMs),
                     candidate.epochElection()
-                );
-                // Go immediately to a random, exponential backoff. The backoff starts low to prevent
-                // needing to wait the entire election timeout when the vote result has already been
-                // determined. The randomness prevents the next election from being gridlocked with
-                // another nominee due to timing. The exponential aspect limits epoch churn when the
-                // replica has failed multiple elections in succession.
-                candidate.startBackingOff(
-                    currentTimeMs,
-                    binaryExponentialElectionBackoffMs(candidate.retries())
                 );
             }
         } else if (state instanceof ProspectiveState prospective) {
@@ -1044,17 +1052,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 "Expected to be a NomineeState (Prospective or Candidate), but current state is " + state
             );
         }
-    }
-
-    private int binaryExponentialElectionBackoffMs(int retries) {
-        if (retries <= 0) {
-            throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
-        }
-        // upper limit exponential co-efficients at 20 to avoid overflow
-        return Math.min(
-            RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries - 1)),
-            quorumConfig.electionBackoffMaxMs()
-        );
     }
 
     private int strictExponentialElectionBackoffMs(int positionInSuccessors, int totalNumSuccessors) {
@@ -1530,19 +1527,22 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             || FetchResponse.recordsSize(partitionResponse) > 0
             || request.maxWaitMs() == 0
             || isPartitionDiverged(partitionResponse)
-            || isPartitionSnapshotted(partitionResponse)) {
+            || isPartitionSnapshotted(partitionResponse)
+            || isHighWatermarkUpdated(partitionResponse, fetchPartition)) {
             // Reply immediately if any of the following is true
             // 1. The response contains an error
             // 2. There are records in the response
             // 3. The fetching replica doesn't want to wait for the partition to contain new data
             // 4. The fetching replica needs to truncate because the log diverged
             // 5. The fetching replica needs to fetch a snapshot
+            // 6. The fetching replica should update its high-watermark
             return completedFuture(response);
         }
 
         CompletableFuture<Long> future = fetchPurgatory.await(
             fetchPartition.fetchOffset(),
-            request.maxWaitMs());
+            request.maxWaitMs()
+        );
 
         return future.handle((completionTimeMs, exception) -> {
             if (exception != null) {
@@ -1572,26 +1572,25 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         Optional.empty()
                     );
                 }
+            } else {
+                logger.trace(
+                    "Completing delayed fetch from {} starting at offset {} at {}",
+                    replicaKey,
+                    fetchPartition.fetchOffset(),
+                    completionTimeMs
+                );
+
+                // It is safe to call tryCompleteFetchRequest because only the polling thread completes
+                // this future successfully. The future is completed successfully either because of an
+                // append (maybeAppendBatches) or because the HWM was updated (onUpdateLeaderHighWatermark)
+                return tryCompleteFetchRequest(
+                    requestMetadata.listenerName(),
+                    requestMetadata.apiVersion(),
+                    replicaKey,
+                    fetchPartition,
+                    completionTimeMs
+                );
             }
-
-            // FIXME: `completionTimeMs`, which can be null
-            logger.trace(
-                "Completing delayed fetch from {} starting at offset {} at {}",
-                replicaKey,
-                fetchPartition.fetchOffset(),
-                completionTimeMs
-            );
-
-            // It is safe to call tryCompleteFetchRequest because only the polling thread completes this
-            // future successfully. This is true because only the polling thread appends record batches to
-            // the log from maybeAppendBatches.
-            return tryCompleteFetchRequest(
-                requestMetadata.listenerName(),
-                requestMetadata.apiVersion(),
-                replicaKey,
-                fetchPartition,
-                time.milliseconds()
-            );
         });
     }
 
@@ -1649,16 +1648,27 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private static boolean isPartitionDiverged(FetchResponseData.PartitionData partitionResponseData) {
+    private static boolean isPartitionDiverged(
+        FetchResponseData.PartitionData partitionResponseData
+    ) {
         FetchResponseData.EpochEndOffset divergingEpoch = partitionResponseData.divergingEpoch();
 
         return divergingEpoch.epoch() != -1 || divergingEpoch.endOffset() != -1;
     }
 
-    private static boolean isPartitionSnapshotted(FetchResponseData.PartitionData partitionResponseData) {
+    private static boolean isPartitionSnapshotted(
+        FetchResponseData.PartitionData partitionResponseData
+    ) {
         FetchResponseData.SnapshotId snapshotId = partitionResponseData.snapshotId();
 
         return snapshotId.epoch() != -1 || snapshotId.endOffset() != -1;
+    }
+
+    private static boolean isHighWatermarkUpdated(
+        FetchResponseData.PartitionData partitionResponseData,
+        FetchRequestData.FetchPartition partitionRequestData
+    ) {
+        return partitionRequestData.highWatermark() < partitionResponseData.highWatermark();
     }
 
     private static OptionalInt optionalLeaderId(int leaderIdOrNil) {
@@ -2898,6 +2908,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 .setLastFetchedEpoch(log.lastFetchedEpoch())
                 .setFetchOffset(log.endOffset().offset())
                 .setReplicaDirectoryId(quorum.localDirectoryId())
+                .setHighWatermark(quorum.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L))
         );
 
         return request
@@ -3152,13 +3163,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             //  3) the shutdown timer expires
             long minRequestBackoffMs = maybeSendVoteRequests(state, currentTimeMs);
             return Math.min(shutdown.remainingTimeMs(), minRequestBackoffMs);
-        } else if (state.isBackingOff()) {
-            if (state.isBackoffComplete(currentTimeMs)) {
-                logger.info("Transition to prospective after election backoff has completed");
-                transitionToProspective(currentTimeMs);
-                return 0L;
-            }
-            return state.remainingBackoffMs(currentTimeMs);
         } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
             logger.info("Election was not granted, transitioning to prospective");
             transitionToProspective(currentTimeMs);
@@ -3897,7 +3901,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     BufferSupplier.create(),
                     MAX_BATCH_SIZE_BYTES,
                     this,
-                    true /* Validate batch CRC*/
+                    true, /* Validate batch CRC*/
+                    logContext
                 )
             );
         }

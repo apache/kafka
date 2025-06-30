@@ -34,6 +34,7 @@ import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{BufferSupplier, ConfigUtils, Utils}
 import org.apache.kafka.config
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
@@ -48,15 +49,16 @@ import org.apache.kafka.server.telemetry.ClientTelemetry
 import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.apache.kafka.storage.internals.log.{LogCleaner, LogConfig}
 
+import scala.util.Using
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
 /**
   * Dynamic broker configurations may be defined at two levels:
   * <ul>
-  *   <li>Per-broker configurations are persisted at the controller and can be described 
+  *   <li>Per-broker configurations are persisted at the controller and can be described
   *         or altered using AdminClient with the resource name brokerId.</li>
-  *   <li>Cluster-wide default configurations are persisted at the cluster level and can be 
+  *   <li>Cluster-wide default configurations are persisted at the cluster level and can be
   *         described or altered using AdminClient with an empty resource name.</li>
   * </ul>
   * The order of precedence for broker configs is:
@@ -96,7 +98,8 @@ object DynamicBrokerConfig {
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs ++
     DynamicProducerStateManagerConfig ++
-    DynamicRemoteLogConfig.ReconfigurableConfigs
+    DynamicRemoteLogConfig.ReconfigurableConfigs ++
+    Set(AbstractConfig.CONFIG_PROVIDERS_CONFIG)
 
   private val ClusterLevelListenerConfigs = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
@@ -195,7 +198,8 @@ object DynamicBrokerConfig {
   private[server] def readDynamicBrokerConfigsFromSnapshot(
     raftManager: KafkaRaftManager[ApiMessageAndVersion],
     config: KafkaConfig,
-    quotaManagers: QuotaFactory.QuotaManagers
+    quotaManagers: QuotaFactory.QuotaManagers,
+    logContext: LogContext
   ): Unit = {
     def putOrRemoveIfNull(props: Properties, key: String, value: String): Unit = {
       if (value == null) {
@@ -204,38 +208,42 @@ object DynamicBrokerConfig {
         props.put(key, value)
       }
     }
-    raftManager.replicatedLog.latestSnapshotId().ifPresent(latestSnapshotId => {
-      raftManager.replicatedLog.readSnapshot(latestSnapshotId).ifPresent(rawSnapshotReader => {
-        val reader = RecordsSnapshotReader.of(
-          rawSnapshotReader,
-          raftManager.recordSerde,
-          BufferSupplier.create(),
-          KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-          true
-        )
-        val dynamicPerBrokerConfigs = new Properties()
-        val dynamicDefaultConfigs = new Properties()
-        while (reader.hasNext) {
-          val batch = reader.next()
-          batch.forEach(record => {
-            if (record.message().apiKey() == MetadataRecordType.CONFIG_RECORD.id) {
-              val configRecord = record.message().asInstanceOf[ConfigRecord]
-              if (DynamicBrokerConfig.AllDynamicConfigs.contains(configRecord.name()) &&
-                configRecord.resourceType() == ConfigResource.Type.BROKER.id()) {
-                if (configRecord.resourceName().isEmpty) {
-                  putOrRemoveIfNull(dynamicDefaultConfigs, configRecord.name(), configRecord.value())
-                } else if (configRecord.resourceName() == config.brokerId.toString) {
-                  putOrRemoveIfNull(dynamicPerBrokerConfigs, configRecord.name(), configRecord.value())
-                }
+    raftManager.replicatedLog.latestSnapshotId().ifPresent { latestSnapshotId =>
+      raftManager.replicatedLog.readSnapshot(latestSnapshotId).ifPresent { rawSnapshotReader =>
+        Using.resource(
+          RecordsSnapshotReader.of(
+            rawSnapshotReader,
+            raftManager.recordSerde,
+            BufferSupplier.create(),
+            KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+            true,
+            logContext
+          )
+        ) { reader =>
+          val dynamicPerBrokerConfigs = new Properties()
+          val dynamicDefaultConfigs = new Properties()
+          while (reader.hasNext) {
+            val batch = reader.next()
+            batch.forEach { record =>
+              if (record.message().apiKey() == MetadataRecordType.CONFIG_RECORD.id) {
+                val configRecord = record.message().asInstanceOf[ConfigRecord]
+                if (DynamicBrokerConfig.AllDynamicConfigs.contains(configRecord.name()) &&
+                  configRecord.resourceType() == ConfigResource.Type.BROKER.id()) {
+                    if (configRecord.resourceName().isEmpty) {
+                      putOrRemoveIfNull(dynamicDefaultConfigs, configRecord.name(), configRecord.value())
+                    } else if (configRecord.resourceName() == config.brokerId.toString) {
+                      putOrRemoveIfNull(dynamicPerBrokerConfigs, configRecord.name(), configRecord.value())
+                    }
+                  }
               }
             }
-          })
+          }
+          val configHandler = new BrokerConfigHandler(config, quotaManagers)
+          configHandler.processConfigChanges("", dynamicPerBrokerConfigs)
+          configHandler.processConfigChanges(config.brokerId.toString, dynamicPerBrokerConfigs)
         }
-        val configHandler = new BrokerConfigHandler(config, quotaManagers)
-        configHandler.processConfigChanges("", dynamicPerBrokerConfigs)
-        configHandler.processConfigChanges(config.brokerId.toString, dynamicPerBrokerConfigs)
-      })
-    })
+      }
+    }
   }
 }
 
@@ -966,7 +974,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     val oldListeners = oldConfig.listeners.map(l => ListenerName.normalised(l.listener)).toSet
     if (!oldAdvertisedListeners.subsetOf(newListeners))
       throw new ConfigException(s"Advertised listeners '$oldAdvertisedListeners' must be a subset of listeners '$newListeners'")
-    if (!newListeners.subsetOf(newConfig.effectiveListenerSecurityProtocolMap.keySet))
+    if (!newListeners.subsetOf(newConfig.effectiveListenerSecurityProtocolMap.keySet.asScala))
       throw new ConfigException(s"Listeners '$newListeners' must be subset of listener map '${newConfig.effectiveListenerSecurityProtocolMap}'")
     newListeners.intersect(oldListeners).foreach { listenerName =>
       def immutableListenerConfigs(kafkaConfig: KafkaConfig, prefix: String): Map[String, AnyRef] = {
@@ -978,7 +986,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       if (immutableListenerConfigs(newConfig, listenerName.configPrefix) != immutableListenerConfigs(oldConfig, listenerName.configPrefix))
         throw new ConfigException(s"Configs cannot be updated dynamically for existing listener $listenerName, " +
           "restart broker or create a new listener for update")
-      if (oldConfig.effectiveListenerSecurityProtocolMap(listenerName) != newConfig.effectiveListenerSecurityProtocolMap(listenerName))
+      if (oldConfig.effectiveListenerSecurityProtocolMap.get(listenerName) != newConfig.effectiveListenerSecurityProtocolMap.get(listenerName))
         throw new ConfigException(s"Security protocol cannot be updated for existing listener $listenerName")
     }
   }
@@ -1022,9 +1030,19 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
 
       if (RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP.equals(k) ||
           RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP.equals(k) ||
-          RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP.equals(k)) {
+          RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP.equals(k) ||
+          RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP.equals(k)) {
         val newValue = v.asInstanceOf[Int]
-        val oldValue = server.config.getInt(k)
+        val oldValue: Int = {
+          // This logic preserves backward compatibility in scenarios where
+          // `remote.log.manager.thread.pool.size` is configured in config file,
+          // but `remote.log.manager.follower.thread.pool.size` is set dynamically.
+          // This can be removed once `remote.log.manager.thread.pool.size` is removed.
+          if (RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP.equals(k))
+            server.config.remoteLogManagerConfig.remoteLogManagerFollowerThreadPoolSize()
+          else
+            server.config.getInt(k)
+        }
         if (newValue != oldValue) {
           val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
           if (newValue <= 0)
@@ -1076,6 +1094,9 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
       if (newRLMConfig.remoteLogManagerExpirationThreadPoolSize() != oldRLMConfig.remoteLogManagerExpirationThreadPoolSize())
         remoteLogManager.resizeExpirationThreadPool(newRLMConfig.remoteLogManagerExpirationThreadPoolSize())
 
+      if (newRLMConfig.remoteLogManagerFollowerThreadPoolSize() != oldRLMConfig.remoteLogManagerFollowerThreadPoolSize())
+        remoteLogManager.resizeFollowerThreadPool(newRLMConfig.remoteLogManagerFollowerThreadPoolSize())
+
       if (newRLMConfig.remoteLogReaderThreads() != oldRLMConfig.remoteLogReaderThreads())
         remoteLogManager.resizeReaderThreadPool(newRLMConfig.remoteLogReaderThreads())
     }
@@ -1101,6 +1122,7 @@ object DynamicRemoteLogConfig {
     RemoteLogManagerConfig.REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP,
     RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
     RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
+    RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
     RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP
   )
 }
