@@ -674,7 +674,7 @@ public class ReassignPartitionsCommandTest {
 
     private VerifyAssignmentResult runVerifyAssignment(Admin admin,
                                                        String jsonString,
-                                                       Boolean preserveThrottles) {
+                                                       boolean preserveThrottles) {
         try {
             return verifyAssignment(admin, jsonString, preserveThrottles);
         } catch (ExecutionException | InterruptedException | JsonProcessingException e) {
@@ -684,7 +684,7 @@ public class ReassignPartitionsCommandTest {
 
     private void waitForVerifyAssignment(Admin admin,
                                          String jsonString,
-                                         Boolean preserveThrottles,
+                                         boolean preserveThrottles,
                                          VerifyAssignmentResult expectedResult) throws InterruptedException {
         final VerifyAssignmentResult[] latestResult = {null};
         TestUtils.waitForCondition(
@@ -696,7 +696,7 @@ public class ReassignPartitionsCommandTest {
         );
     }
 
-    private void runExecuteAssignment(Boolean additional,
+    private void runExecuteAssignment(boolean additional,
                                       String reassignmentJson,
                                       Long interBrokerThrottle,
                                       Long replicaAlterLogDirsThrottle) throws RuntimeException {
@@ -710,8 +710,8 @@ public class ReassignPartitionsCommandTest {
 
     private Map.Entry<Set<TopicPartition>, Set<TopicPartitionReplica>> runCancelAssignment(
             String jsonString,
-            Boolean preserveThrottles,
-            Boolean useBootstrapServer
+            boolean preserveThrottles,
+            boolean useBootstrapServer
     ) {
         Map<String, Object> config;
         if (useBootstrapServer) {
