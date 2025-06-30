@@ -69,10 +69,6 @@ public interface CoordinatorMetadataImage {
 
         int partitionCount();
 
-        default Set<Integer> partitionSet() {
-            return IntStream.range(0, partitionCount()).boxed().collect(Collectors.toSet());
-        }
-
         List<String> partitionRacks(int partitionId);
     }
 

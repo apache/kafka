@@ -2727,7 +2727,7 @@ public class GroupMetadataManager {
             metadataImage.topicMetadata(topicName).ifPresent(topicMetadata -> {
                 Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicMetadata.id()) ? alreadyInitialized.get(topicMetadata.id()).partitions() : Set.of();
                 if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.partitionCount()) {
-                    Set<Integer> partitionSet = topicMetadata.partitionSet().stream()
+                    Set<Integer> partitionSet = IntStream.range(0, topicMetadata.partitionCount()).boxed()
                         .filter(p -> !alreadyInitializedPartSet.contains(p)).collect(Collectors.toSet());
                     // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
                     // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
@@ -7974,7 +7974,7 @@ public class GroupMetadataManager {
                     return Map.entry(tid, new InitMapValue("<UNKNOWN>", Set.of(), -1));
                 } else {
                     CoordinatorMetadataImage.TopicMetadata topicMetadata = topicMetadataOp.get();
-                    return Map.entry(tid, new InitMapValue(topicMetadata.name(), topicMetadata.partitionSet(), -1));
+                    return Map.entry(tid, new InitMapValue(topicMetadata.name(), IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toSet()), -1));
                 }
             })
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -8069,7 +8069,7 @@ public class GroupMetadataManager {
                         // If the topic for which delete share group offsets request is sent is already present in the deletingTopics set,
                         // we will include that topic in the delete share group state request.
                         List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                        topicMetadata.partitionSet().forEach(partition ->
+                        IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toSet()).forEach(partition ->
                             partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
                         deleteShareGroupStateRequestTopicsData.add(
                             new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -8122,7 +8122,7 @@ public class GroupMetadataManager {
             metadataImage.topicMetadata(topic.topicName()).ifPresentOrElse(
                 topicMetadata -> {
                     Uuid topicId = topicMetadata.id();
-                    Set<Integer> existingPartitions = topicMetadata.partitionSet();
+                    Set<Integer> existingPartitions = IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toSet());
                     List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition> partitions = new ArrayList<>();
                     topic.partitions().forEach(partition -> {
                         if (existingPartitions.contains(partition.partitionIndex())) {
