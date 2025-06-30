@@ -329,10 +329,10 @@ public class SimpleHomogeneousAssignmentBuilder {
 
     /**
      * Assign partitions to unfilled members. It repeatedly iterates through the unfilled members while running
-     * once thrown the set of partitions. When a partition is found that has insufficient sharing, it attempts to assign
-     * to one of the partitions.
+     * once through the set of partitions. When a partition is found that has insufficient sharing, it attempts to assign
+     * to one of the members.
      * <p>
-     * There is one tricky cases here and that's where a partition wants another assignment, but none of the unfilled
+     * There is one tricky case here and that's where a partition wants another assignment, but none of the unfilled
      * members are able to take it (because they already have that partition). In this situation, we just accept that
      * no additional assignments for this partition could be made and carry on. In theory, a different shuffling of the
      * partitions would be able to achieve better balance, but it's harmless tolerating a slight imbalance in this case.
