@@ -2909,6 +2909,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 0)
 
     // Now change the preferred leader to 1
+    Thread.sleep(1000)
     changePreferredLeader(prefer1)
 
     // meaningful election
@@ -2947,6 +2948,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 1)
 
     // Now change the preferred leader to 2
+    Thread.sleep(1000)
     changePreferredLeader(prefer2)
 
     // mixed results
@@ -2963,9 +2965,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 2)
 
     // Now change the preferred leader to 1
+    Thread.sleep(1000)
     changePreferredLeader(prefer1)
     // but shut it down...
     killBroker(1)
+    Thread.sleep(1000)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     def assertPreferredLeaderNotAvailable(
