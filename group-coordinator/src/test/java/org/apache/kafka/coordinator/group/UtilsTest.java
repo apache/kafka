@@ -18,10 +18,10 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 
 import com.dynatrace.hash4j.hashing.Hashing;
 
-import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
