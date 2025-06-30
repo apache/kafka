@@ -271,9 +271,11 @@ public class ClientQuotasRequestTest {
                 InetAddress entityIp = entityName == null
                     ? InetAddress.getByName(unknownHost)
                     : InetAddress.getByName(entityName);
-                int currentServerQuota = cluster.brokerSocketServers()
+                int currentServerQuota = cluster.brokers()
+                    .values()
                     .iterator()
                     .next()
+                    .socketServer()
                     .connectionQuotas()
                     .connectionRateForIp(entityIp);
                 assertTrue(Math.abs(expectedMatches.get(entity) - currentServerQuota) < 0.01,
