@@ -90,9 +90,9 @@ public class StreamsRebalanceDataTest {
     @Test
     public void assignmentShouldNotBeModifiable() {
         final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
-            new HashSet<>(Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1))),
-            new HashSet<>(Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2))),
-            new HashSet<>(Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3)))
+            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1)),
+            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2)),
+            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3))
         );
 
         assertThrows(
@@ -220,8 +220,8 @@ public class StreamsRebalanceDataTest {
     @Test
     public void subtopologyShouldNotBeModifiable() {
         final StreamsRebalanceData.Subtopology subtopology = new StreamsRebalanceData.Subtopology(
-            new HashSet<>(Set.of("sourceTopic1")),
-            new HashSet<>(Set.of("repartitionSinkTopic1")),
+            Set.of("sourceTopic1"),
+            Set.of("repartitionSinkTopic1"),
             Map.of("repartitionSourceTopic1", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of()))
                 .entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),

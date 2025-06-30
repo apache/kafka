@@ -20,17 +20,17 @@ package org.apache.kafka.jmh.partition;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
-import kafka.cluster.Replica;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.builders.LogManagerBuilder;
 
+import org.apache.kafka.common.PartitionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
+import org.apache.kafka.server.replica.Replica;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -114,8 +114,7 @@ public class UpdateFollowerFetchStateBenchmark {
         replicas.add(0);
         replicas.add(1);
         replicas.add(2);
-        LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
-            .setControllerEpoch(0)
+        PartitionState partitionState = new PartitionState()
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(replicas)

@@ -166,6 +166,7 @@ public class AbstractCoordinatorTest {
                                                                         HEARTBEAT_INTERVAL_MS,
                                                                         GROUP_ID,
                                                                         groupInstanceId,
+                                                                        null,
                                                                         retryBackoffMs,
                                                                         retryBackoffMaxMs,
                                                                         leaveOnClose);
@@ -1601,12 +1602,9 @@ public class AbstractCoordinatorTest {
 
         mockClient.createPendingAuthenticationError(node, 300);
 
-        try {
-            coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE));
-            fail("Expected an authentication error.");
-        } catch (AuthenticationException e) {
-            // OK
-        }
+        assertThrows(AuthenticationException.class,
+            () -> coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE)),
+            "Expected an authentication error.");
     }
 
     @Test

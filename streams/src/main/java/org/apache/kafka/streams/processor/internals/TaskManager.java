@@ -148,6 +148,11 @@ public class TaskManager {
         );
     }
 
+    void init() {
+        if (stateUpdater != null) {
+            this.stateUpdater.start();
+        }
+    }
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
     }

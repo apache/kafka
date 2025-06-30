@@ -156,8 +156,8 @@ class TransactionsTest extends IntegrationTestHarness {
     verifyLogStartOffsets(Map((tp11, 0), (tp22, 0)))
     maybeVerifyLocalLogStartOffsets(Map((tp11, 3L), (tp22, 3L)))
 
-    consumer.subscribe(List(topic1, topic2).asJava)
-    unCommittedConsumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
+    unCommittedConsumer.subscribe(java.util.List.of(topic1, topic2))
 
     val records = consumeRecords(consumer, 2)
     records.foreach { record =>
@@ -204,19 +204,19 @@ class TransactionsTest extends IntegrationTestHarness {
     // ensure the records are visible to the read uncommitted consumer
     val tp1 = new TopicPartition(topic1, 0)
     val tp2 = new TopicPartition(topic2, 0)
-    readUncommittedConsumer.assign(Set(tp1, tp2).asJava)
+    readUncommittedConsumer.assign(java.util.Set.of(tp1, tp2))
     consumeRecords(readUncommittedConsumer, 8)
-    val readUncommittedOffsetsForTimes = readUncommittedConsumer.offsetsForTimes(Map(
-      tp1 -> (latestWrittenTimestamp: JLong),
-      tp2 -> (latestWrittenTimestamp: JLong)
-    ).asJava)
+    val readUncommittedOffsetsForTimes = readUncommittedConsumer.offsetsForTimes(java.util.Map.of(
+      tp1, latestWrittenTimestamp: JLong,
+      tp2, latestWrittenTimestamp: JLong
+    ))
     assertEquals(2, readUncommittedOffsetsForTimes.size)
     assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp1).timestamp)
     assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp2).timestamp)
     readUncommittedConsumer.unsubscribe()
 
     // we should only see the first two records which come before the undecided second transaction
-    readCommittedConsumer.assign(Set(tp1, tp2).asJava)
+    readCommittedConsumer.assign(java.util.Set.of(tp1, tp2))
     val records = consumeRecords(readCommittedConsumer, 2)
     records.foreach { record =>
       assertEquals("x", new String(record.key))
@@ -231,10 +231,10 @@ class TransactionsTest extends IntegrationTestHarness {
     }
 
     // undecided timestamps should not be searchable either
-    val readCommittedOffsetsForTimes = readCommittedConsumer.offsetsForTimes(Map(
-      tp1 -> (latestWrittenTimestamp: JLong),
-      tp2 -> (latestWrittenTimestamp: JLong)
-    ).asJava)
+    val readCommittedOffsetsForTimes = readCommittedConsumer.offsetsForTimes(java.util.Map.of(
+      tp1, latestWrittenTimestamp: JLong,
+      tp2, latestWrittenTimestamp: JLong
+    ))
     assertNull(readCommittedOffsetsForTimes.get(tp1))
     assertNull(readCommittedOffsetsForTimes.get(tp2))
   }
@@ -282,7 +282,7 @@ class TransactionsTest extends IntegrationTestHarness {
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "100")
     val readCommittedConsumer = createReadCommittedConsumer(props = consumerProps)
 
-    readCommittedConsumer.assign(Set(tp10).asJava)
+    readCommittedConsumer.assign(java.util.Set.of(tp10))
     val records = consumeRecords(readCommittedConsumer, numRecords = 2)
     assertEquals(2, records.size)
 
@@ -324,7 +324,7 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer = transactionalProducers.head
 
     val consumer = createReadCommittedConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
-    consumer.subscribe(List(topic1).asJava)
+    consumer.subscribe(java.util.List.of(topic1))
     producer.initTransactions()
 
     var shouldCommit = false
@@ -368,7 +368,7 @@ class TransactionsTest extends IntegrationTestHarness {
     // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
     val verifyingConsumer = transactionalConsumers(0)
-    verifyingConsumer.subscribe(List(topic2).asJava)
+    verifyingConsumer.subscribe(java.util.List.of(topic2))
     val valueSeq = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
       TestUtils.assertCommittedAndGetValue(record).toInt
     }
@@ -384,7 +384,7 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
 
-    consumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
 
     producer1.initTransactions()
 
@@ -415,7 +415,7 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
 
-    consumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
 
     producer1.initTransactions()
 
@@ -429,8 +429,8 @@ class TransactionsTest extends IntegrationTestHarness {
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition(topic1, 0)
-      -> new OffsetAndMetadata(110L)).asJava, new ConsumerGroupMetadata("foobarGroup")))
+    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(java.util.Map.of(new TopicPartition(topic1, 0),
+      new OffsetAndMetadata(110L)), new ConsumerGroupMetadata("foobarGroup")))
 
     producer2.commitTransaction()  // ok
 
@@ -449,13 +449,13 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer = transactionalProducers.head
     val consumer = createReadCommittedConsumer(groupId)
 
-    consumer.subscribe(List(topic1).asJava)
+    consumer.subscribe(java.util.List.of(topic1))
 
     producer.initTransactions()
 
     producer.beginTransaction()
     val offsetAndMetadata = new OffsetAndMetadata(110L, Optional.of(15), "some metadata")
-    producer.sendOffsetsToTransaction(Map(tp -> offsetAndMetadata).asJava, new ConsumerGroupMetadata(groupId))
+    producer.sendOffsetsToTransaction(java.util.Map.of(tp, offsetAndMetadata), new ConsumerGroupMetadata(groupId))
     producer.commitTransaction()  // ok
 
     // The call to commit the transaction may return before all markers are visible, so we initialize a second
@@ -463,7 +463,7 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer2 = transactionalProducers(1)
     producer2.initTransactions()
 
-    TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(Set(tp).asJava).get(tp)), "cannot read committed offset")
+    TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(java.util.Set.of(tp)).get(tp)), "cannot read committed offset")
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -476,7 +476,7 @@ class TransactionsTest extends IntegrationTestHarness {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testSendOffsetsToTransactionTimeout(groupProtocol: String): Unit = {
     testTimeout(needInitAndSendMsg = true, producer => producer.sendOffsetsToTransaction(
-      Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, new ConsumerGroupMetadata("test-group")))
+      java.util.Map.of(new TopicPartition(topic1, 0), new OffsetAndMetadata(0)), new ConsumerGroupMetadata("test-group")))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -513,7 +513,7 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
 
-    consumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
 
     producer1.initTransactions()
 
@@ -558,7 +558,7 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
 
-    consumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
     TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic1, 0))
     TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic2, 0))
 
@@ -629,7 +629,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
     // Verify that the first message was aborted and the second one was never written at all.
     val nonTransactionalConsumer = nonTransactionalConsumers.head
-    nonTransactionalConsumer.subscribe(List(topic1).asJava)
+    nonTransactionalConsumer.subscribe(java.util.List.of(topic1))
 
     // Attempt to consume the one written record. We should not see the second. The
     // assertion does not strictly guarantee that the record wasn't written, but the
@@ -639,7 +639,7 @@ class TransactionsTest extends IntegrationTestHarness {
     assertEquals("1", TestUtils.recordValueAsString(records.head))
 
     val transactionalConsumer = transactionalConsumers.head
-    transactionalConsumer.subscribe(List(topic1).asJava)
+    transactionalConsumer.subscribe(java.util.List.of(topic1))
 
     val transactionalRecords = consumeRecordsFor(transactionalConsumer)
     assertTrue(transactionalRecords.isEmpty)
@@ -668,8 +668,8 @@ class TransactionsTest extends IntegrationTestHarness {
     sendTransactionalMessagesWithValueRange(firstProducer, topicWith10Partitions, 10000, 11000, willBeCommitted = true)
     firstProducer.commitTransaction()
 
-    consumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
-    unCommittedConsumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
+    consumer.subscribe(java.util.List.of(topicWith10PartitionsAndOneReplica, topicWith10Partitions))
+    unCommittedConsumer.subscribe(java.util.List.of(topicWith10PartitionsAndOneReplica, topicWith10Partitions))
 
     val records = consumeRecords(consumer, 1000)
     records.foreach { record =>
@@ -698,7 +698,7 @@ class TransactionsTest extends IntegrationTestHarness {
     "consumer,false",
   ))
   def testBumpTransactionalEpochWithTV2Disabled(groupProtocol: String, isTV2Enabled: Boolean): Unit = {
-    val defaultLinger = 5;
+    val defaultLinger = 5
     val producer = createTransactionalProducer("transactionalProducer",
       deliveryTimeoutMs = 5000 + defaultLinger, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
@@ -753,7 +753,7 @@ class TransactionsTest extends IntegrationTestHarness {
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
       producer.commitTransaction()
 
-      consumer.subscribe(List(topic1, topic2, testTopic).asJava)
+      consumer.subscribe(java.util.List.of(topic1, topic2, testTopic))
 
       val records = consumeRecords(consumer, 5)
       records.foreach { record =>
@@ -778,7 +778,7 @@ class TransactionsTest extends IntegrationTestHarness {
     "consumer, true"
   ))
   def testBumpTransactionalEpochWithTV2Enabled(groupProtocol: String, isTV2Enabled: Boolean): Unit = {
-    val defaultLinger = 5;
+    val defaultLinger = 5
     val producer = createTransactionalProducer("transactionalProducer",
       deliveryTimeoutMs = 5000 + defaultLinger, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
@@ -834,7 +834,7 @@ class TransactionsTest extends IntegrationTestHarness {
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
       producer.commitTransaction()
 
-      consumer.subscribe(List(topic1, topic2, testTopic).asJava)
+      consumer.subscribe(java.util.List.of(topic1, topic2, testTopic))
 
       val records = consumeRecords(consumer, 5)
       records.foreach { record =>
@@ -991,11 +991,10 @@ class TransactionsTest extends IntegrationTestHarness {
     waitUntilTrue(() => {
       brokers.forall(broker => {
         partitionStartOffsets.forall {
-          case (partition, offset) => {
+          case (partition, offset) =>
             val lso = broker.replicaManager.localLog(partition).get.logStartOffset
             offsets.put(broker.config.brokerId, lso)
             offset == lso
-          }
         }
       })
     }, s"log start offset doesn't change to the expected position: $partitionStartOffsets, current position: $offsets")

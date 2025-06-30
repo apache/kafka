@@ -62,7 +62,7 @@ class LocalLeaderEndPointTest extends Logging {
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(sourceBroker.id, port = sourceBroker.port)
     val config = KafkaConfig.fromProps(props)
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)))
     val alterPartitionManager = mock(classOf[AlterPartitionManager])
     val metrics = new Metrics
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "", "")
@@ -90,8 +90,8 @@ class LocalLeaderEndPointTest extends Logging {
     delta.replay(new PartitionRecord()
       .setPartitionId(partition)
       .setTopicId(topicId)
-      .setReplicas(List[Integer](sourceBroker.id).asJava)
-      .setIsr(List[Integer](sourceBroker.id).asJava)
+      .setReplicas(java.util.List.of[Integer](sourceBroker.id))
+      .setIsr(java.util.List.of[Integer](sourceBroker.id))
       .setLeader(sourceBroker.id)
       .setLeaderEpoch(0)
       .setPartitionEpoch(0)

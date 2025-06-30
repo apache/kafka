@@ -38,6 +38,8 @@ import org.apache.kafka.common.errors.StreamsTopologyFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -572,6 +574,91 @@ public class GroupCoordinatorServiceTest {
             future.get(5, TimeUnit.SECONDS)
         );
     }
+    @Test
+    public void testStreamsGroupHeartbeatFailsForUnsupportedFeatures() throws Exception {
+
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(mockRuntime())
+            .build(true);
+
+        AuthorizableRequestContext context = mock(AuthorizableRequestContext.class);
+        when(context.requestVersion()).thenReturn((int) ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("Static membership is not yet supported."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setInstanceId(Uuid.randomUuid().toString())
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("TaskOffsets are not supported yet."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("TaskEndOffsets are not supported yet."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setTaskEndOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()))
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("WarmupTasks are not supported yet."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setWarmupTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()))
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("Regular expressions for source topics are not supported yet."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setTopology(new StreamsGroupHeartbeatRequestData.Topology()
+                        .setSubtopologies(List.of(new StreamsGroupHeartbeatRequestData.Subtopology()
+                            .setSourceTopicRegex(List.of("foo.*"))
+                        ))
+                    )
+            ).get(5, TimeUnit.SECONDS)
+        );
+    }
 
     @SuppressWarnings("MethodLength")
     @Test
@@ -582,7 +669,7 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         AuthorizableRequestContext context = mock(AuthorizableRequestContext.class);
-        when(context.requestVersion()).thenReturn((int) ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion());
+        when(context.requestVersion()).thenReturn((int) ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
 
         String memberId = Uuid.randomUuid().toString();
 
@@ -738,24 +825,6 @@ public class GroupCoordinatorServiceTest {
                     .setActiveTasks(List.of())
                     .setStandbyTasks(List.of())
                     .setWarmupTasks(List.of())
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        // InstanceId must be non-empty if provided in all requests.
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("InstanceId can't be empty."),
-                Map.of()
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setGroupId("foo")
-                    .setMemberId(memberId)
-                    .setMemberEpoch(1)
-                    .setInstanceId("")
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -1556,7 +1625,7 @@ public class GroupCoordinatorServiceTest {
             .setGroupId("");
         List<DescribeGroupsResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new DescribeGroupsResponseData.DescribedGroup()
-                .setGroupId(null)
+                .setGroupId("")
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             describedGroup
         );
@@ -1951,11 +2020,11 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> partitionCount);
 
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
-            .setGroupId(null)
+            .setGroupId("")
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new ConsumerGroupDescribeResponseData.DescribedGroup()
-                .setGroupId(null)
+                .setGroupId("")
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             describedGroup
         );
@@ -2089,11 +2158,11 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> partitionCount);
 
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
-            .setGroupId(null)
+            .setGroupId("")
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
         List<StreamsGroupDescribeResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new StreamsGroupDescribeResponseData.DescribedGroup()
-                .setGroupId(null)
+                .setGroupId("")
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             describedGroup
         );
@@ -3433,11 +3502,11 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> partitionCount);
 
         ShareGroupDescribeResponseData.DescribedGroup describedGroup = new ShareGroupDescribeResponseData.DescribedGroup()
-            .setGroupId(null)
+            .setGroupId("")
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
         List<ShareGroupDescribeResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new ShareGroupDescribeResponseData.DescribedGroup()
-                .setGroupId(null)
+                .setGroupId("")
                 .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             describedGroup
         );
@@ -5223,6 +5292,192 @@ public class GroupCoordinatorServiceTest {
         );
         verify(runtime, times(1)).scheduleWriteOperation(
             ArgumentMatchers.eq("uninitialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
+        verify(mockPersister, times(1)).initializeState(ArgumentMatchers.any());
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsMetadataImageNull() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build(true);
+
+        // Forcing a null Metadata Image
+        service.onNewMetadataImage(null, null);
+
+        String groupId = "share-group";
+        AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(null);
+
+        AlterShareGroupOffsetsResponseData response = new AlterShareGroupOffsetsResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                .setErrorMessage(Errors.COORDINATOR_NOT_AVAILABLE.message());
+
+        CompletableFuture<AlterShareGroupOffsetsResponseData> future = service.alterShareGroupOffsets(
+            requestContext(ApiKeys.ALTER_SHARE_GROUP_OFFSETS),
+            groupId,
+            request
+        );
+        assertEquals(response, future.get());
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsInvalidGroupId() throws InterruptedException, ExecutionException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setMetrics(mock(GroupCoordinatorMetrics.class))
+            .build(true);
+
+        String groupId = "";
+        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection requestTopicCollection =
+            new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection(List.of(
+                new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+                    .setTopicName(TOPIC_NAME)
+                    .setPartitions(List.of(
+                        new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                            .setPartitionIndex(0)
+                            .setStartOffset(0L)
+                    ))
+            ).iterator());
+        AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(requestTopicCollection);
+
+        AlterShareGroupOffsetsResponseData response = new AlterShareGroupOffsetsResponseData()
+            .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            .setErrorMessage(Errors.INVALID_GROUP_ID.message());
+
+        CompletableFuture<AlterShareGroupOffsetsResponseData> future = service.alterShareGroupOffsets(
+            requestContext(ApiKeys.ALTER_SHARE_GROUP_OFFSETS),
+            groupId,
+            request
+        );
+        assertEquals(response, future.get());
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsEmptyRequest() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setMetrics(mock(GroupCoordinatorMetrics.class))
+            .build(true);
+
+        String groupId = "share-group";
+        AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
+            .setGroupId(groupId);
+
+        CompletableFuture<AlterShareGroupOffsetsResponseData> future = service.alterShareGroupOffsets(
+            requestContext(ApiKeys.ALTER_SHARE_GROUP_OFFSETS),
+            groupId,
+            request
+        );
+
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+        assertEquals(data, future.get());
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsRequestReturnsGroupNotEmpty() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister persister = mock(DefaultStatePersister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(persister)
+            .build(true);
+        service.startup(() -> 1);
+
+        String groupId = "share-group";
+
+        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection requestTopicCollection =
+            new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection(List.of(
+                new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+                    .setTopicName(TOPIC_NAME)
+                    .setPartitions(List.of(
+                        new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                            .setPartitionIndex(0)
+                            .setStartOffset(0L)
+                    ))
+            ).iterator());
+
+        AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(requestTopicCollection);
+
+        AlterShareGroupOffsetsResponseData response = new AlterShareGroupOffsetsResponseData()
+            .setErrorCode(Errors.NON_EMPTY_GROUP.code())
+            .setErrorMessage(Errors.NON_EMPTY_GROUP.message());
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("share-group-offsets-alter"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(
+            new GroupNotEmptyException("bad stuff")
+        ));
+
+        CompletableFuture<AlterShareGroupOffsetsResponseData> future =
+            service.alterShareGroupOffsets(requestContext(ApiKeys.ALTER_SHARE_GROUP_OFFSETS), groupId, request);
+        assertEquals(response, future.get());
+    }
+
+    @Test
+    public void testPersisterInitializeForAlterShareGroupOffsetsResponseSuccess() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister mockPersister = mock(Persister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(mockPersister)
+            .build(true);
+
+        String groupId = "share-group";
+        Uuid topicId = Uuid.randomUuid();
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(topicId, "topic-name", 1)
+            .build();
+
+        service.onNewMetadataImage(image, null);
+
+        when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
+            new InitializeShareGroupStateResult.Builder()
+                .setTopicsData(List.of(
+                    new TopicData<>(topicId, List.of(
+                        PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())
+                    ))
+                )).build()
+        ));
+
+        AlterShareGroupOffsetsResponseData defaultResponse = new AlterShareGroupOffsetsResponseData();
+        InitializeShareGroupStateParameters params = new InitializeShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(
+                new GroupTopicPartitionData<>(groupId,
+                    List.of(
+                        new TopicData<>(topicId, List.of(PartitionFactory.newPartitionStateData(0, 0, 0)))
+                    ))
+            ).build();
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        assertEquals(defaultResponse, service.persisterInitialize(params, defaultResponse).getNow(null));
+        verify(runtime, times(1)).scheduleWriteOperation(
+            ArgumentMatchers.eq("initialize-share-group-state"),
             ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()

@@ -23,6 +23,8 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -93,8 +95,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
@@ -107,8 +107,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -270,6 +268,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withConfig(config)
                 .withGroupConfigManager(groupConfigManager)
                 .withGroupCoordinatorMetricsShard(metricsShard)
+                .withShareGroupAssignor(config.shareGroupAssignors().get(0))
                 .withAuthorizerPlugin(authorizerPlugin)
                 .build();
 
@@ -646,10 +645,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     /**
      * Method returns a Map keyed on groupId and value as pair of {@link DeleteShareGroupStateParameters}
-     * and any ERRORS while building the request corresponding
-     * to the valid share groups passed as the input.
+     * and any ERRORS while building the request corresponding to the valid share groups passed as the input.
      * <p>
-     * The groupIds are first filtered by type to restrict the list to share groups.
+     * The groupIds are first filtered by type to restrict the list to share groups. If a group isn't
+     * found or isn't a share group, it won't trigger an error in the response since group deletions
+     * are chained. Instead, that group should be retried against other group types.
      * @param groupIds - A list of groupIds as string
      * @return A result object containing a map keyed on groupId and value pair (req, error) and related coordinator records.
      */
@@ -665,9 +665,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records)
                     .ifPresent(req -> responseMap.put(groupId, Map.entry(req, Errors.NONE)));
             } catch (GroupIdNotFoundException exception) {
-                log.debug("GroupId {} not found as a share group.", groupId);
+                log.debug("Unable to delete share group. GroupId {} not found.", groupId);
+                // Do not include the error in response map, as the deletion of groups is chained hence
+                // the respective group should be re-tried for deletion against other group types.
             } catch (GroupNotEmptyException exception) {
-                log.debug("Share group {} is not empty.", groupId);
+                log.debug("Unable to delete share group. Provided group {} is not empty.", groupId);
                 responseMap.put(groupId, Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(exception)));
             }
         }
@@ -727,13 +729,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             );
 
         } catch (GroupIdNotFoundException exception) {
-            log.error("groupId {} not found", groupId, exception);
+            log.debug("Unable to delete share group offsets. GroupId {} not found.", groupId);
             return new CoordinatorResult<>(
                 records,
                 new DeleteShareGroupOffsetsResultHolder(Errors.GROUP_ID_NOT_FOUND.code(), exception.getMessage())
             );
         } catch (GroupNotEmptyException exception) {
-            log.error("Provided group {} is not empty", groupId);
+            log.debug("Unable to delete share group offsets. Provided group {} is not empty.", groupId);
             return new CoordinatorResult<>(
                 records,
                 new DeleteShareGroupOffsetsResultHolder(Errors.NON_EMPTY_GROUP.code(), exception.getMessage())
@@ -773,6 +775,36 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .setErrorCode(Errors.NONE.code())
                 .setErrorMessage(null)
                 .setResponses(topicResponseList)
+        );
+    }
+
+    /**
+     * Make the following checks to make sure the AlterShareGroupOffsetsRequest request is valid:
+     * 1. Checks whether the provided group is empty
+     * 2. Checks the requested topics are presented in the metadataImage
+     * 3. Checks the corresponding share partitions in AlterShareGroupOffsetsRequest are existing
+     *
+     * @param groupId - The group ID
+     * @param alterShareGroupOffsetsRequestData - The request data for AlterShareGroupOffsetsRequestData
+     * @return A Result containing a pair of AlterShareGroupOffsets InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
+     */
+    public CoordinatorResult<Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters>, CoordinatorRecord> alterShareGroupOffsets(
+        String groupId,
+        AlterShareGroupOffsetsRequestData alterShareGroupOffsetsRequestData
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        ShareGroup group = groupMetadataManager.shareGroup(groupId);
+        group.validateOffsetsAlterable();
+
+        Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters> response = groupMetadataManager.completeAlterShareGroupOffsets(
+            groupId,
+            alterShareGroupOffsetsRequestData,
+            records
+        );
+        return new CoordinatorResult<>(
+            records,
+            response
         );
     }
 
@@ -1201,13 +1233,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 );
                 break;
 
-            case SHARE_GROUP_PARTITION_METADATA:
-                groupMetadataManager.replay(
-                    (ShareGroupPartitionMetadataKey) key,
-                    (ShareGroupPartitionMetadataValue) Utils.messageOrNull(value)
-                );
-                break;
-
             case SHARE_GROUP_MEMBER_METADATA:
                 groupMetadataManager.replay(
                     (ShareGroupMemberMetadataKey) key,
@@ -1261,13 +1286,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.replay(
                     (StreamsGroupMetadataKey) key,
                     (StreamsGroupMetadataValue) Utils.messageOrNull(value)
-                );
-                break;
-
-            case STREAMS_GROUP_PARTITION_METADATA:
-                groupMetadataManager.replay(
-                    (StreamsGroupPartitionMetadataKey) key,
-                    (StreamsGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
