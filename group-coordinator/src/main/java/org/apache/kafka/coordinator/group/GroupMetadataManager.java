@@ -5682,7 +5682,6 @@ public class GroupMetadataManager {
         if (value == null) {
             shareGroupStatePartitionMetadata.remove(groupId);   // Should not throw any exceptions.
         } else {
-            getOrMaybeCreatePersistedShareGroup(groupId, true);
             long timestamp = time.milliseconds();
             ShareGroupStatePartitionMetadataInfo info = new ShareGroupStatePartitionMetadataInfo(
                 value.initializingTopics().stream()
