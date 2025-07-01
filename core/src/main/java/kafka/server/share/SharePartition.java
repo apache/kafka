@@ -2088,6 +2088,9 @@ public class SharePartition {
                     state.completeStateTransition(true);
                     // Cancel the acquisition lock timeout task for the state since it is acknowledged/released successfully.
                     state.cancelAndClearAcquisitionLockTimeoutTask();
+                    if (state.state != RecordState.ARCHIVED) {
+                        findNextFetchOffset.set(true);
+                    }
                 });
                 // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
                 cacheStateUpdated  = maybeUpdateCachedStateAndOffsets();
