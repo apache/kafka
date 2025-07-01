@@ -23013,7 +23013,7 @@ public class GroupMetadataManagerTest {
 
     @ParameterizedTest
     @MethodSource("shareGroupRecords")
-    public void testShareGroupStateMetadataTombstoneReplayNoExceptionOnGroupNotFound(CoordinatorRecord record) {
+    public void testShareGroupRecordsNoExceptionOnReplay(CoordinatorRecord record) {
         MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         GroupMetadataManagerTestContext context = spy(new GroupMetadataManagerTestContext.Builder()

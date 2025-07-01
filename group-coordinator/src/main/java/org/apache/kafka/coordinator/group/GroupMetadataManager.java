@@ -5361,7 +5361,7 @@ public class GroupMetadataManager {
         try {
             shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
             oldMember = shareGroup.getOrMaybeCreateMember(memberId, value != null);
-        } catch (GroupIdNotFoundException ex) {
+        } catch (GroupIdNotFoundException | UnknownMemberIdException ex) {
             log.debug("ShareGroupMemberMetadata tombstone without group - {}", groupId, ex);
             return;
         }
