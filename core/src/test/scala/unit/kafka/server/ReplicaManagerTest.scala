@@ -77,7 +77,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -94,8 +94,8 @@ import java.net.InetAddress
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
-import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, TimeUnit}
-import java.util.function.BiConsumer
+import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, Future, TimeUnit}
+import java.util.function.{BiConsumer, Consumer}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
@@ -3621,6 +3621,12 @@ class ReplicaManagerTest {
         responseLatch.countDown()
       }
 
+      val callbacks: util.Set[Consumer[RemoteLogReadResult]] = new util.HashSet[Consumer[RemoteLogReadResult]]()
+      when(mockRemoteLogManager.asyncRead(any(), any())).thenAnswer(ans => {
+        callbacks.add(ans.getArgument(1, classOf[Consumer[RemoteLogReadResult]]))
+        mock(classOf[Future[Void]])
+      })
+
       // Start the fetch request for both partitions - this should trigger remote fetches since
       // the default mocked log behavior throws OffsetOutOfRangeException
       replicaManager.fetchMessages(params, Seq(
@@ -3655,9 +3661,32 @@ class ReplicaManagerTest {
         }
       }
 
+      // Complete the 2 asyncRead tasks
+      callbacks.forEach(callback => callback.accept(buildRemoteReadResult(Errors.NONE)))
+
+      // Wait for the fetch callback to complete and verify responseSeq content
+      assertTrue(responseLatch.await(5, TimeUnit.SECONDS), "Fetch callback should complete")
+
+      val responseData = responseSeq.get()
+      assertNotNull(responseData, "Response sequence should not be null")
+      assertEquals(2, responseData.size, "Response should contain data for both partitions")
+
+      // Verify that response contains both tidp0 and tidp1 and have no errors
+      val responseTopicIdPartitions = responseData.map(_._1).toSet
+      assertTrue(responseTopicIdPartitions.contains(tidp0), "Response should contain tidp0")
+      assertTrue(responseTopicIdPartitions.contains(tidp1), "Response should contain tidp1")
+      responseData.foreach { case (_, fetchPartitionData) =>
+        assertEquals(Errors.NONE, fetchPartitionData.error)
+      }
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
+  }
+
+  private def buildRemoteReadResult(error: Errors): RemoteLogReadResult = {
+    new RemoteLogReadResult(
+      Optional.of(new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY)),
+      if (error != Errors.NONE) Optional.of[Throwable](error.exception) else Optional.empty[Throwable]())
   }
 
   private def yammerMetricValue(name: String): Any = {
