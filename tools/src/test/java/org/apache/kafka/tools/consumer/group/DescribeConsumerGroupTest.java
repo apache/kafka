@@ -1108,7 +1108,7 @@ public class DescribeConsumerGroupTest {
                         && Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(partition0content)
                         && Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(partition1content)
                         && Arrays.stream(lines[3].trim().split("\\s+")).toList().equals(partition2content);
-            }, "Expected a data row and no error in describe groups when a broker shutdown.");
+            }, "Expected 3 data rows excluding the header and no error in describe groups when a broker shutdown.");
         }
     }
 
