@@ -501,8 +501,13 @@ class ReplicaManager(val config: KafkaConfig,
   // Visible for testing
   def createPartition(topicPartition: TopicPartition): Partition = {
     val partition = Partition(topicPartition, time, this)
-    allPartitions.put(topicPartition, HostedPartition.Online(partition))
+    addOnlinePartition(topicPartition, partition)
     partition
+  }
+
+  // Visible for testing
+  private[server] def addOnlinePartition(topicPartition: TopicPartition, partition: Partition): Unit = {
+    allPartitions.put(topicPartition, HostedPartition.Online(partition))
   }
 
   def onlinePartition(topicPartition: TopicPartition): Option[Partition] = {
@@ -1150,6 +1155,7 @@ class ReplicaManager(val config: KafkaConfig,
               if (partition.futureReplicaDirChanged(destinationDir)) {
                 replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
                 partition.removeFutureLocalReplica()
+                logManager.resumeCleaning(topicPartition)
               }
             case HostedPartition.Offline(_) =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
