@@ -22913,6 +22913,37 @@ public class GroupMetadataManagerTest {
         );
     }
 
+    @Test
+    public void testShareGroupStateMetadataReplayNoExceptionOnGroupNotFound() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        String shareGroupId = "shareGroup";
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topicName";
+
+        assertDoesNotThrow(() -> context.replay(CoordinatorRecord.record(
+                new ShareGroupStatePartitionMetadataKey()
+                    .setGroupId(shareGroupId),
+                new ApiMessageAndVersion(
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializingTopics(List.of())
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicId(topicId)
+                                .setTopicName(topicName)
+                                .setPartitions(List.of(0, 1, 2))
+                        ))
+                        .setDeletingTopics(List.of()),
+                    (short) 0
+                )
+            ))
+        );
+    }
+
     private static void checkJoinGroupResponse(
         JoinGroupResponseData expectedResponse,
         JoinGroupResponseData actualResponse,
