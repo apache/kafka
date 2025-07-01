@@ -1093,7 +1093,13 @@ public class TransactionManager {
 
     synchronized boolean canAddBatch(ProducerBatch batch) {
         final TopicPartition topicPartition = batch.topicPartition;
-        return txnPartitionMap.getOrCreate(topicPartition).canAddBatch(batch);
+        final TxnPartitionEntry entry = txnPartitionMap.get(topicPartition);
+
+        if (entry == null) {
+            return true;
+        }
+
+        return entry.canAddBatch(batch);
     }
 
     // visible for testing
