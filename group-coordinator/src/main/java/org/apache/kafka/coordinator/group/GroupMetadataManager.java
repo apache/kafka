@@ -5671,13 +5671,17 @@ public class GroupMetadataManager {
     ) {
         String groupId = key.groupId();
 
-        getOrMaybeCreatePersistedShareGroup(groupId, false);
-
         // Update timeline structures with info about initialized/deleted topics.
         if (value == null) {
-            // Tombstone!
-            shareGroupStatePartitionMetadata.remove(groupId);
+            try {
+                getOrMaybeCreatePersistedShareGroup(groupId, false);
+            } catch (GroupIdNotFoundException ex) {
+                // Ignore tombstone if group not found.
+                log.debug("ShareGroupStatePartitionMetadata tombstone for non-existent share group {}", groupId, ex);
+            }
+            shareGroupStatePartitionMetadata.remove(groupId);   // Should not throw any exceptions.
         } else {
+            getOrMaybeCreatePersistedShareGroup(groupId, false);
             long timestamp = time.milliseconds();
             ShareGroupStatePartitionMetadataInfo info = new ShareGroupStatePartitionMetadataInfo(
                 value.initializingTopics().stream()
