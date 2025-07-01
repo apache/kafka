@@ -618,7 +618,7 @@ public class Sender implements Runnable {
                     ProducerBatch batch = batches.get(tp);
                     if (batch == null) {
                         throw new IllegalStateException("Can't find batch created for topic id " + r.topicId() +
-                                " topic name " + r.name() + "-" + p.index() + " using " + topicNames);
+                                " topic name " + r.name() + " partition " + p.index() + " using " + topicNames);
                     }
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
                 }));
