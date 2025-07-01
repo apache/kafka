@@ -646,10 +646,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     ) {
         long timestamp = time.milliseconds();
         int updatesPerSnapshotLimit = config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot();
-        if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit || partitionData.stateEpoch() > shareStateMap.get(key).stateEpoch()) {
+        if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit) {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
             int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? currentState.leaderEpoch() : partitionData.leaderEpoch();
-            int newStateEpoch = partitionData.stateEpoch() == -1 ? currentState.stateEpoch() : partitionData.stateEpoch();
+            int newStateEpoch = currentState.stateEpoch();
             long newStartOffset = partitionData.startOffset() == -1 ? currentState.startOffset() : partitionData.startOffset();
 
             // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot
