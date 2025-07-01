@@ -5361,8 +5361,11 @@ public class GroupMetadataManager {
         try {
             shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
             oldMember = shareGroup.getOrMaybeCreateMember(memberId, value != null);
-        } catch (GroupIdNotFoundException | UnknownMemberIdException ex) {
+        } catch (GroupIdNotFoundException ex) {
             log.debug("ShareGroupMemberMetadata tombstone without group - {}", groupId, ex);
+            return;
+        } catch (UnknownMemberIdException ex) {
+            log.debug("ShareGroupMemberMetadata tombstone for groupId - {} without member - {}", groupId, memberId, ex);
             return;
         }
 
@@ -5673,8 +5676,11 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
             oldMember = group.getOrMaybeCreateMember(memberId, value != null);
-        } catch (GroupIdNotFoundException | UnknownMemberIdException ex) {
+        } catch (GroupIdNotFoundException ex) {
             log.debug("ShareGroupCurrentMemberAssignment tombstone without group - {}", groupId, ex);
+            return;
+        } catch (UnknownMemberIdException ex) {
+            log.debug("ShareGroupCurrentMemberAssignment tombstone for groupId - {} without member - {}", groupId, memberId, ex);
             return;
         }
 
