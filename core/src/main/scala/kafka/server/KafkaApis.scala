@@ -3778,7 +3778,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case Some(error) =>
             topic.partitions().forEach(partition => responseBuilder.addPartition(topic.topicName(), partition.partitionIndex(), metadataCache.topicNamesToIds(), error.error))
           case None =>
-            authorizedTopicPartitions.add(topic)
+            authorizedTopicPartitions.add(topic.duplicate)
         }
       })
 
@@ -3831,15 +3831,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         authorizedTopics.add(topic)
       }
-    }
-
-    if (authorizedTopics.isEmpty) {
-      requestHelper.sendMaybeThrottle(
-        request,
-        new DeleteShareGroupOffsetsResponse(
-          new DeleteShareGroupOffsetsResponseData()
-            .setResponses(deleteShareGroupOffsetsResponseTopics)))
-      return CompletableFuture.completedFuture[Unit](())
     }
 
     groupCoordinator.deleteShareGroupOffsets(

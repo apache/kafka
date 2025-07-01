@@ -698,6 +698,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         InitializeShareGroupStateParameters request,
         AlterShareGroupOffsetsResponseData response
     ) {
+        if (request.groupTopicPartitionData().topicsData().isEmpty()) {
+            return CompletableFuture.completedFuture(response);
+        }
+
         return persister.initializeState(request)
             .handle((result, exp) -> {
                 if (exp == null) {
@@ -1246,7 +1250,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.INVALID_GROUP_ID));
         }
 
-        if (request.topics() == null || request.topics().isEmpty()) {
+        if (request.topics() == null) {
             return CompletableFuture.completedFuture(new AlterShareGroupOffsetsResponseData());
         }
 
@@ -1261,7 +1265,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "share-group-offsets-alter",
             request,
             exception,
-            (error, __) -> AlterShareGroupOffsetsRequest.getErrorResponseData(error),
+            (error, message) -> AlterShareGroupOffsetsRequest.getErrorResponseData(error, message),
             log
         ));
     }
@@ -1836,7 +1840,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return CompletableFuture.completedFuture(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.INVALID_GROUP_ID));
         }
 
-        if (requestData.topics() == null || requestData.topics().isEmpty()) {
+        if (requestData.topics() == null) {
             return CompletableFuture.completedFuture(new DeleteShareGroupOffsetsResponseData()
             );
         }
@@ -1851,7 +1855,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "initiate-delete-share-group-offsets",
             groupId,
             exception,
-            (error, __) -> DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(error),
+            (error, message) -> DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(error, message),
             log
         ));
     }

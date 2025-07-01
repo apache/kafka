@@ -71,13 +71,13 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
     }
 
     public static AlterShareGroupOffsetsResponseData getErrorResponseData(Errors error) {
-        return getErrorResponseData(error.code(), error.message());
+        return getErrorResponseData(error, null);
     }
 
-    public static AlterShareGroupOffsetsResponseData getErrorResponseData(short errorCode, String errorMessage) {
+    public static AlterShareGroupOffsetsResponseData getErrorResponseData(Errors error, String errorMessage) {
         return new AlterShareGroupOffsetsResponseData()
-            .setErrorCode(errorCode)
-            .setErrorMessage(errorMessage);
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage == null ? error.message() : errorMessage);
     }
 
     public static AlterShareGroupOffsetsRequest parse(Readable readable, short version) {

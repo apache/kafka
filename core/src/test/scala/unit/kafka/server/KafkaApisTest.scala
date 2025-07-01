@@ -12863,10 +12863,18 @@ class KafkaApisTest extends Logging {
   def testDeleteShareGroupOffsetsRequestEmptyTopicsSuccess(): Unit = {
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
 
-    val deleteShareGroupOffsetsRequest = new DeleteShareGroupOffsetsRequestData()
+    val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
       .setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequest).build)
+    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequestData).build)
+
+    val groupCoordinatorResponse: DeleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
+      .setErrorCode(Errors.NONE.code())
+
+    when(groupCoordinator.deleteShareGroupOffsets(
+      requestChannelRequest.context,
+      deleteShareGroupOffsetsRequestData
+    )).thenReturn(CompletableFuture.completedFuture(groupCoordinatorResponse))
 
     val resultFuture = new CompletableFuture[DeleteShareGroupOffsetsResponseData]
     kafkaApis = createKafkaApis()
