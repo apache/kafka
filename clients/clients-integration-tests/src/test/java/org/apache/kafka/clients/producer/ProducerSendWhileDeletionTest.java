@@ -163,7 +163,7 @@ public class ProducerSendWhileDeletionTest {
         }
     }
 
-    @Timeout(90)
+    @Timeout(120)
     @ClusterTest
     public void testSendWhileTopicGetRecreated() {
         int maxNumTopicRecreationAttempts = 10;

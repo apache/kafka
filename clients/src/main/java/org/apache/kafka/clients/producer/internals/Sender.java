@@ -617,7 +617,8 @@ public class Sender implements Runnable {
 
                     ProducerBatch batch = batches.get(tp);
                     if (batch == null) {
-                        throw new IllegalStateException("batch created for " + tp  + " can't be found.");
+                        throw new IllegalStateException("Can't find batch created for topic id " + r.topicId() +
+                                " topic name " + r.name() + "-" + p.index() + " using " + topicNames);
                     }
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
                 }));
@@ -901,7 +902,8 @@ public class Sender implements Runnable {
                         .setTopicData(tpd),
                 useTransactionV1Version
         );
-        RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, metadata.topicNames(), time.milliseconds());
+        Map<Uuid, String> topicNames = metadata.topicNames();
+        RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, topicNames, time.milliseconds());
 
         String nodeId = Integer.toString(destination);
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
