@@ -4076,7 +4076,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testInitPidResponse2PCWithOngoingTransaction() {
+    public void testInitPidResponseWithKeepPreparedTrueAndOngoingTransaction() {
         // Initialize transaction manager with 2PC enabled
         initializeTransactionManager(Optional.of(transactionalId), true, true);
         
@@ -4119,9 +4119,10 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testInitPidResponse2PCWithoutOngoingTransaction() {
-        // Initialize transaction manager with 2PC enabled
-        initializeTransactionManager(Optional.of(transactionalId), true, true);
+    public void testInitPidResponseWithKeepPreparedTrueAndNoOngoingTransaction() {
+        // Initialize transaction manager without 2PC enabled
+        // keepPrepared can be true even when enable2Pc is false, and we expect the same behavior
+        initializeTransactionManager(Optional.of(transactionalId), true, false);
         
         // Start initializeTransactions with keepPreparedTxn=true
         TransactionalRequestResult result = transactionManager.initializeTransactions(true);
@@ -4137,7 +4138,7 @@ public class TransactionManagerTest {
             producerId,
             epoch,
             true,
-            true,
+            false,
             RecordBatch.NO_PRODUCER_ID,
             RecordBatch.NO_PRODUCER_EPOCH
         );

@@ -1500,11 +1500,10 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-                // If this is a 2PC-enabled transaction with keepPreparedTxn=true, transition directly
+                // If this is a transaction with keepPreparedTxn=true, transition directly
                 // to PREPARED_TRANSACTION state IFF there is an ongoing transaction.
-                if (enable2PC &&
-                    builder.data.keepPreparedTxn() &&
-                    initProducerIdResponse.data().ongoingTxnProducerId() != -1
+                if (builder.data.keepPreparedTxn() &&
+                    initProducerIdResponse.data().ongoingTxnProducerId() != RecordBatch.NO_PRODUCER_ID
                 ) {
                     transitionTo(State.PREPARED_TRANSACTION);
                     // Update the preparedTxnState with the ongoing pid and epoch from the response.
