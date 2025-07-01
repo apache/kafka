@@ -16,6 +16,7 @@
   */
 package kafka.cluster
 
+import org.apache.kafka.storage.internals.log.SimpleAssignmentState
 import org.apache.kafka.common.PartitionState
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -88,7 +89,7 @@ class AssignmentStateTest extends AbstractPartitionTest {
   @MethodSource(Array("parameters"))
   def testPartitionAssignmentStatus(isr: util.List[Integer], replicas: util.List[Integer],
                                     adding: util.List[Integer], removing: util.List[Integer],
-                                    original: util.List[Int], isUnderReplicated: Boolean): Unit = {
+                                    original: util.List[Integer], isUnderReplicated: Boolean): Unit = {
     val leaderState = new PartitionState()
       .setLeader(brokerId)
       .setLeaderEpoch(6)
@@ -105,7 +106,7 @@ class AssignmentStateTest extends AbstractPartitionTest {
 
     // set the original replicas as the URP calculation will need them
     if (!original.isEmpty)
-      partition.assignmentState = SimpleAssignmentState(original.asScala)
+      partition.assignmentState = new SimpleAssignmentState(original)
     // do the test
     partition.makeLeader(leaderState, offsetCheckpoints, None)
     assertEquals(isReassigning, partition.isReassigning)
