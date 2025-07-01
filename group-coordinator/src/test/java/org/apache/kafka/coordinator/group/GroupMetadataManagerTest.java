@@ -95,10 +95,18 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.Endpoint;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -22897,51 +22905,122 @@ public class GroupMetadataManagerTest {
         assertEquals(Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1)), GroupMetadataManager.combineInitMaps(m1, m2));
     }
 
-    @Test
-    public void testShareGroupStateMetadataTombstoneReplayNoExceptionOnGroupNotFound() {
+    private static Stream<CoordinatorRecord> shareGroupRecords() {
+        String groupId = "groupId";
+        String memberId = Uuid.randomUuid().toString();
+
+        return Stream.of(
+            // Tombstones
+            CoordinatorRecord.tombstone(
+                new ShareGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupMetadataKey()
+                    .setGroupId(groupId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupTargetAssignmentMemberKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupTargetAssignmentMetadataKey()
+                    .setGroupId(groupId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupStatePartitionMetadataKey()
+                    .setGroupId(groupId)
+            ),
+            // Data
+            CoordinatorRecord.record(
+                new ShareGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                new ApiMessageAndVersion(
+                    new ShareGroupMemberMetadataValue()
+                        .setSubscribedTopicNames(List.of("tp1")),
+                    (short) 10
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(
+                    new ShareGroupMetadataValue()
+                        .setEpoch(1)
+                        .setMetadataHash(2L),
+                    (short) 11
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupTargetAssignmentMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(
+                    new ShareGroupTargetAssignmentMetadataValue()
+                        .setAssignmentEpoch(5),
+                    (short) 12
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupTargetAssignmentMemberKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                new ApiMessageAndVersion(new ShareGroupTargetAssignmentMemberValue()
+                    .setTopicPartitions(List.of(
+                        new ShareGroupTargetAssignmentMemberValue.TopicPartition()
+                            .setTopicId(Uuid.randomUuid())
+                            .setPartitions(List.of(0, 1, 2))
+                    )),
+                    (short) 13
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                new ApiMessageAndVersion(new ShareGroupCurrentMemberAssignmentValue()
+                    .setAssignedPartitions(List.of(
+                            new ShareGroupCurrentMemberAssignmentValue.TopicPartitions()
+                                .setTopicId(Uuid.randomUuid())
+                                .setPartitions(List.of(0, 1, 2))
+                        )
+                    )
+                    .setMemberEpoch(5)
+                    .setPreviousMemberEpoch(4)
+                    .setState((byte) 0),
+                    (short) 14
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupStatePartitionMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(new ShareGroupStatePartitionMetadataValue()
+                    .setInitializingTopics(List.of())
+                    .setInitializedTopics(List.of())
+                    .setDeletingTopics(List.of()),
+                    (short) 15
+                )
+            )
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("shareGroupRecords")
+    public void testShareGroupStateMetadataTombstoneReplayNoExceptionOnGroupNotFound(CoordinatorRecord record) {
         MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         GroupMetadataManagerTestContext context = spy(new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
             .build());
 
-        String shareGroupId = "shareGroup";
-        assertDoesNotThrow(() -> context.replay(CoordinatorRecord.tombstone(
-                new ShareGroupStatePartitionMetadataKey()
-                    .setGroupId(shareGroupId)
-            ))
-        );
-    }
-
-    @Test
-    public void testShareGroupStateMetadataReplayNoExceptionOnGroupNotFound() {
-        MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
-        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withShareGroupAssignor(assignor)
-            .build();
-
-        String shareGroupId = "shareGroup";
-        Uuid topicId = Uuid.randomUuid();
-        String topicName = "topicName";
-
-        assertDoesNotThrow(() -> context.replay(CoordinatorRecord.record(
-                new ShareGroupStatePartitionMetadataKey()
-                    .setGroupId(shareGroupId),
-                new ApiMessageAndVersion(
-                    new ShareGroupStatePartitionMetadataValue()
-                        .setInitializingTopics(List.of())
-                        .setInitializedTopics(List.of(
-                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
-                                .setTopicId(topicId)
-                                .setTopicName(topicName)
-                                .setPartitions(List.of(0, 1, 2))
-                        ))
-                        .setDeletingTopics(List.of()),
-                    (short) 0
-                )
-            ))
-        );
+        assertDoesNotThrow(() -> context.replay(record));
     }
 
     private static void checkJoinGroupResponse(
