@@ -86,7 +86,7 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
     public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(short errorCode, String errorMessage) {
         return new DeleteShareGroupOffsetsResponseData()
             .setErrorCode(errorCode)
-            .setErrorMessage(errorMessage == null ? Errors.forCode(errorCode).message(): errorMessage);
+            .setErrorMessage(errorMessage == null ? Errors.forCode(errorCode).message() : errorMessage);
     }
 
     public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(Errors error, String errorMessage) {
