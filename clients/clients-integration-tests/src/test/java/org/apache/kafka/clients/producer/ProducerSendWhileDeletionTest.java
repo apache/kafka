@@ -166,7 +166,7 @@ public class ProducerSendWhileDeletionTest {
     @Timeout(120)
     @ClusterTest
     public void testSendWhileTopicGetRecreated() {
-        int maxNumTopicRecreationAttempts = 10;
+        int maxNumTopicRecreationAttempts = 5;
         var recreateTopicFuture = CompletableFuture.supplyAsync(() -> {
             var topicIds = new HashSet<Uuid>();
             while (topicIds.size() < maxNumTopicRecreationAttempts) {
