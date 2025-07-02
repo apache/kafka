@@ -95,10 +95,18 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.Endpoint;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -204,6 +212,7 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABL
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.SHARE_GROUP_REBALANCES_SENSOR_NAME;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -215,6 +224,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22893,6 +22903,124 @@ public class GroupMetadataManagerTest {
         m1 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
         m2 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
         assertEquals(Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1)), GroupMetadataManager.combineInitMaps(m1, m2));
+    }
+
+    private static Stream<CoordinatorRecord> shareGroupRecords() {
+        String groupId = "groupId";
+        String memberId = Uuid.randomUuid().toString();
+
+        return Stream.of(
+            // Tombstones
+            CoordinatorRecord.tombstone(
+                new ShareGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupMetadataKey()
+                    .setGroupId(groupId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupTargetAssignmentMemberKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupTargetAssignmentMetadataKey()
+                    .setGroupId(groupId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupStatePartitionMetadataKey()
+                    .setGroupId(groupId)
+            ),
+            // Data
+            CoordinatorRecord.record(
+                new ShareGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                new ApiMessageAndVersion(
+                    new ShareGroupMemberMetadataValue()
+                        .setSubscribedTopicNames(List.of("tp1")),
+                    (short) 10
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(
+                    new ShareGroupMetadataValue()
+                        .setEpoch(1)
+                        .setMetadataHash(2L),
+                    (short) 11
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupTargetAssignmentMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(
+                    new ShareGroupTargetAssignmentMetadataValue()
+                        .setAssignmentEpoch(5),
+                    (short) 12
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupTargetAssignmentMemberKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                new ApiMessageAndVersion(new ShareGroupTargetAssignmentMemberValue()
+                    .setTopicPartitions(List.of(
+                        new ShareGroupTargetAssignmentMemberValue.TopicPartition()
+                            .setTopicId(Uuid.randomUuid())
+                            .setPartitions(List.of(0, 1, 2))
+                    )),
+                    (short) 13
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                new ApiMessageAndVersion(new ShareGroupCurrentMemberAssignmentValue()
+                    .setAssignedPartitions(List.of(
+                            new ShareGroupCurrentMemberAssignmentValue.TopicPartitions()
+                                .setTopicId(Uuid.randomUuid())
+                                .setPartitions(List.of(0, 1, 2))
+                        )
+                    )
+                    .setMemberEpoch(5)
+                    .setPreviousMemberEpoch(4)
+                    .setState((byte) 0),
+                    (short) 14
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupStatePartitionMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(new ShareGroupStatePartitionMetadataValue()
+                    .setInitializingTopics(List.of())
+                    .setInitializedTopics(List.of())
+                    .setDeletingTopics(List.of()),
+                    (short) 15
+                )
+            )
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("shareGroupRecords")
+    public void testShareGroupRecordsNoExceptionOnReplay(CoordinatorRecord record) {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = spy(new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build());
+
+        assertDoesNotThrow(() -> context.replay(record));
     }
 
     private static void checkJoinGroupResponse(
