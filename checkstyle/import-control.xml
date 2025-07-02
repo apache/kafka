@@ -539,6 +539,9 @@
       <allow pkg="org.apache.kafka.server.config" />
       <allow pkg="org.apache.logging.log4j" />
       <allow pkg="kafka.server" />
+      <subpackage name="integration">
+        <allow pkg="org.apache.kafka.raft" />
+      </subpackage>
       <subpackage name="rest">
         <allow pkg="jakarta.ws.rs" />
         <allow pkg="jakarta.inject" />
@@ -622,6 +625,7 @@
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
       <!-- for tests -->
+      <allow pkg="org.apache.kafka.raft" />
       <allow pkg="org.apache.kafka.server.util" />
       <allow pkg="org.apache.kafka.server.config" />
       <allow pkg="kafka.server"/>

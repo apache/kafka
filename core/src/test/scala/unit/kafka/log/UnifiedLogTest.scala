@@ -56,7 +56,7 @@ import org.mockito.Mockito.{doAnswer, doThrow, spy}
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
-import org.apache.kafka.server.config.KRaftConfigs
+import org.apache.kafka.raft.KRaftConfigs
 
 import java.io._
 import java.nio.ByteBuffer

@@ -82,72 +82,6 @@ public class KafkaRaftLog implements RaftLog {
     private final MetadataLogConfig config;
     private final String logIdent;
 
-    public static KafkaRaftLog createLog(
-            TopicPartition topicPartition,
-            Uuid topicId,
-            File dataDir,
-            Time time,
-            Scheduler scheduler,
-            MetadataLogConfig config,
-            int nodeId) throws IOException {
-        Properties props = new Properties();
-        props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(config.internalMaxBatchSizeInBytes()));
-        if (config.internalSegmentBytes() != null) {
-            props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, String.valueOf(config.internalSegmentBytes()));
-        } else {
-            props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.logSegmentBytes()));
-        }
-        props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, String.valueOf(ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT));
-
-        // Disable time and byte retention when deleting segments
-        props.setProperty(TopicConfig.RETENTION_MS_CONFIG, "-1");
-        props.setProperty(TopicConfig.RETENTION_BYTES_CONFIG, "-1");
-        LogConfig.validate(props);
-        LogConfig defaultLogConfig = new LogConfig(props);
-
-        if (defaultLogConfig.retentionMs >= 0) {
-            throw new InvalidConfigurationException(
-                    "Cannot set " + TopicConfig.RETENTION_MS_CONFIG + " above -1: " + defaultLogConfig.retentionMs
-            );
-        } else if (defaultLogConfig.retentionSize >= 0) {
-            throw new InvalidConfigurationException(
-                    "Cannot set " + TopicConfig.RETENTION_BYTES_CONFIG + " above -1: " + defaultLogConfig.retentionSize
-            );
-        }
-
-        UnifiedLog log = UnifiedLog.create(
-                dataDir,
-                defaultLogConfig,
-                0L,
-                0L,
-                scheduler,
-                new BrokerTopicStats(),
-                time,
-                Integer.MAX_VALUE,
-                new ProducerStateManagerConfig(Integer.MAX_VALUE, false),
-                Integer.MAX_VALUE,
-                new LogDirFailureChannel(5),
-                false,
-                Optional.of(topicId)
-        );
-
-        KafkaRaftLog metadataLog = new KafkaRaftLog(
-                log,
-                time,
-                scheduler,
-                recoverSnapshots(log),
-                topicPartition,
-                config,
-                nodeId
-        );
-
-        // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
-        // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
-        metadataLog.truncateToLatestSnapshot();
-
-        return metadataLog;
-    }
-
     public KafkaRaftLog(
             UnifiedLog log,
             Time time,
@@ -164,7 +98,7 @@ public class KafkaRaftLog implements RaftLog {
         this.snapshots = snapshots;
         this.topicPartition = topicPartition;
         this.config = config;
-        this.logIdent = "[MetadataLog partition=" + topicPartition + ", nodeId=" + nodeId + "] ";
+        this.logIdent = "[RaftLog partition=" + topicPartition + ", nodeId=" + nodeId + "] ";
         this.logger = new LogContext(logIdent).logger(KafkaRaftLog.class);
     }
 
@@ -192,7 +126,7 @@ public class KafkaRaftLog implements RaftLog {
                     )
             );
         } catch (IOException ioe) {
-            throw new UncheckedIOException(ioe);
+            throw new KafkaException(ioe);
         }
     }
 
@@ -205,7 +139,7 @@ public class KafkaRaftLog implements RaftLog {
         try {
             return handleAndConvertLogAppendInfo(log.appendAsLeader((MemoryRecords) records, epoch, AppendOrigin.RAFT_LEADER));
         } catch (IOException ioe) {
-            throw new UncheckedIOException(ioe);
+            throw new KafkaException(ioe);
         }
     }
 
@@ -254,7 +188,7 @@ public class KafkaRaftLog implements RaftLog {
             if (earliestSnapshotIdOpt.isPresent()) {
                 OffsetAndEpoch earliestSnapshotId = earliestSnapshotIdOpt.get();
                 if (endOffsetEpoch.offset() == earliestSnapshotId.offset() && endOffsetEpoch.epoch() == epoch) {
-                    // The epoch is smaller than the smallest epoch on the log. Override the diverging
+                    // The epoch is equal to the smallest epoch on the log. Override the diverging
                     // epoch to the oldest snapshot which should be the snapshot at the log start offset
                     return new OffsetAndEpoch(earliestSnapshotId.offset(), earliestSnapshotId.epoch());
                 }
@@ -343,7 +277,7 @@ public class KafkaRaftLog implements RaftLog {
                 logger.warn("Log's high watermark ({}) is different from the local replica's high watermark ({})", metadata, logOffsetMetadata);
             }
         } catch (IOException ioe) {
-            throw new UncheckedIOException(ioe);
+            throw new KafkaException(ioe);
         }
     }
 
@@ -357,7 +291,7 @@ public class KafkaRaftLog implements RaftLog {
 
             return new LogOffsetMetadata(hwm.messageOffset, segmentPosition);
         } catch (IOException ioe) {
-            throw new UncheckedIOException(ioe);
+            throw new KafkaException(ioe);
         }
     }
 
@@ -593,7 +527,7 @@ public class KafkaRaftLog implements RaftLog {
     }
 
     /**
-     * Iterate through the snapshots a test the given predicate to see if we should attempt to delete it. Since
+     * Iterate through the snapshots and test the given predicate to see if we should attempt to delete it. Since
      * we have some additional invariants regarding snapshots and log segments we cannot simply delete a snapshot in
      * all cases.
      *
@@ -719,9 +653,83 @@ public class KafkaRaftLog implements RaftLog {
         }
     }
 
+    public static KafkaRaftLog createLog(
+            TopicPartition topicPartition,
+            Uuid topicId,
+            File dataDir,
+            Time time,
+            Scheduler scheduler,
+            MetadataLogConfig config,
+            int nodeId) throws IOException {
+        Properties props = new Properties();
+        props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(config.internalMaxBatchSizeInBytes()));
+        if (config.internalSegmentBytes() != null) {
+            props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, String.valueOf(config.internalSegmentBytes()));
+        } else {
+            props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.logSegmentBytes()));
+        }
+        props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, String.valueOf(config.logSegmentMillis()));
+        props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, String.valueOf(ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT));
+
+        // Disable time and byte retention when deleting segments
+        props.setProperty(TopicConfig.RETENTION_MS_CONFIG, "-1");
+        props.setProperty(TopicConfig.RETENTION_BYTES_CONFIG, "-1");
+        LogConfig.validate(props);
+        LogConfig defaultLogConfig = new LogConfig(props);
+
+        if (defaultLogConfig.retentionMs >= 0) {
+            throw new InvalidConfigurationException(
+                    "Cannot set " + TopicConfig.RETENTION_MS_CONFIG + " above -1: " + defaultLogConfig.retentionMs
+            );
+        } else if (defaultLogConfig.retentionSize >= 0) {
+            throw new InvalidConfigurationException(
+                    "Cannot set " + TopicConfig.RETENTION_BYTES_CONFIG + " above -1: " + defaultLogConfig.retentionSize
+            );
+        }
+
+        UnifiedLog log = UnifiedLog.create(
+                dataDir,
+                defaultLogConfig,
+                0L,
+                0L,
+                scheduler,
+                new BrokerTopicStats(),
+                time,
+                Integer.MAX_VALUE,
+                new ProducerStateManagerConfig(Integer.MAX_VALUE, false),
+                Integer.MAX_VALUE,
+                new LogDirFailureChannel(5),
+                false,
+                Optional.of(topicId)
+        );
+
+        KafkaRaftLog metadataLog = new KafkaRaftLog(
+                log,
+                time,
+                scheduler,
+                recoverSnapshots(log),
+                topicPartition,
+                config,
+                nodeId
+        );
+
+        if (defaultLogConfig.segmentSize() < config.logSegmentBytes()) {
+            metadataLog.logger.error("Overriding {} is only supported for testing. Setting this value too low may " +
+                    "lead to an inability to write batches of metadata records.",
+                    MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG);
+        }
+
+        // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
+        // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
+        metadataLog.truncateToLatestSnapshot();
+
+        return metadataLog;
+    }
+
     private static TreeMap<OffsetAndEpoch, Optional<FileRawSnapshotReader>> recoverSnapshots(UnifiedLog log) throws IOException {
         TreeMap<OffsetAndEpoch, Optional<FileRawSnapshotReader>> snapshotsToRetain = new TreeMap<>();
         List<SnapshotPath> snapshotsToDelete = new ArrayList<>();
+        String indent = "[RaftLog partition=" + log.topicPartition() + "] ";
 
         // Scan the log directory; deleting partial snapshots and older snapshot, only remembering immutable snapshots start
         // from logStartOffset
@@ -757,11 +765,11 @@ public class KafkaRaftLog implements RaftLog {
 
             for (SnapshotPath snapshotPath : snapshotsToDelete) {
                 Files.deleteIfExists(snapshotPath.path());
-                LOG.info("Deleted unneeded snapshot file with path {}", snapshotPath);
+                LOG.info("{}Deleted unneeded snapshot file with path {}", indent, snapshotPath);
             }
         }
 
-        LOG.info("Initialized snapshots with IDs {} from {}", snapshotsToRetain.keySet(), log.dir());
+        LOG.info("{}Initialized snapshots with IDs {} from {}", indent, snapshotsToRetain.keySet(), log.dir());
         return snapshotsToRetain;
     }
 
@@ -776,17 +784,7 @@ public class KafkaRaftLog implements RaftLog {
         String reason(OffsetAndEpoch snapshotId);
     }
 
-    static class RetentionMsBreach implements SnapshotDeletionReason {
-        private final long now;
-        private final long timestamp;
-        private final long retentionMillis;
-
-        RetentionMsBreach(long now, long timestamp, long retentionMillis) {
-            this.now = now;
-            this.timestamp = timestamp;
-            this.retentionMillis = retentionMillis;
-        }
-
+    record RetentionMsBreach(long now, long timestamp, long retentionMillis) implements SnapshotDeletionReason {
         @Override
         public String reason(OffsetAndEpoch snapshotId) {
             return "Marking snapshot " + snapshotId + " for deletion because its timestamp (" + timestamp + ") is now (" +
@@ -794,17 +792,7 @@ public class KafkaRaftLog implements RaftLog {
         }
     }
 
-    static class RetentionSizeBreach implements SnapshotDeletionReason {
-        private final long logSize;
-        private final long snapshotsSize;
-        private final long retentionMaxBytes;
-
-        RetentionSizeBreach(long logSize, long snapshotsSize, long retentionMaxBytes) {
-            this.logSize = logSize;
-            this.snapshotsSize = snapshotsSize;
-            this.retentionMaxBytes = retentionMaxBytes;
-        }
-
+    record RetentionSizeBreach(long logSize, long snapshotsSize, long retentionMaxBytes) implements SnapshotDeletionReason {
         @Override
         public String reason(OffsetAndEpoch snapshotId) {
             return "Marking snapshot " + snapshotId + " for deletion because the log size (" + logSize + ") and snapshots size (" +
@@ -812,14 +800,14 @@ public class KafkaRaftLog implements RaftLog {
         }
     }
 
-    static class FullTruncation implements SnapshotDeletionReason {
+    record FullTruncation() implements SnapshotDeletionReason {
         @Override
         public String reason(OffsetAndEpoch snapshotId) {
             return "Marking snapshot " + snapshotId + " for deletion because the partition was fully truncated";
         }
     }
 
-    static class UnknownReason implements SnapshotDeletionReason {
+    record UnknownReason() implements SnapshotDeletionReason {
         @Override
         public String reason(OffsetAndEpoch snapshotId) {
             return "Marking snapshot " + snapshotId + " for deletion for unknown reason";

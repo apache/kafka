@@ -100,10 +100,10 @@ public class KafkaRaftLogTest {
     @Test
     public void testConfig() throws IOException {
         Properties props = new Properties();
-        props.put("process.roles", "broker");
+        props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
         props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9093");
-        props.put("node.id", String.valueOf(2));
-        props.put("controller.listener.names", "SSL");
+        props.put(KRaftConfigs.NODE_ID_CONFIG, String.valueOf(2));
+        props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL");
         props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG, String.valueOf(10240));
         props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, String.valueOf(10 * 1024));
         assertThrows(ConfigException.class, () -> {
@@ -502,8 +502,7 @@ public class KafkaRaftLogTest {
 
         mockTime.sleep(config.internalDeleteDelayMillis());
         // Assert that the log dir doesn't contain any older snapshots
-        Files
-                .walk(logDir, 1)
+        Files.walk(logDir, 1)
                 .map(Snapshots::parse)
                 .filter(Optional::isPresent)
                 .forEach(path -> assertFalse(path.get().snapshotId().offset() < log.startOffset()));
@@ -995,12 +994,14 @@ public class KafkaRaftLogTest {
         RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(snapshotId1).get();
         append(snapshot, 500);
         snapshot.freeze();
+        snapshot.close();
 
         // Then generate a snapshot
         OffsetAndEpoch snapshotId2 = new OffsetAndEpoch(2000, 1);
         snapshot = log.createNewSnapshotUnchecked(snapshotId2).get();
         append(snapshot, 500);
         snapshot.freeze();
+        snapshot.close();
 
         // Cleaning should occur, but resulting size will not be under retention limit since we have to keep one snapshot
         assertTrue(log.maybeClean());
@@ -1011,6 +1012,12 @@ public class KafkaRaftLogTest {
                 assertTrue(reader.sizeInBytes() + log.log().size() > config.retentionMaxBytes())
             );
         });
+    }
+
+    @Test
+    public void testSegmentMsConfigIsSetInMetadataLog() throws IOException {
+        KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, DEFAULT_METADATA_LOG_CONFIG);
+        assertEquals(DEFAULT_METADATA_LOG_CONFIG.logSegmentMillis(), log.log().config().segmentMs);
     }
 
     @Test
@@ -1133,11 +1140,13 @@ public class KafkaRaftLogTest {
     private void createNewSnapshot(KafkaRaftLog log, OffsetAndEpoch snapshotId) {
         RawSnapshotWriter snapshot = log.createNewSnapshot(snapshotId).get();
         snapshot.freeze();
+        snapshot.close();
     }
 
     private static void createNewSnapshotUnchecked(KafkaRaftLog log, OffsetAndEpoch snapshotId) {
         RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(snapshotId).get();
         snapshot.freeze();
+        snapshot.close();
     }
 
     private static void append(RaftLog log, int numberOfRecords, int epoch) {

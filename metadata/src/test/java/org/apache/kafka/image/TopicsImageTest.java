@@ -194,7 +194,7 @@ public class TopicsImageTest {
         );
     }
 
-    private PartitionRegistration newPartition(int[] replicas) {
+    private static PartitionRegistration newPartition(int[] replicas) {
         Uuid[] directories = new Uuid[replicas.length];
         for (int i = 0; i < replicas.length; i++) {
             directories[i] = DirectoryId.random();
@@ -259,10 +259,8 @@ public class TopicsImageTest {
             changes.leaders().keySet()
         );
         assertEquals(
-            new HashSet<>(
-                List.of(new TopicPartition("baz", 1), new TopicPartition("bar", 0),
-                    new TopicPartition("bam", 1))
-            ),
+            Set.of(new TopicPartition("baz", 1), new TopicPartition("bar", 0),
+                    new TopicPartition("bam", 1)),
             changes.followers().keySet()
         );
 
@@ -658,11 +656,11 @@ public class TopicsImageTest {
             newTopicsByNameMap(List.of()));
         TopicsDelta delta = new TopicsDelta(image);
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
-        topicRecords.addAll(List.of(
+        topicRecords.add(
             new ApiMessageAndVersion(
                 new ClearElrRecord().setTopicName("non-exist"),
                 CLEAR_ELR_RECORD.highestSupportedVersion()
-            ))
+            )
         );
         assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
     }
@@ -869,7 +867,7 @@ public class TopicsImageTest {
         assertEquals(BAR_UUID, map.get("bar"));
         assertFalse(map.containsKey("baz"));
         assertNull(map.get("baz"));
-        HashSet<Uuid> uuids = new HashSet<>();
+        Set<Uuid> uuids = new HashSet<>();
         map.values().iterator().forEachRemaining(uuids::add);
         Set<Uuid> expectedUuids = Set.of(
             Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA"),
@@ -888,7 +886,7 @@ public class TopicsImageTest {
         assertEquals("bar", map.get(BAR_UUID));
         assertFalse(map.containsKey(BAZ_UUID));
         assertNull(map.get(BAZ_UUID));
-        HashSet<String> names = new HashSet<>();
+        Set<String> names = new HashSet<>();
         map.values().iterator().forEachRemaining(names::add);
         Set<String> expectedNames = Set.of("foo", "bar");
         assertEquals(expectedNames, names);
