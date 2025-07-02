@@ -3055,13 +3055,9 @@ public class CoordinatorRuntimeTest {
     public void testBufferShrinkWhenMaxMessageSizeReducedBelowInitialBufferSize() {
         MockTimer timer = new MockTimer();
         var mockWriter = new InMemoryPartitionWriter(false) {
-            private LogConfig config;
-
-            {
-                config = new LogConfig(Map.of(
-                    TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024) // 1MB
-                ));
-            }
+            private LogConfig config = new LogConfig(Map.of(
+                TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024) // 1MB
+            ));;
 
             @Override
             public LogConfig config(TopicPartition tp) {
@@ -3119,6 +3115,8 @@ public class CoordinatorRuntimeTest {
         // Reduce max message size below initial buffer size.
         mockWriter.updateConfig(new LogConfig(
             Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(INITIAL_BUFFER_SIZE - 66))));
+        assertEquals(INITIAL_BUFFER_SIZE - 66, mockWriter.config(TP).maxMessageSize());
+        assertTrue(mockWriter.config(TP).maxMessageSize() < INITIAL_BUFFER_SIZE);
 
         // Write #2.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
@@ -3126,7 +3124,7 @@ public class CoordinatorRuntimeTest {
         );
         assertFalse(write2.isCompletedExceptionally());
 
-        // Verify that there is no cached buffer.
+        // Verify that there is no cached buffer since the cached buffer size is greater than new maxMessageSize.
         assertEquals(1, ctx.bufferSupplier.get(1).capacity());
 
         // Write #3.
@@ -3135,8 +3133,8 @@ public class CoordinatorRuntimeTest {
         );
         assertFalse(write3.isCompletedExceptionally());
 
-        // Verify that the cached buffer size is equals to new max message size that less than INITIAL_BUFFER_SIZE.
-        assertEquals(INITIAL_BUFFER_SIZE - 66, ctx.bufferSupplier.get(1).capacity());
+        // Verify that the cached buffer size is equals to new maxMessageSize that less than INITIAL_BUFFER_SIZE.
+        assertEquals(mockWriter.config(TP).maxMessageSize(), ctx.bufferSupplier.get(1).capacity());
     }
 
 
