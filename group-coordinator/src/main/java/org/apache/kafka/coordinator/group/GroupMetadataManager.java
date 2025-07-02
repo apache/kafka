@@ -7977,19 +7977,21 @@ public class GroupMetadataManager {
         // a retry for the same is possible. Since this is part of an admin operation
         // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
-        Map<Uuid, InitMapValue> deletingTopics = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics().stream()
-            .map(tid -> {
-                TopicImage image = metadataImage.topics().getTopic(tid);
-                return Map.entry(tid, new InitMapValue(image.name(), image.partitions().keySet(), -1));
-            })
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Set<Uuid> deletingCurrent = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics();
+        if (metadataImage != null && !metadataImage.equals(MetadataImage.EMPTY)) {
+            Map<Uuid, InitMapValue> deletingTopics = deletingCurrent.stream()
+                .map(tid -> metadataImage.topics().getTopic(tid))
+                .filter(Objects::nonNull)
+                .map(image -> Map.entry(image.id(), new InitMapValue(image.name(), image.partitions().keySet(), -1)))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        if (!deletingTopics.isEmpty()) {
-            log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deletingTopics);
-            deleteCandidates = combineInitMaps(deleteCandidates, deletingTopics);
+            if (!deletingTopics.isEmpty()) {
+                log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deletingTopics);
+                deleteCandidates = combineInitMaps(deleteCandidates, deletingTopics);
+            }
         }
 
-        if (deleteCandidates.isEmpty()) {
+        if (deleteCandidates.isEmpty() && deletingCurrent.isEmpty()) {
             return Optional.empty();
         }
 
@@ -8012,6 +8014,10 @@ public class GroupMetadataManager {
             Map.of(),
             attachTopicName(deleteCandidates.keySet())
         ));
+
+        if (topicDataList.isEmpty()) {
+            return Optional.empty();
+        }
 
         return Optional.of(new DeleteShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()

@@ -96,6 +96,7 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -2137,10 +2138,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ).get();
 
         // At this point the metadata will not have been updated
-        // with the deleted topics.
-        Set<Uuid> topicIds = topicPartitions.stream()
-            .map(tp -> metadataImage.topics().getTopic(tp.topic()).id())
-            .collect(Collectors.toSet());
+        // with the deleted topics, but we must guard against it.
+        if (metadataImage == null || metadataImage.equals(MetadataImage.EMPTY)) {
+            return;
+        }
+
+        Set<Uuid> topicIds = new HashSet<>();
+        for (TopicPartition tp : topicPartitions) {
+            TopicImage image = metadataImage.topics().getTopic(tp.topic());
+            if (image != null) {
+                topicIds.add(image.id());
+            }
+        }
 
         CompletableFuture.allOf(
             FutureUtils.mapExceptionally(
