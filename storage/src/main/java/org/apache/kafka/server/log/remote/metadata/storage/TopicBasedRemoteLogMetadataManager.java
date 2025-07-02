@@ -485,7 +485,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 log.info("Topic {} does not exist", topic);
                 return false;
             }
-            log.warn("Fail to check if topic {} exist. Error: {}", topic, ex.getCause().getMessage());
             throw ex;
         }
     }
