@@ -55,6 +55,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
+import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.NOT_READY;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.RECONCILING;
@@ -765,6 +766,11 @@ public class StreamsGroup implements Group {
 
     @Override
     public boolean isSubscribedToTopic(String topic) {
+        if (state.get() == EMPTY || state.get() == DEAD) {
+            // No topic subscriptions if the group is empty.
+            // This allows offsets to expire for empty groups.
+            return false;
+        }
         Optional<ConfiguredTopology> maybeConfiguredTopology = configuredTopology.get();
         if (maybeConfiguredTopology.isEmpty() || !maybeConfiguredTopology.get().isReady()) {
             return false;
