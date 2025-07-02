@@ -35,6 +35,7 @@ import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.common.PartitionState;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -48,7 +49,6 @@ import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.RecordsSend;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -166,8 +166,7 @@ public class ReplicaFetcherThreadBenchmark {
             TopicPartition tp = new TopicPartition("topic", i);
 
             List<Integer> replicas = Arrays.asList(0, 1, 2);
-            LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
-                    .setControllerEpoch(0)
+            PartitionState partitionState = new PartitionState()
                     .setLeader(0)
                     .setLeaderEpoch(0)
                     .setIsr(replicas)

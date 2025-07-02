@@ -132,7 +132,7 @@ public class TransactionMetadata {
     public TxnTransitMetadata prepareNoTransit() {
         // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
         return new TxnTransitMetadata(producerId, prevProducerId, nextProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs,
-            state, Set.copyOf(topicPartitions), txnStartTimestamp, txnLastUpdateTimestamp, clientTransactionVersion);
+            state, new HashSet<>(topicPartitions), txnStartTimestamp, txnLastUpdateTimestamp, clientTransactionVersion);
     }
 
     public TxnTransitMetadata prepareFenceProducerEpoch() {
@@ -347,7 +347,7 @@ public class TransactionMetadata {
         if (data.state.validPreviousStates().contains(this.state)) {
             TxnTransitMetadata transitMetadata = new TxnTransitMetadata(
                 data.producerId, this.producerId, data.nextProducerId, data.producerEpoch, data.lastProducerEpoch,
-                data.txnTimeoutMs, data.state, Set.copyOf(data.topicPartitions),
+                data.txnTimeoutMs, data.state, new HashSet<>(data.topicPartitions),
                 data.txnStartTimestamp, data.txnLastUpdateTimestamp, data.clientTransactionVersion
             );
 
@@ -452,7 +452,7 @@ public class TransactionMetadata {
             producerEpoch = transitMetadata.producerEpoch();
             lastProducerEpoch = transitMetadata.lastProducerEpoch();
             txnTimeoutMs = transitMetadata.txnTimeoutMs();
-            topicPartitions = new HashSet<>(transitMetadata.topicPartitions());
+            topicPartitions = transitMetadata.topicPartitions();
             txnStartTimestamp = transitMetadata.txnStartTimestamp();
             txnLastUpdateTimestamp = transitMetadata.txnLastUpdateTimestamp();
             clientTransactionVersion = transitMetadata.clientTransactionVersion();
