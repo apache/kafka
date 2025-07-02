@@ -8273,7 +8273,7 @@ public class GroupMetadataManager {
             deletingDeletedCurrent.retainAll(deletedTopicIds);
 
             // The deleted topic ids are neither present in initializing
-            // nor in initialized not in deleting, so we have nothing to do.
+            // nor in initialized nor in deleting, so we have nothing to do.
             if (initializingDeletedCurrent.isEmpty() && initializedDeletedCurrent.isEmpty() && deletingDeletedCurrent.isEmpty()) {
                 return;
             }
@@ -8289,14 +8289,14 @@ public class GroupMetadataManager {
             Map<Uuid, InitMapValue> finalInitialized = new HashMap<>(metadata.initializedTopics());
             initializedDeletedCurrent.forEach(finalInitialized::remove);
 
-            Set<Uuid> deletingTopics = new HashSet<>(metadata.deletingTopics());
-            deletingTopics.removeAll(deletedTopicIds);
+            Set<Uuid> finalDeleting = new HashSet<>(metadata.deletingTopics());
+            finalDeleting.removeAll(deletedTopicIds);
 
             records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
                 finalInitializing,
                 finalInitialized,
-                attachTopicName(deletingTopics)
+                attachTopicName(finalDeleting)
             ));
         });
 
