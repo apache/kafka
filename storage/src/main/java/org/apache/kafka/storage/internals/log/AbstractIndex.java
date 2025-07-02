@@ -413,7 +413,7 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     protected final <T> T inLock(Supplier<T> action) {
-        return LockUtils.inLock(lock, () -> action).get();
+        return LockUtils.inLock(lock, action);
     }
 
     protected final void inLock(Runnable action) {
@@ -429,11 +429,11 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     protected final <T> T inRemapReadLock(Supplier<T> action) {
-        return LockUtils.inLock(remapLock.readLock(), () -> action).get();
+        return LockUtils.inLock(remapLock.readLock(), action);
     }
 
     protected final <T, E extends Exception> T inRemapWriteLockThrows(LockUtils.ThrowingSupplier<T, E> action) throws E {
-        return LockUtils.inLockThrows(remapLock.writeLock(), () -> action).get();
+        return LockUtils.inLockThrows(remapLock.writeLock(), action);
     }
 
     protected final <E extends Exception> void inRemapWriteLockThrows(LockUtils.ThrowingRunnable<E> action) throws E {
