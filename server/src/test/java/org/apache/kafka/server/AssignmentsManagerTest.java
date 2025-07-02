@@ -425,7 +425,7 @@ public class AssignmentsManagerTest {
 
     @Test
     public void testGlobalResponseErrorDisconnectedTimedOut() {
-        assertEquals(Optional.of("Disonnected[Timeout]"),
+        assertEquals(Optional.of("Disconnected[Timeout]"),
             AssignmentsManager.globalResponseError(Optional.of(
                 new ClientResponse(null, null, "", 0, 0, true, true,
                    null, null, null))));
