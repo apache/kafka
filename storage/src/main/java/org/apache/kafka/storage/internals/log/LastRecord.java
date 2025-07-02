@@ -23,14 +23,9 @@ import java.util.OptionalLong;
  * The last written record for a given producer. The last data offset may be undefined
  * if the only log entry for a producer is a transaction marker.
  */
-public final class LastRecord {
-    public final OptionalLong lastDataOffset;
-    public final short producerEpoch;
-
-    public LastRecord(OptionalLong lastDataOffset, short producerEpoch) {
+public record LastRecord(OptionalLong lastDataOffset, short producerEpoch) {
+    public LastRecord {
         Objects.requireNonNull(lastDataOffset, "lastDataOffset must be non null");
-        this.lastDataOffset = lastDataOffset;
-        this.producerEpoch = producerEpoch;
     }
 
     @Override

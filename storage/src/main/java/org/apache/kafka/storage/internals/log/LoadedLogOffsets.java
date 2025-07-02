@@ -18,11 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import java.util.Objects;
 
-public class LoadedLogOffsets {
-    public final long logStartOffset;
-    public final long recoveryPoint;
-    public final LogOffsetMetadata nextOffsetMetadata;
-
+public record LoadedLogOffsets(long logStartOffset, long recoveryPoint, LogOffsetMetadata nextOffsetMetadata) {
     public LoadedLogOffsets(final long logStartOffset,
                             final long recoveryPoint,
                             final LogOffsetMetadata nextOffsetMetadata) {

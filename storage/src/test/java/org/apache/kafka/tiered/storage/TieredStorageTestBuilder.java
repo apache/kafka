@@ -363,8 +363,8 @@ public final class TieredStorageTestBuilder {
                         offloadables.computeIfAbsent(topicPartition, k -> new ArrayList<>())
                         .stream()
                         .map(spec ->
-                                new OffloadedSegmentSpec(spec.getSourceBrokerId(), topicPartition, spec.getBaseOffset(),
-                                        spec.getRecords()))
+                                new OffloadedSegmentSpec(spec.sourceBrokerId(), topicPartition, spec.baseOffset(),
+                                        spec.records()))
                         .toList();
                 ProduceAction action = new ProduceAction(topicPartition, offloadedSegmentSpecs, recordsToProduce,
                         producableSpec.getBatchSize(), producableSpec.getEarliestLocalLogOffset());
@@ -379,10 +379,10 @@ public final class TieredStorageTestBuilder {
         if (!consumables.isEmpty()) {
             consumables.forEach((topicPartition, consumableSpec) -> {
                 FetchableSpec fetchableSpec = fetchables.computeIfAbsent(topicPartition, k -> new FetchableSpec(0, new RemoteFetchCount(0)));
-                RemoteFetchSpec remoteFetchSpec = new RemoteFetchSpec(fetchableSpec.getSourceBrokerId(), topicPartition,
-                        fetchableSpec.getFetchCount());
-                ConsumeAction action = new ConsumeAction(topicPartition, consumableSpec.getFetchOffset(),
-                        consumableSpec.getExpectedTotalCount(), consumableSpec.getExpectedFromSecondTierCount(),
+                RemoteFetchSpec remoteFetchSpec = new RemoteFetchSpec(fetchableSpec.sourceBrokerId(), topicPartition,
+                        fetchableSpec.fetchCount());
+                ConsumeAction action = new ConsumeAction(topicPartition, consumableSpec.fetchOffset(),
+                        consumableSpec.expectedTotalCount(), consumableSpec.expectedFromSecondTierCount(),
                         remoteFetchSpec);
                 actions.add(action);
             });
@@ -412,11 +412,11 @@ public final class TieredStorageTestBuilder {
                     TopicPartition partition = e.getKey();
                     List<DeletableSpec> deletableSpecs = e.getValue();
                     return deletableSpecs.stream()
-                            .map(spec -> new RemoteDeleteSegmentSpec(spec.getSourceBrokerId(), partition,
-                                    spec.getEventType(), spec.getEventCount()));
+                            .map(spec -> new RemoteDeleteSegmentSpec(spec.sourceBrokerId(), partition,
+                                    spec.eventType(), spec.eventCount()));
                 })
                 .toList();
-        deleteSegmentSpecList.forEach(spec -> deletables.remove(spec.getTopicPartition()));
+        deleteSegmentSpecList.forEach(spec -> deletables.remove(spec.topicPartition()));
         return deleteSegmentSpecList;
     }
 }

@@ -188,10 +188,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteLogManager");
 
     // The endpoint for remote log metadata manager to connect to
-    private Optional<Endpoint> endpoint = Optional.empty();
+    private final Optional<Endpoint> endpoint;
+    private final Timer remoteReadTimer;
+
     private boolean closed = false;
 
-    private final Timer remoteReadTimer;
     private volatile DelayedOperationPurgatory<DelayedRemoteListOffsets> delayedRemoteListOffsetsPurgatory;
 
     /**
@@ -1010,7 +1011,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             List<EpochEntry> epochEntries = getLeaderEpochEntries(log, segment.baseOffset(), nextSegmentBaseOffset);
             Map<Integer, Long> segmentLeaderEpochs = new HashMap<>(epochEntries.size());
-            epochEntries.forEach(entry -> segmentLeaderEpochs.put(entry.epoch, entry.startOffset));
+            epochEntries.forEach(entry -> segmentLeaderEpochs.put(entry.epoch(), entry.startOffset()));
 
             boolean isTxnIdxEmpty = segment.txnIndex().isEmpty();
             RemoteLogSegmentMetadata copySegmentStartedRlsm = new RemoteLogSegmentMetadata(segmentId, segment.baseOffset(), endOffset,
@@ -1071,7 +1072,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             // `epochEntries` cannot be empty, there is a pre-condition validation in RemoteLogSegmentMetadata
             // constructor
-            int lastEpochInSegment = epochEntries.get(epochEntries.size() - 1).epoch;
+            int lastEpochInSegment = epochEntries.get(epochEntries.size() - 1).epoch();
             copiedOffsetOption = Optional.of(new OffsetAndEpoch(endOffset, lastEpochInSegment));
             // Update the highest offset in remote storage for this partition's log so that the local log segments
             // are not deleted before they are copied to remote storage.
@@ -1206,7 +1207,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                                                              RemoteLogSegmentMetadata metadata)
                     throws RemoteStorageException, ExecutionException, InterruptedException {
                 boolean isSegmentDeleted = deleteRemoteLogSegment(metadata, 
-                    ignored -> metadata.segmentLeaderEpochs().keySet().stream().allMatch(epoch -> epoch < earliestEpochEntry.epoch));
+                    ignored -> metadata.segmentLeaderEpochs().keySet().stream().allMatch(epoch -> epoch < earliestEpochEntry.epoch()));
                 if (isSegmentDeleted) {
                     logger.info("Deleted remote log segment {} due to leader-epoch-cache truncation. " +
                                     "Current earliest-epoch-entry: {}, segment-end-offset: {} and segment-epochs: {}",
@@ -1375,7 +1376,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             if (earliestEpochEntryOptional.isPresent()) {
                 EpochEntry earliestEpochEntry = earliestEpochEntryOptional.get();
                 Iterator<Integer> epochsToClean = remoteLeaderEpochs.stream()
-                        .filter(remoteEpoch -> remoteEpoch < earliestEpochEntry.epoch)
+                        .filter(remoteEpoch -> remoteEpoch < earliestEpochEntry.epoch())
                         .iterator();
 
                 List<RemoteLogSegmentMetadata> listOfSegmentsToBeCleaned = new ArrayList<>();
@@ -1658,11 +1659,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {
-        int fetchMaxBytes = remoteStorageFetchInfo.fetchMaxBytes;
-        TopicPartition tp = remoteStorageFetchInfo.topicIdPartition.topicPartition();
-        FetchRequest.PartitionData fetchInfo = remoteStorageFetchInfo.fetchInfo;
+        int fetchMaxBytes = remoteStorageFetchInfo.fetchMaxBytes();
+        TopicPartition tp = remoteStorageFetchInfo.topicIdPartition().topicPartition();
+        FetchRequest.PartitionData fetchInfo = remoteStorageFetchInfo.fetchInfo();
 
-        boolean includeAbortedTxns = remoteStorageFetchInfo.fetchIsolation == FetchIsolation.TXN_COMMITTED;
+        boolean includeAbortedTxns = remoteStorageFetchInfo.fetchIsolation() == FetchIsolation.TXN_COMMITTED;
 
         long offset = fetchInfo.fetchOffset;
         int maxBytes = Math.min(fetchMaxBytes, fetchInfo.maxBytes);
@@ -1714,14 +1715,14 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             // An empty record is sent instead of an incomplete batch when
             //  - there is no minimum-one-message constraint and
             //  - the first batch size is more than maximum bytes that can be sent and
-            if (!remoteStorageFetchInfo.minOneMessage && firstBatchSize > maxBytes) {
+            if (!remoteStorageFetchInfo.minOneMessage() && firstBatchSize > maxBytes) {
                 LOGGER.debug("Returning empty record for offset {} in partition {} because the first batch size {} " +
                         "is greater than max fetch bytes {}", offset, tp, firstBatchSize, maxBytes);
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY);
             }
 
             int updatedFetchSize =
-                    remoteStorageFetchInfo.minOneMessage && firstBatchSize > maxBytes ? firstBatchSize : maxBytes;
+                    remoteStorageFetchInfo.minOneMessage() && firstBatchSize > maxBytes ? firstBatchSize : maxBytes;
 
             ByteBuffer buffer = ByteBuffer.allocate(updatedFetchSize);
             int remainingBytes = updatedFetchSize;
@@ -1770,7 +1771,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
         OffsetIndex offsetIndex = indexCache.getIndexEntry(segmentMetadata).offsetIndex();
         long upperBoundOffset = offsetIndex.fetchUpperBoundOffset(startOffsetPosition, fetchSize)
-                .map(position -> position.offset).orElse(segmentMetadata.endOffset() + 1);
+                .map(OffsetPosition::offset).orElse(segmentMetadata.endOffset() + 1);
 
         final Set<FetchResponseData.AbortedTransaction> abortedTransactions = new HashSet<>();
 
@@ -1815,8 +1816,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             if (txnIndexOpt.isPresent()) {
                 TransactionIndex txnIndex = txnIndexOpt.get();
                 TxnIndexSearchResult searchResult = txnIndex.collectAbortedTxns(startOffset, upperBoundOffset);
-                accumulator.accept(searchResult.abortedTransactions);
-                isSearchComplete = searchResult.isComplete;
+                accumulator.accept(searchResult.abortedTransactions());
+                isSearchComplete = searchResult.isComplete();
             }
             if (!isSearchComplete) {
                 currentMetadataOpt = findNextSegmentWithTxnIndex(tp, currentMetadata.endOffset() + 1, leaderEpochCache);
@@ -1844,8 +1845,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             TransactionIndex txnIndex = localLogSegments.next().txnIndex();
             if (txnIndex != null) {
                 TxnIndexSearchResult searchResult = txnIndex.collectAbortedTxns(startOffset, upperBoundOffset);
-                accumulator.accept(searchResult.abortedTransactions);
-                if (searchResult.isComplete) {
+                accumulator.accept(searchResult.abortedTransactions());
+                if (searchResult.isComplete()) {
                     return;
                 }
             }
@@ -1886,9 +1887,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
         int initialEpoch = initialEpochOpt.getAsInt();
         for (EpochEntry epochEntry : leaderEpochCache.epochEntries()) {
-            if (epochEntry.epoch >= initialEpoch) {
-                long startOffset = Math.max(epochEntry.startOffset, offset);
-                Optional<RemoteLogSegmentMetadata> metadataOpt = fetchNextSegmentWithTxnIndex(tp, epochEntry.epoch, startOffset);
+            if (epochEntry.epoch() >= initialEpoch) {
+                long startOffset = Math.max(epochEntry.startOffset(), offset);
+                Optional<RemoteLogSegmentMetadata> metadataOpt = fetchNextSegmentWithTxnIndex(tp, epochEntry.epoch(), startOffset);
                 if (metadataOpt.isPresent()) {
                     return metadataOpt;
                 }
@@ -1917,7 +1918,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         LeaderEpochFileCache leaderEpochCache = log.leaderEpochCache();
         Optional<EpochEntry> maybeEpochEntry = leaderEpochCache.latestEntry();
         while (offsetAndEpoch == null && maybeEpochEntry.isPresent()) {
-            int epoch = maybeEpochEntry.get().epoch;
+            int epoch = maybeEpochEntry.get().epoch();
             Optional<Long> highestRemoteOffsetOpt =
                     remoteLogMetadataManagerPlugin.get().highestOffsetForEpoch(topicIdPartition, epoch);
             if (highestRemoteOffsetOpt.isPresent()) {
@@ -1946,7 +1947,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         Optional<Long> logStartOffset = Optional.empty();
         LeaderEpochFileCache leaderEpochCache = log.leaderEpochCache();
         OptionalInt earliestEpochOpt = leaderEpochCache.earliestEntry()
-                .map(epochEntry -> OptionalInt.of(epochEntry.epoch))
+                .map(epochEntry -> OptionalInt.of(epochEntry.epoch()))
                 .orElseGet(OptionalInt::empty);
         while (logStartOffset.isEmpty() && earliestEpochOpt.isPresent()) {
             Iterator<RemoteLogSegmentMetadata> iterator =

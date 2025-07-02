@@ -160,7 +160,7 @@ public class RemoteLogSegmentLifecycleTest {
             for (Map.Entry<EpochEntry, RemoteLogSegmentMetadata> entry : expectedEpochEntryToMetadata.entrySet()) {
                 EpochEntry epochEntry = entry.getKey();
                 Optional<RemoteLogSegmentMetadata> actualMetadataOpt = metadataManager
-                        .remoteLogSegmentMetadata(topicIdPartition, epochEntry.epoch, epochEntry.startOffset);
+                        .remoteLogSegmentMetadata(topicIdPartition, epochEntry.epoch(), epochEntry.startOffset());
                 RemoteLogSegmentMetadata expectedSegmentMetadata = entry.getValue();
                 if (expectedSegmentMetadata != null) {
                     assertEquals(Optional.of(expectedSegmentMetadata), actualMetadataOpt);
