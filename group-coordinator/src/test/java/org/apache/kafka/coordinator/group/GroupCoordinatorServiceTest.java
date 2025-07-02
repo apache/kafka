@@ -3240,6 +3240,110 @@ public class GroupCoordinatorServiceTest {
                 BufferSupplier.NO_CACHING
             )
         );
+
+        verify(runtime, times(1)).scheduleWriteAllOperation(
+            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    public void testOnPartitionsDeletedCleanupShareGroupStateEmptyMetadata() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build();
+        service.startup(() -> 3);
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "bar", 1)
+            .build();
+        service.onNewMetadataImage(image, new MetadataDelta(image));
+
+        // No error in partition deleted callback
+        when(runtime.scheduleWriteAllOperation(
+            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(List.of(
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null)
+        ));
+
+        when(runtime.scheduleWriteAllOperation(
+            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(List.of(
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null)
+        ));
+
+        // The exception is logged and swallowed.
+        assertDoesNotThrow(() ->
+            service.onPartitionsDeleted(
+                List.of(new TopicPartition("foo", 0)),
+                BufferSupplier.NO_CACHING
+            )
+        );
+
+        verify(runtime, times(0)).scheduleWriteAllOperation(
+            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    public void testOnPartitionsDeletedCleanupShareGroupStateTopicsNotInMetadata() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build();
+        service.startup(() -> 3);
+
+        MetadataImage image = MetadataImage.EMPTY;
+        service.onNewMetadataImage(image, new MetadataDelta(image));
+
+        // No error in partition deleted callback
+        when(runtime.scheduleWriteAllOperation(
+            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(List.of(
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null)
+        ));
+
+        when(runtime.scheduleWriteAllOperation(
+            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(List.of(
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null)
+        ));
+
+        // The exception is logged and swallowed.
+        assertDoesNotThrow(() ->
+            service.onPartitionsDeleted(
+                List.of(new TopicPartition("foo", 0)),
+                BufferSupplier.NO_CACHING
+            )
+        );
+
+        verify(runtime, times(0)).scheduleWriteAllOperation(
+            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        );
     }
 
     @Test

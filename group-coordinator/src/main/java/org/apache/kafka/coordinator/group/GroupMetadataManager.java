@@ -8020,24 +8020,52 @@ public class GroupMetadataManager {
         // a retry for the same is possible. Since this is part of an admin operation
         // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
-        Map<Uuid, InitMapValue> deletingTopics = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics().stream()
-            .map(tid -> {
-                TopicImage image = metadataImage.topics().getTopic(tid);
-                return Map.entry(tid, new InitMapValue(image.name(), image.partitions().keySet(), -1));
-            })
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        if (!deletingTopics.isEmpty()) {
-            log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deletingTopics);
-            deleteCandidates = combineInitMaps(deleteCandidates, deletingTopics);
+        Set<Uuid> currentDeleting = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics();
+        Map<Uuid, InitMapValue> deleteRetryCandidates = new HashMap<>();
+        Set<Uuid> deletingToIgnore = new HashSet<>();
+        if (!currentDeleting.isEmpty()) {
+            if (metadataImage == null || metadataImage.equals(MetadataImage.EMPTY)) {
+                deletingToIgnore.addAll(currentDeleting);
+            } else {
+                for (Uuid deletingTopicId : currentDeleting) {
+                    TopicImage topicImage = metadataImage.topics().getTopic(deletingTopicId);
+                    if (topicImage == null) {
+                        deletingToIgnore.add(deletingTopicId);
+                    } else {
+                        deleteRetryCandidates.put(deletingTopicId, new InitMapValue(topicImage.name(), topicImage.partitions().keySet(), -1));
+                    }
+                }
+            }
         }
+
+        if (!deletingToIgnore.isEmpty()) {
+            log.warn("Some topics for share group id {} were not found in the metadata image - {}", shareGroupId, deletingToIgnore);
+        }
+
+        if (!deleteRetryCandidates.isEmpty()) {
+            log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deleteRetryCandidates);
+            deleteCandidates = combineInitMaps(deleteCandidates, deleteRetryCandidates);
+        }
+
+        // Remove all initializing and initialized topic info from record and add deleting. There
+        // could be previous deleting topics due to offsets delete, we need to account for them as well.
+        // If some older deleting topics could not be found in the metadata image, they will be ignored
+        // and logged.
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+            shareGroupId,
+            Map.of(),
+            Map.of(),
+            deleteCandidates.entrySet().stream()
+                .map(entry -> Map.entry(entry.getKey(), entry.getValue().name()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
+        ));
 
         if (deleteCandidates.isEmpty()) {
             return Optional.empty();
         }
 
         List<TopicData<PartitionIdData>> topicDataList = new ArrayList<>(deleteCandidates.size());
-
         for (Map.Entry<Uuid, InitMapValue> entry : deleteCandidates.entrySet()) {
             topicDataList.add(new TopicData<>(
                 entry.getKey(),
@@ -8046,15 +8074,6 @@ public class GroupMetadataManager {
                     .toList()
             ));
         }
-
-        // Remove all initializing and initialized topic info from record and add deleting. There
-        // could be previous deleting topics due to offsets delete, we need to account for them as well.
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
-            shareGroupId,
-            Map.of(),
-            Map.of(),
-            attachTopicName(deleteCandidates.keySet())
-        ));
 
         return Optional.of(new DeleteShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
@@ -8247,13 +8266,15 @@ public class GroupMetadataManager {
         shareGroupStatePartitionMetadata.forEach((groupId, metadata) -> {
             Set<Uuid> initializingDeletedCurrent = new HashSet<>(metadata.initializingTopics().keySet());
             Set<Uuid> initializedDeletedCurrent = new HashSet<>(metadata.initializedTopics().keySet());
+            Set<Uuid> deletingDeletedCurrent = new HashSet<>(metadata.deletingTopics());
 
             initializingDeletedCurrent.retainAll(deletedTopicIds);
             initializedDeletedCurrent.retainAll(deletedTopicIds);
+            deletingDeletedCurrent.retainAll(deletedTopicIds);
 
             // The deleted topic ids are neither present in initializing
-            // not initialized, so we have nothing to do.
-            if (initializingDeletedCurrent.isEmpty() && initializedDeletedCurrent.isEmpty()) {
+            // nor in initialized not in deleting, so we have nothing to do.
+            if (initializingDeletedCurrent.isEmpty() && initializedDeletedCurrent.isEmpty() && deletingDeletedCurrent.isEmpty()) {
                 return;
             }
 
