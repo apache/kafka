@@ -43,6 +43,7 @@ import org.apache.kafka.common.metrics.Monitorable
 import org.apache.kafka.common.metrics.PluginMetrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.{PartitionState => JPartitionState}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
@@ -92,7 +93,7 @@ import java.io.{ByteArrayInputStream, File}
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.function.BiConsumer
 import java.util.stream.IntStream
@@ -133,7 +134,6 @@ class ReplicaManagerTest {
 
   // Constants defined for readability
   private val zkVersion = 0
-  private val controllerEpoch = 0
   private val brokerEpoch = 0L
 
   // These metrics are static and once we remove them after each test, they won't be created and verified anymore
@@ -255,8 +255,7 @@ class ReplicaManagerTest {
       quotaManagers = quotaManager,
       metadataCache = new KRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterPartitionManager = alterPartitionManager,
-      threadNamePrefix = Option(this.getClass.getName))
+      alterPartitionManager = alterPartitionManager)
     try {
       def callback(responseStatus: Map[TopicIdPartition, PartitionResponse]): Unit = {
         assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS)
@@ -461,8 +460,7 @@ class ReplicaManagerTest {
         quotaManagers = quotaManager,
         metadataCache = new KRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-        alterPartitionManager = alterPartitionManager,
-        threadNamePrefix = Option(this.getClass.getName))
+        alterPartitionManager = alterPartitionManager)
 
       // shutdown ReplicaManager so that metrics are removed
       rm.shutdown(checkpointHW = false)
@@ -2480,11 +2478,6 @@ class ReplicaManagerTest {
     produceResult
   }
 
-  /**
-   * This method assumes that the test using created ReplicaManager calls
-   * ReplicaManager.becomeLeaderOrFollower() once with LeaderAndIsrRequest containing
-   * 'leaderEpochInLeaderAndIsr' leader epoch for partition 'topicPartition'.
-   */
   private def prepareReplicaManagerAndLogManager(timer: MockTimer,
                                                  topicPartition: Int,
                                                  leaderEpochInLeaderAndIsr: Int,
@@ -2620,15 +2613,13 @@ class ReplicaManagerTest {
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
       delayedRemoteFetchPurgatoryParam = Some(mockRemoteFetchPurgatory),
       delayedRemoteListOffsetsPurgatoryParam = Some(mockRemoteListOffsetsPurgatory),
-      delayedShareFetchPurgatoryParam = Some(mockDelayedShareFetchPurgatory),
-      threadNamePrefix = Option(this.getClass.getName)) {
+      delayedShareFetchPurgatoryParam = Some(mockDelayedShareFetchPurgatory)) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
                                                          time: Time,
-                                                         threadNamePrefix: Option[String],
                                                          replicationQuotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
         val rm = this
-        new ReplicaFetcherManager(this.config, rm, metrics, time, threadNamePrefix, replicationQuotaManager, () => this.metadataCache.metadataVersion(), () => 1) {
+        new ReplicaFetcherManager(this.config, rm, metrics, time, replicationQuotaManager, () => this.metadataCache.metadataVersion(), () => 1) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
             val logContext = new LogContext(s"[ReplicaFetcher replicaId=${rm.config.brokerId}, leaderId=${sourceBroker.id}, " +
@@ -2665,11 +2656,10 @@ class ReplicaManagerTest {
                                          leaderEpoch: Int,
                                          leaderBrokerId: Int,
                                          aliveBrokerIds: Seq[Integer],
-                                         isNew: Boolean = false): LeaderAndIsrRequest.PartitionState = {
-    new LeaderAndIsrRequest.PartitionState()
+                                         isNew: Boolean = false): JPartitionState = {
+    new JPartitionState()
       .setTopicName(topic)
       .setPartitionIndex(topicPartition.partition)
-      .setControllerEpoch(controllerEpoch)
       .setLeader(leaderBrokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(aliveBrokerIds.asJava)
@@ -2965,7 +2955,6 @@ class ReplicaManagerTest {
     propsModifier: Properties => Unit = _ => {},
     mockReplicaFetcherManager: Option[ReplicaFetcherManager] = None,
     mockReplicaAlterLogDirsManager: Option[ReplicaAlterLogDirsManager] = None,
-    isShuttingDown: AtomicBoolean = new AtomicBoolean(false),
     enableRemoteStorage: Boolean = false,
     shouldMockLog: Boolean = false,
     remoteLogManager: Option[RemoteLogManager] = None,
@@ -3050,14 +3039,12 @@ class ReplicaManagerTest {
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager,
       brokerTopicStats = brokerTopicStats,
-      isShuttingDown = isShuttingDown,
       delayedProducePurgatoryParam = Some(mockProducePurgatory),
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
       delayedRemoteFetchPurgatoryParam = Some(mockDelayedRemoteFetchPurgatory),
       delayedRemoteListOffsetsPurgatoryParam = Some(mockDelayedRemoteListOffsetsPurgatory),
       delayedShareFetchPurgatoryParam = Some(mockDelayedShareFetchPurgatory),
-      threadNamePrefix = Option(this.getClass.getName),
       addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
       directoryEventHandler = directoryEventHandler,
       remoteLogManager = if (enableRemoteStorage) {
@@ -3070,7 +3057,6 @@ class ReplicaManagerTest {
       override protected def createReplicaFetcherManager(
         metrics: Metrics,
         time: Time,
-        threadNamePrefix: Option[String],
         quotaManager: ReplicationQuotaManager
       ): ReplicaFetcherManager = {
         mockReplicaFetcherManager.getOrElse {
@@ -3078,15 +3064,13 @@ class ReplicaManagerTest {
             super.createReplicaFetcherManager(
               metrics,
               time,
-              threadNamePrefix,
               quotaManager
             )
             val config = this.config
             val metadataCache = this.metadataCache
-            new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager, () => metadataCache.metadataVersion(), () => 1) {
+            new ReplicaFetcherManager(config, this, metrics, time, quotaManager, () => metadataCache.metadataVersion(), () => 1) {
               override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
-                val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
-                val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
+                val threadName = s"ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
 
                 val tp = new TopicPartition(topic, 0)
                 val leader = new MockLeaderEndPoint() {
@@ -3115,7 +3099,6 @@ class ReplicaManagerTest {
             super.createReplicaFetcherManager(
               metrics,
               time,
-              threadNamePrefix,
               quotaManager
             )
           }
@@ -4963,12 +4946,10 @@ class ReplicaManagerTest {
     val foo2 = new TopicPartition("foo", 2)
 
     val mockReplicaFetcherManager = mock(classOf[ReplicaFetcherManager])
-    val isShuttingDown = new AtomicBoolean(false)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
       mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
-      isShuttingDown = isShuttingDown,
       enableRemoteStorage = enableRemoteStorage
     )
 
@@ -5045,10 +5026,6 @@ class ReplicaManagerTest {
       }
 
       reset(mockReplicaFetcherManager)
-
-      // The broker transitions to SHUTTING_DOWN state. This should not have
-      // any impact in KRaft mode.
-      isShuttingDown.set(true)
 
       // The replica begins the controlled shutdown.
       replicaManager.beginControlledShutdown()
