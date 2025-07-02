@@ -454,6 +454,7 @@ public class PersisterStateManager {
                 case COORDINATOR_NOT_AVAILABLE: // retriable error codes
                 case COORDINATOR_LOAD_IN_PROGRESS:
                 case NOT_COORDINATOR:
+                case UNKNOWN_TOPIC_OR_PARTITION:
                     log.debug("Received retriable error in find coordinator for {} using key {}: {}", name(), partitionKey(), error.message());
                     if (!findCoordBackoff.canAttempt()) {
                         log.error("Exhausted max retries to find coordinator for {} using key {} without success.", name(), partitionKey());
@@ -581,6 +582,7 @@ public class PersisterStateManager {
                             case COORDINATOR_NOT_AVAILABLE:
                             case COORDINATOR_LOAD_IN_PROGRESS:
                             case NOT_COORDINATOR:
+                            case UNKNOWN_TOPIC_OR_PARTITION:
                                 log.debug("Received retriable error in initialize state RPC for key {}: {}", partitionKey(), error.message());
                                 if (!initializeStateBackoff.canAttempt()) {
                                     log.error("Exhausted max retries for initialize state RPC for key {} without success.", partitionKey());
@@ -739,6 +741,7 @@ public class PersisterStateManager {
                             case COORDINATOR_NOT_AVAILABLE:
                             case COORDINATOR_LOAD_IN_PROGRESS:
                             case NOT_COORDINATOR:
+                            case UNKNOWN_TOPIC_OR_PARTITION:
                                 log.debug("Received retriable error in write state RPC for key {}: {}", partitionKey(), error.message());
                                 if (!writeStateBackoff.canAttempt()) {
                                     log.error("Exhausted max retries for write state RPC for key {} without success.", partitionKey());
@@ -881,6 +884,7 @@ public class PersisterStateManager {
                             case COORDINATOR_NOT_AVAILABLE:
                             case COORDINATOR_LOAD_IN_PROGRESS:
                             case NOT_COORDINATOR:
+                            case UNKNOWN_TOPIC_OR_PARTITION:
                                 log.debug("Received retriable error in read state RPC for key {}: {}", partitionKey(), error.message());
                                 if (!readStateBackoff.canAttempt()) {
                                     log.error("Exhausted max retries for read state RPC for key {} without success.", partitionKey());
@@ -1023,6 +1027,7 @@ public class PersisterStateManager {
                             case COORDINATOR_NOT_AVAILABLE:
                             case COORDINATOR_LOAD_IN_PROGRESS:
                             case NOT_COORDINATOR:
+                            case UNKNOWN_TOPIC_OR_PARTITION:
                                 log.debug("Received retriable error in read state summary RPC for key {}: {}", partitionKey(), error.message());
                                 if (!readStateSummaryBackoff.canAttempt()) {
                                     log.error("Exhausted max retries for read state summary RPC for key {} without success.", partitionKey());
@@ -1162,6 +1167,7 @@ public class PersisterStateManager {
                             case COORDINATOR_NOT_AVAILABLE:
                             case COORDINATOR_LOAD_IN_PROGRESS:
                             case NOT_COORDINATOR:
+                            case UNKNOWN_TOPIC_OR_PARTITION:
                                 log.debug("Received retriable error in delete state RPC for key {}: {}", partitionKey(), error.message());
                                 if (!deleteStateBackoff.canAttempt()) {
                                     log.error("Exhausted max retries for delete state RPC for key {} without success.", partitionKey());
