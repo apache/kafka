@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.test;
 
-import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
@@ -130,36 +129,18 @@ public interface ClusterInstance {
      */
     String bootstrapControllers();
 
-    /**
-     * A collection of all brokers in the cluster.
-     */
-    default Collection<SocketServer> brokerSocketServers() {
+    default List<Integer> controllerBoundPorts() {
+        return controllers().values().stream()
+            .map(ControllerServer::socketServer)
+            .map(ss -> ss.boundPort(controllerListenerName()))
+            .toList();
+    }
+
+    default List<Integer> brokerBoundPorts() {
         return brokers().values().stream()
-                .map(KafkaBroker::socketServer)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * A collection of all controllers in the cluster.
-     */
-    Collection<SocketServer> controllerSocketServers();
-
-    /**
-     * Return any one of the broker servers. Throw an error if none are found
-     */
-    default SocketServer anyBrokerSocketServer() {
-        return brokerSocketServers().stream()
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
-    }
-
-    /**
-     * Return any one of the controller servers. Throw an error if none are found
-     */
-    default SocketServer anyControllerSocketServer() {
-        return controllerSocketServers().stream()
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
+            .map(KafkaBroker::socketServer)
+            .map(ss -> ss.boundPort(clientListener()))
+            .toList();
     }
 
     String clusterId();

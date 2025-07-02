@@ -16,7 +16,7 @@
   */
 package kafka.cluster
 
-import org.apache.kafka.common.requests.LeaderAndIsrRequest
+import org.apache.kafka.common.PartitionState
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
@@ -89,10 +89,7 @@ class AssignmentStateTest extends AbstractPartitionTest {
   def testPartitionAssignmentStatus(isr: util.List[Integer], replicas: util.List[Integer],
                                     adding: util.List[Integer], removing: util.List[Integer],
                                     original: util.List[Int], isUnderReplicated: Boolean): Unit = {
-    val controllerEpoch = 3
-
-    val leaderState = new LeaderAndIsrRequest.PartitionState()
-      .setControllerEpoch(controllerEpoch)
+    val leaderState = new PartitionState()
       .setLeader(brokerId)
       .setLeaderEpoch(6)
       .setIsr(isr)
