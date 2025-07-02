@@ -65,7 +65,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -282,7 +281,7 @@ public class EmbeddedKafkaCluster {
      * @return the map of optional {@link TopicDescription} keyed by the topic name
      */
     public Map<String, Optional<TopicDescription>> describeTopics(String... topicNames) {
-        return describeTopics(new HashSet<>(Arrays.asList(topicNames)));
+        return describeTopics(Set.of(topicNames));
     }
 
     /**

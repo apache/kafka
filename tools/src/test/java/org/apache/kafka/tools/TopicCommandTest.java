@@ -73,6 +73,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -259,7 +260,7 @@ public class TopicCommandTest {
                 .configs(Collections.emptyMap());
 
         verify(adminClient, times(1)).createTopics(
-                eq(new HashSet<>(Arrays.asList(expectedNewTopic))),
+                eq(Set.of(expectedNewTopic)),
                 argThat(exception -> !exception.shouldRetryOnQuotaViolation())
         );
     }
@@ -1426,12 +1427,12 @@ public class TopicCommandTest {
 
     private void checkReplicaDistribution(Map<Integer, List<Integer>> assignment,
                                           Map<Integer, String> brokerRackMapping,
-                                          Integer numBrokers,
-                                          Integer numPartitions,
-                                          Integer replicationFactor,
-                                          Boolean verifyRackAware,
-                                          Boolean verifyLeaderDistribution,
-                                          Boolean verifyReplicasDistribution) {
+                                          int numBrokers,
+                                          int numPartitions,
+                                          int replicationFactor,
+                                          boolean verifyRackAware,
+                                          boolean verifyLeaderDistribution,
+                                          boolean verifyReplicasDistribution) {
         // always verify that no broker will be assigned for more than one replica
         assignment.forEach((partition, assignedNodes) -> assertEquals(new HashSet<>(assignedNodes).size(), assignedNodes.size(),
                 "More than one replica is assigned to same broker for the same partition"));

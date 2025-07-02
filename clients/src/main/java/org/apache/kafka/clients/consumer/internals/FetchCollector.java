@@ -155,7 +155,10 @@ public class FetchCollector<K, V> {
             log.debug("Not returning fetched records for partition {} since it is no longer assigned", tp);
         } else if (!subscriptions.isFetchable(tp)) {
             // this can happen when a partition is paused before fetched records are returned to the consumer's
-            // poll call or if the offset is being reset
+            // poll call or if the offset is being reset.
+            // It can also happen under the Consumer rebalance protocol, when the consumer changes its subscription.
+            // Until the consumer receives an updated assignment from the coordinator, it can hold assigned partitions
+            // that are not in the subscription anymore, so we make them not fetchable.
             log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", tp);
         } else {
             SubscriptionState.FetchPosition position = subscriptions.position(tp);

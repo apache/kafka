@@ -52,7 +52,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
 /**
- * <p>Manages the request creation and response handling for the Streams group heartbeat. The class creates a
+ * <p>Manages the request creation and response handling for the streams group heartbeat. The class creates a
  * heartbeat request using the state stored in the membership manager. The requests can be retrieved
  * by calling {@link StreamsGroupHeartbeatRequestManager#poll(long)}. Once the response is received, it updates the
  * state in the membership manager and handles any errors.

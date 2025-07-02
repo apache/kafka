@@ -885,6 +885,40 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Completes a prepared transaction by comparing the provided prepared transaction state with the
+     * current prepared state on the producer.
+     * If they match, the transaction is committed; otherwise, it is aborted.
+     * 
+     * @param preparedTxnState              The prepared transaction state to compare against the current state
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws InvalidTxnStateException if the producer is not in prepared state
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws TimeoutException if the time taken for completing the transaction has surpassed <code>max.block.ms</code>
+     * @throws InterruptException if the thread is interrupted while blocked
+     */
+    @Override
+    public void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException {
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
+        
+        if (!transactionManager.isPrepared()) {
+            throw new InvalidTxnStateException("Cannot complete transaction because no transaction has been prepared. " +
+                "Call prepareTransaction() first, or make sure initTransaction(true) was called.");
+        }
+        
+        // Get the current prepared transaction state
+        PreparedTxnState currentPreparedState = transactionManager.preparedTransactionState();
+        
+        // Compare the prepared transaction state token and commit or abort accordingly
+        if (currentPreparedState.equals(preparedTxnState)) {
+            commitTransaction();
+        } else {
+            abortTransaction();
+        }
+    }
+
+    /**
      * Asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
      * See {@link #send(ProducerRecord, Callback)} for details.
      */

@@ -17,8 +17,6 @@
 package kafka.coordinator.transaction
 
 import java.util
-import java.util.Arrays.asList
-import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.{Callable, Executors, Future}
 import kafka.server.KafkaConfig
@@ -156,7 +154,7 @@ class TransactionMarkerChannelManagerTest {
 
       val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
       val response = new WriteTxnMarkersResponse(
-        Collections.singletonMap(producerId2: java.lang.Long, Collections.singletonMap(partition1, Errors.NONE)))
+        util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
       val clientResponse = new ClientResponse(header, null, null,
         time.milliseconds(), time.milliseconds(), false, null, null,
         response)
@@ -205,7 +203,7 @@ class TransactionMarkerChannelManagerTest {
     // Build a successful client response.
     val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
     val successfulResponse = new WriteTxnMarkersResponse(
-      Collections.singletonMap(producerId2: java.lang.Long, Collections.singletonMap(partition1, Errors.NONE)))
+      util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
     val successfulClientResponse = new ClientResponse(header, null, null,
       time.milliseconds(), time.milliseconds(), false, null, null,
       successfulResponse)
@@ -302,10 +300,10 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(0, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition2))
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
+      util.List.of(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1)),
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1)))).build()
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
+      util.List.of(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition2)))).build()
 
     val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
@@ -372,10 +370,10 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition2))
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
+      util.List.of(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1)),
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1)))).build()
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
+      util.List.of(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition2)))).build()
 
     val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())

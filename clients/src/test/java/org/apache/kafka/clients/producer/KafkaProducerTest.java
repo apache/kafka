@@ -32,6 +32,7 @@ import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.TransactionManager;
+import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -1597,6 +1598,82 @@ public class KafkaProducerTest {
                 producer::prepareTransaction,
                 "prepareTransaction() should fail if 2PC is disabled"
             );
+        }
+    }
+    
+    @Test
+    public void testCompleteTransactionWithMatchingState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
+        when(ctx.sender.isRunning()).thenReturn(true);
+        
+        // Create prepared states with matching values
+        long producerId = 12345L;
+        short epoch = 5;
+        PreparedTxnState currentState = new PreparedTxnState(producerId, epoch);
+        PreparedTxnState inputState = new PreparedTxnState(producerId, epoch);
+        
+        // Set up the transaction manager to return the prepared state
+        when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentState);
+        
+        // Should trigger commit when states match
+        TransactionalRequestResult commitResult = mock(TransactionalRequestResult.class);
+        when(ctx.transactionManager.beginCommit()).thenReturn(commitResult);
+        
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Call completeTransaction with the matching state
+            producer.completeTransaction(inputState);
+            
+            // Verify methods called in order
+            verify(ctx.transactionManager).isPrepared();
+            verify(ctx.transactionManager).preparedTransactionState();
+            verify(ctx.transactionManager).beginCommit();
+            
+            // Verify abort was never called
+            verify(ctx.transactionManager, never()).beginAbort();
+            
+            // Verify sender was woken up
+            verify(ctx.sender).wakeup();
+        }
+    }
+    
+    @Test
+    public void testCompleteTransactionWithNonMatchingState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
+        when(ctx.sender.isRunning()).thenReturn(true);
+        
+        // Create txn prepared states with different values
+        long producerId = 12345L;
+        short epoch = 5;
+        PreparedTxnState currentState = new PreparedTxnState(producerId, epoch);
+        PreparedTxnState inputState = new PreparedTxnState(producerId + 1, epoch);
+        
+        // Set up the transaction manager to return the prepared state
+        when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentState);
+        
+        // Should trigger abort when states don't match
+        TransactionalRequestResult abortResult = mock(TransactionalRequestResult.class);
+        when(ctx.transactionManager.beginAbort()).thenReturn(abortResult);
+        
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Call completeTransaction with the non-matching state
+            producer.completeTransaction(inputState);
+            
+            // Verify methods called in order
+            verify(ctx.transactionManager).isPrepared();
+            verify(ctx.transactionManager).preparedTransactionState();
+            verify(ctx.transactionManager).beginAbort();
+            
+            // Verify commit was never called
+            verify(ctx.transactionManager, never()).beginCommit();
+            
+            // Verify sender was woken up
+            verify(ctx.sender).wakeup();
         }
     }
     

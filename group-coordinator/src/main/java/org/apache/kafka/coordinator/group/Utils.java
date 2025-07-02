@@ -281,6 +281,22 @@ public class Utils {
     }
 
     /**
+     * Throws an InvalidRequestException if the value is not null and non-empty.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNotNullOrEmpty(
+        Collection<?> value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null && !value.isEmpty()) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
      * Throws an InvalidRequestException if the value is non-null.
      *
      * @param value The value.
@@ -348,7 +364,7 @@ public class Utils {
      * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
      * @return The hash of the group.
      */
-    static long computeGroupHash(Map<String, Long> topicHashes) {
+    public static long computeGroupHash(Map<String, Long> topicHashes) {
         if (topicHashes.isEmpty()) {
             return 0;
         }
@@ -386,7 +402,7 @@ public class Utils {
      * @param metadataImage The cluster image.
      * @return The hash of the topic.
      */
-    static long computeTopicHash(String topicName, MetadataImage metadataImage) {
+    public static long computeTopicHash(String topicName, MetadataImage metadataImage) {
         TopicImage topicImage = metadataImage.topics().getTopic(topicName);
         if (topicImage == null) {
             return 0;

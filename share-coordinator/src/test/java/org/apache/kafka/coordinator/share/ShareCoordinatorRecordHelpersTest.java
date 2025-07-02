@@ -84,7 +84,7 @@ public class ShareCoordinatorRecordHelpersTest {
         Uuid topicId = Uuid.randomUuid();
         int partitionId = 1;
         PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
-        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
+        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareUpdateRecord(
             groupId,
             topicId,
             partitionId,
