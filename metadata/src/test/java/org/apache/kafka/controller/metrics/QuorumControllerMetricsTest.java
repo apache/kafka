@@ -26,8 +26,6 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -44,7 +42,7 @@ public class QuorumControllerMetricsTest {
                     time,
                     9000)) {
                 metrics.addTimeSinceLastHeartbeatMetric(1);
-                HashSet<String> expected = new HashSet<>(List.of(
+                Set<String> expected = Set.of(
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
                     "kafka.controller:type=KafkaController,name=ActiveControllerCount",
@@ -57,7 +55,7 @@ public class QuorumControllerMetricsTest {
                     "kafka.controller:type=KafkaController,name=NewActiveControllersCount",
                     "kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount",
                     "kafka.controller:type=KafkaController,name=TimeSinceLastHeartbeatReceivedMs,broker=1"
-                ));
+                );
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller", expected);
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller",
@@ -179,6 +177,8 @@ public class QuorumControllerMetricsTest {
             metrics.updateBrokerContactTime(brokerId);
             time.sleep(1000);
             assertEquals(1000, timeSinceLastHeartbeatReceivedMs.value());
+            metrics.updateBrokerContactTime(brokerId);
+            assertEquals(0, timeSinceLastHeartbeatReceivedMs.value());
             time.sleep(100000);
             assertEquals(sessionTimeoutMs, timeSinceLastHeartbeatReceivedMs.value());
             metrics.removeTimeSinceLastHeartbeatMetrics();

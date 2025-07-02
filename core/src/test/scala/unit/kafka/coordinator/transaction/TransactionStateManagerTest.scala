@@ -18,8 +18,8 @@ package kafka.coordinator.transaction
 
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
+import java.util
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
-import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
 import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
@@ -50,7 +50,6 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{atLeastOnce, mock, reset, times, verify, when}
 
-import java.util.Collections
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -73,7 +72,7 @@ class TransactionStateManagerTest {
   when(metadataCache.features()).thenReturn {
     new FinalizedFeatures(
       MetadataVersion.latestTesting(),
-      Collections.singletonMap(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
+      util.Map.of(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
       0)
   }
   
@@ -758,7 +757,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -803,7 +801,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -847,7 +844,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any())
@@ -901,7 +897,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -1118,7 +1113,6 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -1271,7 +1265,6 @@ class TransactionStateManagerTest {
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicIdPartition, MemoryRecords]],
       capturedArgument.capture(),
-      any[Option[ReentrantLock]],
       any(),
       any(),
       any()
@@ -1361,7 +1354,7 @@ class TransactionStateManagerTest {
     when(metadataCache.features()).thenReturn {
       new FinalizedFeatures(
         MetadataVersion.latestTesting(),
-        Collections.singletonMap(TransactionVersion.FEATURE_NAME, transactionVersion.featureLevel()),
+        util.Map.of(TransactionVersion.FEATURE_NAME, transactionVersion.featureLevel()),
         0)
     }
     val transactionManager = new TransactionStateManager(0, scheduler,

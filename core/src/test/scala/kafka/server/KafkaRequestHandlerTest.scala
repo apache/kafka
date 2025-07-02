@@ -40,7 +40,6 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
@@ -56,7 +55,7 @@ class KafkaRequestHandlerTest {
   def testCallbackTiming(): Unit = {
     val time = new MockTime()
     val startTime = time.nanoseconds()
-    val metrics = new RequestChannelMetrics(Collections.emptySet[ApiKeys])
+    val metrics = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
     val requestChannel = new RequestChannel(10, time, metrics)
     val apiHandler = mock(classOf[ApiRequestHandler])
     try {

@@ -328,7 +328,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager internalTopicManager =
                 new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
         try {
-            final Set<String> topic1set = new HashSet<>(Collections.singletonList(topic1));
+            final Set<String> topic1set = Set.of(topic1);
             internalTopicManager.getTopicPartitionInfo(topic1set, null);
 
         } catch (final TimeoutException expected) {
@@ -338,7 +338,7 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(1);
 
         try {
-            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
+            final Set<String> topic2set = Set.of(topic2);
             internalTopicManager.getTopicPartitionInfo(topic2set, null);
 
         } catch (final TimeoutException expected) {
@@ -353,7 +353,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager internalTopicManager =
                 new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
         try {
-            final Set<String> topic1set = new HashSet<>(Collections.singletonList(topic1));
+            final Set<String> topic1set = Set.of(topic1);
             final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
 
             internalTopicManager.getNumPartitions(topic1set, topic2set);
@@ -365,7 +365,7 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(1);
 
         try {
-            final Set<String> topic1set = new HashSet<>(Collections.singletonList(topic1));
+            final Set<String> topic1set = Set.of(topic1);
             final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
 
             internalTopicManager.getNumPartitions(topic1set, topic2set);

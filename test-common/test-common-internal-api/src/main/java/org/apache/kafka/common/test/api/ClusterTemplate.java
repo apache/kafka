@@ -44,7 +44,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  * Usage looks something like this:
  * <pre>{@code
  * private static List<ClusterConfig> generator() {
- *     return Collections.singletonList(ClusterConfig.defaultBuilder().build());
+ *     return List.of(ClusterConfig.defaultBuilder().build());
  * }
  *
  * @ClusterTemplate("generator")

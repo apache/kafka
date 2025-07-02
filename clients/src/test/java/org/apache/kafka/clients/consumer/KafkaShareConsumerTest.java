@@ -166,9 +166,9 @@ public class KafkaShareConsumerTest {
                 return request.data().groupId().equals(groupId) &&
                     request.data().shareSessionEpoch() == 0 &&
                     request.data().batchSize() == batchSize &&
-                    request.data().topics().get(0).topicId().equals(topicId1) &&
-                    request.data().topics().get(0).partitions().size() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
+                    request.data().topics().stream().findFirst().get().topicId().equals(topicId1) &&
+                    request.data().topics().stream().findFirst().get().partitions().size() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().isEmpty();
             } else {
                 return false;
             }
@@ -180,10 +180,10 @@ public class KafkaShareConsumerTest {
                 ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
                 return request.data().groupId().equals(groupId) &&
                     request.data().shareSessionEpoch() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).firstOffset() == 0 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).lastOffset() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().size() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().get(0) == (byte) 1;
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).firstOffset() == 0 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).lastOffset() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).acknowledgeTypes().size() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).acknowledgeTypes().get(0) == (byte) 1;
             } else {
                 return false;
             }
@@ -243,9 +243,9 @@ public class KafkaShareConsumerTest {
                 return request.data().groupId().equals(groupId) &&
                     request.data().shareSessionEpoch() == 0 &&
                     request.data().batchSize() == batchSize &&
-                    request.data().topics().get(0).topicId().equals(topicId1) &&
-                    request.data().topics().get(0).partitions().size() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
+                    request.data().topics().stream().findFirst().get().topicId().equals(topicId1) &&
+                    request.data().topics().stream().findFirst().get().partitions().size() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().isEmpty();
             } else {
                 return false;
             }
@@ -411,7 +411,7 @@ public class KafkaShareConsumerTest {
             .setPartitions(List.of(partData));
         return new ShareAcknowledgeResponse(
             new ShareAcknowledgeResponseData()
-                .setResponses(List.of(topicResponse))
+                .setResponses(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection(List.of(topicResponse).iterator()))
         );
     }
 }
