@@ -1680,30 +1680,30 @@ public class GroupCoordinatorService implements GroupCoordinator {
         List<ReadShareGroupStateSummaryRequestData.ReadStateSummaryData> readStateSummaryData = new ArrayList<>(requestData.topics().size());
         List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList = new ArrayList<>(requestData.topics().size());
         requestData.topics().forEach(topic -> {
-            metadataImage.topicId(topic.topicName()).ifPresentOrElse(
-                topicId -> {
-                    requestTopicIdToNameMapping.put(topicId, topic.topicName());
-                    readStateSummaryData.add(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
-                        .setTopicId(topicId)
-                        .setPartitions(
-                            topic.partitions().stream().map(
-                                partitionIndex -> new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partitionIndex)
-                            ).toList()
-                        ));
-                },
-                () -> {
-                    // If the topic does not exist, the start offset is returned as -1 (uninitialized offset).
-                    // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
-                    // It's treated as absence of data, rather than an error, unlike TOPIC_AUTHORIZATION_ERROR for example.
-                    describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
-                        .setTopicName(topic.topicName())
-                        .setTopicId(Uuid.ZERO_UUID)
-                        .setPartitions(topic.partitions().stream().map(
-                            partition -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                .setPartitionIndex(partition)
-                                .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
-                        ).toList()));
-                });
+            Optional<Uuid> topicIdOpt = metadataImage.topicId(topic.topicName());
+            if (topicIdOpt.isPresent()) {
+                var topicId = topicIdOpt.get();
+                requestTopicIdToNameMapping.put(topicId, topic.topicName());
+                readStateSummaryData.add(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                    .setTopicId(topicId)
+                    .setPartitions(
+                        topic.partitions().stream().map(
+                            partitionIndex -> new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partitionIndex)
+                        ).toList()
+                    ));
+            } else {
+                // If the topic does not exist, the start offset is returned as -1 (uninitialized offset).
+                // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
+                // It's treated as absence of data, rather than an error, unlike TOPIC_AUTHORIZATION_ERROR for example.
+                describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                    .setTopicName(topic.topicName())
+                    .setTopicId(Uuid.ZERO_UUID)
+                    .setPartitions(topic.partitions().stream().map(
+                        partition -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                            .setPartitionIndex(partition)
+                            .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
+                    ).toList()));
+            }
         });
 
         // If the request for the persister is empty, just complete the operation right away.

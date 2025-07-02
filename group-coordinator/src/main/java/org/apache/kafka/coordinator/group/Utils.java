@@ -137,7 +137,7 @@ public class Utils {
      * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
      *
      * @param assignment    The map to convert.
-     * @param image   The GroupCoordinatorMetadataImage.
+     * @param image   The CoordinatorMetadataImage.
      * @return The converted ConsumerProtocolAssignment.
      */
     public static ConsumerProtocolAssignment toConsumerProtocolAssignment(

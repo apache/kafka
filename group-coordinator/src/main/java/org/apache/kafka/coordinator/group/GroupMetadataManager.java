@@ -487,7 +487,7 @@ public class GroupMetadataManager {
     /**
      * The cache for topic hash value by topic name.
      * A topic hash is calculated when there is a group subscribes to it.
-     * A topic hash is removed when it's updated in GroupCoordinatorMetadataImage or there is no group subscribes to it.
+     * A topic hash is removed when it's updated in CoordinatorMetadataImage or there is no group subscribes to it.
      */
     private final Map<String, Long> topicHashCache;
 
@@ -8047,51 +8047,50 @@ public class GroupMetadataManager {
         Set<Uuid> deletingTopics = new HashSet<>(currentMap.deletingTopics());
 
         requestData.topics().forEach(topic -> {
-            metadataImage.topicMetadata(topic.topicName()).ifPresentOrElse(
-                topicMetadata -> {
-                    Uuid topicId = topicMetadata.id();
-                    // A deleteState request to persister should only be sent with those topic partitions for which corresponding
-                    // share partitions are initialized for the group.
-                    if (initializedTopics.containsKey(topicId)) {
-                        List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                        initializedTopics.get(topicId).partitions().forEach(partition ->
-                            partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
-                        deleteShareGroupStateRequestTopicsData.add(
-                            new DeleteShareGroupStateRequestData.DeleteStateData()
-                                .setTopicId(topicId)
-                                .setPartitions(partitions)
-                        );
-                        // Removing the topic from initializedTopics map.
-                        initializedTopics.remove(topicId);
-                        // Adding the topic to deletingTopics map.
-                        deletingTopics.add(topicId);
-                    } else if (deletingTopics.contains(topicId)) {
-                        // If the topic for which delete share group offsets request is sent is already present in the deletingTopics set,
-                        // we will include that topic in the delete share group state request.
-                        List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                        IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toSet()).forEach(partition ->
-                            partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
-                        deleteShareGroupStateRequestTopicsData.add(
-                            new DeleteShareGroupStateRequestData.DeleteStateData()
-                                .setTopicId(topicId)
-                                .setPartitions(partitions)
-                        );
-                    } else {
-                        errorTopicResponseList.add(
-                            new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
-                                .setTopicName(topic.topicName())
-                                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                                .setErrorMessage("There is no offset information to delete."));
-                    }
-                },
-                () -> {
-                    errorTopicResponseList.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
-                        .setTopicName(topic.topicName())
-                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                        .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+            Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOpt = metadataImage.topicMetadata(topic.topicName());
+            if (topicMetadataOpt.isPresent()) {
+                var topicMetadata = topicMetadataOpt.get();
+                Uuid topicId = topicMetadata.id();
+                // A deleteState request to persister should only be sent with those topic partitions for which corresponding
+                // share partitions are initialized for the group.
+                if (initializedTopics.containsKey(topicId)) {
+                    List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
+                    initializedTopics.get(topicId).partitions().forEach(partition ->
+                        partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
+                    deleteShareGroupStateRequestTopicsData.add(
+                        new DeleteShareGroupStateRequestData.DeleteStateData()
+                            .setTopicId(topicId)
+                            .setPartitions(partitions)
                     );
+                    // Removing the topic from initializedTopics map.
+                    initializedTopics.remove(topicId);
+                    // Adding the topic to deletingTopics map.
+                    deletingTopics.add(topicId);
+                } else if (deletingTopics.contains(topicId)) {
+                    // If the topic for which delete share group offsets request is sent is already present in the deletingTopics set,
+                    // we will include that topic in the delete share group state request.
+                    List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
+                    IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toSet()).forEach(partition ->
+                        partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
+                    deleteShareGroupStateRequestTopicsData.add(
+                        new DeleteShareGroupStateRequestData.DeleteStateData()
+                            .setTopicId(topicId)
+                            .setPartitions(partitions)
+                    );
+                } else {
+                    errorTopicResponseList.add(
+                        new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                            .setTopicName(topic.topicName())
+                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                            .setErrorMessage("There is no offset information to delete."));
                 }
-            );
+            } else {
+                errorTopicResponseList.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(topic.topicName())
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                );
+            }
         });
 
         records.add(
@@ -8119,58 +8118,57 @@ public class GroupMetadataManager {
         Map<Uuid, Map<Integer, Long>> offsetByTopicPartitions = new HashMap<>();
 
         alterShareGroupOffsetsRequest.topics().forEach(topic -> {
-            metadataImage.topicMetadata(topic.topicName()).ifPresentOrElse(
-                topicMetadata -> {
-                    Uuid topicId = topicMetadata.id();
-                    Set<Integer> existingPartitions = IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toSet());
-                    List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition> partitions = new ArrayList<>();
-                    topic.partitions().forEach(partition -> {
-                        if (existingPartitions.contains(partition.partitionIndex())) {
-                            partitions.add(
-                                new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                                    .setPartitionIndex(partition.partitionIndex())
-                                    .setErrorCode(Errors.NONE.code()));
-                            offsetByTopicPartitions.computeIfAbsent(topicId, k -> new HashMap<>()).put(partition.partitionIndex(), partition.startOffset());
-                        } else {
-                            partitions.add(
-                                new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                                    .setPartitionIndex(partition.partitionIndex())
-                                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
-                        }
-                    });
+            Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOpt = metadataImage.topicMetadata(topic.topicName());
+            if (topicMetadataOpt.isPresent()) {
+                var topicMetadata = topicMetadataOpt.get();
+                Uuid topicId = topicMetadata.id();
+                Set<Integer> existingPartitions = IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toSet());
+                List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition> partitions = new ArrayList<>();
+                topic.partitions().forEach(partition -> {
+                    if (existingPartitions.contains(partition.partitionIndex())) {
+                        partitions.add(
+                            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(Errors.NONE.code()));
+                        offsetByTopicPartitions.computeIfAbsent(topicId, k -> new HashMap<>()).put(partition.partitionIndex(), partition.startOffset());
+                    } else {
+                        partitions.add(
+                            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                                .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
+                    }
+                });
 
-                    initializingTopics.put(topicId, new InitMapValue(
-                        topic.topicName(),
-                        topic.partitions().stream()
-                            .map(AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition::partitionIndex)
-                            .filter(existingPartitions::contains)
-                            .collect(Collectors.toSet()),
-                        currentTimeMs
-                    ));
+                initializingTopics.put(topicId, new InitMapValue(
+                    topic.topicName(),
+                    topic.partitions().stream()
+                        .map(AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition::partitionIndex)
+                        .filter(existingPartitions::contains)
+                        .collect(Collectors.toSet()),
+                    currentTimeMs
+                ));
 
-                    alterShareGroupOffsetsResponseTopics.add(
-                        new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                            .setTopicName(topic.topicName())
-                            .setTopicId(topicId)
-                            .setPartitions(partitions)
-                    );
+                alterShareGroupOffsetsResponseTopics.add(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName())
+                        .setTopicId(topicId)
+                        .setPartitions(partitions)
+                );
 
-                },
-                () -> {
-                    List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition> partitions = new ArrayList<>();
-                    topic.partitions().forEach(partition -> partitions.add(
-                        new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partition.partitionIndex())
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())));
-                    alterShareGroupOffsetsResponseTopics.add(
-                        new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                            .setTopicName(topic.topicName())
-                            .setPartitions(partitions)
-                    );
-                }
-            );
+            } else {
+                List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition> partitions = new ArrayList<>();
+                topic.partitions().forEach(partition -> partitions.add(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                        .setPartitionIndex(partition.partitionIndex())
+                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                        .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())));
+                alterShareGroupOffsetsResponseTopics.add(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName())
+                        .setPartitions(partitions)
+                );
+            }
         });
 
         addInitializingTopicsRecords(groupId, records, initializingTopics);
