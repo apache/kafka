@@ -22,7 +22,6 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -202,11 +201,11 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             .describedAs("regex")
             .ofType(String.class);
 
-        allGroupSelectionScopeOpts = new HashSet<>(List.of(groupOpt, allGroupsOpt));
-        allConsumerGroupLevelOpts = new HashSet<>(List.of(listOpt, describeOpt, deleteOpt, resetOffsetsOpt));
-        allResetOffsetScenarioOpts = new HashSet<>(List.of(resetToOffsetOpt, resetShiftByOpt,
-            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt));
-        allDeleteOffsetsOpts = new HashSet<>(List.of(groupOpt, topicOpt));
+        allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
+        allConsumerGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt, resetOffsetsOpt);
+        allResetOffsetScenarioOpts = Set.of(resetToOffsetOpt, resetShiftByOpt,
+            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt);
+        allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
 
         options = parser.parse(args);
     }

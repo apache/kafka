@@ -22,7 +22,6 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -199,12 +198,12 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         exportOpt = parser.accepts("export", EXPORT_DOC);
         options = parser.parse(args);
 
-        allResetOffsetScenarioOpts = new HashSet<>(List.of(resetToOffsetOpt, resetShiftByOpt,
-            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt));
-        allGroupSelectionScopeOpts = new HashSet<>(List.of(groupOpt, allGroupsOpt));
-        allStreamsGroupLevelOpts = new HashSet<>(List.of(listOpt, describeOpt, deleteOpt));
-        allDeleteOffsetsOpts = new HashSet<>(List.of(inputTopicOpt, allInputTopicsOpt));
-        allDeleteInternalGroupsOpts = new HashSet<>(List.of(resetOffsetsOpt, deleteOpt));
+        allResetOffsetScenarioOpts = Set.of(resetToOffsetOpt, resetShiftByOpt,
+            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt);
+        allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
+        allStreamsGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt);
+        allDeleteOffsetsOpts = Set.of(inputTopicOpt, allInputTopicsOpt);
+        allDeleteInternalGroupsOpts = Set.of(resetOffsetsOpt, deleteOpt);
     }
 
     @SuppressWarnings("NPathComplexity")

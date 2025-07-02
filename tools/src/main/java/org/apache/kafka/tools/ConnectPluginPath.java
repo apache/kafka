@@ -322,7 +322,7 @@ public class ConnectPluginPath {
             rowAliases.add(PluginUtils.prunedName(pluginDesc));
             rows.add(newRow(workspace, pluginDesc.className(), new ArrayList<>(rowAliases), pluginDesc.type(), pluginDesc.version(), true));
             // If a corresponding manifest exists, mark it as loadable by removing it from the map.
-            nonLoadableManifests.getOrDefault(pluginDesc.className(), Set.of()).remove(pluginDesc.type());
+            nonLoadableManifests.getOrDefault(pluginDesc.className(), new HashSet<>()).remove(pluginDesc.type());
         });
         nonLoadableManifests.forEach((className, types) -> types.forEach(type -> {
             // All manifests which remain in the map are not loadable
