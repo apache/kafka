@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWriter}
+import kafka.coordinator.group.CoordinatorPartitionWriter
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.network.SocketServer
@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
+import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
@@ -68,6 +68,7 @@ import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, Ti
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
+import scala.jdk.javaapi.OptionConverters.toJava
 
 
 /**
@@ -618,7 +619,8 @@ class BrokerServer(
     )
     val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
       time,
-      replicaManager,
+      tp => toJava(replicaManager.getLog(tp)),
+      tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
       config.groupCoordinatorConfig.offsetsLoadBufferSize
     )
@@ -648,7 +650,8 @@ class BrokerServer(
     val serde = new ShareCoordinatorRecordSerde
     val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
       time,
-      replicaManager,
+      tp => toJava(replicaManager.getLog(tp)),
+      tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
       config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
     )

@@ -1660,9 +1660,11 @@ project(':coordinator-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.hdrHistogram
+    implementation libs.scalaLibrary
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':core')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
