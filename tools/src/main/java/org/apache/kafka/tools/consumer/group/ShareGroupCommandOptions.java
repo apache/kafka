@@ -22,7 +22,6 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -144,10 +143,10 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         verboseOpt = parser.accepts("verbose", VERBOSE_DOC)
             .availableIf(describeOpt);
 
-        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
-        allShareGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt, resetOffsetsOpt));
-        allResetOffsetScenarioOpts = new HashSet<>(Arrays.asList(resetToDatetimeOpt, resetToEarliestOpt, resetToLatestOpt));
-        allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(groupOpt, topicOpt));
+        allGroupSelectionScopeOpts = new HashSet<>(List.of(groupOpt, allGroupsOpt));
+        allShareGroupLevelOpts = new HashSet<>(List.of(listOpt, describeOpt, deleteOpt, resetOffsetsOpt));
+        allResetOffsetScenarioOpts = new HashSet<>(List.of(resetToDatetimeOpt, resetToEarliestOpt, resetToLatestOpt));
+        allDeleteOffsetsOpts = new HashSet<>(List.of(groupOpt, topicOpt));
 
         options = parser.parse(args);
     }
@@ -162,7 +161,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
-            List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
+            List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
