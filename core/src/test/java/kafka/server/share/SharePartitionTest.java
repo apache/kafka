@@ -7388,8 +7388,8 @@ public class SharePartitionTest {
         CompletableFuture<WriteShareGroupStateResult> future1 = new CompletableFuture<>();
         CompletableFuture<WriteShareGroupStateResult> future2 = new CompletableFuture<>();
 
-        // Mocking the persister write state RPC to return future 1 when acknowledgement occurs for offsets 0-9.
-        // Mocking the persister write state RPC to return future 2 when acknowledgement occurs for offsets 10-19.
+        // Mocking the persister write state RPC to return future 1 and future 2 when acknowledgement occurs for
+        // offsets 0-9 and 10-19 respectively.
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(future1).thenReturn(future2);
 
         // Acknowledge batch to create ongoing transition.
@@ -7435,8 +7435,8 @@ public class SharePartitionTest {
         CompletableFuture<WriteShareGroupStateResult> future1 = new CompletableFuture<>();
         CompletableFuture<WriteShareGroupStateResult> future2 = new CompletableFuture<>();
 
-        // Mocking the persister write state RPC to return future 1 when acknowledgement occurs for offsets 5-9.
-        // Mocking the persister write state RPC to return future 2 when acknowledgement occurs for offsets 20-24.
+        // Mocking the persister write state RPC to return future 1 and future 2 when acknowledgement occurs for
+        // offsets 5-9 and 20-24 respectively.
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(future1).thenReturn(future2);
 
         // Acknowledge batch to create ongoing transition.

@@ -2088,7 +2088,7 @@ public class SharePartition {
                     state.completeStateTransition(true);
                     // Cancel the acquisition lock timeout task for the state since it is acknowledged/released successfully.
                     state.cancelAndClearAcquisitionLockTimeoutTask();
-                    if (state.state != RecordState.ARCHIVED) {
+                    if (state.state == RecordState.AVAILABLE) {
                         findNextFetchOffset.set(true);
                     }
                 });
