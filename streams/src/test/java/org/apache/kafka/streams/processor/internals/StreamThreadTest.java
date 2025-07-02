@@ -104,8 +104,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -1300,20 +1298,53 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
-    public void shouldOnlyCompleteShutdownAfterRebalanceNotInProgress(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
-        // The state updater is disabled for this test because this test relies on the fact the mainConsumer.resume()
-        // is not called. This is not true when the state updater is enabled which leads to
-        // java.lang.IllegalStateException: No current assignment for partition topic1-2.
-        // Since this tests verifies an aspect that is independent from the state updater, it is OK to disable
-        // the state updater and leave the rewriting of the test to later, when the code path for disabled state updater
-        // is removed.
-        assumeFalse(stateUpdaterEnabled);
+    @ValueSource(booleans = {true, false})
+    public void shouldOnlyCompleteShutdownAfterRebalanceNotInProgress(final boolean processingThreadsEnabled) throws InterruptedException {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        final Time mockTime = new MockTime(1);
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            APPLICATION_ID,
+            PROCESS_ID.toString(),
+            mockTime
+        );
 
-        final Properties props = configProps(true, stateUpdaterEnabled, processingThreadsEnabled);
-        thread =
-            createStreamThread(CLIENT_ID, new StreamsConfig(props), new MockTime(1));
+        lenient().when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final MockConsumerClientSupplier mockClientSupplier = new MockConsumerClientSupplier(consumer);
+        mockClientSupplier.setCluster(createCluster());
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, config),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        thread = StreamThread.create(
+            topologyMetadata,
+            config,
+            mockClientSupplier,
+            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            PROCESS_ID,
+            CLIENT_ID,
+            streamsMetrics,
+            mockTime,
+            streamsMetadataState,
+            0,
+            stateDirectory,
+            new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
+            threadIdx,
+            null,
+            null
+        );
+
+        mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
 
         thread.taskManager().handleRebalanceStart(Collections.singleton(topic1));
 
@@ -1332,6 +1363,13 @@ public class StreamThreadTest {
                 () -> thread.state() == StreamThread.State.STARTING,
                 10 * 1000,
                 "Thread never started.");
+
+        TestUtils.waitForCondition(
+            () -> Thread.getAllStackTraces().keySet().stream()
+                    .map(Thread::getName)
+                    .anyMatch(name -> name.contains("StateUpdater")),
+            10 * 1000,
+            "StateUpdater thread not found.");
 
         thread.shutdown();
 
@@ -1354,8 +1392,8 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
-    public void shouldShutdownTaskManagerOnClose(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    @ValueSource(booleans = {true, false})
+    public void shouldShutdownTaskManagerOnClose(final boolean processingThreadsEnabled) {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
@@ -3390,10 +3428,9 @@ public class StreamThreadTest {
         );
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testNamedTopologyWithStreamsProtocol(final boolean stateUpdaterEnabled) {
-        final Properties props = configProps(false, stateUpdaterEnabled, false);
+    @Test
+    public void testNamedTopologyWithStreamsProtocol() {
+        final Properties props = configProps(false, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
         final StreamsConfig config = new StreamsConfig(props);
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
@@ -3450,10 +3487,9 @@ public class StreamThreadTest {
         assertTrue(thread.streamsRebalanceData().isEmpty());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testStreamsRebalanceDataWithExtraCopartition(final boolean stateUpdaterEnabled) {
-        final Properties props = configProps(false, stateUpdaterEnabled, false);
+    @Test
+    public void testStreamsRebalanceDataWithExtraCopartition() {
+        final Properties props = configProps(false, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
 
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);

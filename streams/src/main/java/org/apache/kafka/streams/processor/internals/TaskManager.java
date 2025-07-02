@@ -385,7 +385,7 @@ public class TaskManager {
         // 3. otherwise, close them since they are no longer owned
         final Map<TaskId, RuntimeException> failedTasks = new LinkedHashMap<>();
 
-        handleTasksWithStateUpdater(
+        handleTasks(
             activeTasksToCreate,
             standbyTasksToCreate,
             tasksToRecycle,
@@ -480,7 +480,7 @@ public class TaskManager {
         }
     }
 
-    private void handleTasksWithStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+    private void handleTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                              final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                              final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                              final Set<Task> tasksToCloseClean,

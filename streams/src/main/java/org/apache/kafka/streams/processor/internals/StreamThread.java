@@ -446,8 +446,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final DefaultTaskManager schedulingTaskManager =
             maybeCreateSchedulingTaskManager(processingThreadsEnabled, topologyMetadata, time, threadId, tasks);
         final StateUpdater stateUpdater =
-            maybeCreateStateUpdater(
-                stateUpdaterEnabled,
+            createStateUpdater(
                 streamsMetrics,
                 config,
                 restoreConsumer,
@@ -621,8 +620,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return null;
     }
 
-    private static StateUpdater maybeCreateStateUpdater(final boolean stateUpdaterEnabled,
-                                                                final StreamsMetricsImpl streamsMetrics,
+    private static StateUpdater createStateUpdater(final StreamsMetricsImpl streamsMetrics,
                                                                 final StreamsConfig streamsConfig,
                                                                 final Consumer<byte[], byte[]> restoreConsumer,
                                                                 final ChangelogReader changelogReader,
@@ -630,20 +628,16 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                                 final Time time,
                                                                 final String clientId,
                                                                 final int threadIdx) {
-        if (stateUpdaterEnabled) {
-            final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
-            return new DefaultStateUpdater(
-                name,
-                streamsMetrics.metricsRegistry(),
-                streamsConfig,
-                restoreConsumer,
-                changelogReader,
-                topologyMetadata,
-                time
-            );
-        } else {
-            return null;
-        }
+        final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
+        return new DefaultStateUpdater(
+            name,
+            streamsMetrics.metricsRegistry(),
+            streamsConfig,
+            restoreConsumer,
+            changelogReader,
+            topologyMetadata,
+            time
+        );
     }
 
     private static Optional<StreamsRebalanceData.HostInfo> parseHostInfo(final String endpoint) {
@@ -868,9 +862,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         boolean cleanRun = false;
         try {
-            if (stateUpdaterEnabled) {
-                taskManager.init();
-            }
+            taskManager.init();
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
