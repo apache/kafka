@@ -24,8 +24,6 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.util
 
-import scala.jdk.CollectionConverters._
-
 object AssignmentStateTest {
   import AbstractPartitionTest._
 
