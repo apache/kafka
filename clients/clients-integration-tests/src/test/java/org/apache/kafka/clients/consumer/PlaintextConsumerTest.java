@@ -1323,13 +1323,11 @@ public class PlaintextConsumerTest {
              Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)
         ) {
             Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
-            var i = 0;
-            for (var part = 0; part < numPartitions; part++) {
+            for (int part = 0, i = 0; part < numPartitions; part++, i++) {
                 var tp = new TopicPartition(TOPIC, part);
                 // key, val, and timestamp equal to the sequence number.
                 sendRecords(producer, tp, 100, 0);
                 timestampsToSearch.put(tp, i * 20L);
-                i++;
             }
             // Test negative target time
             assertThrows(IllegalArgumentException.class, () -> consumer.offsetsForTimes(Map.of(TP, -1L)));
