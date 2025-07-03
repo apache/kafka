@@ -55,6 +55,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -393,11 +394,14 @@ public class KafkaRaftLog implements RaftLog {
                     snapshots.put(snapshotId, Optional.of(fileReader));
                     return Optional.of(fileReader);
                 } catch (UncheckedIOException e) {
-                    // Snapshot doesn't exist in the data dir; remove
-                    Path path = Snapshots.snapshotPath(log.dir().toPath(), snapshotId);
-                    logger.warn("Couldn't read {}; expected to find snapshot file {}", snapshotId, path);
-                    snapshots.remove(snapshotId);
-                    return Optional.empty();
+                    if (e.getCause() instanceof NoSuchFileException) {
+                        // Snapshot doesn't exist in the data dir; remove
+                        Path path = Snapshots.snapshotPath(log.dir().toPath(), snapshotId);
+                        logger.warn("Couldn't read {}; expected to find snapshot file {}", snapshotId, path);
+                        snapshots.remove(snapshotId);
+                        return Optional.empty();
+                    }
+                    throw e;
                 }
             }
         }

@@ -427,6 +427,14 @@ public class KafkaRaftLogTest {
     }
 
     @Test
+    public void testReadMissingSnapshotFile() throws IOException {
+        KafkaRaftLog log = buildMetadataLog(tempDir, mockTime);
+        OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10, 0);
+        log.onSnapshotFrozen(offsetAndEpoch);
+        assertEquals(Optional.empty(), log.readSnapshot(offsetAndEpoch));
+    }
+
+    @Test
     public void testDeleteNonExistentSnapshot() throws IOException {
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime);
         int offset = 10;
