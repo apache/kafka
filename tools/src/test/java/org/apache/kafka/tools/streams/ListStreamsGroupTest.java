@@ -42,10 +42,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -133,7 +133,7 @@ public class ListStreamsGroupTest {
             final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
 
             TestUtils.waitForCondition(() -> {
-                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Collections.emptySet())));
+                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
@@ -153,18 +153,18 @@ public class ListStreamsGroupTest {
             final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
 
             TestUtils.waitForCondition(() -> {
-                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Collections.emptySet())));
+                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
 
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"})) {
-            Set<GroupListing> expectedListing = Collections.emptySet();
+            Set<GroupListing> expectedListing = Set.of();
 
             final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
 
             TestUtils.waitForCondition(() -> {
-                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Collections.singleton(GroupState.PREPARING_REBALANCE))));
+                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.PREPARING_REBALANCE))));
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
@@ -174,8 +174,8 @@ public class ListStreamsGroupTest {
     public void testListStreamsGroupOutput() throws Exception {
         validateListOutput(
             Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--list"),
-            Collections.emptyList(),
-            Set.of(Collections.singletonList(APP_ID))
+            List.of(),
+            Set.of(List.of(APP_ID))
         );
 
         validateListOutput(
@@ -212,7 +212,7 @@ public class ListStreamsGroupTest {
         StreamsGroupCommandOptions opts = StreamsGroupCommandOptions.fromArgs(args);
         return new StreamsGroupCommand.StreamsGroupService(
             opts,
-            Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+            Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
     }
 

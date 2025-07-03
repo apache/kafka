@@ -100,10 +100,10 @@ public class DescribeStreamsGroupTest {
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "0"));
 
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--group", APP_ID), expectedHeader, expectedRows, List.of());
         // --describe --offsets has the same output as --describe
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--offsets", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--offsets", "--group", APP_ID), expectedHeader, expectedRows, List.of());
     }
 
     @Test
@@ -116,35 +116,35 @@ public class DescribeStreamsGroupTest {
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "-", "-", "0", "0"));
 
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, List.of());
         // --describe --offsets has the same output as --describe
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--offsets", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--offsets", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, List.of());
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--offsets", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--offsets", "--group", APP_ID), expectedHeader, expectedRows, List.of());
     }
 
     @Test
     public void testDescribeStreamsGroupWithStateOption() throws Exception {
-        final List<String> expectedHeader = Arrays.asList("GROUP", "COORDINATOR", "(ID)", "STATE", "#MEMBERS");
-        final Set<List<String>> expectedRows = Set.of(Arrays.asList(APP_ID, "", "", "Stable", "2"));
+        final List<String> expectedHeader = List.of("GROUP", "COORDINATOR", "(ID)", "STATE", "#MEMBERS");
+        final Set<List<String>> expectedRows = Set.of(List.of(APP_ID, "", "", "Stable", "2"));
         // The coordinator is not deterministic, so we don't care about it.
         final List<Integer> dontCares = List.of(1, 2);
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--state", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--state", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
     }
 
     @Test
     public void testDescribeStreamsGroupWithStateAndVerboseOptions() throws Exception {
-        final List<String> expectedHeader = Arrays.asList("GROUP", "COORDINATOR", "(ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-        final Set<List<String>> expectedRows = Set.of(Arrays.asList(APP_ID, "", "", "Stable", "3", "3", "2"));
+        final List<String> expectedHeader = List.of("GROUP", "COORDINATOR", "(ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
+        final Set<List<String>> expectedRows = Set.of(List.of(APP_ID, "", "", "Stable", "3", "3", "2"));
         // The coordinator is not deterministic, so we don't care about it.
         final List<Integer> dontCares = List.of(1, 2);
 
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--state", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--state", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--state", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--state", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
     }
 
     @Test
@@ -157,7 +157,7 @@ public class DescribeStreamsGroupTest {
         final List<Integer> dontCares = List.of(1, 2, 3);
 
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
     }
 
     @Test
@@ -170,15 +170,15 @@ public class DescribeStreamsGroupTest {
         final List<Integer> dontCares = List.of(3, 6, 7);
 
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
     }
 
     private static Topology topology() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
-            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .flatMapValues(value -> List.of(value.toLowerCase(Locale.getDefault()).split("\\W+")))
             .groupBy((key, value) -> value)
             .count()
             .toStream().to(OUTPUT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
@@ -208,11 +208,11 @@ public class DescribeStreamsGroupTest {
             if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
             if (lines.length == 0) return false;
-            List<String> header = Arrays.asList(lines[0].split("\\s+"));
+            List<String> header = List.of(lines[0].split("\\s+"));
             if (!expectedHeader.equals(header)) return false;
 
             Set<List<String>> groupDesc = Arrays.stream(Arrays.copyOfRange(lines, 1, lines.length))
-                .map(line -> Arrays.asList(line.split("\\s+")))
+                .map(line -> List.of(line.split("\\s+")))
                 .collect(Collectors.toSet());
             if (groupDesc.size() != expectedRows.size()) return false;
             // clear the dontCare fields and then compare two sets
