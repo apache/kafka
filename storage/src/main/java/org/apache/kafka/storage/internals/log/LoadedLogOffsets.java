@@ -28,29 +28,6 @@ public record LoadedLogOffsets(long logStartOffset, long recoveryPoint, LogOffse
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-
-        final LoadedLogOffsets that = (LoadedLogOffsets) o;
-        return logStartOffset == that.logStartOffset
-                && recoveryPoint == that.recoveryPoint
-                && nextOffsetMetadata.equals(that.nextOffsetMetadata);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = Long.hashCode(logStartOffset);
-        result = 31 * result + Long.hashCode(recoveryPoint);
-        result = 31 * result + nextOffsetMetadata.hashCode();
-        return result;
-    }
-
-    @Override
     public String toString() {
         return "LoadedLogOffsets(" +
                 "logStartOffset=" + logStartOffset +

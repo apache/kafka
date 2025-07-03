@@ -29,22 +29,6 @@ public record LastRecord(OptionalLong lastDataOffset, short producerEpoch) {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        LastRecord that = (LastRecord) o;
-
-        return producerEpoch == that.producerEpoch &&
-                lastDataOffset.equals(that.lastDataOffset);
-    }
-
-    @Override
-    public int hashCode() {
-        return 31 * lastDataOffset.hashCode() + producerEpoch;
-    }
-
-    @Override
     public String toString() {
         return "LastRecord(" +
                 "lastDataOffset=" + lastDataOffset +

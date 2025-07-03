@@ -36,9 +36,9 @@ import java.util.Iterator;
 
 /**
  * @param <R1> The type of records used to formulate the expectations.
- * @param <R2></R2> The type of records compared against the expectations.
- * @param <K></K> The type of the record keys.
- * @param <V></V> The type of the record values.
+ * @param <R2> The type of records compared against the expectations.
+ * @param <K> The type of the record keys.
+ * @param <V> The type of the record values.
  */
 public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosingMatcher<Collection<R2>> {
 

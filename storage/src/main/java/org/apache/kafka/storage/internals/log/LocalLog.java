@@ -752,7 +752,7 @@ public class LocalLog {
             throw new KafkaException("dir should not be null");
         }
         String dirName = dir.getName();
-        if (dirName.isEmpty() || !dirName.contains("-")) {
+        if (!dirName.contains("-")) {
             throw exception(dir);
         }
         if (dirName.endsWith(DELETE_DIR_SUFFIX) && !DELETE_DIR_PATTERN.matcher(dirName).matches() ||
