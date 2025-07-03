@@ -53,7 +53,7 @@ public class KafkaRaftClientClusterAuthTest {
 
         context.pollUntilRequest();
 
-        RaftRequest.Outbound request = context.assertSentFetchRequest(epoch, 0, 0);
+        RaftRequest.Outbound request = context.assertSentFetchRequest(epoch, 0, 0, context.client.highWatermark());
         FetchResponseData response = new FetchResponseData()
                 .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
         context.deliverResponse(

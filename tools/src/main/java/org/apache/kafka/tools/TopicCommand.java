@@ -189,7 +189,7 @@ public abstract class TopicCommand {
 
     }
 
-    private static Integer getReplicationFactor(TopicPartitionInfo tpi, PartitionReassignment reassignment) {
+    private static int getReplicationFactor(TopicPartitionInfo tpi, PartitionReassignment reassignment) {
         return isReassignmentInProgress(tpi, reassignment) ?
             reassignment.replicas().size() - reassignment.addingReplicas().size() :
             tpi.replicas().size();
@@ -204,7 +204,7 @@ public abstract class TopicCommand {
      *                           If set to true, the command will throw an exception if the topic with the
      *                           requested name does not exist.
      */
-    private static void ensureTopicExists(List<String> foundTopics, Optional<String> requestedTopic, Boolean requireTopicExists) {
+    private static void ensureTopicExists(List<String> foundTopics, Optional<String> requestedTopic, boolean requireTopicExists) {
         // If no topic name was mentioned, do not need to throw exception.
         if (requestedTopic.isPresent() && !requestedTopic.get().isEmpty() && requireTopicExists && foundTopics.isEmpty()) {
             // If given topic doesn't exist then throw exception
@@ -212,7 +212,7 @@ public abstract class TopicCommand {
         }
     }
 
-    private static List<String> doGetTopics(List<String> allTopics, Optional<String> topicIncludeList, Boolean excludeInternalTopics) {
+    private static List<String> doGetTopics(List<String> allTopics, Optional<String> topicIncludeList, boolean excludeInternalTopics) {
         if (topicIncludeList.isPresent()) {
             IncludeList topicsFilter = new IncludeList(topicIncludeList.get());
             return allTopics.stream()
@@ -234,7 +234,7 @@ public abstract class TopicCommand {
      *                             If set to true, the command will throw an exception if the topic with the
      *                             requested id does not exist.
      */
-    private static void ensureTopicIdExists(List<Uuid> foundTopicIds, Uuid requestedTopicId, Boolean requireTopicIdExists) {
+    private static void ensureTopicIdExists(List<Uuid> foundTopicIds, Uuid requestedTopicId, boolean requireTopicIdExists) {
         // If no topic id was mentioned, do not need to throw exception.
         if (requestedTopicId != null && requireTopicIdExists && foundTopicIds.isEmpty()) {
             // If given topicId doesn't exist then throw exception
@@ -260,11 +260,11 @@ public abstract class TopicCommand {
             configsToAdd = parseTopicConfigsToBeAdded(options);
         }
 
-        public Boolean hasReplicaAssignment() {
+        public boolean hasReplicaAssignment() {
             return !replicaAssignment.isEmpty();
         }
 
-        public Boolean ifTopicDoesntExist() {
+        public boolean ifTopicDoesntExist() {
             return opts.ifNotExists();
         }
     }
@@ -272,12 +272,12 @@ public abstract class TopicCommand {
     static class TopicDescription {
         private final String topic;
         private final Uuid topicId;
-        private final Integer numPartitions;
-        private final Integer replicationFactor;
+        private final int numPartitions;
+        private final int replicationFactor;
         private final Config config;
-        private final Boolean markedForDeletion;
+        private final boolean markedForDeletion;
 
-        public TopicDescription(String topic, Uuid topicId, Integer numPartitions, Integer replicationFactor, Config config, Boolean markedForDeletion) {
+        public TopicDescription(String topic, Uuid topicId, int numPartitions, int replicationFactor, Config config, boolean markedForDeletion) {
             this.topic = topic;
             this.topicId = topicId;
             this.numPartitions = numPartitions;
@@ -306,13 +306,13 @@ public abstract class TopicCommand {
         private final String topic;
         private final TopicPartitionInfo info;
         private final Config config;
-        private final Boolean markedForDeletion;
+        private final boolean markedForDeletion;
         private final PartitionReassignment reassignment;
 
         PartitionDescription(String topic,
                              TopicPartitionInfo info,
                              Config config,
-                             Boolean markedForDeletion,
+                             boolean markedForDeletion,
                              PartitionReassignment reassignment) {
             this.topic = topic;
             this.info = info;
@@ -321,11 +321,11 @@ public abstract class TopicCommand {
             this.reassignment = reassignment;
         }
 
-        public Integer minIsrCount() {
+        public int minIsrCount() {
             return Integer.parseInt(config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
         }
 
-        public Boolean isUnderReplicated() {
+        public boolean isUnderReplicated() {
             return getReplicationFactor(info, reassignment) - info.isr().size() > 0;
         }
 
@@ -333,15 +333,15 @@ public abstract class TopicCommand {
             return info.leader() != null;
         }
 
-        public Boolean isUnderMinIsr() {
+        public boolean isUnderMinIsr() {
             return !hasLeader() ||  info.isr().size() < minIsrCount();
         }
 
-        public Boolean isAtMinIsrPartitions() {
+        public boolean isAtMinIsrPartitions() {
             return minIsrCount() == info.isr().size();
         }
 
-        public Boolean hasUnavailablePartitions(Set<Integer> liveBrokers) {
+        public boolean hasUnavailablePartitions(Set<Integer> liveBrokers) {
             return !hasLeader() || !liveBrokers.contains(info.leader().id());
         }
 
@@ -519,7 +519,7 @@ public abstract class TopicCommand {
             String topicName) {
             if (topic.hasReplicaAssignment()) {
                 try {
-                    Integer startPartitionId = topicsInfo.get(topicName).get().partitions().size();
+                    int startPartitionId = topicsInfo.get(topicName).get().partitions().size();
                     Map<Integer, List<Integer>> replicaMap = topic.replicaAssignment.entrySet().stream()
                         .skip(startPartitionId)
                         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -552,7 +552,7 @@ public abstract class TopicCommand {
             // If topicId is provided and not zero, will use topicId regardless of topic name
             Optional<Uuid> inputTopicId = opts.topicId()
                 .map(Uuid::fromString).filter(uuid -> !uuid.equals(Uuid.ZERO_UUID));
-            Boolean useTopicId = inputTopicId.isPresent();
+            boolean useTopicId = inputTopicId.isPresent();
 
             List<Uuid> topicIds;
             List<String> topics;
@@ -820,13 +820,13 @@ public abstract class TopicCommand {
                     .ofType(java.lang.Integer.class);
             options = parser.parse(args);
 
-            allTopicLevelOpts = new HashSet<>(Arrays.asList(alterOpt, createOpt, describeOpt, listOpt, deleteOpt));
-            allReplicationReportOpts = new HashSet<>(Arrays.asList(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt));
+            allTopicLevelOpts = Set.of(alterOpt, createOpt, describeOpt, listOpt, deleteOpt);
+            allReplicationReportOpts = Set.of(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt);
 
             checkArgs();
         }
 
-        public Boolean has(OptionSpec<?> builder) {
+        public boolean has(OptionSpec<?> builder) {
             return options.has(builder);
         }
 
@@ -850,23 +850,23 @@ public abstract class TopicCommand {
             return options.has(option) ? Optional.of(options.valuesOf(option)) : Optional.of(defaultValue);
         }
 
-        public Boolean hasCreateOption() {
+        public boolean hasCreateOption() {
             return has(createOpt);
         }
 
-        public Boolean hasAlterOption() {
+        public boolean hasAlterOption() {
             return has(alterOpt);
         }
 
-        public Boolean hasListOption() {
+        public boolean hasListOption() {
             return has(listOpt);
         }
 
-        public Boolean hasDescribeOption() {
+        public boolean hasDescribeOption() {
             return has(describeOpt);
         }
 
-        public Boolean hasDeleteOption() {
+        public boolean hasDeleteOption() {
             return has(deleteOpt);
         }
 
@@ -905,35 +905,35 @@ public abstract class TopicCommand {
                 return Optional.empty();
         }
 
-        public Boolean reportUnderReplicatedPartitions() {
+        public boolean reportUnderReplicatedPartitions() {
             return has(reportUnderReplicatedPartitionsOpt);
         }
 
-        public Boolean reportUnavailablePartitions() {
+        public boolean reportUnavailablePartitions() {
             return has(reportUnavailablePartitionsOpt);
         }
 
-        public Boolean reportUnderMinIsrPartitions() {
+        public boolean reportUnderMinIsrPartitions() {
             return has(reportUnderMinIsrPartitionsOpt);
         }
 
-        public Boolean reportAtMinIsrPartitions() {
+        public boolean reportAtMinIsrPartitions() {
             return has(reportAtMinIsrPartitionsOpt);
         }
 
-        public Boolean reportOverriddenConfigs() {
+        public boolean reportOverriddenConfigs() {
             return has(topicsWithOverridesOpt);
         }
 
-        public Boolean ifExists() {
+        public boolean ifExists() {
             return has(ifExistsOpt);
         }
 
-        public Boolean ifNotExists() {
+        public boolean ifNotExists() {
             return has(ifNotExistsOpt);
         }
 
-        public Boolean excludeInternalTopics() {
+        public boolean excludeInternalTopics() {
             return has(excludeInternalTopicOpt);
         }
 
@@ -980,8 +980,8 @@ public abstract class TopicCommand {
             if (!has(listOpt) && !has(describeOpt))
                 CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
             if (has(alterOpt)) {
-                Set<OptionSpec<?>> usedOptions = new HashSet<>(Arrays.asList(bootstrapServerOpt, configOpt));
-                Set<OptionSpec<?>> invalidOptions = new HashSet<>(Arrays.asList(alterOpt));
+                Set<OptionSpec<?>> usedOptions = Set.of(bootstrapServerOpt, configOpt);
+                Set<OptionSpec<?>> invalidOptions = Set.of(alterOpt);
                 CommandLineUtils.checkInvalidArgsSet(parser, options, usedOptions, invalidOptions, Optional.of(KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS));
                 CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt);
             }

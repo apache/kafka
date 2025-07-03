@@ -47,7 +47,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -95,7 +94,7 @@ public class ShareGroupAssignorBenchmark {
     @Param({"1", "10", "100"})
     private int partitionCount;
 
-    @Param({"10", "100"})
+    @Param({"1", "10", "100"})
     private int topicCount;
 
     @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
@@ -114,7 +113,7 @@ public class ShareGroupAssignorBenchmark {
 
     private GroupSpec groupSpec;
 
-    private List<String> allTopicNames = Collections.emptyList();
+    private List<String> allTopicNames = List.of();
 
     private TopicIds.TopicResolver topicResolver;
 
@@ -179,14 +178,14 @@ public class ShareGroupAssignorBenchmark {
         for (String memberId : groupSpec.memberIds()) {
             MemberAssignment memberAssignment = members.getOrDefault(
                 memberId,
-                new MemberAssignmentImpl(Collections.emptyMap())
+                new MemberAssignmentImpl(Map.of())
             );
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 groupSpec.memberSubscription(memberId).rackId(),
                 Optional.empty(),
                 groupSpec.memberSubscription(memberId).subscribedTopicIds(),
-                new Assignment(Collections.unmodifiableMap(memberAssignment.partitions()))
+                new Assignment(Map.copyOf(memberAssignment.partitions()))
             ));
         }
 

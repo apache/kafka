@@ -539,8 +539,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
-            log.info("Streams rebalance protocol enabled");
-
             final Optional<StreamsRebalanceData> streamsRebalanceData = Optional.of(
                 initStreamsRebalanceData(
                     processId,
@@ -1138,19 +1136,29 @@ public class StreamThread extends Thread implements ProcessingThread {
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
             if (streamsRebalanceData.isPresent()) {
-                final AsyncKafkaConsumer<byte[], byte[]> consumer = mainConsumer instanceof ConsumerWrapper
-                    ? ((ConsumerWrapper) mainConsumer).consumer()
-                    : (AsyncKafkaConsumer<byte[], byte[]>) mainConsumer;
-                consumer.subscribe(
-                    topologyMetadata.allFullSourceTopicNames(),
-                    new DefaultStreamsRebalanceListener(
-                        log,
-                        time,
-                        streamsRebalanceData.get(),
-                        this,
-                        taskManager
-                    )
-                );
+                if (mainConsumer instanceof ConsumerWrapper) {
+                    ((ConsumerWrapper) mainConsumer).subscribe(
+                        topologyMetadata.allFullSourceTopicNames(),
+                        new DefaultStreamsRebalanceListener(
+                            log,
+                            time,
+                            streamsRebalanceData.get(),
+                            this,
+                            taskManager
+                        )
+                    );
+                } else {
+                    ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
+                        topologyMetadata.allFullSourceTopicNames(),
+                        new DefaultStreamsRebalanceListener(
+                            log,
+                            time,
+                            streamsRebalanceData.get(),
+                            this,
+                            taskManager
+                        )
+                    );
+                }
             } else {
                 mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
             }

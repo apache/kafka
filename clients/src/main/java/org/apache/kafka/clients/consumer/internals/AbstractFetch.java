@@ -45,6 +45,7 @@ import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -54,7 +55,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -223,10 +223,15 @@ public abstract class AbstractFetch implements Closeable {
             }
 
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
-                List<Node> leaderNodes = response.data().nodeEndpoints().stream()
-                    .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
-                    .filter(e -> !e.equals(Node.noNode()))
-                    .collect(Collectors.toList());
+                List<Node> leaderNodes = new ArrayList<>();
+
+                for (FetchResponseData.NodeEndpoint e : response.data().nodeEndpoints()) {
+                    Node node = new Node(e.nodeId(), e.host(), e.port(), e.rack());
+
+                    if (!node.equals(Node.noNode()))
+                        leaderNodes.add(node);
+                }
+
                 Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
                 updatedPartitions.forEach(
                     tp -> {
@@ -397,7 +402,7 @@ public abstract class AbstractFetch implements Closeable {
             fetchable.put(fetchTarget, sessionHandler.newBuilder());
         });
 
-        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
+        return convert(fetchable);
     }
 
     /**
@@ -470,7 +475,21 @@ public abstract class AbstractFetch implements Closeable {
             }
         }
 
-        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
+        return convert(fetchable);
+    }
+
+    /**
+     * This method converts {@link FetchSessionHandler.Builder} instances to
+     * {@link FetchSessionHandler.FetchRequestData} instances. It intentionally forgoes use of the Java Collections
+     * Streams API to reduce overhead in the critical network path.
+     */
+    private Map<Node, FetchSessionHandler.FetchRequestData> convert(Map<Node, FetchSessionHandler.Builder> fetchable) {
+        Map<Node, FetchSessionHandler.FetchRequestData> map = new HashMap<>(fetchable.size());
+
+        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet())
+            map.put(entry.getKey(), entry.getValue().build());
+
+        return map;
     }
 
     /**
