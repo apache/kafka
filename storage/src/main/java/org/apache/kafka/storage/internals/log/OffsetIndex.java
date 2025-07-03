@@ -56,7 +56,7 @@ public final class OffsetIndex extends AbstractIndex {
     private static final int ENTRY_SIZE = 8;
 
     /* the last offset in the index */
-    private long lastOffset;
+    private volatile long lastOffset;
 
     public OffsetIndex(File file, long baseOffset) throws IOException {
         this(file, baseOffset, -1);
@@ -224,7 +224,7 @@ public final class OffsetIndex extends AbstractIndex {
      * The last entry in the index
      */
     private OffsetPosition lastEntry() {
-        return inLock(() -> {
+        return inRemapReadLock(() -> {
             int entries = entries();
             if (entries == 0)
                 return new OffsetPosition(baseOffset(), 0);

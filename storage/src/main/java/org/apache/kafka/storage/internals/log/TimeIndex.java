@@ -76,7 +76,7 @@ public class TimeIndex extends AbstractIndex {
         TimestampOffset entry = lastEntry();
         long lastTimestamp = entry.timestamp;
         long lastOffset = entry.offset;
-        inLock(() -> {
+        inRemapReadLock(() -> {
             if (entries() != 0 && lastTimestamp < timestamp(mmap(), 0))
                 throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
                     + "non-zero size but the last timestamp is " + lastTimestamp + " which is less than the first timestamp "
@@ -252,7 +252,7 @@ public class TimeIndex extends AbstractIndex {
      * Read the last entry from the index file. This operation involves disk access.
      */
     private TimestampOffset lastEntryFromIndexFile() {
-        return inLock(() -> {
+        return inRemapReadLock(() -> {
             int entries = entries();
             if (entries == 0)
                 return new TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset());
