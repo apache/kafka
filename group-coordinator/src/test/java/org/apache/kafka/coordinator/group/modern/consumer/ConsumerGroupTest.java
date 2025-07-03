@@ -501,13 +501,13 @@ public class ConsumerGroupTest {
     @Test
     public void testGroupTypeFromString() {
 
-        assertEquals(Group.GroupType.parse("classic"), Group.GroupType.CLASSIC);
+        assertEquals(Group.GroupType.CLASSIC, Group.GroupType.parse("classic"));
 
         // Test case insensitivity.
-        assertEquals(Group.GroupType.parse("Consumer"), Group.GroupType.CONSUMER);
+        assertEquals(Group.GroupType.CONSUMER, Group.GroupType.parse("Consumer"));
 
         // Test with invalid group type.
-        assertEquals(Group.GroupType.parse("Invalid"), Group.GroupType.UNKNOWN);
+        assertEquals(Group.GroupType.UNKNOWN, Group.GroupType.parse("Invalid"));
     }
 
     @Test

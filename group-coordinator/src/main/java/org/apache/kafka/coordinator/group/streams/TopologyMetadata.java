@@ -36,7 +36,7 @@ import java.util.SortedMap;
 public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap<String, ConfiguredSubtopology> subtopologyMap) implements TopologyDescriber {
 
     public TopologyMetadata {
-        metadataImage = Objects.requireNonNull(metadataImage);
+        Objects.requireNonNull(metadataImage);
         subtopologyMap = Objects.requireNonNull(Collections.unmodifiableSortedMap(subtopologyMap));
     }
 

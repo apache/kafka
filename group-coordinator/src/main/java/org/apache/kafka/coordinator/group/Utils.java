@@ -211,7 +211,7 @@ public class Utils {
     ) {
         return topicPartitionsList.stream().collect(Collectors.toMap(
             ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
-            topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
+                topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
     }
 
     /**
