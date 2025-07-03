@@ -902,7 +902,10 @@ public class Sender implements Runnable {
                         .setTopicData(tpd),
                 useTransactionV1Version
         );
+        // Fetch topic names from metadata outside callback as topic ids may change during the callback
+        // for example if topic was recreated.
         Map<Uuid, String> topicNames = metadata.topicNames();
+
         RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, topicNames, time.milliseconds());
 
         String nodeId = Integer.toString(destination);

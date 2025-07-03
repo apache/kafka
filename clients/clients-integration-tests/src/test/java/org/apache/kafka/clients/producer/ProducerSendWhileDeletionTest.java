@@ -174,7 +174,7 @@ public class ProducerSendWhileDeletionTest {
                     if (admin.listTopics().names().get().contains(topic)) {
                         admin.deleteTopics(List.of(topic)).all().get();
                     }
-                    topicIds.add(admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).topicId(topic).get());
+                    topicIds.add(admin.createTopics(List.of(new NewTopic(topic, 2, (short) 1))).topicId(topic).get());
                 } catch (Exception e) {
                     // ignore
                 }
