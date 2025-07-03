@@ -641,14 +641,14 @@ public class SharePartition {
                 // Check if the state is maintained per offset or batch. If the offsetState
                 // is not maintained then the batch state is used to determine the offsets state.
                 if (entry.getValue().offsetState() == null) {
-                    if (entry.getValue().batchState() == RecordState.AVAILABLE) {
+                    if (entry.getValue().batchState() == RecordState.AVAILABLE && !entry.getValue().batchHasOngoingStateTransition()) {
                         nextFetchOffset = entry.getValue().firstOffset();
                         break;
                     }
                 } else {
                     // The offset state is maintained hence find the next available offset.
                     for (Map.Entry<Long, InFlightState> offsetState : entry.getValue().offsetState().entrySet()) {
-                        if (offsetState.getValue().state == RecordState.AVAILABLE) {
+                        if (offsetState.getValue().state == RecordState.AVAILABLE && !offsetState.getValue().hasOngoingStateTransition()) {
                             nextFetchOffset = offsetState.getKey();
                             break;
                         }
@@ -2088,6 +2088,9 @@ public class SharePartition {
                     state.completeStateTransition(true);
                     // Cancel the acquisition lock timeout task for the state since it is acknowledged/released successfully.
                     state.cancelAndClearAcquisitionLockTimeoutTask();
+                    if (state.state == RecordState.AVAILABLE) {
+                        findNextFetchOffset.set(true);
+                    }
                 });
                 // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
                 cacheStateUpdated  = maybeUpdateCachedStateAndOffsets();
