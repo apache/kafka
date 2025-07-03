@@ -178,6 +178,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
+        // When the coordinator can't find and consumer is closing, we clear all requests
+        if (coordinatorRequestManager.coordinator().isEmpty() && closing) {
+            pendingRequests.clearAll();
+        }
+
         // poll when the coordinator node is known and fatal error is not present
         if (coordinatorRequestManager.coordinator().isEmpty()) {
             pendingRequests.maybeFailOnCoordinatorFatalError();
