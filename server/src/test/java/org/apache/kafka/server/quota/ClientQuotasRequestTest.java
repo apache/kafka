@@ -379,7 +379,7 @@ public class ClientQuotasRequestTest {
     }
 
     // Entities to be matched against.
-    final private Map<ClientQuotaEntity, Double> matchUserClientEntities = new HashMap<>() {
+    private final Map<ClientQuotaEntity, Double> matchUserClientEntities = new HashMap<>() {
         {
             put(toClientEntity(Optional.of("user-1"), Optional.of("client-id-1")), 50.50);
             put(toClientEntity(Optional.of("user-2"), Optional.of("client-id-1")), 51.51);
@@ -395,7 +395,7 @@ public class ClientQuotasRequestTest {
         }
     };
 
-    final private Map<ClientQuotaEntity, Double> matchIpEntities = Map.of(
+    private final Map<ClientQuotaEntity, Double> matchIpEntities = Map.of(
         toIpEntity(Optional.of("1.2.3.4")), 10.0,
         toIpEntity(Optional.of("2.3.4.5")), 20.0
     );
