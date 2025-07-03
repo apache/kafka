@@ -68,9 +68,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
     private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new EnumMap<>(Schema.Type.class);
 
-    // if a schema is provided in config, this schema will 
-    // be used for all messages
-    private Schema schema = null;
+    // if a schema is provided in config, this schema will be used for all messages
 
     static {
         TO_CONNECT_CONVERTERS.put(Schema.Type.BOOLEAN, (schema, value, config) -> value.booleanValue());
@@ -233,6 +231,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private JsonConverterConfig config;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
+    private Schema schema = null;
 
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;
@@ -298,14 +297,13 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
         try {
             final byte[] schemaContent = config.schemaContent();
-            if (schemaContent != null && schemaContent.length > 0) {
+            if (schemaContent != null) {
                 final JsonNode schemaNode = deserializer.deserialize("", schemaContent);
                 this.schema = asConnectSchema(schemaNode);
             }
         } catch (SerializationException e) {
             throw new DataException("Failed to parse schema in converter config due to serialization error: ", e);
         }
-
     }
 
     @Override
@@ -361,7 +359,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
         }
 
         if (config.schemasEnabled()) {
-            if (this.schema != null) {
+            if (schema != null) {
                 return new SchemaAndValue(schema, convertToConnect(schema, jsonValue, config));
             } else if (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)) {
                 throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
