@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -242,37 +243,28 @@ public class StreamsGroupCommand {
         }
 
         public void describeGroups() throws ExecutionException, InterruptedException {
-            List<String> groupIds = new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
+            List<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? new ArrayList<>(listStreamsGroups())
+                : new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
             if (!groupIds.isEmpty()) {
                 for (String groupId : groupIds) {
-                    try {
-                        StreamsGroupDescription description = getDescribeGroup(groupId);
-                        boolean verbose = opts.options.has(opts.verboseOpt);
-                        if (opts.options.has(opts.membersOpt)) {
-                            printMembers(description, verbose);
-                        } else if (opts.options.has(opts.stateOpt)) {
-                            printStates(description, verbose);
-                        } else {
-                            printOffsets(description, verbose);
-                        }
-
-                    } catch (GroupIdNotFoundException e) {
-                        printError("The group '" + groupId + "' does not exist.", Optional.of(e));
-                    } catch (ExecutionException e) {
-                        if (e.getCause() instanceof GroupNotEmptyException) {
-                            printError("The group '" + groupId + "' is not empty.", Optional.of(e));
-                        } else {
-                            throw e;
-                        }
-                    } catch (KafkaException e) {
-                        printError("Describing the group '" + groupId + "' failed due to " + e.getMessage(), Optional.of(e));
+                    StreamsGroupDescription description = getDescribeGroup(groupId);
+                    boolean verbose = opts.options.has(opts.verboseOpt);
+                    if (opts.options.has(opts.membersOpt)) {
+                        printMembers(description, verbose);
+                    } else if (opts.options.has(opts.stateOpt)) {
+                        printStates(description, verbose);
+                    } else {
+                        printOffsets(description, verbose);
                     }
                 }
             }
         }
 
         StreamsGroupDescription getDescribeGroup(String group) throws ExecutionException, InterruptedException {
-            DescribeStreamsGroupsResult result = adminClient.describeStreamsGroups(List.of(group));
+            DescribeStreamsGroupsResult result = adminClient.describeStreamsGroups(
+                List.of(group),
+                new DescribeStreamsGroupsOptions().timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
             Map<String, StreamsGroupDescription> descriptionMap = result.all().get();
             return descriptionMap.get(group);
         }
