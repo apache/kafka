@@ -65,8 +65,9 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
      */
     @Override
     public GroupAssignment assign(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException {
-        if (groupSpec.memberIds().isEmpty())
+        if (groupSpec.memberIds().isEmpty()) {
             return new GroupAssignment(Map.of());
+        }
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             log.debug("Detected that all members are subscribed to the same set of topics, invoking the homogeneous assignment algorithm");

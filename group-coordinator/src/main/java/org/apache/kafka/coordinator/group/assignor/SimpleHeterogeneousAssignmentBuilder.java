@@ -210,9 +210,8 @@ public class SimpleHeterogeneousAssignmentBuilder {
         groupSpec.memberIds().forEach(memberId -> {
             int memberIndex = memberIndices.get(memberId);
             MemberSubscription memberSubscription = groupSpec.memberSubscription(memberId);
-            memberSubscription.subscribedTopicIds().forEach(topicId -> {
-                subscribedMembersByTopic.computeIfAbsent(topicId, k -> new ArrayList<>(numMembers)).add(memberIndex);
-            });
+            memberSubscription.subscribedTopicIds().forEach(topicId ->
+                subscribedMembersByTopic.computeIfAbsent(topicId, k -> new ArrayList<>(numMembers)).add(memberIndex));
         });
 
         return subscribedMembersByTopic;
