@@ -35,6 +35,10 @@ public interface CoordinatorMetadataDelta {
 
     Set<Uuid> deletedTopicIds();
 
+    /**
+     * Returns the previous image of the coordinator metadata.
+     * This image is a snapshot of the metadata before the delta occurred.
+     */
     CoordinatorMetadataImage image();
 
     private static CoordinatorMetadataDelta emptyDelta() {
