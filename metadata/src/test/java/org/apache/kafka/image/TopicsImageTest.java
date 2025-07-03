@@ -912,8 +912,8 @@ public class TopicsImageTest {
     public void testIsStrayReplicaWithEmptyImage() {
         TopicsImage image = topicsImage(List.of());
         List<TopicIdPartition> onDisk = List.of(FOO_0, FOO_1, BAR_0, BAR_1, BAZ_0);
-        assertTrue(onDisk.stream().allMatch(log ->
-                TopicsImage.isStrayReplica(image, 0, Optional.of(log.topicId()), log.partition(), ""))
+        assertTrue(onDisk.stream().allMatch(tp ->
+                TopicsImage.isStrayReplica(image, 0, Optional.of(tp.topicId()), tp.partition(), ""))
         );
     }
 
@@ -926,9 +926,9 @@ public class TopicsImageTest {
         List<TopicIdPartition> onDisk = List.of(FOO_0, FOO_1, BAR_0, BAR_1, BAZ_0);
         Set<TopicPartition> expectedStrays = Stream.of(FOO_1, BAZ_0).map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
 
-        onDisk.forEach(log -> assertEquals(
-                expectedStrays.contains(log.topicPartition()),
-                TopicsImage.isStrayReplica(image, 0, Optional.of(log.topicId()), log.partition(), "")));
+        onDisk.forEach(tp -> assertEquals(
+                expectedStrays.contains(tp.topicPartition()),
+                TopicsImage.isStrayReplica(image, 0, Optional.of(tp.topicId()), tp.partition(), "")));
     }
 
     @Test
@@ -939,9 +939,9 @@ public class TopicsImageTest {
         ));
         List<TopicIdPartition> onDisk = List.of(FOO_0, BAR_0, BAR_1);
         Set<TopicPartition> expectedStrays = Stream.of(BAR_0).map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
-        onDisk.forEach(log -> assertEquals(
-                expectedStrays.contains(log.topicPartition()),
-                TopicsImage.isStrayReplica(image, 0, Optional.of(log.topicId()), log.partition(), ""))
+        onDisk.forEach(tp -> assertEquals(
+                expectedStrays.contains(tp.topicPartition()),
+                TopicsImage.isStrayReplica(image, 0, Optional.of(tp.topicId()), tp.partition(), ""))
         );
     }
 

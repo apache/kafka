@@ -126,7 +126,7 @@ public class KafkaRaftLog implements RaftLog {
                     )
             );
         } catch (IOException ioe) {
-            throw new KafkaException(ioe);
+            throw new UncheckedIOException(ioe);
         }
     }
 
@@ -139,7 +139,7 @@ public class KafkaRaftLog implements RaftLog {
         try {
             return handleAndConvertLogAppendInfo(log.appendAsLeader((MemoryRecords) records, epoch, AppendOrigin.RAFT_LEADER));
         } catch (IOException ioe) {
-            throw new KafkaException(ioe);
+            throw new UncheckedIOException(ioe);
         }
     }
 
@@ -277,7 +277,7 @@ public class KafkaRaftLog implements RaftLog {
                 logger.warn("Log's high watermark ({}) is different from the local replica's high watermark ({})", metadata, logOffsetMetadata);
             }
         } catch (IOException ioe) {
-            throw new KafkaException(ioe);
+            throw new UncheckedIOException(ioe);
         }
     }
 
@@ -291,7 +291,7 @@ public class KafkaRaftLog implements RaftLog {
 
             return new LogOffsetMetadata(hwm.messageOffset, segmentPosition);
         } catch (IOException ioe) {
-            throw new KafkaException(ioe);
+            throw new UncheckedIOException(ioe);
         }
     }
 

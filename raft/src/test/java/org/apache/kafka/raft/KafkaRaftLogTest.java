@@ -625,9 +625,9 @@ public class KafkaRaftLogTest {
 
         // Assert that the log dir doesn't contain any partial snapshots
         Files.walk(logDir, 1)
-             .map(Snapshots::parse)
-             .filter(Optional::isPresent)
-             .forEach(path -> assertFalse(path.get().partial()));
+                .map(Snapshots::parse)
+                .filter(Optional::isPresent)
+                .forEach(path -> assertFalse(path.get().partial()));
     }
 
     @Test
@@ -666,9 +666,9 @@ public class KafkaRaftLogTest {
 
         // Assert that the log dir doesn't contain any older snapshots
         Files.walk(logDir, 1)
-             .map(Snapshots::parse)
-             .filter(Optional::isPresent)
-             .forEach(path -> assertFalse(path.get().snapshotId().offset() < log.startOffset()));
+                .map(Snapshots::parse)
+                .filter(Optional::isPresent)
+                .forEach(path -> assertFalse(path.get().snapshotId().offset() < log.startOffset()));
     }
 
     @Test
