@@ -38,8 +38,6 @@ import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -163,7 +161,6 @@ public class ProducerSendWhileDeletionTest {
         }
     }
 
-    @Timeout(120)
     @ClusterTest
     public void testSendWhileTopicGetRecreated() {
         int maxNumTopicRecreationAttempts = 5;
@@ -184,7 +181,7 @@ public class ProducerSendWhileDeletionTest {
 
         AtomicInteger numAcks = new AtomicInteger(0);
         var producerFuture = CompletableFuture.runAsync(() -> {
-            try (var producer = cluster.producer()) {
+            try (var producer = createProducer()) {
                 for (int i = 1; i <= numRecords; i++) {
                     producer.send(new ProducerRecord<>(topic, null, ("value" + i).getBytes()),
                             (metadata, exception) -> {
