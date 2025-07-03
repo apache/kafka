@@ -82,8 +82,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -131,7 +129,7 @@ public class ReplicaFetcherThreadBenchmark {
         List<File> logDirs = config.logDirs().stream().map(File::new).toList();
         logManager = new LogManagerBuilder().
             setLogDirs(logDirs).
-            setInitialOfflineDirs(Collections.emptyList()).
+            setInitialOfflineDirs(List.of()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
             setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
@@ -165,7 +163,7 @@ public class ReplicaFetcherThreadBenchmark {
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
 
-            List<Integer> replicas = Arrays.asList(0, 1, 2);
+            List<Integer> replicas = List.of(0, 1, 2);
             PartitionState partitionState = new PartitionState()
                     .setLeader(0)
                     .setLeaderEpoch(0)
