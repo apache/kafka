@@ -40,6 +40,12 @@ public class KRaftCoordinatorMetadataDeltaTest {
     public void testKRaftCoordinatorDeltaWithNulls() {
         assertTrue(new KRaftCoordinatorMetadataDelta(null).changedTopicIds().isEmpty());
         assertTrue(new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY)).changedTopicIds().isEmpty());
+
+        assertTrue(new KRaftCoordinatorMetadataDelta(null).deletedTopicIds().isEmpty());
+        assertTrue(new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY)).deletedTopicIds().isEmpty());
+
+        assertTrue(new KRaftCoordinatorMetadataDelta(null).createdTopicIds().isEmpty());
+        assertTrue(new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY)).createdTopicIds().isEmpty());
     }
 
     @Test
