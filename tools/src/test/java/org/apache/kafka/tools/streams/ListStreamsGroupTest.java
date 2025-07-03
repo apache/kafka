@@ -173,35 +173,35 @@ public class ListStreamsGroupTest {
     @Test
     public void testListStreamsGroupOutput() throws Exception {
         validateListOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--list"),
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--list"),
             List.of(),
             Set.of(List.of(APP_ID))
         );
 
         validateListOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state"),
-            Arrays.asList("GROUP", "STATE"),
-            Set.of(Arrays.asList(APP_ID, "Stable"))
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state"),
+            List.of("GROUP", "STATE"),
+            Set.of(List.of(APP_ID, "Stable"))
         );
 
         validateListOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "Stable"),
-            Arrays.asList("GROUP", "STATE"),
-            Set.of(Arrays.asList(APP_ID, "Stable"))
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "Stable"),
+            List.of("GROUP", "STATE"),
+            Set.of(List.of(APP_ID, "Stable"))
         );
 
         // Check case-insensitivity in state filter.
         validateListOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"),
-            Arrays.asList("GROUP", "STATE"),
-            Set.of(Arrays.asList(APP_ID, "Stable"))
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"),
+            List.of("GROUP", "STATE"),
+            Set.of(List.of(APP_ID, "Stable"))
         );
     }
 
     private static Topology topology() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
-            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .flatMapValues(value -> List.of(value.toLowerCase(Locale.getDefault()).split("\\W+")))
             .groupBy((key, value) -> value)
             .count()
             .toStream().to(OUTPUT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
@@ -230,12 +230,12 @@ public class ListStreamsGroupTest {
             if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
             if (!expectedHeader.isEmpty() && lines.length > 0) {
-                List<String> header = Arrays.asList(lines[0].split("\\s+"));
+                List<String> header = List.of(lines[0].split("\\s+"));
                 if (!expectedHeader.equals(header)) return false;
             }
 
             Set<List<String>> groups = Arrays.stream(lines, expectedHeader.isEmpty() ? 0 : 1, lines.length)
-                .map(line -> Arrays.asList(line.split("\\s+")))
+                .map(line -> List.of(line.split("\\s+")))
                 .collect(Collectors.toSet());
             return expectedRows.equals(groups);
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));

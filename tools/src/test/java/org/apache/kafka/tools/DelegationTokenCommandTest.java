@@ -23,8 +23,6 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -54,12 +52,12 @@ public class DelegationTokenCommandTest {
 
         tokens = DelegationTokenCommand.describeToken(adminClient, getDescribeOpts(""));
         assertEquals(2, tokens.size());
-        assertEquals(Arrays.asList(token1, token2), tokens);
+        assertEquals(List.of(token1, token2), tokens);
 
         //get tokens for renewer2
         tokens = DelegationTokenCommand.describeToken(adminClient, getDescribeOpts(renewer2));
         assertEquals(1, tokens.size());
-        assertEquals(Collections.singletonList(token2), tokens);
+        assertEquals(List.of(token2), tokens);
 
         //test renewing tokens
         Long expiryTimestamp = DelegationTokenCommand.renewToken(adminClient, getRenewOpts(token1.hmacAsBase64String()));
