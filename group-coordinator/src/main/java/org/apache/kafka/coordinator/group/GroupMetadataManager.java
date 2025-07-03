@@ -5753,28 +5753,25 @@ public class GroupMetadataManager {
             lastMetadataImageWithNewTopics = metadataImage.version();
         }
 
-        CoordinatorMetadataDelta.TopicsDelta topicsDelta = delta.topicsDelta();
-        if (topicsDelta == null) return;
-
         // Updated the last offset of the image with newly created topics. This is used to
         // trigger a refresh of all the regular expressions when topics are created. Note
         // that we don't trigger a refresh when topics are deleted. Those are removed from
         // the subscription metadata (and the assignment) via the above mechanism. The
         // resolved regular expressions are cleaned up on the next refresh.
-        if (!topicsDelta.createdTopicIds().isEmpty()) {
+        if (!delta.createdTopicIds().isEmpty()) {
             lastMetadataImageWithNewTopics = metadataImage.version();
         }
 
         // Notify all the groups subscribed to the created, updated or
         // deleted topics.
         Set<String> allGroupIds = new HashSet<>();
-        topicsDelta.changedTopicIds().forEach(topicId ->
+        delta.changedTopicIds().forEach(topicId ->
             metadataImage.topicName(topicId).ifPresent(topicName -> {
                 // Remove topic hash from the cache to recalculate it.
                 topicHashCache.remove(topicName);
                 allGroupIds.addAll(groupsSubscribedToTopic(topicName));
             }));
-        topicsDelta.deletedTopicIds().forEach(topicId ->
+        delta.deletedTopicIds().forEach(topicId ->
             delta.image().topicName(topicId).ifPresent(topicName -> {
                 topicHashCache.remove(topicName);
                 allGroupIds.addAll(groupsSubscribedToTopic(topicName));

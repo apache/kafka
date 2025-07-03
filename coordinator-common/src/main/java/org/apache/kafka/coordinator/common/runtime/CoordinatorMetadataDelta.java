@@ -29,38 +29,29 @@ public interface CoordinatorMetadataDelta {
 
     CoordinatorMetadataDelta EMPTY = emptyDelta();
 
-    interface TopicsDelta {
-        Collection<Uuid> createdTopicIds();
+    Collection<Uuid> createdTopicIds();
 
-        Collection<Uuid> changedTopicIds();
+    Collection<Uuid> changedTopicIds();
 
-        Set<Uuid> deletedTopicIds();
-    }
-
-    TopicsDelta topicsDelta();
+    Set<Uuid> deletedTopicIds();
 
     CoordinatorMetadataImage image();
 
     private static CoordinatorMetadataDelta emptyDelta() {
         return new CoordinatorMetadataDelta() {
             @Override
-            public TopicsDelta topicsDelta() {
-                return new TopicsDelta() {
-                    @Override
-                    public Collection<Uuid> createdTopicIds() {
-                        return Set.of();
-                    }
+            public Collection<Uuid> createdTopicIds() {
+                return Set.of();
+            }
 
-                    @Override
-                    public Collection<Uuid> changedTopicIds() {
-                        return Set.of();
-                    }
+            @Override
+            public Collection<Uuid> changedTopicIds() {
+                return Set.of();
+            }
 
-                    @Override
-                    public Set<Uuid> deletedTopicIds() {
-                        return Set.of();
-                    }
-                };
+            @Override
+            public Set<Uuid> deletedTopicIds() {
+                return Set.of();
             }
 
             @Override

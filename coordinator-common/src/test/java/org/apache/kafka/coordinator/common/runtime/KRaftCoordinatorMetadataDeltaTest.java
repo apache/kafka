@@ -32,15 +32,14 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KRaftCoordinatorMetadataDeltaTest {
 
     @Test
     public void testKRaftCoordinatorDeltaWithNulls() {
-        assertNull(new KRaftCoordinatorMetadataDelta(null).topicsDelta());
-        assertNull(new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY)).topicsDelta());
+        assertTrue(new KRaftCoordinatorMetadataDelta(null).changedTopicIds().isEmpty());
+        assertTrue(new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY)).changedTopicIds().isEmpty());
     }
 
     @Test
@@ -66,24 +65,21 @@ public class KRaftCoordinatorMetadataDeltaTest {
 
         KRaftCoordinatorMetadataDelta coordinatorDelta = new KRaftCoordinatorMetadataDelta(delta);
 
-        CoordinatorMetadataDelta.TopicsDelta topicsDelta = coordinatorDelta.topicsDelta();
-        assertNotNull(topicsDelta);
-
         // created topics
-        Collection<Uuid> createdTopicIds = topicsDelta.createdTopicIds();
+        Collection<Uuid> createdTopicIds = coordinatorDelta.createdTopicIds();
         assertNotNull(createdTopicIds);
         assertEquals(2, createdTopicIds.size());
         assertTrue(createdTopicIds.contains(topicId));
         assertTrue(createdTopicIds.contains(topicId2));
 
         // deleted topics
-        Set<Uuid> deletedTopicIds = topicsDelta.deletedTopicIds();
+        Set<Uuid> deletedTopicIds = coordinatorDelta.deletedTopicIds();
         assertNotNull(deletedTopicIds);
         assertEquals(1, deletedTopicIds.size());
         assertTrue(deletedTopicIds.contains(deletedTopicId));
 
         // changed topics (also includes created topics)
-        Collection<Uuid> changedTopicIds = topicsDelta.changedTopicIds();
+        Collection<Uuid> changedTopicIds = coordinatorDelta.changedTopicIds();
         assertNotNull(changedTopicIds);
         assertEquals(3, changedTopicIds.size());
         assertTrue(changedTopicIds.contains(changedTopicId));

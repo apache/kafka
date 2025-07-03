@@ -34,13 +34,29 @@ public class KRaftCoordinatorMetadataDelta implements CoordinatorMetadataDelta {
     }
 
     @Override
-    public TopicsDelta topicsDelta() {
+    public Collection<Uuid> createdTopicIds() {
         if (metadataDelta == null || metadataDelta.topicsDelta() == null) {
-            return null;
-        } else {
-            return new KRaftTopicsDelta(metadataDelta.topicsDelta());
+            return Set.of();
         }
+        return metadataDelta.topicsDelta().createdTopicIds();
     }
+
+    @Override
+    public Collection<Uuid> changedTopicIds() {
+        if (metadataDelta == null || metadataDelta.topicsDelta() == null) {
+            return Set.of();
+        }
+        return metadataDelta.topicsDelta().changedTopics().keySet();
+    }
+
+    @Override
+    public Set<Uuid> deletedTopicIds() {
+        if (metadataDelta == null || metadataDelta.topicsDelta() == null) {
+            return Set.of();
+        }
+        return metadataDelta.topicsDelta().deletedTopicIds();
+    }
+
 
     @Override
     public String toString() {
@@ -62,46 +78,5 @@ public class KRaftCoordinatorMetadataDelta implements CoordinatorMetadataDelta {
     @Override
     public CoordinatorMetadataImage image() {
         return new KRaftCoordinatorMetadataImage(metadataDelta.image());
-    }
-
-    public static class KRaftTopicsDelta implements TopicsDelta {
-
-        private final org.apache.kafka.image.TopicsDelta topicsDelta;
-
-        public KRaftTopicsDelta(org.apache.kafka.image.TopicsDelta topicsDelta) {
-            this.topicsDelta = topicsDelta;
-        }
-
-        @Override
-        public Collection<Uuid> createdTopicIds() {
-            return topicsDelta.createdTopicIds();
-        }
-
-        @Override
-        public Collection<Uuid> changedTopicIds() {
-            return topicsDelta.changedTopics().keySet();
-        }
-
-        @Override
-        public Set<Uuid> deletedTopicIds() {
-            return topicsDelta.deletedTopicIds();
-        }
-
-        @Override
-        public String toString() {
-            return topicsDelta.toString();
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (o == null || !o.getClass().equals(this.getClass())) return false;
-            KRaftTopicsDelta other = (KRaftTopicsDelta) o;
-            return topicsDelta.equals(other.topicsDelta);
-        }
-
-        @Override
-        public int hashCode() {
-            return topicsDelta.hashCode();
-        }
     }
 }
