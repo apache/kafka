@@ -16,17 +16,19 @@
  */
 package kafka.server
 
+import org.apache.kafka.common.Cluster
 import java.net.InetAddress
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.ClientQuotaManager
-import org.apache.kafka.server.quota.{ClientQuotaEntity, QuotaType}
+import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType, QuotaType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import java.util.Optional
+import java.util.{Collections, Map, HashMap, Optional}
 
 class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = new ClientQuotaManagerConfig()
@@ -184,7 +186,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
   @Test
   def testSetAndRemoveUserQuota(): Unit = {
-    // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
+
     val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, QuotaType.PRODUCE, time, "")
 
@@ -497,6 +499,122 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       val byteRateSensor = metrics.getSensor("Produce-:"  + clientId)
       assertNotNull(byteRateSensor, "Byte rate sensor should exist")
+    } finally {
+      clientQuotaManager.shutdown()
+    }
+  }
+
+  @Test
+  def testQuotaTypesEnabledUpdatesWithDefaultCallback(): Unit = {
+    val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.CONTROLLER_MUTATION, time, "")
+    try {
+      assertEquals(ClientQuotaManager.NO_QUOTAS, clientQuotaManager.quotaTypesEnabled())
+      assertFalse(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(5, true)))
+      assertEquals(ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.empty(), Optional.of(new Quota(5, true)))
+      assertEquals(ClientQuotaManager.USER_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client2")), Optional.of(new Quota(5, true)))
+      assertEquals(ClientQuotaManager.USER_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userB")), Optional.empty(), Optional.of(new Quota(5, true)))
+      assertEquals(ClientQuotaManager.USER_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(10, true)))
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.USER_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(12, true)))
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.USER_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.empty(), Optional.empty())
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.USER_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userB")), Optional.empty(), Optional.empty())
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client2")), Optional.empty())
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      assertEquals(ClientQuotaManager.NO_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+      assertFalse(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      assertEquals(ClientQuotaManager.NO_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+      assertFalse(clientQuotaManager.quotasEnabled)
+    } finally {
+      clientQuotaManager.shutdown()
+    }
+  }
+
+  @Test
+  def testQuotaTypesEnabledUpdatesWithCustomCallback(): Unit = {
+    val customQuotaCallback = new ClientQuotaCallback {
+      val quotas = new HashMap[ClientQuotaEntity, Quota]()
+      override def configure(configs: Map[String, _]): Unit = {}
+
+      override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): Map[String, String] = Collections.emptyMap()
+
+      override def quotaLimit(quotaType: ClientQuotaType, metricTags: Map[String, String]): java.lang.Double = 1
+      override def updateClusterMetadata(cluster: Cluster): Boolean = false
+
+      override def updateQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity, newValue: Double): Unit = {
+        quotas.put(entity.asInstanceOf[ClientQuotaManager.KafkaQuotaEntity], new Quota(newValue.toLong, true))
+      }
+
+      override def removeQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity): Unit = {
+        quotas.remove(entity.asInstanceOf[ClientQuotaManager.KafkaQuotaEntity])
+      }
+
+      override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
+
+      override def close(): Unit = {}
+    }
+    val clientQuotaManager = new ClientQuotaManager(
+      new ClientQuotaManagerConfig(),
+      metrics,
+      QuotaType.CONTROLLER_MUTATION,
+      time,
+      "",
+      Optional.of(Plugin.wrapInstance(customQuotaCallback, metrics, ""))
+    )
+
+    try {
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should be true with custom callback")
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(12, true)))
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.empty(), Optional.of(new Quota(12, true)))
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(12, true)))
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.empty(), Optional.empty())
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
     } finally {
       clientQuotaManager.shutdown()
     }

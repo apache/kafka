@@ -59,13 +59,14 @@ import java.util.function.Consumer;
 
 public class ClientQuotaManager {
 
-    private static final int NO_QUOTAS = 0;
-    private static final int CLIENT_ID_QUOTA_ENABLED = 1;
-    private static final int USER_QUOTA_ENABLED = 2;
-    private static final int USER_CLIENT_ID_QUOTA_ENABLED = 4;
-    private static final int CUSTOM_QUOTAS = 8; // No metric update optimizations are used with custom quotas
+    public static final int NO_QUOTAS = 0;
+    public static final int CLIENT_ID_QUOTA_ENABLED = 1;
+    public static final int USER_QUOTA_ENABLED = 2;
+    public static final int USER_CLIENT_ID_QUOTA_ENABLED = 4;
+    public static final int CUSTOM_QUOTAS = 8; // No metric update optimizations are used with custom quotas
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientQuotaManager.class);
+    private final ConcurrentHashMap<Integer, Integer> activeQuotaEntities = new ConcurrentHashMap<>();
 
     // Purge sensors after 1 hour of inactivity
     private static final int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
@@ -122,7 +123,7 @@ public class ClientQuotaManager {
             return "default user";
         }
     };
-    
+
     public static final ClientQuotaEntity.ConfigEntity DEFAULT_USER_CLIENT_ID = new ClientQuotaEntity.ConfigEntity() {
         @Override
         public ClientQuotaEntity.ConfigEntityType entityType() {
@@ -131,7 +132,7 @@ public class ClientQuotaManager {
         @Override
         public String name() {
             return DEFAULT_NAME;
-        }  
+        }
         @Override
         public String toString() {
             return "default client-id";
@@ -146,7 +147,7 @@ public class ClientQuotaManager {
             new KafkaQuotaEntity(DEFAULT_USER_ENTITY, DEFAULT_USER_CLIENT_ID);
 
     public record KafkaQuotaEntity(ClientQuotaEntity.ConfigEntity userEntity,
-                                          ClientQuotaEntity.ConfigEntity clientIdEntity) implements ClientQuotaEntity {
+                                   ClientQuotaEntity.ConfigEntity clientIdEntity) implements ClientQuotaEntity {
 
         @Override
         public List<ConfigEntity> configEntities() {
@@ -195,6 +196,10 @@ public class ClientQuotaManager {
     private final ClientQuotaType clientQuotaType;
 
     private volatile int quotaTypesEnabled;
+
+    public int quotaTypesEnabled() {
+        return quotaTypesEnabled;
+    }
 
     private final Sensor delayQueueSensor;
     private final DelayQueue<ThrottledChannel> delayQueue = new DelayQueue<>();
@@ -307,9 +312,6 @@ public class ClientQuotaManager {
     /**
      * Returns true if any quotas are enabled for this quota manager. This is used
      * to determine if quota-related metrics should be created.
-     * Note: If any quotas (static defaults, dynamic defaults or quota overrides) have
-     * been configured for this broker at any time for this quota type, quotasEnabled will
-     * return true until the next broker restarts, even if all quotas are subsequently deleted.
      */
     public boolean quotasEnabled() {
         return quotaTypesEnabled != NO_QUOTAS;
@@ -453,8 +455,8 @@ public class ClientQuotaManager {
      */
     public ClientSensors getOrCreateQuotaSensors(Session session, String clientId) {
         var metricTags = quotaCallback instanceof DefaultQuotaCallback defaultCallback
-                        ? defaultCallback.quotaMetricTags(session.sanitizedUser, clientId)
-                        : quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId);
+                ? defaultCallback.quotaMetricTags(session.sanitizedUser, clientId)
+                : quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId);
         var sensors = new ClientSensors(
                 metricTags,
                 sensorAccessor.getOrCreate(
@@ -538,25 +540,12 @@ public class ClientQuotaManager {
         try {
             var quotaEntity = new KafkaQuotaEntity(userEntity.orElse(null), clientEntity.orElse(null));
 
-            // Update quota types enabled flags atomically
-            var currentQuotaTypes = quotaTypesEnabled;
-
-            if (userEntity.isPresent()) {
-                if (clientEntity.isPresent()) {
-                    currentQuotaTypes |= USER_CLIENT_ID_QUOTA_ENABLED;
-                } else {
-                    currentQuotaTypes |= USER_QUOTA_ENABLED;
-                }
-            } else if (clientEntity.isPresent()) {
-                currentQuotaTypes |= CLIENT_ID_QUOTA_ENABLED;
-            }
-
-            quotaTypesEnabled = currentQuotaTypes;
-
-            // Apply quota changes
+            // Apply quota changes with proper quota type tracking
             if (quota.isPresent()) {
+                updateQuotaTypes(quotaEntity, true);
                 quotaCallback.updateQuota(clientQuotaType, quotaEntity, quota.get().bound());
             } else {
+                updateQuotaTypes(quotaEntity, false);
                 quotaCallback.removeQuota(clientQuotaType, quotaEntity);
             }
 
@@ -574,6 +563,68 @@ public class ClientQuotaManager {
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    /**
+     * Updates `quotaTypesEnabled` by performing a bitwise OR operation to combine the enabled quota types.
+     * This method ensures that the `quotaTypesEnabled` field reflects the active quota types based on the
+     * current state of `activeQuotaEntities`.
+     * For example:
+     *  - If UserQuotaEnabled = 2 and ClientIdQuotaEnabled = 1, then quotaTypesEnabled = 3 (2 | 1 = 3)
+     *  - If UserClientIdQuotaEnabled = 4 and UserQuotaEnabled = 1, then quotaTypesEnabled = 5 (4 | 1 = 5)
+     *  - If UserClientIdQuotaEnabled = 4 and ClientIdQuotaEnabled = 2, then quotaTypesEnabled = 6 (4 | 2 = 6)
+     *  - If all three are enabled (1 | 2 | 4), then quotaTypesEnabled = 7
+     *
+     * @param quotaEntity The entity for which the quota is being updated, which can be a combination of user and client-id.
+     * @param shouldAdd   A boolean indicating whether to add or remove the quota entity.
+     */
+    private void updateQuotaTypes(KafkaQuotaEntity quotaEntity, boolean shouldAdd) {
+        if (quotaTypesEnabled == CUSTOM_QUOTAS) {
+            // If custom quotas are enabled, we do not need to update quota types
+            return;
+        }
+
+        boolean isActive = (quotaCallback instanceof DefaultQuotaCallback defaultCallback)
+                ? defaultCallback.getActiveQuotasEntities().contains(quotaEntity)
+                : true;
+
+        int activeQuotaType;
+        if (quotaEntity.userEntity() != null && quotaEntity.clientIdEntity() != null) {
+            activeQuotaType = USER_CLIENT_ID_QUOTA_ENABLED;
+        } else if (quotaEntity.userEntity() != null) {
+            activeQuotaType = USER_QUOTA_ENABLED;
+        } else if (quotaEntity.clientIdEntity() != null) {
+            activeQuotaType = CLIENT_ID_QUOTA_ENABLED;
+        } else {
+            activeQuotaType = NO_QUOTAS;
+        }
+
+        if (shouldAdd && !isActive) {
+            activeQuotaEntities.compute(activeQuotaType, (key, currentValue) ->
+                    (currentValue == null || currentValue == 0) ? 1 : currentValue + 1);
+            quotaTypesEnabled |= activeQuotaType;
+        } else if (!shouldAdd && isActive) {
+            activeQuotaEntities.compute(activeQuotaType, (key, currentValue) ->
+                    (currentValue == null || currentValue <= 1) ? 0 : currentValue - 1);
+            if (activeQuotaEntities.getOrDefault(activeQuotaType, 0) == 0) {
+                quotaTypesEnabled &= ~activeQuotaType;
+            }
+        }
+
+        // Log the changes
+        var quotaTypeNames = Map.of(
+                USER_CLIENT_ID_QUOTA_ENABLED, "UserClientIdQuota",
+                CLIENT_ID_QUOTA_ENABLED, "ClientIdQuota",
+                USER_QUOTA_ENABLED, "UserQuota"
+        );
+
+        var activeEntities = quotaTypeNames.entrySet().stream()
+                .filter(entry -> activeQuotaEntities.getOrDefault(entry.getKey(), 0) > 0)
+                .map(Map.Entry::getValue)
+                .collect(java.util.stream.Collectors.joining(", "));
+
+        LOG.info("Quota types enabled has been changed to {} with active quota entities: [{}]",
+                quotaTypesEnabled, activeEntities);
     }
 
 
@@ -777,6 +828,10 @@ public class ClientQuotaManager {
         @Override
         public boolean quotaResetRequired(ClientQuotaType quotaType) {
             return false;
+        }
+
+        public java.util.Set<ClientQuotaEntity> getActiveQuotasEntities() {
+            return overriddenQuotas.keySet();
         }
 
         public Map<String, String> quotaMetricTags(String sanitizedUser, String clientId) {
