@@ -242,18 +242,31 @@ public class StreamsGroupCommand {
         }
 
         public void describeGroups() throws ExecutionException, InterruptedException {
-            List<String> groups = listStreamsGroups();
-            if (!groups.isEmpty()) {
-                StreamsGroupDescription description = getDescribeGroup(groups.get(0));
-                if (description == null)
-                    return;
-                boolean verbose = opts.options.has(opts.verboseOpt);
-                if (opts.options.has(opts.membersOpt)) {
-                    printMembers(description, verbose);
-                } else if (opts.options.has(opts.stateOpt)) {
-                    printStates(description, verbose);
-                } else {
-                    printOffsets(description, verbose);
+            List<String> groupIds = new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
+            if (!groupIds.isEmpty()) {
+                for (String groupId : groupIds) {
+                    try {
+                        StreamsGroupDescription description = getDescribeGroup(groupId);
+                        boolean verbose = opts.options.has(opts.verboseOpt);
+                        if (opts.options.has(opts.membersOpt)) {
+                            printMembers(description, verbose);
+                        } else if (opts.options.has(opts.stateOpt)) {
+                            printStates(description, verbose);
+                        } else {
+                            printOffsets(description, verbose);
+                        }
+
+                    } catch (GroupIdNotFoundException e) {
+                        printError("The group '" + groupId + "' does not exist.", Optional.of(e));
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof GroupNotEmptyException) {
+                            printError("The group '" + groupId + "' is not empty.", Optional.of(e));
+                        } else {
+                            throw e;
+                        }
+                    } catch (KafkaException e) {
+                        printError("Describing the group '" + groupId + "' failed due to " + e.getMessage(), Optional.of(e));
+                    }
                 }
             }
         }
