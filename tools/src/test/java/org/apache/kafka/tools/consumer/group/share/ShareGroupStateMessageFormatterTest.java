@@ -39,7 +39,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -55,7 +55,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
         .setLeaderEpoch(20)
         .setStartOffset(50)
         .setStateBatches(
-            Arrays.asList(
+            List.of(
                 new PersisterStateBatch(
                     100,
                     200,
@@ -78,7 +78,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
         .setLeaderEpoch(25)
         .setStartOffset(55)
         .setStateBatches(
-            Arrays.asList(
+            List.of(
                 new PersisterStateBatch(
                     100,
                     150,

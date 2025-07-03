@@ -113,7 +113,7 @@ public class ShareGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--list"};
         Admin adminClient = mock(KafkaAdminClient.class);
         ListGroupsResult result = mock(ListGroupsResult.class);
-        when(result.all()).thenReturn(KafkaFuture.completedFuture(Arrays.asList(
+        when(result.all()).thenReturn(KafkaFuture.completedFuture(List.of(
                 new GroupListing(firstGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.STABLE)),
                 new GroupListing(secondGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY))
         )));
@@ -139,7 +139,7 @@ public class ShareGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--list", "--state"};
         Admin adminClient = mock(KafkaAdminClient.class);
         ListGroupsResult resultWithAllStates = mock(ListGroupsResult.class);
-        when(resultWithAllStates.all()).thenReturn(KafkaFuture.completedFuture(Arrays.asList(
+        when(resultWithAllStates.all()).thenReturn(KafkaFuture.completedFuture(List.of(
             new GroupListing(firstGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.STABLE)),
             new GroupListing(secondGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY))
         )));
@@ -557,7 +557,7 @@ public class ShareGroupCommandTest {
 
         for (List<String> describeType : DESCRIBE_TYPES) {
             // note the group to be queried is a different (non-existing) group
-            List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--describe", "--group", missingGroup));
+            List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", bootstrapServer, "--describe", "--group", missingGroup));
             cgcArgs.addAll(describeType);
             Admin adminClient = mock(KafkaAdminClient.class);
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
@@ -663,7 +663,7 @@ public class ShareGroupCommandTest {
         String secondTopic = "t2";
         String bootstrapServer = "localhost:9092";
 
-        List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--topic", firstTopic, "--topic", secondTopic));
+        List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--topic", firstTopic, "--topic", secondTopic));
         Admin adminClient = mock(KafkaAdminClient.class);
         DeleteShareGroupOffsetsResult result = mock(DeleteShareGroupOffsetsResult.class);
 
@@ -701,7 +701,7 @@ public class ShareGroupCommandTest {
         String secondTopic = "t2";
         String bootstrapServer = "localhost:9092";
 
-        List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--group", secondGroup, "--topic", firstTopic, "--topic", secondTopic));
+        List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--group", secondGroup, "--topic", firstTopic, "--topic", secondTopic));
         Admin adminClient = mock(KafkaAdminClient.class);
 
         try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
@@ -720,7 +720,7 @@ public class ShareGroupCommandTest {
         String secondTopic = "t2";
         String bootstrapServer = "localhost:9092";
 
-        List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--topic", firstTopic, "--topic", secondTopic));
+        List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--topic", firstTopic, "--topic", secondTopic));
         Admin adminClient = mock(KafkaAdminClient.class);
         DeleteShareGroupOffsetsResult result = mock(DeleteShareGroupOffsetsResult.class);
 
@@ -773,7 +773,7 @@ public class ShareGroupCommandTest {
         String secondTopic = "t2";
         String bootstrapServer = "localhost:9092";
 
-        List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--topic", firstTopic, "--topic", secondTopic));
+        List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--topic", firstTopic, "--topic", secondTopic));
         Admin adminClient = mock(KafkaAdminClient.class);
         DeleteShareGroupOffsetsResult result = mock(DeleteShareGroupOffsetsResult.class);
 
