@@ -2682,8 +2682,6 @@ public class GroupMetadataManager {
             return false;
         }
 
-        // We need to check if all the group initialized share partitions are part of the group assignment.
-        Map<Uuid, Set<Integer>> initializedTps = stripInitValue(shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics());
         Map<Uuid, Set<Integer>> currentAssigned = new HashMap<>();
         for (Assignment assignment : group.targetAssignment().values()) {
             for (Map.Entry<Uuid, Set<Integer>> tps : assignment.partitions().entrySet()) {
@@ -2692,7 +2690,27 @@ public class GroupMetadataManager {
             }
         }
 
-        return !initializedTps.equals(currentAssigned);
+        Set<String> subscribedTopicNames = group.subscribedTopicNames().keySet();
+        for (Map.Entry<Uuid, InitMapValue> entry : shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics().entrySet()) {
+            if (subscribedTopicNames.contains(entry.getValue().name())) {
+                // This topic is currently subscribed, so investigate further.
+                Set<Integer> currentAssignedPartitions = currentAssigned.get(entry.getKey());
+                if (currentAssignedPartitions != null) {
+                    if (currentAssignedPartitions.equals(entry.getValue().partitions())) {
+                        // The assigned and initialized partitions match, so assignment does not need to be recomputed.
+                        continue;
+                    } else {
+                        // The assigned and initialized partitions do not match, so recompute the assignment.
+                        return true;
+                    }
+                } else {
+                    // This topic is not currently assigned, so recompute the assignment.
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
