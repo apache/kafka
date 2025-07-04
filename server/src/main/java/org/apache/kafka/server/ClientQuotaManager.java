@@ -671,7 +671,7 @@ public class ClientQuotaManager {
                 metric.config(getQuotaMetricConfig(newQuota));
             }
         } else {
-            var quotaMetricName = clientQuotaMetricName(Collections.emptyMap());
+            var quotaMetricName = clientQuotaMetricName(Map.of());
             allMetrics.forEach((metricName, metric) -> {
                 if (metricName.name().equals(quotaMetricName.name()) &&
                         metricName.group().equals(quotaMetricName.group())) {
