@@ -166,11 +166,11 @@ class ReplicaFetcherThread(name: String,
     val partition = replicaMgr.getPartitionOrException(tp)
     val log = partition.localLogOrException
 
-    partition.truncateTo(offsetTruncationState.offset, isFuture = false)
-
     if (offsetTruncationState.offset < log.highWatermark)
       warn(s"Truncating $tp to offset ${offsetTruncationState.offset} below high watermark " +
         s"${log.highWatermark}")
+
+    partition.truncateTo(offsetTruncationState.offset, isFuture = false)
 
     // mark the future replica for truncation only when we do last truncation
     if (offsetTruncationState.truncationCompleted)
