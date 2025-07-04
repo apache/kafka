@@ -17,12 +17,13 @@
 
 package kafka.utils
 
+import com.typesafe.scalalogging.Logger
 import org.apache.kafka.server.logger.LoggingController
-import java.lang.management.ManagementFactory
 
+import java.lang.management.ManagementFactory
 import javax.management.ObjectName
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.slf4j.LoggerFactory
 
 class LoggingTest extends Logging {
@@ -78,4 +79,21 @@ class LoggingTest extends Logging {
       controller.setLogLevel("kafka", previousLevel)
     }
   }
+
+  @Test
+  def testLoggerSingletonForOneClass(): Unit = {
+    class TestLogging extends Logging {
+      def logger_var: Logger = logger
+      def logger_var2: Logger = Logger(LoggerFactory.getLogger(loggerName))
+    }
+
+    val logging1 = new TestLogging
+    val logging2 = new TestLogging
+    // Using caching, the logger objects of both Logging instances are the same
+    assertEquals(logging1.logger_var, logging2.logger_var)
+
+    // The previous method of obtaining loggers creates loggers for two object instances repeatedly.
+    assertNotEquals(logging1.logger_var2, logging2.logger_var2)
+  }
+
 }

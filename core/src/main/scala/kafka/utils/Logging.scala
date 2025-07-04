@@ -39,11 +39,15 @@ object Log4jControllerRegistration {
 
 private object Logging {
   private val FatalMarker: Marker = MarkerFactory.getMarker("FATAL")
+  private val loggerCache = new java.util.concurrent.ConcurrentHashMap[String, Logger]()
 }
 
 trait Logging {
 
-  protected lazy val logger: Logger = Logger(LoggerFactory.getLogger(loggerName))
+  protected lazy val logger: Logger = {
+    val name = loggerName
+    Logging.loggerCache.computeIfAbsent(name, _ => Logger(LoggerFactory.getLogger(name)))
+  }
 
   protected var logIdent: String = _
 
