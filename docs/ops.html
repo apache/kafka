@@ -4081,15 +4081,15 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
 
   After starting the controller, the replication to the new controller can be monitored using the <code>bin/kafka-metadata-quorum.sh describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>bin/kafka-metadata-quorum.sh add-controller</code> command.
 
-  The <code>--command-config</code> needs to point to the to-be-added controller's configuration file.
-
-  The <code>controller.quorum.bootstrap.servers</code> property in <code>--command-config</code> file needs to contain an active controller in the quorum.
-
   When using broker endpoints use the --bootstrap-server flag:
   <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
 
   When using controller endpoints use the --bootstrap-controller flag:
   <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --bootstrap-controller localhost:9093 add-controller</code></pre>
+
+  The <code>--command-config</code> needs to point to the to-be-added controller's configuration file.
+
+  Be sure that the <code>controller.quorum.bootstrap.servers</code> property in the specified <code>--command-config</code> file contains at least one controller currently in the quorum.
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
   If the dynamic controller cluster already exists, it can be shrunk using the <code>bin/kafka-metadata-quorum.sh remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
