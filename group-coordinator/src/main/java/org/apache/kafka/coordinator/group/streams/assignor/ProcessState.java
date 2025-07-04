@@ -32,7 +32,6 @@ public class ProcessState {
     private int capacity;
     private double load;
     private int taskCount;
-    private int activeTaskCount;
     private final Map<String, Integer> memberToTaskCounts;
     private final Map<String, Set<TaskId>> assignedActiveTasks;
     private final Map<String, Set<TaskId>> assignedStandbyTasks;
@@ -65,10 +64,6 @@ public class ProcessState {
         return memberToTaskCounts;
     }
 
-    public int activeTaskCount() {
-        return activeTaskCount;
-    }
-
     public Set<TaskId> assignedActiveTasks() {
         return assignedActiveTasks.values().stream()
             .flatMap(Set::stream)
@@ -93,7 +88,6 @@ public class ProcessState {
         taskCount += 1;
         assignedTasks.add(taskId);
         if (isActive) {
-            activeTaskCount += 1;
             assignedActiveTasks.putIfAbsent(memberId, new HashSet<>());
             assignedActiveTasks.get(memberId).add(taskId);
         } else {
