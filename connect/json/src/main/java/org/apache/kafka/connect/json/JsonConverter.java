@@ -68,8 +68,6 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
     private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new EnumMap<>(Schema.Type.class);
 
-    // if a schema is provided in config, this schema will be used for all messages
-
     static {
         TO_CONNECT_CONVERTERS.put(Schema.Type.BOOLEAN, (schema, value, config) -> value.booleanValue());
         TO_CONNECT_CONVERTERS.put(Schema.Type.INT8, (schema, value, config) -> (byte) value.intValue());
@@ -231,7 +229,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private JsonConverterConfig config;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
-    private Schema schema = null;
+    private Schema schema = null;     // if a schema is provided in config, this schema will be used for all messages
 
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;
