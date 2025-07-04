@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -100,9 +99,9 @@ public class StickyTaskAssignor implements TaskAssignor {
         localState.activeTasksPerMember = computeTasksPerMember(localState.totalActiveTasks, localState.totalMembersWithActiveTaskCapacity);
         localState.tasksPerMember = computeTasksPerMember(localState.totalTasks, localState.totalMembersWithActiveTaskCapacity);
 
-        localState.processIdToState = new HashMap<>();
-        localState.activeTaskToPrevMember = new HashMap<>();
-        localState.standbyTaskToPrevMember = new HashMap<>();
+        localState.processIdToState = new HashMap<>(localState.totalMembersWithActiveTaskCapacity);
+        localState.activeTaskToPrevMember = new HashMap<>(localState.totalActiveTasks);
+        localState.standbyTaskToPrevMember = new HashMap<>(localState.numStandbyReplicas > 0 ? (localState.totalTasks - localState.totalActiveTasks) / localState.numStandbyReplicas : 0);
         for (Map.Entry<String, AssignmentMemberSpec> memberEntry : groupSpec.members().entrySet()) {
             final String memberId = memberEntry.getKey();
             final String processId = memberEntry.getValue().processId();
@@ -125,7 +124,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 Set<Integer> partitionNoSet = entry.getValue();
                 for (int partitionNo : partitionNoSet) {
                     TaskId taskId = new TaskId(entry.getKey(), partitionNo);
-                    localState.standbyTaskToPrevMember.putIfAbsent(taskId, new ArrayList<>());
+                    localState.standbyTaskToPrevMember.putIfAbsent(taskId, new ArrayList<>(localState.numStandbyReplicas));
                     localState.standbyTaskToPrevMember.get(taskId).add(member);
                 }
             }
@@ -208,19 +207,17 @@ public class StickyTaskAssignor implements TaskAssignor {
         // 3. assign any remaining unassigned tasks
         PriorityQueue<ProcessState> processByLoad = new PriorityQueue<>(Comparator.comparingDouble(ProcessState::load));
         processByLoad.addAll(localState.processIdToState.values());
-        for (Iterator<TaskId> it = activeTasks.iterator(); it.hasNext();) {
-            final TaskId task = it.next();
+        for (TaskId task: activeTasks) {
             ProcessState processWithLeastLoad = processByLoad.poll();
             if (processWithLeastLoad == null) {
                 throw new TaskAssignorException("No process available to assign active task {}." + task);
             }
-            String member = memberWithLeastLoad(processWithLeastLoad);
-            if (member == null) {
+            int newTaskCount = processWithLeastLoad.addTaskToLeastLoadedMember(task, true);
+            if (newTaskCount != -1) {
+                maybeUpdateActiveTasksPerMember(newTaskCount);
+            } else {
                 throw new TaskAssignorException("No member available to assign active task {}." + task);
             }
-            processWithLeastLoad.addTask(member, task, true);
-            it.remove();
-            maybeUpdateActiveTasksPerMember(processWithLeastLoad.memberToTaskCounts().get(member));
             processByLoad.add(processWithLeastLoad); // Add it back to the queue after updating its state
         }
     }
@@ -248,10 +245,10 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
         boolean found = false;
         if (!processWithLeastLoad.hasTask(taskId)) {
-            String memberId = memberWithLeastLoad(processWithLeastLoad);
-            if (memberId != null) {
-                processWithLeastLoad.addTask(memberId, taskId, false);
+            int newTaskCount = processWithLeastLoad.addTaskToLeastLoadedMember(taskId, false);
+            if (newTaskCount != -1) {
                 found = true;
+                maybeUpdateTasksPerMember(newTaskCount);
             }
         } else if (!queue.isEmpty()) {
             found = assignStandbyToMemberWithLeastLoad(queue, taskId);
@@ -296,20 +293,6 @@ public class StickyTaskAssignor implements TaskAssignor {
             return candidate;
         }
         return null;
-    }
-
-    private String memberWithLeastLoad(final ProcessState processWithLeastLoad) {
-        Map<String, Integer> members = processWithLeastLoad.memberToTaskCounts();
-        if (members.isEmpty()) {
-            return null;
-        }
-        if (members.size() == 1) {
-            return members.keySet().iterator().next();
-        }
-        Optional<String> memberWithLeastLoad = processWithLeastLoad.memberToTaskCounts().entrySet().stream()
-            .min(Map.Entry.comparingByValue())
-            .map(Map.Entry::getKey);
-        return memberWithLeastLoad.orElse(null);
     }
 
     private boolean hasUnfulfilledActiveTaskQuota(final ProcessState process, final Member member) {
