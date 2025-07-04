@@ -56,14 +56,12 @@ import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.network.Session
-import org.apache.kafka.server.ControllerMutationQuota
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.SimpleApiVersionManager
-import org.apache.kafka.server.ClientQuotaManager
-import org.apache.kafka.server.ControllerMutationQuotaManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.apache.kafka.test.TestUtils

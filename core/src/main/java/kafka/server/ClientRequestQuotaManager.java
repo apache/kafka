@@ -25,9 +25,9 @@ import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.ClientQuotaManager;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
+import org.apache.kafka.server.quota.ClientQuotaManager;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.quota.QuotaUtils;
 

@@ -21,12 +21,12 @@ import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.ClientQuotaManager;
-import org.apache.kafka.server.ControllerMutationQuotaManager;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
+import org.apache.kafka.server.quota.ClientQuotaManager;
+import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
 import org.apache.kafka.server.quota.QuotaType;
 
 import java.util.Optional;

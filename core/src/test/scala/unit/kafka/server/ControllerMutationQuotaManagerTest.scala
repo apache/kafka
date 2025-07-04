@@ -25,12 +25,7 @@ import org.apache.kafka.common.metrics.QuotaViolationException
 import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
-import org.apache.kafka.server.quota.QuotaType
-import org.apache.kafka.server.PermissiveControllerMutationQuota
-import org.apache.kafka.server.StrictControllerMutationQuota
-import org.apache.kafka.server.ControllerMutationQuota
-import org.apache.kafka.server.ControllerMutationQuotaManager
-import org.apache.kafka.server.ClientQuotaManager
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, PermissiveControllerMutationQuota, QuotaType, StrictControllerMutationQuota}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse

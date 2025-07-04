@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server;
+package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -32,21 +32,12 @@ import org.apache.kafka.common.utils.Sanitizer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.network.Session;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
-import org.apache.kafka.server.quota.ClientQuotaCallback;
-import org.apache.kafka.server.quota.ClientQuotaEntity;
-import org.apache.kafka.server.quota.ClientQuotaType;
-import org.apache.kafka.server.quota.QuotaType;
-import org.apache.kafka.server.quota.QuotaUtils;
-import org.apache.kafka.server.quota.SensorAccess;
-import org.apache.kafka.server.quota.ThrottleCallback;
-import org.apache.kafka.server.quota.ThrottledChannel;
 import org.apache.kafka.server.util.ShutdownableThread;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

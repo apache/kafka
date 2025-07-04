@@ -42,8 +42,7 @@ import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
-import org.apache.kafka.server.quota.QuotaType
-import org.apache.kafka.server.ClientQuotaManager
+import org.apache.kafka.server.quota.{ClientQuotaManager, QuotaType}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals

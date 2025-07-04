@@ -94,15 +94,12 @@ import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerC
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
-import org.apache.kafka.server.quota.ThrottleCallback
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ThrottleCallback}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.share.context.{FinalContext, ShareSessionContext}
 import org.apache.kafka.server.share.session.{ShareSession, ShareSessionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
-import org.apache.kafka.server.ClientQuotaManager
-import org.apache.kafka.server.ControllerMutationQuotaManager
-import org.apache.kafka.server.ControllerMutationQuota
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._

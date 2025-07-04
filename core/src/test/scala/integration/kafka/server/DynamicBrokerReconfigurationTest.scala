@@ -62,8 +62,7 @@ import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
-import org.apache.kafka.server.ClientQuotaManager
-import org.apache.kafka.server.quota.ClientQuotaEntity
+import org.apache.kafka.server.quota.{ClientQuotaEntity, ClientQuotaManager}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions._

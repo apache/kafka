@@ -18,8 +18,7 @@ package kafka.server
 
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
-import org.apache.kafka.server.quota.QuotaType
-import org.apache.kafka.server.ClientQuotaManager
+import org.apache.kafka.server.quota.{ClientQuotaManager, QuotaType}
 import org.apache.kafka.server.quota.ClientQuotaEntity
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test

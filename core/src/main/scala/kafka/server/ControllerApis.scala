@@ -41,7 +41,7 @@ import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartit
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
-import org.apache.kafka.common.message.{CreateTopicsRequestData, _}
+import org.apache.kafka.common.message._
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
@@ -58,7 +58,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.{ApiVersionManager, DelegationTokenManager, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
-import org.apache.kafka.server.ControllerMutationQuota
+import org.apache.kafka.server.quota.ControllerMutationQuota
 
 import scala.jdk.CollectionConverters._
 

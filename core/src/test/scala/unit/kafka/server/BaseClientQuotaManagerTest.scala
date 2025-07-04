@@ -30,9 +30,8 @@ import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestC
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.network.Session
-import org.apache.kafka.server.ClientQuotaManager
 import org.apache.kafka.network.metrics.RequestChannelMetrics
-import org.apache.kafka.server.quota.ThrottleCallback
+import org.apache.kafka.server.quota.{ClientQuotaManager, ThrottleCallback}
 import org.junit.jupiter.api.AfterEach
 import org.mockito.Mockito.mock
 

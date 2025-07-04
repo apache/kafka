@@ -25,12 +25,12 @@ import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.server.quota.ClientQuotaEntity.ConfigEntity
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.server.ClientQuotaManager
 
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Optional
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
 import org.apache.kafka.server.config.QuotaConfig
+import org.apache.kafka.server.quota.ClientQuotaManager
 
 import scala.jdk.OptionConverters.RichOptionalDouble
 

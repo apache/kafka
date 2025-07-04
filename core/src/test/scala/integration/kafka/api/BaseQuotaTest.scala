@@ -36,8 +36,7 @@ import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.ClientQuotaManager
-import org.apache.kafka.server.quota.QuotaType
+import org.apache.kafka.server.quota.{ClientQuotaManager, QuotaType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest

@@ -16,8 +16,8 @@
  */
 package kafka.server.metadata
 
-import org.apache.kafka.server.ClientQuotaManager
 import org.apache.kafka.image.ClientQuotaDelta
+import org.apache.kafka.server.quota.ClientQuotaManager
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable

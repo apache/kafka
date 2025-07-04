@@ -57,13 +57,13 @@ import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.ClientMetricsManager;
-import org.apache.kafka.server.ClientQuotaManager;
-import org.apache.kafka.server.ControllerMutationQuotaManager;
 import org.apache.kafka.server.SimpleApiVersionManager;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.quota.ClientQuotaManager;
+import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
