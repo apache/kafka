@@ -40,6 +40,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -289,6 +290,11 @@ public class GroupCoordinatorConfig {
     public static final int STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT = 2;
     public static final String STREAMS_GROUP_MAX_STANDBY_REPLICAS_DOC = "The maximum allowed value for the group-level configuration of " + GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG;
 
+    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG = "group.share.initialize.retry.interval.ms";
+    // Because persister retries with exp backoff 5 times and upper cap of 30 secs.
+    public static final int SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT = OFFSET_COMMIT_TIMEOUT_MS_DEFAULT * 6;
+    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request.";
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         // Group coordinator configs
         .define(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, LIST, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT,
@@ -335,6 +341,7 @@ public class GroupCoordinatorConfig {
         .define(SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC)
         .define(SHARE_GROUP_MAX_SIZE_CONFIG, INT, SHARE_GROUP_MAX_SIZE_DEFAULT, between(1, 1000), MEDIUM, SHARE_GROUP_MAX_SIZE_DOC)
         .define(SHARE_GROUP_ASSIGNORS_CONFIG, LIST, SHARE_GROUP_ASSIGNORS_DEFAULT, null, MEDIUM, SHARE_GROUP_ASSIGNORS_DOC)
+        .defineInternal(SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT, atLeast(1), LOW, SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC)
 
         // Streams group configs
         .define(STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, INT, STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_SESSION_TIMEOUT_MS_DOC)
@@ -387,6 +394,7 @@ public class GroupCoordinatorConfig {
     private final int shareGroupMinHeartbeatIntervalMs;
     private final int shareGroupMaxHeartbeatIntervalMs;
     private final List<ShareGroupPartitionAssignor> shareGroupAssignors;
+    private final int shareGroupInitializeRetryIntervalMs;
     // Streams group configurations
     private final int streamsGroupSessionTimeoutMs;
     private final int streamsGroupMinSessionTimeoutMs;
@@ -437,6 +445,7 @@ public class GroupCoordinatorConfig {
         this.shareGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareGroupMaxSize = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG);
         this.shareGroupAssignors = shareGroupAssignors(config);
+        this.shareGroupInitializeRetryIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG);
         // Streams group configurations
         this.streamsGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
@@ -484,6 +493,9 @@ public class GroupCoordinatorConfig {
         require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
             String.format("%s must be less than or equal to %s",
                 SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
+        require(shareGroupInitializeRetryIntervalMs >= offsetCommitTimeoutMs,
+            String.format("%s must be greater than %s",
+                SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, OFFSET_COMMIT_TIMEOUT_MS_CONFIG));
 
         require(shareGroupHeartbeatIntervalMs < shareGroupSessionTimeoutMs,
             String.format("%s must be less than %s",
@@ -880,6 +892,13 @@ public class GroupCoordinatorConfig {
      */
     public List<ShareGroupPartitionAssignor> shareGroupAssignors() {
         return shareGroupAssignors;
+    }
+
+    /**
+     * The share group initialize retry interval.
+     */
+    public int shareGroupInitializeRetryIntervalMs() {
+        return shareGroupInitializeRetryIntervalMs;
     }
 
     /**

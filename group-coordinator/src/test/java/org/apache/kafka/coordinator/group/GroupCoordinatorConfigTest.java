@@ -319,6 +319,10 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
         assertEquals("group.share.heartbeat.interval.ms must be less than group.share.session.timeout.ms",
                 assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+        configs.put(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, 5000);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, 1000);
+        assertEquals("group.share.initialize.retry.interval.ms must be greater than offsets.commit.timeout.ms",
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 45000);
