@@ -2671,14 +2671,24 @@ public class GroupMetadataManager {
         );
     }
 
-    private boolean initializedAssignmentPending(ShareGroup group) {
-        if (!shareGroupStatePartitionMetadata.containsKey(group.groupId())) {
+    // Visibility for testing
+    boolean initializedAssignmentPending(ShareGroup group) {
+        if (group.isEmpty()) {
+            // No members then no point in computing assignment.
+            return false;
+        }
+
+        String groupId = group.groupId();
+
+        if (!shareGroupStatePartitionMetadata.containsKey(groupId) ||
+            shareGroupStatePartitionMetadata.get(groupId).initializedTopics().isEmpty()) {
             // No initialized share partitions for the group so nothing can be assigned.
             return false;
         }
 
-        if (group.isEmpty()) {
-            // No members then no point of computing assignment.
+        Set<String> subscribedTopicNames = group.subscribedTopicNames().keySet();
+        // No subscription then no need to compute assignment.
+        if (subscribedTopicNames.isEmpty()) {
             return false;
         }
 
@@ -2690,26 +2700,19 @@ public class GroupMetadataManager {
             }
         }
 
-        Set<String> subscribedTopicNames = group.subscribedTopicNames().keySet();
-        for (Map.Entry<Uuid, InitMapValue> entry : shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics().entrySet()) {
+        for (Map.Entry<Uuid, InitMapValue> entry : shareGroupStatePartitionMetadata.get(groupId).initializedTopics().entrySet()) {
             if (subscribedTopicNames.contains(entry.getValue().name())) {
                 // This topic is currently subscribed, so investigate further.
                 Set<Integer> currentAssignedPartitions = currentAssigned.get(entry.getKey());
-                if (currentAssignedPartitions != null) {
-                    if (currentAssignedPartitions.equals(entry.getValue().partitions())) {
-                        // The assigned and initialized partitions match, so assignment does not need to be recomputed.
-                        continue;
-                    } else {
-                        // The assigned and initialized partitions do not match, so recompute the assignment.
-                        return true;
-                    }
-                } else {
-                    // This topic is not currently assigned, so recompute the assignment.
-                    return true;
+                if (currentAssignedPartitions != null && currentAssignedPartitions.equals(entry.getValue().partitions())) {
+                    // The assigned and initialized partitions match, so assignment does not need to be recomputed.
+                    continue;
                 }
+                // The assigned and initialized partitions do not match, OR
+                // this topic is not currently assigned, so recompute the assignment.
+                return true;
             }
         }
-
         return false;
     }
 
