@@ -2873,23 +2873,41 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     /** Changes the <i>preferred</i> leader without changing the <i>current</i> leader. */
     def changePreferredLeader(newAssignment: Seq[Int]): Unit = {
       val preferred = newAssignment.head
-      val prior1 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id()
-      val prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
-
-      var m = Map.empty[TopicPartition, Optional[NewPartitionReassignment]]
-      if (prior1 != preferred)
-        m += partition1 -> Optional.of(new NewPartitionReassignment(newAssignment.map(Int.box).asJava))
-      if (prior2 != preferred)
-        m += partition2 -> Optional.of(new NewPartitionReassignment(newAssignment.map(Int.box).asJava))
-      client.alterPartitionReassignments(m.asJava).all().get()
+      var prior1 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id()
+      var prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
 
       TestUtils.waitUntilTrue(
-        () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
+        () => {
+          prior1 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id()
+          prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
+          var m = Map.empty[TopicPartition, Optional[NewPartitionReassignment]]
+            if (prior1 != preferred)
+              m += partition1 -> Optional.of(new NewPartitionReassignment(newAssignment.map(Int.box).asJava))
+            if (prior2 != preferred)
+              m += partition2 -> Optional.of(new NewPartitionReassignment(newAssignment.map(Int.box).asJava))
+          client.alterPartitionReassignments(m.asJava).all().get()
+          preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred
+        },
         s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
-        10000)
+        10000L)
+
       // Check the leader hasn't moved
-      TestUtils.assertLeader(client, partition1, prior1)
-      TestUtils.assertLeader(client, partition2, prior2)
+      TestUtils.waitUntilTrue(
+        () => {
+          prior1 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition1.partition(), listenerName).get.id()
+          TestUtils.assertLeader(client, partition1, prior1)
+        },
+        "Waiting for leader of partition2 to become prior1",
+        1000L
+      )
+      TestUtils.waitUntilTrue(
+        () => {
+          prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
+          TestUtils.assertLeader(client, partition2, prior2)
+        },
+        "Waiting for leader of partition2 to become prior2",
+        1000L
+      )
     }
 
     // Check current leaders are 0
@@ -2907,9 +2925,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(electResult.partitions.get.isEmpty)
     TestUtils.assertLeader(client, partition1, 0)
     TestUtils.assertLeader(client, partition2, 0)
-
     // Now change the preferred leader to 1
-    Thread.sleep(1000)
     changePreferredLeader(prefer1)
 
     // meaningful election
@@ -2948,7 +2964,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 1)
 
     // Now change the preferred leader to 2
-    Thread.sleep(1000)
     changePreferredLeader(prefer2)
 
     // mixed results
@@ -2963,14 +2978,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(util.Set.of(partition2), electResult.partitions.get.keySet)
     assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
-
     // Now change the preferred leader to 1
-    Thread.sleep(1000)
     changePreferredLeader(prefer1)
+
     // but shut it down...
     killBroker(1)
-    Thread.sleep(1000)
-    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
+    TestUtils.waitUntilTrue(
+      () => TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1)),
+      "Waiting for broker 1 to be out of ISR for partition1 and partition2",
+      1000L
+    )
 
     def assertPreferredLeaderNotAvailable(
       topicPartition: TopicPartition,

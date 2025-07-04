@@ -1298,11 +1298,11 @@ object TestUtils extends Logging {
     adminClient.incrementalAlterConfigs(configs)
   }
 
-  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
+  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Boolean = {
     waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
   }
 
-  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Unit = {
+  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Boolean = {
     waitForLeaderToBecome(client, topicPartition, None)
   }
 
@@ -1317,7 +1317,7 @@ object TestUtils extends Logging {
     client: Admin,
     topicPartition: TopicPartition,
     expectedLeaderOpt: Option[Int]
-  ): Unit = {
+  ): Boolean = {
     val topic = topicPartition.topic
     val partitionId = topicPartition.partition
 
@@ -1335,11 +1335,14 @@ object TestUtils extends Logging {
       case Failure(e) => throw e
     }
 
-    assertTrue(isLeaderElected, s"Timed out waiting for leader to become $expectedLeaderOpt. " +
+    assertTrue(isLeaderElected, s"Timed out waiting for leader to become expectedLeaderOpt. " +
       s"Last metadata lookup returned leader = ${lastLeaderCheck.getOrElse("unknown")}")
+
+    isLeaderElected
   }
 
-  def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
+  def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Boolean = {
+    var result = false
     waitUntilTrue(
       () => {
         val description = client.describeTopics(partition.map(_.topic).asJava).allTopicNames.get.asScala
@@ -1349,10 +1352,12 @@ object TestUtils extends Logging {
           .map(_.id)
           .toSet
 
+        result = brokerIds.intersect(isr).isEmpty
         brokerIds.intersect(isr).isEmpty
       },
       s"Expected brokers $brokerIds to no longer be in the ISR for $partition"
     )
+    result
   }
 
   def currentIsr(admin: Admin, partition: TopicPartition): Set[Int] = {
