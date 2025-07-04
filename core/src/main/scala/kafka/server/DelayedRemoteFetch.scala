@@ -83,10 +83,10 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
         }
     }
     // Case c
-    if (remoteFetchResults.values().stream().anyMatch(taskResult => !taskResult.isDone))
-      false
-    else
+    if (remoteFetchResults.values().stream().allMatch(taskResult => taskResult.isDone))
       forceComplete()
+    else
+      false
   }
 
   override def onExpiration(): Unit = {

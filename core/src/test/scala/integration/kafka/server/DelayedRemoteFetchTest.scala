@@ -326,6 +326,11 @@ class DelayedRemoteFetchTest {
     val fetchInfo1 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null)
     val fetchInfo2 = new RemoteStorageFetchInfo(0, false, topicIdPartition2, null, null)
 
+    val highWatermark1 = 100
+    val leaderLogStartOffset1 = 10
+    val highWatermark2 = 200
+    val leaderLogStartOffset2 = 20
+
     val logReadInfo1 = buildReadResult(Errors.NONE, 100, 10)
     val logReadInfo2 = buildReadResult(Errors.NONE, 200, 20)
 
@@ -365,7 +370,7 @@ class DelayedRemoteFetchTest {
     assertFalse(delayedRemoteFetch.tryComplete())
     assertFalse(delayedRemoteFetch.isCompleted)
 
-    // Complete the other future
+    // Complete future2
     future2.complete(buildRemoteReadResult(Errors.NONE))
 
     // Now it should complete
@@ -378,7 +383,12 @@ class DelayedRemoteFetchTest {
     assertTrue(responses.contains(topicIdPartition2))
 
     assertEquals(Errors.NONE, responses(topicIdPartition).error)
+    assertEquals(highWatermark1, responses(topicIdPartition).highWatermark)
+    assertEquals(leaderLogStartOffset1, responses(topicIdPartition).logStartOffset)
+
     assertEquals(Errors.NONE, responses(topicIdPartition2).error)
+    assertEquals(highWatermark2, responses(topicIdPartition2).highWatermark)
+    assertEquals(leaderLogStartOffset2, responses(topicIdPartition2).logStartOffset)
   }
 
   @Test

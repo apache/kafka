@@ -1605,7 +1605,6 @@ class ReplicaManager(val config: KafkaConfig,
         // Store the error in RemoteLogReadResult if any in scheduling the remote fetch task.
         // It will be sent back to the client in DelayedRemoteFetch along with other successful remote fetch results.
         remoteFetchResult.complete(new RemoteLogReadResult(Optional.empty, Optional.of(e)))
-        delayedRemoteFetchPurgatory.checkAndComplete(key)
     }
 
     (remoteFetchTask, remoteFetchResult)
