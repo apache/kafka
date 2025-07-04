@@ -18,11 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
@@ -57,7 +56,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         data.topics().forEach(topic ->
             topic.partitions().forEach(partition ->
                 updateErrorCounts(errorCounts, Errors.forCode(partition.errorCode()))));
@@ -73,8 +72,8 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static OffsetsForLeaderEpochResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetsForLeaderEpochResponse(new OffsetForLeaderEpochResponseData(new ByteBufferAccessor(buffer), version));
+    public static OffsetsForLeaderEpochResponse parse(Readable readable, short version) {
+        return new OffsetsForLeaderEpochResponse(new OffsetForLeaderEpochResponseData(readable, version));
     }
 
     @Override

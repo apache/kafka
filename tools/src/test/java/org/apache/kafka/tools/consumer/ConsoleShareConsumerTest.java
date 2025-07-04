@@ -22,15 +22,21 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.MockTime;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.PrintStream;
 import java.time.Duration;
+import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -129,6 +135,45 @@ public class ConsoleShareConsumerTest {
         verify(consumer).receive();
         verify(consumer).acknowledge(record, AcknowledgeType.REJECT);
 
+        consumer.cleanup();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUpgradeDeliveryCount() {
+        // Mock dependencies
+        ConsoleShareConsumer.ConsumerWrapper consumer = mock(ConsoleShareConsumer.ConsumerWrapper.class);
+        MessageFormatter formatter = mock(MessageFormatter.class);
+        PrintStream printStream = mock(PrintStream.class);
+
+        short deliveryCount = 1;
+        // Mock a ConsumerRecord with a delivery count
+        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+                "test-topic", 0, 0, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, 0,
+                0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty(), Optional.of(deliveryCount)
+        );
+
+        // Mock consumer behavior
+        when(consumer.receive()).thenReturn(record);
+
+        // Process the record
+        ConsoleShareConsumer.process(1, formatter, consumer, printStream, false, AcknowledgeType.ACCEPT);
+
+        // Capture the actual ConsumerRecord passed to formatter.writeTo
+        ArgumentCaptor<ConsumerRecord> captor = ArgumentCaptor.forClass(ConsumerRecord.class);
+        verify(formatter).writeTo(captor.capture(), eq(printStream));
+
+        // Assert that the captured ConsumerRecord matches the expected values
+        ConsumerRecord<byte[], byte[]> capturedRecord = captor.getValue();
+        assertEquals("test-topic", capturedRecord.topic());
+        assertEquals(0, capturedRecord.partition());
+        assertEquals(0, capturedRecord.offset());
+        assertEquals(deliveryCount, capturedRecord.deliveryCount().orElse((short) 0));
+
+        // Verify that the consumer acknowledges the record
+        verify(consumer).acknowledge(record, AcknowledgeType.ACCEPT);
+
+        // Cleanup
         consumer.cleanup();
     }
 }

@@ -1010,7 +1010,7 @@ abstract class EmbeddedConnect {
                     .entity(res.getContentAsString())
                     .build();
         } catch (Exception e) {
-            log.error("Could not execute " + httpMethod + " request to " + url, e);
+            log.error("Could not execute {} request to {}", httpMethod, url, e);
             throw new ConnectException(e);
         }
     }

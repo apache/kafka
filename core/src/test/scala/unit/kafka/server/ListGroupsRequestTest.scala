@@ -23,46 +23,28 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
-import org.junit.jupiter.api.Assertions.{assertEquals, fail}
+import org.junit.jupiter.api.Assertions.assertEquals
 
-@ClusterTestDefaults(types = Array(Type.KRAFT))
-class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
-    )
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
   )
-  def testListGroupsWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+)
+class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+  @ClusterTest
+  def testListGroupsWithNewConsumerGroupProtocol(): Unit = {
     testListGroups(true)
   }
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
-  ))
-  def testListGroupsWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testListGroups(false)
-  }
-
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
-  ))
-  def testListGroupsWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+  @ClusterTest
+  def testListGroupsWithOldConsumerGroupProtocol(): Unit = {
     testListGroups(false)
   }
 
   private def testListGroups(useNewProtocol: Boolean): Unit = {
-    if (!isNewGroupCoordinatorEnabled && useNewProtocol) {
-      fail("Cannot use the new protocol with the old group coordinator.")
-    }
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()

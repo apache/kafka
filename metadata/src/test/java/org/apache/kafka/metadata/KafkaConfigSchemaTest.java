@@ -54,7 +54,8 @@ public class KafkaConfigSchemaTest {
             define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc doc").
             define("def", ConfigDef.Type.LONG, ConfigDef.Importance.HIGH, "def doc").
             define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi doc").
-            define("xyz", ConfigDef.Type.PASSWORD, "thedefault", ConfigDef.Importance.HIGH, "xyz doc"));
+            define("xyz", ConfigDef.Type.PASSWORD, "thedefault", ConfigDef.Importance.HIGH, "xyz doc").
+            defineInternal("internal", ConfigDef.Type.STRING, "internalValue", null, ConfigDef.Importance.HIGH, "internal doc"));
     }
 
     public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
@@ -166,5 +167,31 @@ public class KafkaConfigSchemaTest {
             dynamicClusterConfigs,
             dynamicNodeConfigs,
             dynamicTopicConfigs));
+    }
+
+    @Test
+    public void testResolveEffectiveDynamicInternalTopicConfig() {
+        Map<String, String> dynamicTopicConfigs = Map.of(
+            "ghi", "true",
+            "internal", "internal,change"
+        );
+        Map<String, ConfigEntry> expected = Map.of(
+            "abc", new ConfigEntry("abc", null, 
+                    ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, List.of(), 
+                    ConfigEntry.ConfigType.LIST, "abc doc"),
+            "def", new ConfigEntry("def", null, 
+                    ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, List.of(), 
+                    ConfigEntry.ConfigType.LONG, "def doc"),
+            "ghi", new ConfigEntry("ghi", "true", 
+                    ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of(), 
+                    ConfigEntry.ConfigType.BOOLEAN, "ghi doc"),
+            "xyz", new ConfigEntry("xyz", "thedefault", 
+                    ConfigEntry.ConfigSource.DEFAULT_CONFIG, true, false, List.of(), 
+                    ConfigEntry.ConfigType.PASSWORD, "xyz doc"),
+            "internal", new ConfigEntry("internal", "internal,change", 
+                    ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of(), 
+                    ConfigEntry.ConfigType.STRING, "internal doc")
+        );
+        assertEquals(expected, SCHEMA.resolveEffectiveTopicConfigs(Map.of(), Map.of(), Map.of(), dynamicTopicConfigs));
     }
 }

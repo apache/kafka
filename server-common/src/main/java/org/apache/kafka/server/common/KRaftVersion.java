@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.Collections;
 import java.util.Map;
 
 public enum KRaftVersion implements FeatureVersion {
@@ -53,7 +52,7 @@ public enum KRaftVersion implements FeatureVersion {
             case 1:
                 return KRAFT_VERSION_1;
             default:
-                throw new RuntimeException("Unknown KRaft feature level: " + (int) version);
+                throw new IllegalArgumentException("Unknown KRaft feature level: " + (int) version);
         }
     }
 
@@ -74,11 +73,19 @@ public enum KRaftVersion implements FeatureVersion {
     @Override
     public Map<String, Short> dependencies() {
         if (this.featureLevel == 0) {
-            return Collections.emptyMap();
+            return Map.of();
         } else {
-            return Collections.singletonMap(
+            return Map.of(
                 MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_9_IV0.featureLevel());
         }
+    }
+
+    public boolean isAtLeast(KRaftVersion otherVersion) {
+        return this.compareTo(otherVersion) >= 0;
+    }
+
+    public boolean isMoreThan(KRaftVersion otherVersion) {
+        return this.compareTo(otherVersion) > 0;
     }
 
     public short quorumStateVersion() {
@@ -87,23 +94,26 @@ public enum KRaftVersion implements FeatureVersion {
                 return (short) 0;
             case KRAFT_VERSION_1:
                 return (short) 1;
+            default:
+                throw new IllegalStateException("Unsupported KRaft feature level: " + this);
         }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 
     public short kraftVersionRecordVersion() {
         switch (this) {
             case KRAFT_VERSION_1:
                 return (short) 0;
+            default:
+                throw new IllegalStateException("Unsupported KRaft feature level: " + this);
         }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 
     public short votersRecordVersion() {
         switch (this) {
             case KRAFT_VERSION_1:
                 return (short) 0;
+            default:
+                throw new IllegalStateException("Unsupported KRaft feature level: " + this);
         }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 }

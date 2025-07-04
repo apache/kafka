@@ -20,10 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class AssignReplicasToDirsRequest extends AbstractRequest {
 
@@ -75,8 +73,8 @@ public class AssignReplicasToDirsRequest extends AbstractRequest {
         return data;
     }
 
-    public static AssignReplicasToDirsRequest parse(ByteBuffer buffer, short version) {
+    public static AssignReplicasToDirsRequest parse(Readable readable, short version) {
         return new AssignReplicasToDirsRequest(new AssignReplicasToDirsRequestData(
-                new ByteBufferAccessor(buffer), version), version);
+                readable, version), version);
     }
 }

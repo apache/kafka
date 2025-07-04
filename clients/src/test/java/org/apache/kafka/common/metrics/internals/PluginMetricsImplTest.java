@@ -27,7 +27,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -36,10 +35,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PluginMetricsImplTest {
 
-    private final Map<String, String> extraTags = Collections.singletonMap("my-tag", "my-value");
+    private static final LinkedHashMap<String, String> EXTRA_TAGS = new LinkedHashMap<>();
     private Map<String, String> tags;
     private Metrics metrics;
     private int initialMetrics;
+
+    static {
+        EXTRA_TAGS.put("my-tag", "my-value");
+    }
 
     @BeforeEach
     void setup() {
@@ -53,26 +56,28 @@ public class PluginMetricsImplTest {
     @Test
     void testMetricName() {
         PluginMetricsImpl pmi = new PluginMetricsImpl(metrics, tags);
-        MetricName metricName = pmi.metricName("name", "description", extraTags);
+        MetricName metricName = pmi.metricName("name", "description", EXTRA_TAGS);
         assertEquals("name", metricName.name());
         assertEquals("plugins", metricName.group());
         assertEquals("description", metricName.description());
         Map<String, String> expectedTags = new LinkedHashMap<>(tags);
-        expectedTags.putAll(extraTags);
+        expectedTags.putAll(EXTRA_TAGS);
         assertEquals(expectedTags, metricName.tags());
     }
 
     @Test
     void testDuplicateTagName() {
         PluginMetricsImpl pmi = new PluginMetricsImpl(metrics, tags);
+        LinkedHashMap<String, String> tags = new LinkedHashMap<>();
+        tags.put("k1", "value");
         assertThrows(IllegalArgumentException.class,
-                () -> pmi.metricName("name", "description", Collections.singletonMap("k1", "value")));
+                () -> pmi.metricName("name", "description", tags));
     }
 
     @Test
     void testAddRemoveMetrics() {
         PluginMetricsImpl pmi = new PluginMetricsImpl(metrics, tags);
-        MetricName metricName = pmi.metricName("name", "description", extraTags);
+        MetricName metricName = pmi.metricName("name", "description", EXTRA_TAGS);
         pmi.addMetric(metricName, (Measurable) (config, now) -> 0.0);
         assertEquals(initialMetrics + 1, metrics.metrics().size());
 
@@ -88,7 +93,7 @@ public class PluginMetricsImplTest {
     void testAddRemoveSensor() {
         PluginMetricsImpl pmi = new PluginMetricsImpl(metrics, tags);
         String sensorName = "my-sensor";
-        MetricName metricName = pmi.metricName("name", "description", extraTags);
+        MetricName metricName = pmi.metricName("name", "description", EXTRA_TAGS);
         Sensor sensor = pmi.addSensor(sensorName);
         assertEquals(initialMetrics, metrics.metrics().size());
         sensor.add(metricName, new Rate());
@@ -107,10 +112,10 @@ public class PluginMetricsImplTest {
     void testClose() throws IOException {
         PluginMetricsImpl pmi = new PluginMetricsImpl(metrics, tags);
         String sensorName = "my-sensor";
-        MetricName metricName1 = pmi.metricName("name1", "description", extraTags);
+        MetricName metricName1 = pmi.metricName("name1", "description", EXTRA_TAGS);
         Sensor sensor = pmi.addSensor(sensorName);
         sensor.add(metricName1, new Rate());
-        MetricName metricName2 = pmi.metricName("name2", "description", extraTags);
+        MetricName metricName2 = pmi.metricName("name2", "description", EXTRA_TAGS);
         pmi.addMetric(metricName2, (Measurable) (config, now) -> 1.0);
 
         assertEquals(initialMetrics + 2, metrics.metrics().size());

@@ -18,8 +18,7 @@ package org.apache.kafka.common;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
@@ -69,13 +68,13 @@ public class DirectoryIdTest {
     @Test
     void testIsOnline() {
         // Given
-        List<Uuid> sortedDirs = Arrays.asList(
-                Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"),
-                Uuid.fromString("Mwy5wxTDQxmsZwGzjsaX7w"),
-                Uuid.fromString("s8rHMluuSDCnxt3FmKwiyw")
-        );
+        List<Uuid> sortedDirs = new ArrayList<>(List.of(
+            Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"),
+            Uuid.fromString("Mwy5wxTDQxmsZwGzjsaX7w"),
+            Uuid.fromString("s8rHMluuSDCnxt3FmKwiyw")
+        ));
         sortedDirs.sort(Uuid::compareTo);
-        List<Uuid> emptySortedDirs = Collections.emptyList();
+        List<Uuid> emptySortedDirs = List.of();
 
         // When/Then
         assertTrue(DirectoryId.isOnline(Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"), sortedDirs));

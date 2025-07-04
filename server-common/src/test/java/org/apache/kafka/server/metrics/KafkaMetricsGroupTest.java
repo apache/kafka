@@ -20,7 +20,7 @@ import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -30,7 +30,7 @@ public class KafkaMetricsGroupTest {
         String packageName = "testPackage";
         String simpleName = "testSimple";
         KafkaMetricsGroup group = new KafkaMetricsGroup(packageName, simpleName);
-        MetricName metricName = group.metricName("metric-name", Collections.emptyMap());
+        MetricName metricName = group.metricName("metric-name", Map.of());
         assertEquals(packageName, metricName.getGroup());
         assertEquals(simpleName, metricName.getType());
     }

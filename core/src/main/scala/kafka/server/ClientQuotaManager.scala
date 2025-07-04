@@ -23,6 +23,7 @@ import java.util.function.Consumer
 import kafka.network.RequestChannel
 import kafka.server.ClientQuotaManager._
 import kafka.utils.Logging
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
@@ -137,22 +138,29 @@ object ClientQuotaManager {
  * @param quotaType Quota type of this quota manager
  * @param time @Time object to use
  * @param threadNamePrefix The thread prefix to use
- * @param clientQuotaCallback An optional @ClientQuotaCallback
+ * @param clientQuotaCallbackPlugin An optional @ClientQuotaCallback and 
+ *                                  wrap it in a {@link org.apache.kafka.common.internals.Plugin}
  */
 class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
                          private val quotaType: QuotaType,
                          private val time: Time,
                          private val threadNamePrefix: String,
-                         private val clientQuotaCallback: Option[ClientQuotaCallback] = None) extends Logging {
+                         private val clientQuotaCallbackPlugin: Option[Plugin[ClientQuotaCallback]] = None) extends Logging {
 
   private val lock = new ReentrantReadWriteLock()
   private val sensorAccessor = new SensorAccess(lock, metrics)
-  private val quotaCallback = clientQuotaCallback.getOrElse(new DefaultQuotaCallback)
+  private val quotaCallback = clientQuotaCallbackPlugin match {
+    case Some(plugin) => plugin.get()
+    case None => new DefaultQuotaCallback
+  }
   private val clientQuotaType = QuotaType.toClientQuotaType(quotaType)
+  private val activeQuotaEntities = new ConcurrentHashMap[Int, Int]() // Key is QuotaTypes, value is the number of active quota entities of that type
+
+
 
   @volatile
-  private var quotaTypesEnabled = clientQuotaCallback match {
+  var quotaTypesEnabled = clientQuotaCallbackPlugin match {
     case Some(_) => QuotaTypes.CustomQuotas
     case None => QuotaTypes.NoQuotas
   }
@@ -189,9 +197,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   /**
    * Returns true if any quotas are enabled for this quota manager. This is used
    * to determine if quota related metrics should be created.
-   * Note: If any quotas (static defaults, dynamic defaults or quota overrides) have
-   * been configured for this broker at any time for this quota type, quotasEnabled will
-   * return true until the next broker restart, even if all quotas are subsequently deleted.
    */
   def quotasEnabled: Boolean = quotaTypesEnabled != QuotaTypes.NoQuotas
 
@@ -423,18 +428,16 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     try {
       val quotaEntity = KafkaQuotaEntity(userEntity, clientEntity)
 
-      if (userEntity.nonEmpty) {
-        if (quotaEntity.clientIdEntity.nonEmpty)
-          quotaTypesEnabled |= QuotaTypes.UserClientIdQuotaEnabled
-        else
-          quotaTypesEnabled |= QuotaTypes.UserQuotaEnabled
-      } else if (clientEntity.nonEmpty)
-        quotaTypesEnabled |= QuotaTypes.ClientIdQuotaEnabled
-
       quota match {
-        case Some(newQuota) => quotaCallback.updateQuota(clientQuotaType, quotaEntity, newQuota.bound)
-        case None => quotaCallback.removeQuota(clientQuotaType, quotaEntity)
+        case Some(newQuota) =>
+          updateQuotaTypes(quotaEntity, shouldAdd = true)
+          quotaCallback.updateQuota(clientQuotaType, quotaEntity, newQuota.bound)
+
+        case None =>
+          updateQuotaTypes(quotaEntity, shouldAdd = false)
+          quotaCallback.removeQuota(clientQuotaType, quotaEntity)
       }
+
       val updatedEntity = if (userEntity.contains(DefaultUserEntity) || clientEntity.contains(DefaultClientIdEntity))
         None // more than one entity may need updating, so `updateQuotaMetricConfigs` will go through all metrics
       else
@@ -444,6 +447,60 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     } finally {
       lock.writeLock().unlock()
     }
+  }
+
+  /**
+   * Updates `quotaTypesEnabled` by performing a bitwise OR operation to combine the enabled quota types.
+   * This method ensures that the `quotaTypesEnabled` field reflects the active quota types based on the
+   * current state of `activeQuotaEntities`.
+   * For example:
+   *  - If UserQuotaEnabled = 2 and ClientIdQuotaEnabled = 1, then quotaTypesEnabled = 3 (2 | 1 = 3)
+   *  - If UserClientIdQuotaEnabled = 4 and UserQuotaEnabled = 1, then quotaTypesEnabled =  (4 | 1 = 5)
+   *  - If UserClientIdQuotaEnabled = 4 and ClientIdQuotaEnabled = 2, then quotaTypesEnabled = 6 (4 | 2 = 6)
+   *  - If all three are enabled (1 | 2 | 4), then quotaTypesEnabled = 7
+   *
+   *  @param quotaEntity The entity for which the quota is being updated, which can be a combination of user and client-id.
+   *  @param shouldAdd   A boolean indicating whether to add or remove the quota entity.
+   */
+  private def updateQuotaTypes(quotaEntity: KafkaQuotaEntity, shouldAdd: Boolean): Unit = {
+
+    if (quotaTypesEnabled == QuotaTypes.CustomQuotas) {
+      // If custom quotas are enabled, we do not need to update quota types
+      return
+    }
+
+    val isActive =  quotaCallback match {
+      case callback: DefaultQuotaCallback => callback.getActiveQuotasEntities.contains(quotaEntity)
+      case _ => true
+    }
+
+    val activeQuotaType = quotaEntity match {
+      case KafkaQuotaEntity(Some(_), Some(_)) => QuotaTypes.UserClientIdQuotaEnabled
+      case KafkaQuotaEntity(Some(_), None) => QuotaTypes.UserQuotaEnabled
+      case KafkaQuotaEntity(None, Some(_)) => QuotaTypes.ClientIdQuotaEnabled
+      case _ => QuotaTypes.NoQuotas
+    }
+
+    if (shouldAdd && !isActive) {
+      activeQuotaEntities.compute(activeQuotaType, (_, currentValue) => if (currentValue == 0) 1 else currentValue + 1)
+      quotaTypesEnabled |= activeQuotaType
+    } else if (!shouldAdd && isActive) {
+      activeQuotaEntities.compute(activeQuotaType, (_, currentValue) => if (currentValue <= 1) 0 else currentValue - 1)
+      if (activeQuotaEntities.get(activeQuotaType) == 0) {
+        quotaTypesEnabled &= ~activeQuotaType
+      }
+    }
+
+    val quotaTypes = List(
+      QuotaTypes.UserClientIdQuotaEnabled -> "UserClientIdQuota",
+      QuotaTypes.ClientIdQuotaEnabled     -> "ClientIdQuota",
+      QuotaTypes.UserQuotaEnabled         -> "UserQuota"
+    )
+
+    val activeEntities = quotaTypes.collect {
+      case (k, name) if activeQuotaEntities.get(k) > 0 => name
+    }.mkString(", ")
+    info(s"Quota types enabled has been changed to $quotaTypesEnabled with active quota entities: [$activeEntities]")
   }
 
   /**
@@ -642,6 +699,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       Map(DefaultTags.User -> userTag, DefaultTags.ClientId -> clientIdTag)
     }
 
+    def getActiveQuotasEntities: util.Set[ClientQuotaEntity] = {
+      overriddenQuotas.keySet()
+    }
     override def close(): Unit = {}
   }
 }

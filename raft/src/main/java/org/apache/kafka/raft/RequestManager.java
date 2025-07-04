@@ -136,7 +136,7 @@ public class RequestManager {
      * Returns zero, if there are no pending requests and at least one of the bootstrap servers is
      * ready.
      *
-     * If all of the bootstrap servers are backing off and there are no pending requests, return
+     * If all the bootstrap servers are backing off and there are no pending requests, return
      * the minimum amount of time until a bootstrap server becomes ready.
      *
      * @param currentTimeMs the current time

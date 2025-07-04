@@ -21,13 +21,14 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+import org.apache.kafka.server.network.ConnectionDisconnectListener;
 import org.apache.kafka.server.share.CachedSharePartition;
+import org.apache.kafka.server.share.ShareGroupListener;
 
 import com.yammer.metrics.core.Meter;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -51,25 +52,41 @@ public class ShareSessionCache {
      * Metric for the rate of eviction of share sessions.
      */
     private final Meter evictionsMeter;
+    /**
+     * The listener for connection disconnect events for the client.
+     */
+    private final ConnectionDisconnectListener connectionDisconnectListener;
+    /**
+     * Map of session key to ShareSession.
+     */
+    private final Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
+    /**
+     * Map of groupId to number of members in the group.
+     */
+    private final Map<String, Integer> numMembersPerGroup = new HashMap<>();
+    /**
+     * The map to store the client connection id to session key. This is used to remove the session
+     * from the cache when the respective client disconnects.
+     */
+    private final Map<String, ShareSessionKey> connectionIdToSessionMap;
+    /**
+     * The listener for share group events. This is used to notify the listener when the group members
+     * change.
+     */
+    private ShareGroupListener shareGroupListener;
 
     private final int maxEntries;
-    private final long evictionMs;
     private long numPartitions = 0;
 
-    // A map of session key to ShareSession.
-    private final Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
-
-    // Maps last used times to sessions.
-    private final TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
-
     @SuppressWarnings("this-escape")
-    public ShareSessionCache(int maxEntries, long evictionMs) {
+    public ShareSessionCache(int maxEntries) {
         this.maxEntries = maxEntries;
-        this.evictionMs = evictionMs;
         // Register metrics for ShareSessionCache.
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareSessionCache");
         metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
         metricsGroup.newGauge(SHARE_PARTITIONS_COUNT, this::totalPartitions);
+        this.connectionIdToSessionMap = new HashMap<>();
+        this.connectionDisconnectListener = new ClientConnectionDisconnectListener();
         this.evictionsMeter = metricsGroup.newMeter(SHARE_SESSION_EVICTIONS_PER_SEC, "evictions", TimeUnit.SECONDS);
     }
 
@@ -90,6 +107,15 @@ public class ShareSessionCache {
         return sessions.size();
     }
 
+    /**
+     * Remove all the share sessions from cache.
+     */
+    public synchronized void removeAllSessions() {
+        sessions.clear();
+        numMembersPerGroup.clear();
+        numPartitions = 0;
+    }
+
     public synchronized long totalPartitions() {
         return numPartitions;
     }
@@ -102,88 +128,120 @@ public class ShareSessionCache {
     }
 
     /**
+     * Maybe remove the session and notify listeners. This is called when the connection is disconnected
+     * for the client. The session may have already been removed by the client as part of final epoch,
+     * hence check if the session is still present in the cache.
+     *
+     * @param key The share session key.
+     */
+    public synchronized void maybeRemoveAndNotifyListeners(ShareSessionKey key) {
+        ShareSession session = get(key);
+        if (session != null) {
+            // Notify the share group listener that member has left the group. Notify listener prior
+            // removing the session from the cache to ensure that the listener has access to the session
+            // while it is still in the cache.
+            if (shareGroupListener != null) {
+                shareGroupListener.onMemberLeave(key.groupId(), key.memberId());
+            }
+            // As session is not null hence it's removed as part of connection disconnect. Hence,
+            // update the evictions metric.
+            evictionsMeter.mark();
+            // Try removing session if not already removed. The listener might have removed the session
+            // already.
+            remove(session);
+        }
+        // Notify the share group listener if the group is empty. This should be checked regardless
+        // session is evicted by connection disconnect or client's final epoch.
+        int numMembers = numMembersPerGroup.getOrDefault(key.groupId(), 0);
+        if (numMembers == 0) {
+            // Remove the group from the map as it is empty.
+            numMembersPerGroup.remove(key.groupId());
+            if (shareGroupListener != null) {
+                shareGroupListener.onGroupEmpty(key.groupId());
+            }
+        }
+    }
+
+    /**
      * Remove an entry from the session cache.
      *
      * @param session The session.
      * @return The removed session, or None if there was no such session.
      */
     public synchronized ShareSession remove(ShareSession session) {
-        synchronized (session) {
-            lastUsed.remove(session.lastUsedKey());
-        }
         ShareSession removeResult = sessions.remove(session.key());
         if (removeResult != null) {
             numPartitions = numPartitions - session.cachedSize();
+            numMembersPerGroup.compute(session.key().groupId(), (k, v) -> v != null ? v - 1 : 0);
         }
         return removeResult;
     }
 
     /**
-     * Update a session's position in the lastUsed tree.
+     * Update the size of the cache by updating the total number of share partitions.
      *
      * @param session  The session.
-     * @param now      The current time in milliseconds.
      */
-    public synchronized void touch(ShareSession session, long now) {
-        synchronized (session) {
-            // Update the lastUsed map.
-            lastUsed.remove(session.lastUsedKey());
-            session.lastUsedMs(now);
-            lastUsed.put(session.lastUsedKey(), session);
-
-            int oldSize = session.cachedSize();
-            if (oldSize != -1) {
-                numPartitions = numPartitions - oldSize;
-            }
-            session.cachedSize(session.size());
-            numPartitions = numPartitions + session.cachedSize();
-        }
-    }
-
-    /**
-     * Try to evict an entry from the session cache.
-     * <p>
-     * A proposed new element A may evict an existing element B if:
-     * B is considered "stale" because it has been inactive for a long time.
-     *
-     * @param now        The current time in milliseconds.
-     * @return           True if an entry was evicted; false otherwise.
-     */
-    public synchronized boolean tryEvict(long now) {
-        // Try to evict an entry which is stale.
-        Map.Entry<LastUsedKey, ShareSession> lastUsedEntry = lastUsed.firstEntry();
-        if (lastUsedEntry == null) {
-            return false;
-        } else if (now - lastUsedEntry.getKey().lastUsedMs() > evictionMs) {
-            ShareSession session = lastUsedEntry.getValue();
-            remove(session);
-            evictionsMeter.mark();
-            return true;
-        }
-        return false;
+    public synchronized void updateNumPartitions(ShareSession session) {
+        numPartitions += session.updateCachedSize();
     }
 
     /**
      * Maybe create a new session and add it to the cache.
      * @param groupId - The group id in the share fetch request.
      * @param memberId - The member id in the share fetch request.
-     * @param now - The current time in milliseconds.
      * @param partitionMap - The topic partitions to be added to the session.
+     * @param clientConnectionId - The client connection id.
      * @return - The session key if the session was created, or null if the session was not created.
      */
-    public synchronized ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, long now, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
-        if (sessions.size() < maxEntries || tryEvict(now)) {
+    public synchronized ShareSessionKey maybeCreateSession(
+        String groupId,
+        Uuid memberId,
+        ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
+        String clientConnectionId
+    ) {
+        if (sessions.size() < maxEntries) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
-                    now, now, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
+                ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
-            touch(session, now);
+            updateNumPartitions(session);
+            numMembersPerGroup.compute(session.key().groupId(), (k, v) -> v != null ? v + 1 : 1);
+            connectionIdToSessionMap.put(clientConnectionId, session.key());
             return session.key();
         }
         return null;
     }
 
+    public ConnectionDisconnectListener connectionDisconnectListener() {
+        return connectionDisconnectListener;
+    }
+
+    public synchronized void registerShareGroupListener(ShareGroupListener shareGroupListener) {
+        this.shareGroupListener = shareGroupListener;
+    }
+
     // Visible for testing.
     Meter evictionsMeter() {
         return evictionsMeter;
+    }
+
+    // Visible for testing.
+    Integer numMembers(String groupId) {
+        return numMembersPerGroup.get(groupId);
+    }
+
+    private final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {
+
+        // When the client disconnects, the corresponding session should be removed from the cache.
+        @Override
+        public void onDisconnect(String connectionId) {
+            ShareSessionKey shareSessionKey = connectionIdToSessionMap.remove(connectionId);
+            if (shareSessionKey != null) {
+                // Try removing session and notify listeners. The session might already be removed
+                // as part of final epoch from client, so we need to check if the session is still
+                // present in the cache.
+                maybeRemoveAndNotifyListeners(shareSessionKey);
+            }
+        }
     }
 }

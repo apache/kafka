@@ -23,6 +23,9 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -39,18 +42,21 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -58,6 +64,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -107,7 +114,13 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     private Properties properties;
 
-    private Properties basicProps() {
+    private Properties basicProps(final boolean streamsRebalanceProtocolEnabled) {
+        final String protocol;
+        if (streamsRebalanceProtocolEnabled) {
+            protocol = GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault());
+        } else {
+            protocol = GroupProtocol.CLASSIC.name().toLowerCase(Locale.getDefault());
+        }
         return mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
@@ -116,7 +129,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                mkEntry(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 10000)
+                mkEntry(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 10000),
+                mkEntry(StreamsConfig.GROUP_PROTOCOL_CONFIG, protocol)
             )
         );
     }
@@ -132,7 +146,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic, inputTopic2, outputTopic, outputTopic2);
         final KStream<String, String> stream = builder.stream(inputTopic);
         stream.process(() -> new ShutdownProcessor<>(processorValueCollector), Named.as("process"));
-        properties = basicProps();
     }
 
     @AfterEach
@@ -140,8 +153,10 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         purgeLocalStreamsState(properties);
     }
 
-    @Test
-    public void shouldShutdownClient() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutdownClient(final boolean streamsRebalanceProtocolEnabled) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
 
             kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
@@ -155,35 +170,43 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldReplaceThreads() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldReplaceThreads(final boolean streamsRebalanceProtocolEnabled) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled);
         testReplaceThreads(2);
     }
 
-    @Test
-    public void shouldReplaceThreadsWithoutJavaHandler() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldReplaceThreadsWithoutJavaHandler(final boolean streamsRebalanceProtocolEnabled) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled);
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> fail("exception thrown"));
         testReplaceThreads(2);
     }
 
-    @Test
-    public void shouldReplaceSingleThread() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldReplaceSingleThread(final boolean streamsRebalanceProtocolEnabled) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled);
         testReplaceThreads(1);
     }
 
-    @Test
-    public void shouldShutdownMultipleThreadApplication() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutdownMultipleThreadApplication(final boolean streamsRebalanceProtocolEnabled) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled);
         testShutdownApplication(2);
     }
 
-    @Test
-    public void shouldShutdownSingleThreadApplication() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutdownSingleThreadApplication(final boolean streamsRebalanceProtocolEnabled) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled);
         testShutdownApplication(1);
     }
 
     private static class ShutdownProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
-
-        private ProcessorContext<KOut, VOut> context;
 
         final List<String> valueList;
 
@@ -192,8 +215,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         }
 
         @Override
-        public void init(final ProcessorContext<KOut, VOut> context) {} {
-            this.context = context;
+        public void init(final ProcessorContext<KOut, VOut> context) {
         }
 
         @Override
@@ -211,8 +233,10 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread(final boolean streamsRebalanceProtocolEnabled) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled);
         builder.addGlobalStore(
                 new KeyValueStoreBuilder<>(
                         Stores.persistentKeyValueStore("globalStore"),
@@ -238,8 +262,10 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldEmitSameRecordAfterFailover() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldEmitSameRecordAfterFailover(final boolean streamsRebalanceProtocolEnabled) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled);
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
@@ -334,11 +360,14 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
 
         final Topology topology = builder.build();
-
-        try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties);
-             final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, properties)) {
+        final MockTime time = new MockTime(0L);
+        
+        try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties, time);
+             final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, properties, time);
+             final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister()) {
             kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
             kafkaStreams2.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
+            logCaptureAppender.setClassLogger(StreamThread.class, Level.WARN);
 
             startApplicationAndWaitUntilRunning(asList(kafkaStreams1, kafkaStreams2));
 
@@ -346,6 +375,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             waitForApplicationState(asList(kafkaStreams1, kafkaStreams2), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
+            assertThat("Shutdown warning log message should be exported exactly once",
+                    logCaptureAppender.getMessages("WARN").stream().filter(msg -> msg.contains("Detected that shutdown was requested")).count(), equalTo(1L));
         }
     }
 

@@ -32,7 +32,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.{Executors, TimeUnit}
 import scala.jdk.CollectionConverters._
 
@@ -56,10 +56,10 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
   @Timeout(15)
-  def testFollowerCompleteDelayedFetchesOnReplication(quorum: String, groupProtocol: String): Unit = {
+  def testFollowerCompleteDelayedFetchesOnReplication(groupProtocol: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     val partitionLeaders = TestUtils.createTopicWithAdmin(
@@ -95,15 +95,15 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       TestUtils.generateAndProduceMessages(brokers, topic, numMessages = 1)
       val response = receive[FetchResponse](socket, ApiKeys.FETCH, version)
       assertEquals(Errors.NONE, response.error)
-      assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
+      assertEquals(util.Map.of(Errors.NONE, 2), response.errorCounts)
     } finally {
       socket.close()
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(groupProtocol: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
@@ -123,15 +123,15 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     val topicPartition = new TopicPartition(topic, 0)
     TestUtils.waitUntilTrue(() => {
       val endpoints = brokers(leaderBrokerId).metadataCache.getPartitionReplicaEndpoints(topicPartition, listenerName)
-      !endpoints.contains(followerBrokerId)
+      !endpoints.containsKey(followerBrokerId)
     }, "follower is still reachable.")
 
     assertEquals(-1, getPreferredReplica)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchFromFollowerWithRoll(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchFromFollowerWithRoll(groupProtocol: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
@@ -151,7 +151,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
     try {
-      consumer.subscribe(List(topic).asJava)
+      consumer.subscribe(util.List.of(topic))
 
       // Wait until preferred replica is set to follower.
       TestUtils.waitUntilTrue(() => {
@@ -182,9 +182,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   }
 
   @Disabled
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testRackAwareRangeAssignor(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testRackAwareRangeAssignor(groupProtocol: String): Unit = {
     val partitionList = brokers.indices.toList
 
     val topicWithAllPartitionsOnAllRacks = "topicWithAllPartitionsOnAllRacks"
@@ -240,15 +240,15 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
 
     try {
       // Rack-based assignment results in partitions assigned in reverse order since partition racks are in the reverse order.
-      consumers.foreach(_.subscribe(Collections.singleton(topicWithSingleRackPartitions)))
+      consumers.foreach(_.subscribe(util.Set.of(topicWithSingleRackPartitions)))
       verifyAssignments(partitionList.reverse, topicWithSingleRackPartitions)
 
       // Non-rack-aware assignment results in ordered partitions.
-      consumers.foreach(_.subscribe(Collections.singleton(topicWithAllPartitionsOnAllRacks)))
+      consumers.foreach(_.subscribe(util.Set.of(topicWithAllPartitionsOnAllRacks)))
       verifyAssignments(partitionList, topicWithAllPartitionsOnAllRacks)
 
       // Rack-aware assignment with co-partitioning results in reverse assignment for both topics.
-      consumers.foreach(_.subscribe(Set(topicWithSingleRackPartitions, topicWithAllPartitionsOnAllRacks).asJava))
+      consumers.foreach(_.subscribe(util.Set.of(topicWithSingleRackPartitions, topicWithAllPartitionsOnAllRacks)))
       verifyAssignments(partitionList.reverse, topicWithAllPartitionsOnAllRacks, topicWithSingleRackPartitions)
 
       // Perform reassignment for topicWithSingleRackPartitions to reverse the replica racks and
@@ -256,7 +256,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       val admin = createAdminClient()
       val reassignments = new util.HashMap[TopicPartition, util.Optional[NewPartitionReassignment]]()
       partitionList.foreach { p =>
-        val newAssignment = new NewPartitionReassignment(Collections.singletonList(p))
+        val newAssignment = new NewPartitionReassignment(util.List.of(p))
         reassignments.put(new TopicPartition(topicWithSingleRackPartitions, p), util.Optional.of(newAssignment))
       }
       admin.alterPartitionReassignments(reassignments).all().get(30, TimeUnit.SECONDS)
@@ -283,7 +283,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     )
     val response = connectAndReceive[FetchResponse](request, brokers(leaderBrokerId).socketServer)
     assertEquals(Errors.NONE, response.error)
-    assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
+    assertEquals(util.Map.of(Errors.NONE, 2), response.errorCounts)
     assertEquals(1, response.data.responses.size)
     val topicResponse = response.data.responses.get(0)
     assertEquals(1, topicResponse.partitions.size)

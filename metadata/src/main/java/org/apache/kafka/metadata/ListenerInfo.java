@@ -188,14 +188,14 @@ public final class ListenerInfo {
     ) {
         LinkedHashMap<String, Endpoint> listeners = new LinkedHashMap<>();
         for (Endpoint listener : rawListeners) {
-            String name = listener.listenerName().get();
+            String name = listener.listener();
             if (Optional.of(name).equals(firstListenerName)) {
                 listeners.put(name, listener);
                 break;
             }
         }
         for (Endpoint listener : rawListeners) {
-            String name = listener.listenerName().get();
+            String name = listener.listener();
             if (!Optional.of(name).equals(firstListenerName)) {
                 listeners.put(name, listener);
             }
@@ -236,11 +236,11 @@ public final class ListenerInfo {
             if (entry.getValue().host() == null || entry.getValue().host().trim().isEmpty()) {
                 String newHost = InetAddress.getLocalHost().getCanonicalHostName();
                 Endpoint prevEndpoint = entry.getValue();
-                newListeners.put(entry.getKey(), new Endpoint(prevEndpoint.listenerName().get(),
+                newListeners.put(entry.getKey(), new Endpoint(prevEndpoint.listener(),
                         prevEndpoint.securityProtocol(),
                         newHost,
                         prevEndpoint.port()));
-                log.info("{}: resolved wildcard host to {}", entry.getValue().listenerName().get(),
+                log.info("{}: resolved wildcard host to {}", entry.getValue().listener(),
                         newHost);
             } else {
                 newListeners.put(entry.getKey(), entry.getValue());
@@ -268,9 +268,9 @@ public final class ListenerInfo {
                 Endpoint prevEndpoint = entry.getValue();
                 int newPort = getBoundPortCallback.apply(entry.getKey());
                 checkPortIsSerializable(newPort);
-                log.info("{}: resolved ephemeral port to {}", entry.getValue().listenerName().get(),
+                log.info("{}: resolved ephemeral port to {}", entry.getValue().listener(),
                         newPort);
-                newListeners.put(entry.getKey(), new Endpoint(prevEndpoint.listenerName().get(),
+                newListeners.put(entry.getKey(), new Endpoint(prevEndpoint.listener(),
                         prevEndpoint.securityProtocol(),
                         prevEndpoint.host(),
                         newPort));
@@ -309,7 +309,7 @@ public final class ListenerInfo {
             checkHostIsSerializable(endpoint.host());
             collection.add(new ControllerRegistrationRequestData.Listener().
                 setHost(endpoint.host()).
-                setName(endpoint.listenerName().get()).
+                setName(endpoint.listener()).
                 setPort(endpoint.port()).
                 setSecurityProtocol(endpoint.securityProtocol().id));
         });
@@ -324,7 +324,7 @@ public final class ListenerInfo {
             checkHostIsSerializable(endpoint.host());
             collection.add(new RegisterControllerRecord.ControllerEndpoint().
                 setHost(endpoint.host()).
-                setName(endpoint.listenerName().get()).
+                setName(endpoint.listener()).
                 setPort(endpoint.port()).
                 setSecurityProtocol(endpoint.securityProtocol().id));
         });
@@ -339,7 +339,7 @@ public final class ListenerInfo {
             checkHostIsSerializable(endpoint.host());
             collection.add(new BrokerRegistrationRequestData.Listener().
                 setHost(endpoint.host()).
-                setName(endpoint.listenerName().get()).
+                setName(endpoint.listener()).
                 setPort(endpoint.port()).
                 setSecurityProtocol(endpoint.securityProtocol().id));
         });
@@ -354,7 +354,7 @@ public final class ListenerInfo {
             checkHostIsSerializable(endpoint.host());
             collection.add(new RegisterBrokerRecord.BrokerEndpoint().
                 setHost(endpoint.host()).
-                setName(endpoint.listenerName().get()).
+                setName(endpoint.listener()).
                 setPort(endpoint.port()).
                 setSecurityProtocol(endpoint.securityProtocol().id));
         });

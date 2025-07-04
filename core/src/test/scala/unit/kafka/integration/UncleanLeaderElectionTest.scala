@@ -17,12 +17,13 @@
 
 package kafka.integration
 
+import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
-import kafka.server.{KafkaBroker, KafkaConfig, MetadataCache, QuorumTestHarness}
+import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
@@ -32,6 +33,7 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry}
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.logging.log4j.{Level, LogManager}
@@ -118,9 +120,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     admin = TestUtils.createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), adminConfigs)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUncleanLeaderElectionEnabled(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionEnabled(groupProtocol: String): Unit = {
     // enable unclean leader election
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
@@ -131,9 +133,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionEnabled()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUncleanLeaderElectionDisabled(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionDisabled(groupProtocol: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 
@@ -143,9 +145,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionDisabled()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUncleanLeaderElectionEnabledByTopicOverride(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionEnabledByTopicOverride(groupProtocol: String): Unit = {
     // disable unclean leader election globally, but enable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "false")
     configProps2.put("unclean.leader.election.enable", "false")
@@ -159,9 +161,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionEnabled()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUncleanLeaderElectionDisabledByTopicOverride(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionDisabledByTopicOverride(groupProtocol: String): Unit = {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
@@ -175,9 +177,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     verifyUncleanLeaderElectionDisabled()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUncleanLeaderElectionInvalidTopicOverride(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionInvalidTopicOverride(groupProtocol: String): Unit = {
     startBrokers(Seq(configProps1))
 
     // create topic with an invalid value for unclean leader election
@@ -283,7 +285,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     //make sure follower server joins the ISR
     TestUtils.waitUntilTrue(() => {
       val partitionInfoOpt = followerServer.metadataCache.getLeaderAndIsr(topic, partitionId)
-      partitionInfoOpt.isDefined && partitionInfoOpt.get.isr.contains(followerId)
+      partitionInfoOpt.isPresent() && partitionInfoOpt.get.isr.contains(followerId)
     }, "Inconsistent metadata after first server startup")
 
     brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
@@ -316,15 +318,15 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
       valueDeserializer = new StringDeserializer)
     try {
       val tp = new TopicPartition(topic, partitionId)
-      consumer.assign(Seq(tp).asJava)
+      consumer.assign(util.List.of(tp))
       consumer.seek(tp, 0)
       TestUtils.consumeRecords(consumer, numMessages).map(_.value)
     } finally consumer.close()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(groupProtocol: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 
@@ -409,10 +411,14 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   }
 
   private def alterTopicConfigs(adminClient: Admin, topic: String, topicConfigs: Properties): AlterConfigsResult = {
-    val configEntries = topicConfigs.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
-    adminClient.incrementalAlterConfigs(Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) ->
-      configEntries.asScala.map((e: ConfigEntry) => new AlterConfigOp(e, AlterConfigOp.OpType.SET)).toSeq
-        .asJavaCollection).asJava)
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+
+    val configEntries = topicConfigs.entrySet().stream()
+      .map(e => new ConfigEntry(e.getKey.toString, e.getValue.toString))
+      .map(e => new AlterConfigOp(e, AlterConfigOp.OpType.SET))
+      .toList
+
+    adminClient.incrementalAlterConfigs(util.Map.of(configResource, configEntries))
   }
 
   private def createAdminClient(): Admin = {
@@ -424,9 +430,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   }
 
   private def waitForNoLeaderAndIsrHasOldLeaderId(metadataCache: MetadataCache, leaderId: Int): Unit = {
-    waitUntilTrue(() => metadataCache.getLeaderAndIsr(topic, partitionId).isDefined &&
+    waitUntilTrue(() => metadataCache.getLeaderAndIsr(topic, partitionId).isPresent() &&
       metadataCache.getLeaderAndIsr(topic, partitionId).get.leader() == LeaderConstants.NO_LEADER &&
-      java.util.Arrays.asList(leaderId).equals(metadataCache.getLeaderAndIsr(topic, partitionId).get.isr()),
+      util.List.of(leaderId).equals(metadataCache.getLeaderAndIsr(topic, partitionId).get.isr()),
       "Timed out waiting for broker metadata cache updates the info for topic partition:" + topicPartition)
   }
 }

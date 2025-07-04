@@ -31,7 +31,7 @@ import org.apache.kafka.server.fault.FaultHandler
 class DynamicConfigPublisher(
   conf: KafkaConfig,
   faultHandler: FaultHandler,
-  dynamicConfigHandlers: Map[String, ConfigHandler],
+  dynamicConfigHandlers: Map[ConfigType, ConfigHandler],
   nodeType: String,
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "

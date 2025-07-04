@@ -764,10 +764,10 @@ KTable&lt;byte[], String&gt; table = stream.toTable();</code></pre>
                         <td>
                             <p class="first">Manually trigger repartitioning of the stream with desired number of partitions. (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#repartition--">details</a>)</p>
 
-                            <code><span class="pre">repartition()</span></code> is similar to <code><span class="pre">through()</span></code> however Kafka Streams will manage the topic for you.
+                            Kafka Streams will manage the topic for <code><span class="pre">repartition()</span></code>.
                             Generated topic is treated as internal topic, as a result data will be purged automatically as any other internal repartition topic.
                             In addition, you can specify the desired number of partitions, which allows to easily scale in/out downstream sub-topologies.
-                            <code><span class="pre">repartition()</span></code> operation always triggers repartitioning of the stream, as a result it can be used with embedded Processor API methods (like <code><span class="pre">transform()</span></code> et al.) that do not trigger auto repartitioning when key changing operation is performed beforehand.
+                            <code><span class="pre">repartition()</span></code> operation always triggers repartitioning of the stream, as a result it can be used with embedded Processor API methods (like <code><span class="pre">process()</span></code> et al.) that do not trigger auto repartitioning when key changing operation is performed beforehand.
 
                             <pre class="line-numbers"><code class="language-java">KStream&lt;byte[], String&gt; stream = ... ;
 KStream&lt;byte[], String&gt; repartitionedStream = stream.repartition(Repartitioned.numberOfPartitions(10));</code></pre>

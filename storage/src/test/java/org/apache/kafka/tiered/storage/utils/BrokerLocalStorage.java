@@ -28,7 +28,6 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -114,7 +113,7 @@ public final class BrokerLocalStorage {
                                Long offset,
                                Function<OffsetHolder, Optional<String>> relativePosFunc) {
         Timer timer = time.timer(TimeUnit.SECONDS.toMillis(storageWaitTimeoutSec));
-        OffsetHolder offsetHolder = new OffsetHolder(0L, Collections.emptyList());
+        OffsetHolder offsetHolder = new OffsetHolder(0L, List.of());
         while (timer.notExpired() && offsetHolder.firstLogFileBaseOffset < offset) {
             timer.sleep(TimeUnit.SECONDS.toMillis(storagePollPeriodSec));
             offsetHolder = getEarliestLocalOffset(topicPartition);
@@ -189,7 +188,7 @@ public final class BrokerLocalStorage {
     }
 
     public boolean dirContainsTopicPartition(TopicPartition topicPartition, File logDir) {
-        File[] files = getTopicPartitionFiles(topicPartition, Collections.singleton(logDir));
+        File[] files = getTopicPartitionFiles(topicPartition, Set.of(logDir));
         return files != null && files.length > 0;
     }
 
@@ -218,7 +217,7 @@ public final class BrokerLocalStorage {
         File topicPartitionDir = files[0];
         return Arrays.stream(Objects.requireNonNull(topicPartitionDir.listFiles()))
                 .map(File::getName)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private static final class OffsetHolder {

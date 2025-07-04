@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Scanner;
 import java.util.SplittableRandom;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -194,13 +195,17 @@ public class ProducerPerformance {
                 throw new IllegalArgumentException("File does not exist or empty file provided.");
             }
 
-            String[] payloadList = Files.readString(path).split(payloadDelimiter);
-
-            System.out.println("Number of messages read: " + payloadList.length);
-
-            for (String payload : payloadList) {
-                payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
+            try (Scanner payLoadScanner = new Scanner(path, StandardCharsets.UTF_8)) {
+                //setting the delimiter while parsing the file, avoids loading entire data in memory before split
+                payLoadScanner.useDelimiter(payloadDelimiter);
+                while (payLoadScanner.hasNext()) {
+                    byte[] payloadBytes = payLoadScanner.next().getBytes(StandardCharsets.UTF_8);
+                    payloadByteList.add(payloadBytes);
+                }
             }
+
+            System.out.println("Number of messages read: " + payloadByteList.size());
+
         }
         return payloadByteList;
     }

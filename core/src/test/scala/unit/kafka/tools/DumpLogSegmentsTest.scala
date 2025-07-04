@@ -25,7 +25,7 @@ import java.util.Optional
 import java.util.Properties
 import java.util.stream.IntStream
 import kafka.log.LogTestUtils
-import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
+import kafka.raft.KafkaMetadataLog
 import kafka.server.KafkaRaftServer
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, ShareGroupStateMessageParser, TimeIndexDumpErrors, TransactionLogMessageParser}
 import kafka.utils.TestUtils
@@ -33,19 +33,19 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
+import org.apache.kafka.common.message.{KRaftVersionRecord, LeaderChangeMessage, SnapshotFooterRecord, SnapshotHeaderRecord, VotersRecord}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor, MessageUtil, ObjectSerializationCache}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
+import org.apache.kafka.common.record.{ControlRecordType, ControlRecordUtils, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch, VoterSetTest}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion}
-import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.raft.{MetadataLogConfig, VoterSetTest}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, OffsetAndEpoch}
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState}
 import org.apache.kafka.server.storage.log.FetchIsolation
@@ -485,7 +485,7 @@ class DumpLogSegmentsTest {
         new TopicRecord().setName("test-topic").setTopicId(Uuid.randomUuid()), 0.toShort),
       new ApiMessageAndVersion(
         new PartitionChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).
-          setPartitionId(0).setIsr(util.Arrays.asList(0, 1, 2)), 0.toShort)
+          setPartitionId(0).setIsr(util.List.of(0, 1, 2)), 0.toShort)
     )
 
     val records: Array[SimpleRecord] = metadataRecords.map(message => {
@@ -525,8 +525,47 @@ class DumpLogSegmentsTest {
   }
 
   @Test
+  def testDumpControlRecord(): Unit = {
+    log = createTestLog
+
+    log.appendAsLeader(MemoryRecords.withEndTransactionMarker(0L, 0.toShort,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 100)
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(0L, 0L, 0, ByteBuffer.allocate(4),
+      new LeaderChangeMessage()
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withSnapshotHeaderRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new SnapshotHeaderRecord()
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withSnapshotFooterRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new SnapshotFooterRecord()
+        .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION)
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withKRaftVersionRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new KRaftVersionRecord()
+    ), 0, AppendOrigin.COORDINATOR)
+
+    log.appendAsLeader(MemoryRecords.withVotersRecord(0L, 0L, 0, ByteBuffer.allocate(4),
+      new VotersRecord()
+    ), 0, AppendOrigin.COORDINATOR)
+    log.flush(false)
+
+    val output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
+    assertTrue(output.contains("endTxnMarker"), output)
+    assertTrue(output.contains("LeaderChange"), output)
+    assertTrue(output.contains("SnapshotHeader"), output)
+    assertTrue(output.contains("SnapshotFooter"), output)
+    assertTrue(output.contains("KRaftVersion"), output)
+    assertTrue(output.contains("KRaftVoters"), output)
+  }
+
+  @Test
   def testDumpMetadataSnapshot(): Unit = {
-    val metadataRecords = Seq(
+    val metadataRecords = util.List.of(
       new ApiMessageAndVersion(
         new RegisterBrokerRecord().setBrokerId(0).setBrokerEpoch(10), 0.toShort),
       new ApiMessageAndVersion(
@@ -535,7 +574,7 @@ class DumpLogSegmentsTest {
         new TopicRecord().setName("test-topic").setTopicId(Uuid.randomUuid()), 0.toShort),
       new ApiMessageAndVersion(
         new PartitionChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).
-          setPartitionId(0).setIsr(util.Arrays.asList(0, 1, 2)), 0.toShort)
+          setPartitionId(0).setIsr(util.List.of(0, 1, 2)), 0.toShort)
     )
 
     val metadataLog = KafkaMetadataLog(
@@ -544,17 +583,13 @@ class DumpLogSegmentsTest {
       logDir,
       time,
       time.scheduler,
-      MetadataLogConfig(
-        logSegmentBytes = 100 * 1024,
-        logSegmentMinBytes = 100 * 1024,
-        logSegmentMillis = 10 * 1000,
-        retentionMaxBytes = 100 * 1024,
-        retentionMillis = 60 * 1000,
-        maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-        maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        fileDeleteDelayMs = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-        nodeId = 1
-      )
+      createMetadataLogConfig(
+        100 * 1024,
+        10 * 1000,
+        100 * 1024,
+        60 * 1000
+      ),
+      1
     )
 
     val lastContainedLogTimestamp = 10000
@@ -568,7 +603,7 @@ class DumpLogSegmentsTest {
         .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))))
         .build(MetadataRecordSerde.INSTANCE)
     ) { snapshotWriter =>
-      snapshotWriter.append(metadataRecords.asJava)
+      snapshotWriter.append(metadataRecords)
       snapshotWriter.freeze()
     }
 
@@ -627,14 +662,14 @@ class DumpLogSegmentsTest {
 
     // Get all the batches
     val output = runDumpLogSegments(Array("--files", logFilePath))
-    val lines = util.Arrays.asList(output.split("\n"): _*).listIterator()
+    val lines = util.List.of(output.split("\n"): _*).listIterator()
 
     // Get total bytes of the partial batches
     val partialBatchesBytes = readPartialBatchesBytes(lines, partialBatches)
 
     // Request only the partial batches by bytes
     val partialOutput = runDumpLogSegments(Array("--max-bytes", partialBatchesBytes.toString, "--files", logFilePath))
-    val partialLines = util.Arrays.asList(partialOutput.split("\n"): _*).listIterator()
+    val partialLines = util.List.of(partialOutput.split("\n"): _*).listIterator()
 
     // Count the total of partial batches limited by bytes
     val partialBatchesCount = countBatches(partialLines)
@@ -887,14 +922,14 @@ class DumpLogSegmentsTest {
             .setProducerEpoch(2.toShort)
             .setProducerId(12L)
             .setTransactionLastUpdateTimestampMs(123L)
-            .setTransactionPartitions(List(
+            .setTransactionPartitions(util.List.of(
               new TransactionLogValue.PartitionsSchema()
                 .setTopic("topic1")
-                .setPartitionIds(List(0, 1, 2).map(Integer.valueOf).asJava),
+                .setPartitionIds(util.List.of[Integer](0, 1, 2)),
               new TransactionLogValue.PartitionsSchema()
                 .setTopic("topic2")
-                .setPartitionIds(List(3, 4, 5).map(Integer.valueOf).asJava)
-            ).asJava)
+                .setPartitionIds(util.List.of[Integer](3, 4, 5))
+            ))
             .setTransactionStartTimestampMs(13L)
             .setTransactionStatus(0)
             .setTransactionTimeoutMs(14),
@@ -989,7 +1024,7 @@ class DumpLogSegmentsTest {
     )
 
     val output = runDumpLogSegments(Array("--deep-iteration", "--files", logFilePath))
-    val lines = util.Arrays.asList(output.split("\n"): _*).listIterator()
+    val lines = util.List.of(output.split("\n"): _*).listIterator()
 
     for (batch <- logReadInfo.records.batches.asScala) {
       val parsedBatchOpt = readBatchMetadata(lines)
@@ -1037,6 +1072,7 @@ class DumpLogSegmentsTest {
   @Test
   def testShareGroupStateMessageParser(): Unit = {
     val parser = new ShareGroupStateMessageParser()
+    val timestamp = System.currentTimeMillis
 
     // The key is mandatory.
     assertEquals(
@@ -1051,7 +1087,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
-        Some("{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
+        Some(s"{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"createTimestamp\":$timestamp,\"writeTimestamp\":$timestamp,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
       ),
       parser.parse(serializedRecord(
         new ShareSnapshotKey()
@@ -1063,13 +1099,15 @@ class DumpLogSegmentsTest {
           .setStateEpoch(0)
           .setLeaderEpoch(0)
           .setStartOffset(0)
-          .setStateBatches(List[ShareSnapshotValue.StateBatch](
+          .setCreateTimestamp(timestamp)
+          .setWriteTimestamp(timestamp)
+          .setStateBatches(util.List.of[ShareSnapshotValue.StateBatch](
             new ShareSnapshotValue.StateBatch()
               .setFirstOffset(0)
               .setLastOffset(4)
               .setDeliveryState(2)
               .setDeliveryCount(1)
-          ).asJava),
+          )),
           0.toShort)
       ))
     )
@@ -1089,13 +1127,13 @@ class DumpLogSegmentsTest {
           .setSnapshotEpoch(0)
           .setLeaderEpoch(0)
           .setStartOffset(0)
-          .setStateBatches(List[ShareUpdateValue.StateBatch](
+          .setStateBatches(util.List.of[ShareUpdateValue.StateBatch](
             new ShareUpdateValue.StateBatch()
               .setFirstOffset(0)
               .setLastOffset(4)
               .setDeliveryState(2)
               .setDeliveryCount(1)
-          ).asJava),
+          )),
           0.toShort)
       ))
     )
@@ -1151,5 +1189,20 @@ class DumpLogSegmentsTest {
         )
       ))
     )
+  }
+
+  private def createMetadataLogConfig(
+    internalLogSegmentBytes: Int,
+    logSegmentMillis: Long,
+    retentionMaxBytes: Long,
+    retentionMillis: Long
+  ): MetadataLogConfig = {
+    val config: util.Map[String, Any] = util.Map.of(
+      MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
+      MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
+      MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
+      MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
+    )
+    new MetadataLogConfig(new AbstractConfig(MetadataLogConfig.CONFIG_DEF, config, false))
   }
 }

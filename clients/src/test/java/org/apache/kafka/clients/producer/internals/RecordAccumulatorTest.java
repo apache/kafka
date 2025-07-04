@@ -59,7 +59,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -167,7 +166,7 @@ public class RecordAccumulatorTest {
         accum.append(topic, partition4, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
 
         // drain batches from 2 nodes: node1 => tp1, node2 => tp3, because the max request size is full after the first batch drained
-        Map<Integer, List<ProducerBatch>> batches1 = accum.drain(metadataCache, new HashSet<>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        Map<Integer, List<ProducerBatch>> batches1 = accum.drain(metadataCache, Set.of(node1, node2), (int) batchSize, 0);
         verifyTopicPartitionInBatches(batches1, tp1, tp3);
 
         // add record for tp1, tp3
@@ -176,11 +175,11 @@ public class RecordAccumulatorTest {
 
         // drain batches from 2 nodes: node1 => tp2, node2 => tp4, because the max request size is full after the first batch drained
         // The drain index should start from next topic partition, that is, node1 => tp2, node2 => tp4
-        Map<Integer, List<ProducerBatch>> batches2 = accum.drain(metadataCache, new HashSet<>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        Map<Integer, List<ProducerBatch>> batches2 = accum.drain(metadataCache, Set.of(node1, node2), (int) batchSize, 0);
         verifyTopicPartitionInBatches(batches2, tp2, tp4);
 
         // make sure in next run, the drain index will start from the beginning
-        Map<Integer, List<ProducerBatch>> batches3 = accum.drain(metadataCache, new HashSet<>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        Map<Integer, List<ProducerBatch>> batches3 = accum.drain(metadataCache, Set.of(node1, node2), (int) batchSize, 0);
         verifyTopicPartitionInBatches(batches3, tp1, tp3);
 
         // add record for tp2, tp3, tp4 and mute the tp4
@@ -189,7 +188,7 @@ public class RecordAccumulatorTest {
         accum.append(topic, partition4, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
         accum.mutePartition(tp4);
         // drain batches from 2 nodes: node1 => tp2, node2 => tp3 (because tp4 is muted)
-        Map<Integer, List<ProducerBatch>> batches4 = accum.drain(metadataCache, new HashSet<>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        Map<Integer, List<ProducerBatch>> batches4 = accum.drain(metadataCache, Set.of(node1, node2), (int) batchSize, 0);
         verifyTopicPartitionInBatches(batches4, tp2, tp3);
 
         // add record for tp1, tp2, tp3, and unmute tp4
@@ -198,12 +197,12 @@ public class RecordAccumulatorTest {
         accum.append(topic, partition3, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
         accum.unmutePartition(tp4);
         // set maxSize as a max value, so that the all partitions in 2 nodes should be drained: node1 => [tp1, tp2], node2 => [tp3, tp4]
-        Map<Integer, List<ProducerBatch>> batches5 = accum.drain(metadataCache, new HashSet<>(Arrays.asList(node1, node2)), Integer.MAX_VALUE, 0);
+        Map<Integer, List<ProducerBatch>> batches5 = accum.drain(metadataCache, Set.of(node1, node2), Integer.MAX_VALUE, 0);
         verifyTopicPartitionInBatches(batches5, tp1, tp2, tp3, tp4);
     }
 
     private void verifyTopicPartitionInBatches(Map<Integer, List<ProducerBatch>> nodeBatches, TopicPartition... tp) {
-        int allTpBatchCount = (int) nodeBatches.values().stream().flatMap(Collection::stream).count();
+        int allTpBatchCount = (int) nodeBatches.values().stream().mapToLong(Collection::size).sum();
         assertEquals(tp.length, allTpBatchCount);
         List<TopicPartition> topicPartitionsInBatch = new ArrayList<>();
         for (Map.Entry<Integer, List<ProducerBatch>> entry : nodeBatches.entrySet()) {
@@ -460,7 +459,7 @@ public class RecordAccumulatorTest {
 
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
             Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
-            deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+            deliveryTimeoutMs, metrics, metricGrpName, time, null,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
@@ -525,7 +524,7 @@ public class RecordAccumulatorTest {
 
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
                 Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
-                deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+                deliveryTimeoutMs, metrics, metricGrpName, time, null,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
@@ -586,7 +585,7 @@ public class RecordAccumulatorTest {
 
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
                 Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
-                deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+                deliveryTimeoutMs, metrics, metricGrpName, time, null,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
@@ -1266,7 +1265,7 @@ public class RecordAccumulatorTest {
         long totalSize = 1024 * 1024;
         int batchSize = 128;
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-                3200, config, metrics, "producer-metrics", time, new ApiVersions(), null,
+                3200, config, metrics, "producer-metrics", time, null,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics")) {
             @Override
             BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
@@ -1399,7 +1398,7 @@ public class RecordAccumulatorTest {
         String metricGrpName = "producer-metrics";
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
             Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
-            deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+            deliveryTimeoutMs, metrics, metricGrpName, time, null,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         // Create 1 batch(batchA) to be produced to partition1.
@@ -1430,7 +1429,7 @@ public class RecordAccumulatorTest {
 
             // Try to drain from node1, it should return no batches.
             Map<Integer, List<ProducerBatch>> batches = accum.drain(metadataCache,
-                new HashSet<>(Collections.singletonList(node1)), 999999 /* maxSize */, now);
+                Set.of(node1), 999999 /* maxSize */, now);
             assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).isEmpty(),
                 "No batches ready to be drained on Node1");
         }
@@ -1511,7 +1510,7 @@ public class RecordAccumulatorTest {
 
         // Drain for node2, it should return 0 batches,
         Map<Integer, List<ProducerBatch>> batches = accum.drain(metadataCache,
-            new HashSet<>(Collections.singletonList(node2)), 999999 /* maxSize */, time.milliseconds());
+            Set.of(node2), 999999 /* maxSize */, time.milliseconds());
         assertTrue(batches.get(node2.id()).isEmpty());
     }
 
@@ -1610,22 +1609,6 @@ public class RecordAccumulatorTest {
         }
     }
 
-     /**
-     * Return the offset delta when there is no key.
-     */
-    private int expectedNumAppendsNoKey(int batchSize) {
-        int size = 0;
-        int offsetDelta = 0;
-        while (true) {
-            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, 0, value.length,
-                Record.EMPTY_HEADERS);
-            if (size + recordSize > batchSize)
-                return offsetDelta;
-            offsetDelta += 1;
-            size += recordSize;
-        }
-    }
-
     private RecordAccumulator createTestRecordAccumulator(int batchSize, long totalSize, Compression compression, int lingerMs) {
         int deliveryTimeoutMs = 3200;
         return createTestRecordAccumulator(deliveryTimeoutMs, batchSize, totalSize, compression, lingerMs);
@@ -1661,7 +1644,6 @@ public class RecordAccumulatorTest {
             metrics,
             metricGrpName,
             time,
-            new ApiVersions(),
             txnManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName)) {
             @Override
