@@ -585,6 +585,11 @@ class BrokerServer(
       val authorizerFutures = endpointReadyFutures.futures().asScala.toMap
       val enableRequestProcessingFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
+            // Register for broker ready-for-requests notification with RemoteLogManager
+      remoteLogManagerOpt.foreach(rlm => 
+        rlm.remoteLogMetadataManager().onBrokerReadyForRequests(enableRequestProcessingFuture)
+      )
+
       // Block here until all the authorizer futures are complete.
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "all of the authorizer futures to be completed",

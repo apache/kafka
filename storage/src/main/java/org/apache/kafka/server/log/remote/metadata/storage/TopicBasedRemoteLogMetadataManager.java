@@ -94,6 +94,9 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private volatile boolean initializationFailed;
     private final Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier;
     private final Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitionerFunction;
+    
+    // Used to delay initialization until broker is ready to serve requests
+    private CompletableFuture<Void> brokerReadyFuture;
 
     /**
      * The default constructor delegates to the internal one, starting the consumer thread and
@@ -376,12 +379,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             remotePartitionMetadataStore = remoteLogMetadataManagerSupplier.get();
             configured = true;
             log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
-
-            // Scheduling the initialization producer/consumer managers in a separate thread. Required resources may
-            // not yet be available now. This thread makes sure that it is retried at regular intervals until it is
-            // successful.
-            initializationThread = KafkaThread.nonDaemon("RLMMInitializationThread", this::initializeResources);
-            initializationThread.start();
         } finally {
             lock.writeLock().unlock();
         }
@@ -390,6 +387,25 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     @Override
     public boolean isReady(TopicIdPartition topicIdPartition) {
         return remotePartitionMetadataStore.isInitialized(topicIdPartition);
+    }
+
+    @Override
+    public void onBrokerReadyForRequests(CompletableFuture<Void> brokerReadyFuture) {
+        this.brokerReadyFuture = brokerReadyFuture;
+        log.info("Registering for broker ready-for-requests notification");
+        
+        // Use async callback instead of blocking the main thread
+        brokerReadyFuture.whenComplete((result, throwable) -> {
+            if (throwable != null) {
+                log.error("Error waiting for broker to be ready for requests", throwable);
+                initializationFailed = true;
+            } else {
+                log.info("Broker is ready for requests, now initializing RLMM resources");
+                // Start initialization in a separate thread
+                initializationThread = KafkaThread.nonDaemon("RLMMInitializationThread", this::initializeResources);
+                initializationThread.start();
+            }
+        });
     }
 
     private void initializeResources() {
@@ -466,6 +482,10 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             initializationFailed = true;
         } finally {
             Utils.closeQuietly(adminClient, "AdminClient");
+            if(initializationFailed){
+                log.error("Initialized topic-based RLMM resources failed");
+                throw new FatalExitError();
+            }
         }
     }
 
