@@ -445,7 +445,8 @@ public class GroupCoordinatorConfig {
         this.shareGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareGroupMaxSize = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG);
         this.shareGroupAssignors = shareGroupAssignors(config);
-        this.shareGroupInitializeRetryIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG);
+        int initializeRetryMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG);
+        this.shareGroupInitializeRetryIntervalMs = Math.max(initializeRetryMs, this.offsetCommitTimeoutMs);
         // Streams group configurations
         this.streamsGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
@@ -493,9 +494,6 @@ public class GroupCoordinatorConfig {
         require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
             String.format("%s must be less than or equal to %s",
                 SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
-        require(shareGroupInitializeRetryIntervalMs >= offsetCommitTimeoutMs,
-            String.format("%s must be greater than %s",
-                SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, OFFSET_COMMIT_TIMEOUT_MS_CONFIG));
 
         require(shareGroupHeartbeatIntervalMs < shareGroupSessionTimeoutMs,
             String.format("%s must be less than %s",
