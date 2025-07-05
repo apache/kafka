@@ -52,6 +52,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -209,6 +210,17 @@ public class TestUtils {
         for (int i = 0; i < len; i++)
             b.append(LETTERS_AND_DIGITS.charAt(SEEDED_RANDOM.nextInt(LETTERS_AND_DIGITS.length())));
         return b.toString();
+    }
+
+    /**
+     * Select a random element from collections
+     *
+     * @param elements A collection we can select
+     * @return A element from collection
+     */
+    public static <T> T randomSelect(final Collection<T> elements) {
+        List<T> elementsCopy = new ArrayList<>(elements);
+        return elementsCopy.get(SEEDED_RANDOM.nextInt(elementsCopy.size()));
     }
 
     /**

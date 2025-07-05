@@ -1427,12 +1427,12 @@ public class TopicCommandTest {
 
     private void checkReplicaDistribution(Map<Integer, List<Integer>> assignment,
                                           Map<Integer, String> brokerRackMapping,
-                                          Integer numBrokers,
-                                          Integer numPartitions,
-                                          Integer replicationFactor,
-                                          Boolean verifyRackAware,
-                                          Boolean verifyLeaderDistribution,
-                                          Boolean verifyReplicasDistribution) {
+                                          int numBrokers,
+                                          int numPartitions,
+                                          int replicationFactor,
+                                          boolean verifyRackAware,
+                                          boolean verifyLeaderDistribution,
+                                          boolean verifyReplicasDistribution) {
         // always verify that no broker will be assigned for more than one replica
         assignment.forEach((partition, assignedNodes) -> assertEquals(new HashSet<>(assignedNodes).size(), assignedNodes.size(),
                 "More than one replica is assigned to same broker for the same partition"));

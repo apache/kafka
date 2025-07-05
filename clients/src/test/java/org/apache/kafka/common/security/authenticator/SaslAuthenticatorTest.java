@@ -2616,5 +2616,15 @@ public class SaslAuthenticatorTest {
         static KafkaPrincipal saslSslPrincipal(String saslPrincipal, String sslPrincipal) {
             return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslPrincipal + ":" + sslPrincipal);
         }
+
+        @Override
+        public byte[] serialize(KafkaPrincipal principal) {
+            return new byte[0];
+        }
+
+        @Override
+        public KafkaPrincipal deserialize(byte[] bytes) {
+            return null;
+        }
     }
 }

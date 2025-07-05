@@ -118,5 +118,15 @@ public class ChannelBuildersTest {
         public KafkaPrincipal build(AuthenticationContext context) {
             return null;
         }
+
+        @Override
+        public byte[] serialize(KafkaPrincipal principal) {
+            return new byte[0];
+        }
+
+        @Override
+        public KafkaPrincipal deserialize(byte[] bytes) {
+            return null;
+        }
     }
 }
