@@ -33,7 +33,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -109,12 +109,31 @@ public class ClientsTestUtils {
     }
 
     public static void pollUntilTrue(
-            Consumer<byte[], byte[]> consumer,
-            Supplier<Boolean> testCondition,
-            long waitTimeMs, String msg
+        Consumer<byte[], byte[]> consumer,
+        Supplier<Boolean> testCondition,
+        String msg
+    ) throws InterruptedException {
+        pollUntilTrue(consumer, Duration.ofMillis(100), testCondition, 15_000L, msg);
+    }
+
+    public static void pollUntilTrue(
+        Consumer<byte[], byte[]> consumer,
+        Supplier<Boolean> testCondition,
+        long waitTimeMs,
+        String msg
+    ) throws InterruptedException {
+        pollUntilTrue(consumer, Duration.ofMillis(100), testCondition, waitTimeMs, msg);
+    }
+
+    public static void pollUntilTrue(
+        Consumer<byte[], byte[]> consumer,
+        Duration timeout,
+        Supplier<Boolean> testCondition,
+        long waitTimeMs, 
+        String msg
     ) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
-            consumer.poll(Duration.ofMillis(100));
+            consumer.poll(timeout);
             return testCondition.get();
         }, waitTimeMs, msg);
     }
@@ -298,6 +317,21 @@ public class ClientsTestUtils {
         var initialRevokeCalls = rebalanceListener.callsToRevoked;
         sendAndAwaitAsyncCommit(consumer, Optional.empty());
         assertEquals(initialRevokeCalls, rebalanceListener.callsToRevoked);
+    }
+
+
+    public static void waitForPollThrowException(
+        Consumer<byte[], byte[]> consumer,
+        Class<? extends Exception> exceptedException
+    ) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            try {
+                consumer.poll(Duration.ZERO);
+                return false;
+            } catch (Exception e) {
+                return exceptedException.isInstance(e);
+            }
+        }, "Continuous poll not fail");
     }
 
     /**

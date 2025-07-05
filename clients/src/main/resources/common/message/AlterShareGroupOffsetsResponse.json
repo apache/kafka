@@ -25,7 +25,7 @@
       "about": "The top-level error message, or null if there was no error." },
     { "name": "Responses", "type": "[]AlterShareGroupOffsetsResponseTopic", "versions": "0+",
       "about": "The results for each topic.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
         "about": "The topic name." },
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The unique topic ID." },

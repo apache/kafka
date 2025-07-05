@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, RequestUtils}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.IntegrationTestUtils
 import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, GroupVersion, MetadataVersion, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -35,18 +36,9 @@ import scala.jdk.CollectionConverters._
 @Tag("integration")
 abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
-  def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
-    val socket = if (cluster.controllerListenerName() == listenerName) {
-      cluster.controllerSocketServers().asScala.head
-    } else {
-      cluster.brokerSocketServers().asScala.head
-    }
-    IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, socket, listenerName)
-  }
-
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = IntegrationTestUtils.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
-    val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head, cluster.clientListener())
+    val socket = IntegrationTestUtils.connect(cluster.boundPorts().get(0))
     try {
       val serializedBytes = Utils.toArray(
         RequestUtils.serialize(overrideHeader.data, overrideHeader.headerVersion, request.data, request.version))

@@ -34,7 +34,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import java.io.File
 import java.time.Duration
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
@@ -364,7 +364,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def changeClientIdConfig(sanitizedClientId: String, configs: Properties): Unit = {
     Using.resource(createAdminClient(brokers, listenerName)) {
       admin => {
-        admin.alterClientQuotas(Collections.singleton(
+        admin.alterClientQuotas(util.Set.of(
           new ClientQuotaAlteration(
             new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> (if (sanitizedClientId == "<default>") null else sanitizedClientId)).asJava),
             configs.asScala.map { case (key, value) => new ClientQuotaAlteration.Op(key, value.toDouble) }.toList.asJava))).all().get()

@@ -94,7 +94,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private volatile boolean initializationFailed;
     private final Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier;
     private final Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitionerFunction;
-    
+
     // Used to delay initialization until broker is ready to serve requests
     private CompletableFuture<Void> brokerReadyFuture;
 
@@ -393,7 +393,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     public void onBrokerReadyForRequests(CompletableFuture<Void> brokerReadyFuture) {
         this.brokerReadyFuture = brokerReadyFuture;
         log.info("Registering for broker ready-for-requests notification");
-        
+
         // Use async callback instead of blocking the main thread
         brokerReadyFuture.whenComplete((result, throwable) -> {
             if (throwable != null) {
@@ -482,10 +482,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             initializationFailed = true;
         } finally {
             Utils.closeQuietly(adminClient, "AdminClient");
-            if(initializationFailed){
-                log.error("Initialized topic-based RLMM resources failed");
-                throw new FatalExitError();
-            }
         }
     }
 
@@ -505,7 +501,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 log.info("Topic {} does not exist", topic);
                 return false;
             }
-            log.warn("Fail to check if topic {} exist. Error: {}", topic, ex.getCause().getMessage());
             throw ex;
         }
     }

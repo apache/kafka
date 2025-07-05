@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.test;
 
-import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
@@ -36,10 +35,13 @@ import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -65,6 +67,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -126,36 +129,18 @@ public interface ClusterInstance {
      */
     String bootstrapControllers();
 
-    /**
-     * A collection of all brokers in the cluster.
-     */
-    default Collection<SocketServer> brokerSocketServers() {
+    default List<Integer> controllerBoundPorts() {
+        return controllers().values().stream()
+            .map(ControllerServer::socketServer)
+            .map(ss -> ss.boundPort(controllerListenerName()))
+            .toList();
+    }
+
+    default List<Integer> brokerBoundPorts() {
         return brokers().values().stream()
-                .map(KafkaBroker::socketServer)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * A collection of all controllers in the cluster.
-     */
-    Collection<SocketServer> controllerSocketServers();
-
-    /**
-     * Return any one of the broker servers. Throw an error if none are found
-     */
-    default SocketServer anyBrokerSocketServer() {
-        return brokerSocketServers().stream()
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
-    }
-
-    /**
-     * Return any one of the controller servers. Throw an error if none are found
-     */
-    default SocketServer anyControllerSocketServer() {
-        return controllerSocketServers().stream()
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
+            .map(KafkaBroker::socketServer)
+            .map(ss -> ss.boundPort(clientListener()))
+            .toList();
     }
 
     String clusterId();
@@ -405,5 +390,56 @@ public interface ClusterInstance {
                     .findFirst()
                     .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
+    }
+
+    /**
+     * Wait for a leader to be elected or changed using the provided admin client.
+     */
+    default int waitUntilLeaderIsElectedOrChangedWithAdmin(Admin admin,
+                                                           String topic,
+                                                           int partitionNumber,
+                                                           long timeoutMs) throws Exception {
+        long startTime = System.currentTimeMillis();
+        TopicPartition topicPartition = new TopicPartition(topic, partitionNumber);
+
+        while (System.currentTimeMillis() < startTime + timeoutMs) {
+            try {
+                TopicDescription topicDescription = admin.describeTopics(List.of(topic))
+                        .allTopicNames().get().get(topic);
+
+                Optional<Integer> leader = topicDescription.partitions().stream()
+                        .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
+                        .findFirst()
+                        .map(partitionInfo -> {
+                            int leaderId = partitionInfo.leader().id();
+                            return leaderId == Node.noNode().id() ? null : leaderId;
+                        });
+
+                if (leader.isPresent()) {
+                    return leader.get();
+                }
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof UnknownTopicOrPartitionException ||
+                        cause instanceof LeaderNotAvailableException) {
+                    continue;
+                } else {
+                    throw e;
+                }
+            }
+
+            TimeUnit.MILLISECONDS.sleep(Math.min(100L, timeoutMs));
+        }
+
+        throw new AssertionError("Timing out after " + timeoutMs +
+                " ms since a leader was not elected for partition " + topicPartition);
+    }
+
+    default List<Integer> boundPorts() {
+        return brokers().values().stream()
+                .map(KafkaBroker::socketServer)
+                .map(s -> s.boundPort(clientListener()))
+                .toList();
+
     }
 }

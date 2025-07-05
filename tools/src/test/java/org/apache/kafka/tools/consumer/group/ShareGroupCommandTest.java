@@ -120,7 +120,7 @@ public class ShareGroupCommandTest {
 
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(result);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
-            Set<String> expectedGroups = new HashSet<>(Arrays.asList(firstGroup, secondGroup));
+            Set<String> expectedGroups = Set.of(firstGroup, secondGroup);
 
             final Set[] foundGroups = new Set[]{Set.of()};
             TestUtils.waitForCondition(() -> {
@@ -145,13 +145,13 @@ public class ShareGroupCommandTest {
         )));
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(resultWithAllStates);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
-            Set<GroupListing> expectedListing = new HashSet<>(Arrays.asList(
+            Set<GroupListing> expectedListing = Set.of(
                 new GroupListing(firstGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.STABLE)),
-                new GroupListing(secondGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY))));
+                new GroupListing(secondGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY)));
 
             final Set[] foundListing = new Set[]{Set.of()};
             TestUtils.waitForCondition(() -> {
-                foundListing[0] = new HashSet<>(service.listShareGroupsInStates(new HashSet<>(Arrays.asList(GroupState.values()))));
+                foundListing[0] = new HashSet<>(service.listShareGroupsInStates(Set.of(GroupState.values())));
                 return Objects.equals(expectedListing, foundListing[0]);
             }, "Expected to show groups " + expectedListing + ", but found " + foundListing[0]);
 

@@ -202,7 +202,7 @@ public class ProcessorNodeTest {
                 throw new TaskCorruptedException(tasksIds, new InvalidOffsetException("Invalid offset") {
                     @Override
                     public Set<TopicPartition> partitions() {
-                        return new HashSet<>(Collections.singletonList(new TopicPartition("topic", 0)));
+                        return Set.of(new TopicPartition("topic", 0));
                     }
                 });
             }
