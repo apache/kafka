@@ -19,7 +19,6 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -32,10 +31,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RoundRobinPartitionerTest {
-    private static final Node[] NODES = new Node[] {
-        new Node(0, "localhost", 99),
-        new Node(1, "localhost", 100),
-        new Node(2, "localhost", 101)
+    private final static Node[] NODES = new Node[] {
+            new Node(0, "localhost", 99),
+            new Node(1, "localhost", 100),
+            new Node(2, "localhost", 101)
     };
 
     @Test
@@ -53,7 +52,7 @@ public class RoundRobinPartitionerTest {
         int countForPart2 = 0;
         Partitioner partitioner = new RoundRobinPartitioner();
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
-            Collections.emptySet(), Collections.emptySet());
+                Collections.<String>emptySet(), Collections.<String>emptySet());
         for (int i = 1; i <= 100; i++) {
             int part = partitioner.partition("test", null, null, null, null, cluster);
             assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
@@ -66,7 +65,7 @@ public class RoundRobinPartitionerTest {
     }
 
     @Test
-    public void testRoundRobinWithKeyBytes() {
+    public void testRoundRobinWithKeyBytes() throws InterruptedException {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
@@ -74,7 +73,7 @@ public class RoundRobinPartitionerTest {
                 new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
                 new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.emptySet(), Collections.emptySet());
+                Collections.<String>emptySet(), Collections.<String>emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
@@ -96,9 +95,9 @@ public class RoundRobinPartitionerTest {
         assertEquals(10, partitionCount.get(1).intValue());
         assertEquals(10, partitionCount.get(2).intValue());
     }
-    
+
     @Test
-    public void testRoundRobinWithNullKeyBytes() {
+    public void testRoundRobinWithNullKeyBytes() throws InterruptedException {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
@@ -106,7 +105,7 @@ public class RoundRobinPartitionerTest {
                 new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
                 new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.emptySet(), Collections.emptySet());
+                Collections.<String>emptySet(), Collections.<String>emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
@@ -126,5 +125,25 @@ public class RoundRobinPartitionerTest {
         assertEquals(10, partitionCount.get(0).intValue());
         assertEquals(10, partitionCount.get(1).intValue());
         assertEquals(10, partitionCount.get(2).intValue());
-    }    
+    }
+
+    @Test
+    public void testRoundRobinWithAbortForNewBatch() throws Exception {
+        final String topicA = "topicA";
+        final String topicB = "topicB";
+
+        Cluster testCluster = new Cluster("clusterId", asList(NODES[0]), Collections.emptyList(),
+                Collections.<String>emptySet(), Collections.<String>emptySet());
+
+        Partitioner partitioner = new RoundRobinPartitioner();
+
+        //abort for new batch - previous partition should be returned on subsequent call
+        //simulate three threads producing to two topics, with race condition in producer
+        partitioner.onNewBatch(topicA, testCluster, 7);
+        partitioner.onNewBatch(topicA, testCluster, 8);
+        partitioner.onNewBatch(topicB, testCluster, 1);
+        assertEquals(7, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(8, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(1, partitioner.partition(topicB, null, null, null, null, testCluster));
+    }
 }
