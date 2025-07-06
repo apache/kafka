@@ -70,7 +70,7 @@ public class ReplicationConfigs {
 
     public static final String REPLICA_FETCH_MIN_BYTES_CONFIG = "replica.fetch.min.bytes";
     public static final int REPLICA_FETCH_MIN_BYTES_DEFAULT = 1;
-    public static final String REPLICA_FETCH_MIN_BYTES_DOC = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to <code>replica.fetch.wait.max.ms</code> (broker config).";
+    public static final String REPLICA_FETCH_MIN_BYTES_DOC = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to <code>replica.fetch.wait.max.ms</code> (broker config). Even if the total data available in the broker exceeds replica.fetch.min.bytes, the actual returned size may still be less than this value due to per-partition limits replica.fetch.max.bytes and max returned limits replica.fetch.response.max.bytes";
 
     public static final String REPLICA_FETCH_BACKOFF_MS_CONFIG = "replica.fetch.backoff.ms";
     public static final int REPLICA_FETCH_BACKOFF_MS_DEFAULT = 1000;
