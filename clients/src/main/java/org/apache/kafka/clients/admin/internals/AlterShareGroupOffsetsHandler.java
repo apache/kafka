@@ -21,8 +21,8 @@ import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
-import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterShareGroupOffsetsRequest;
@@ -33,7 +33,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -42,7 +41,7 @@ import java.util.Set;
 /**
  * This class is the handler for {@link KafkaAdminClient#alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)} call
  */
-public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, Errors>> {
+public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, ApiException>> {
 
     private final CoordinatorKey groupId;
 
@@ -52,7 +51,6 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
 
     private final CoordinatorStrategy lookupStrategy;
 
-
     public AlterShareGroupOffsetsHandler(String groupId, Map<TopicPartition, Long> offsets, LogContext logContext) {
         this.groupId = CoordinatorKey.byGroupId(groupId);
         this.offsets = offsets;
@@ -60,8 +58,15 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
         this.lookupStrategy = new CoordinatorStrategy(FindCoordinatorRequest.CoordinatorType.GROUP, logContext);
     }
 
-    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> newFuture(String groupId) {
-        return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, ApiException>> newFuture(String groupId) {
+        return AdminApiFuture.forKeys(Set.of(CoordinatorKey.byGroupId(groupId)));
+    }
+
+    private void validateKeys(Set<CoordinatorKey> groupIds) {
+        if (!groupIds.equals(Set.of(groupId))) {
+            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
+                " (expected only " + Set.of(groupId) + ")");
+        }
     }
 
     @Override
@@ -87,30 +92,38 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(Node broker, Set<CoordinatorKey> keys, AbstractResponse abstractResponse) {
+    public ApiResult<CoordinatorKey, Map<TopicPartition, ApiException>> handleResponse(Node broker, Set<CoordinatorKey> keys, AbstractResponse abstractResponse) {
+        validateKeys(keys);
+
         AlterShareGroupOffsetsResponse response = (AlterShareGroupOffsetsResponse) abstractResponse;
-        final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
         final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
         final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
+        final Map<TopicPartition, ApiException> partitionResults = new HashMap<>();
 
-        for (AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topic : response.data().responses()) {
-            for (AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partition : topic.partitions()) {
-                TopicPartition topicPartition = new TopicPartition(topic.topicName(), partition.partitionIndex());
-                Errors error = Errors.forCode(partition.errorCode());
+        if (response.data().errorCode() != Errors.NONE.code()) {
+            final Errors topLevelError = Errors.forCode(response.data().errorCode());
+            final String topLevelErrorMessage = response.data().errorMessage();
 
-                if (error != Errors.NONE) {
-                    handleError(
-                        groupId,
-                        topicPartition,
-                        error,
-                        partitionResults,
-                        groupsToUnmap,
-                        groupsToRetry
-                    );
-                } else {
-                    partitionResults.put(topicPartition, error);
+            offsets.forEach((topicPartition, offset) ->
+                handleError(
+                    groupId,
+                    topicPartition,
+                    topLevelError,
+                    topLevelErrorMessage,
+                    partitionResults,
+                    groupsToUnmap,
+                    groupsToRetry
+                ));
+        } else {
+            response.data().responses().forEach(topic -> topic.partitions().forEach(partition -> {
+                if (partition.errorCode() != Errors.NONE.code()) {
+                    final Errors partitionError = Errors.forCode(partition.errorCode());
+                    final String partitionErrorMessage = partition.errorMessage();
+                    log.debug("AlterShareGroupOffsets request for group id {} and topic-partition {}-{} failed and returned error {}." + partitionErrorMessage,
+                        groupId.idValue, topic.topicName(), partition.partitionIndex(), partitionError);
                 }
-            }
+                partitionResults.put(new TopicPartition(topic.topicName(), partition.partitionIndex()), Errors.forCode(partition.errorCode()).exception(partition.errorMessage()));
+            }));
         }
 
         if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
@@ -121,23 +134,23 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
     }
 
     private void handleError(
-            CoordinatorKey groupId,
-            TopicPartition topicPartition,
-            Errors error,
-            Map<TopicPartition, Errors> partitionResults,
-            Set<CoordinatorKey> groupsToUnmap,
-            Set<CoordinatorKey> groupsToRetry
+        CoordinatorKey groupId,
+        TopicPartition topicPartition,
+        Errors error,
+        String errorMessage,
+        Map<TopicPartition, ApiException> partitionResults,
+        Set<CoordinatorKey> groupsToUnmap,
+        Set<CoordinatorKey> groupsToRetry
     ) {
         switch (error) {
             case COORDINATOR_LOAD_IN_PROGRESS:
             case REBALANCE_IN_PROGRESS:
-                log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will retry.",
-                        groupId.idValue, error);
+                log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will retry." + errorMessage, groupId.idValue, error);
                 groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will rediscover the coordinator and retry.",
+                log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will rediscover the coordinator and retry." + errorMessage,
                         groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
@@ -147,14 +160,12 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
             case UNKNOWN_SERVER_ERROR:
             case KAFKA_STORAGE_ERROR:
             case GROUP_AUTHORIZATION_FAILED:
-                log.debug("AlterShareGroupOffsets request for group id {} and partition {} failed due" +
-                        " to error {}.", groupId.idValue, topicPartition, error);
-                partitionResults.put(topicPartition, error);
+                log.debug("AlterShareGroupOffsets request for group id {} failed due to error {}." + errorMessage, groupId.idValue, error);
+                partitionResults.put(topicPartition, error.exception(errorMessage));
                 break;
             default:
-                log.error("AlterShareGroupOffsets request for group id {} and partition {} failed due" +
-                        " to unexpected error {}.", groupId.idValue, topicPartition, error);
-                partitionResults.put(topicPartition, error);
+                log.error("AlterShareGroupOffsets request for group id {} failed due to unexpected error {}." + errorMessage, groupId.idValue, error);
+                partitionResults.put(topicPartition, error.exception(errorMessage));
         }
     }
 
