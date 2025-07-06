@@ -677,11 +677,6 @@ public final class QuorumController implements Controller {
     }
 
     // Visible for testing
-    FeatureControlManager featureControl() {
-        return featureControl;
-    }
-
-    // Visible for testing
     ConfigurationControlManager configurationControl() {
         return configurationControl;
     }
@@ -1697,7 +1692,7 @@ public final class QuorumController implements Controller {
      *
      * This task periodically expires delegation tokens.
      *
-     * @param checkIntervalNs
+     * @param checkIntervalNs The check interval in nanoseconds.
      */
     private void registerExpireDelegationTokens(long checkIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("expireDelegationTokens",

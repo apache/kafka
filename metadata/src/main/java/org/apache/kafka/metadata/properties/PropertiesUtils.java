@@ -36,7 +36,7 @@ public final class PropertiesUtils {
      *
      * @param props         The Properties object.
      * @param path          The file to write to.
-     * @throws IOException
+     * @throws IOException  If any I/O error occurs.
      */
     public static void writePropertiesFile(
         Properties props,

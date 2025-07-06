@@ -71,8 +71,7 @@ public final class ConfigurationImage {
 
     public void write(
         ConfigResource configResource,
-        ImageWriter writer,
-        ImageWriterOptions options
+        ImageWriter writer
     ) {
         for (Map.Entry<String, String> entry : data.entrySet()) {
             writer.write(0, new ConfigRecord().

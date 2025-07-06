@@ -23,7 +23,6 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.image.node.ClientQuotaImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -58,8 +57,7 @@ public final class ClientQuotaImage {
 
     public void write(
         ClientQuotaEntity entity,
-        ImageWriter writer,
-        ImageWriterOptions options
+        ImageWriter writer
     ) {
         for (Entry<String, Double> entry : quotas.entrySet()) {
             writer.write(0, new ClientQuotaRecord().
