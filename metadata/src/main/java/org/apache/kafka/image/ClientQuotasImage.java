@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryDat
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.image.node.ClientQuotasImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
 import java.util.HashMap;
