@@ -112,6 +112,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
@@ -23156,6 +23157,203 @@ public class GroupMetadataManagerTest {
             .build());
 
         assertDoesNotThrow(() -> context.replay(record));
+    }
+
+    private record PendingAssignmentCase(
+        String description,
+        String groupId,
+        ShareGroup group,
+        boolean expectedValue,
+        Runnable assertions
+    ) {
+    }
+
+    private static Stream<Function<GroupMetadataManagerTestContext, PendingAssignmentCase>> generatePendingAssignmentCases() {
+        String groupId1 = "groupId";
+        Uuid tid1 = Uuid.randomUuid();
+        String tName1 = "t1";
+        Uuid tid2 = Uuid.randomUuid();
+        String tName2 = "t2";
+
+        return Stream.of(
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.isEmpty()).thenReturn(true);
+                return new PendingAssignmentCase("Group is empty", groupId1, group, false, () -> {
+                    verify(group, times(0)).groupId();
+                    verify(group).isEmpty();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                return new PendingAssignmentCase("Group not in metadata", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                );
+                context.commit();
+                return new PendingAssignmentCase("Group metadata initialized topics empty", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of());
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Empty group subscription", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of(tName2, new SubscriptionCount(1, 1)));
+                when(group.targetAssignment()).thenReturn(Map.of());
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Subscribed topics not in metadata and empty assignment.", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                    verify(group).targetAssignment();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of(tName1, new SubscriptionCount(1, 1)));
+                when(group.targetAssignment()).thenReturn(Map.of(tName1, new Assignment(Map.of(tid1, Set.of(0, 1)))));
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Subscribed topics in metadata and assigned partitions match.", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                    verify(group).targetAssignment();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of(tName1, new SubscriptionCount(1, 1)));
+                when(group.targetAssignment()).thenReturn(Map.of(tName1, new Assignment(Map.of(tid1, Set.of(0)))));
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Subscribed topics in metadata but assigned partitions differ.", groupId1, group, true, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                    verify(group).targetAssignment();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of(tName1, new SubscriptionCount(1, 1)));
+                when(group.targetAssignment()).thenReturn(Map.of(
+                    tName1, new Assignment(Map.of(tid1, Set.of(0, 1))),
+                    tName2, new Assignment(Map.of(tid2, Set.of(0)))
+                ));
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1)),
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName2)
+                                .setTopicId(tid2)
+                                .setPartitions(List.of(0))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Subscribed topics in metadata but assigned has other topics too.", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                    verify(group).targetAssignment();
+                });
+            }
+        );
+    }
+
+    @SuppressWarnings("ClassEscapesDefinedScope")
+    @ParameterizedTest
+    @MethodSource("generatePendingAssignmentCases")
+    public void testShareGroupPendingAssignments(Function<GroupMetadataManagerTestContext, PendingAssignmentCase> testCase) {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        PendingAssignmentCase test = testCase.apply(context);
+        assertEquals(test.expectedValue, context.groupMetadataManager.initializedAssignmentPending(test.group), test.description);
+        test.assertions.run();
     }
 
     private static void checkJoinGroupResponse(
