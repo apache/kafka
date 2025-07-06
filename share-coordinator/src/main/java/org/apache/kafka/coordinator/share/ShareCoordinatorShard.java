@@ -207,6 +207,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     @Override
     public void onLoaded(MetadataImage newImage) {
+        this.metadataImage = newImage;
         coordinatorMetrics.activateMetricsShard(metricsShard);
     }
 
@@ -327,7 +328,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         WriteShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
         SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicData.topicId(), partitionData.partition());
 
-        CoordinatorRecord record = generateShareStateRecord(partitionData, key);
+        CoordinatorRecord record = generateShareStateRecord(partitionData, key, false);
         // build successful response if record is correctly created
         WriteShareGroupStateResponseData responseData = new WriteShareGroupStateResponseData().setResults(
             List.of(WriteShareGroupStateResponse.toResponseWriteStateResult(key.topicId(),
@@ -404,7 +405,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setStartOffset(responseData.results().get(0).partitions().get(0).startOffset())
             .setStateEpoch(responseData.results().get(0).partitions().get(0).stateEpoch());
 
-        CoordinatorRecord record = generateShareStateRecord(writePartitionData, key);
+        CoordinatorRecord record = generateShareStateRecord(writePartitionData, key, true);
         return new CoordinatorResult<>(List.of(record), responseData);
     }
 
@@ -636,20 +637,27 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * seen so far => create a new ShareSnapshot record else create a new ShareUpdate record. This method assumes
      * that share partition key is present in shareStateMap since it should be called on initialized share partitions.
      *
-     * @param partitionData - Represents the data which should be written into the share state record.
-     * @param key           - The {@link SharePartitionKey} object.
+     * @param partitionData     - Represents the data which should be written into the share state record.
+     * @param key               - The {@link SharePartitionKey} object.
+     * @param updateLeaderEpoch - Should the leader epoch be updated, if higher.
      * @return {@link CoordinatorRecord} representing ShareSnapshot or ShareUpdate
      */
     private CoordinatorRecord generateShareStateRecord(
         WriteShareGroupStateRequestData.PartitionData partitionData,
-        SharePartitionKey key
+        SharePartitionKey key,
+        boolean updateLeaderEpoch
     ) {
         long timestamp = time.milliseconds();
         int updatesPerSnapshotLimit = config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot();
-        if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit || partitionData.stateEpoch() > shareStateMap.get(key).stateEpoch()) {
-            ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
-            int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? currentState.leaderEpoch() : partitionData.leaderEpoch();
-            int newStateEpoch = partitionData.stateEpoch() == -1 ? currentState.stateEpoch() : partitionData.stateEpoch();
+        ShareGroupOffset currentState = shareStateMap.get(key); // This method assumes containsKey is true.
+
+        int newLeaderEpoch = currentState.leaderEpoch();
+        if (updateLeaderEpoch) {
+            newLeaderEpoch = partitionData.leaderEpoch() != -1 ? partitionData.leaderEpoch() : newLeaderEpoch;
+        }
+
+        if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit) {
+            // shareStateMap will have the entry as containsKey is true
             long newStartOffset = partitionData.startOffset() == -1 ? currentState.startOffset() : partitionData.startOffset();
 
             // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot
@@ -661,14 +669,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setSnapshotEpoch(currentState.snapshotEpoch() + 1)   // We must increment snapshot epoch as this is new snapshot.
                     .setStartOffset(newStartOffset)
                     .setLeaderEpoch(newLeaderEpoch)
-                    .setStateEpoch(newStateEpoch)
+                    .setStateEpoch(currentState.stateEpoch())
                     .setStateBatches(mergeBatches(currentState.stateBatches(), partitionData, newStartOffset))
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
                     .build());
         } else {
-            ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true.
-
             // Share snapshot is present and number of share snapshot update records < snapshotUpdateRecordsPerSnapshot
             // so create a share update record.
             // The incoming partition data could have overlapping state batches, we must merge them.
@@ -677,7 +683,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 new ShareGroupOffset.Builder()
                     .setSnapshotEpoch(currentState.snapshotEpoch()) // Use same snapshotEpoch as last share snapshot.
                     .setStartOffset(partitionData.startOffset())
-                    .setLeaderEpoch(partitionData.leaderEpoch())
+                    .setLeaderEpoch(newLeaderEpoch)
                     .setStateBatches(mergeBatches(List.of(), partitionData))
                     .build());
         }

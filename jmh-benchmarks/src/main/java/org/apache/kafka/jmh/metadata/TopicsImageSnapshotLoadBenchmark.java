@@ -37,7 +37,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -84,8 +84,8 @@ public class TopicsImageSnapshotLoadBenchmark {
                     setTopicId(topicId).
                     setReplicas(replicas).
                     setIsr(isr).
-                    setRemovingReplicas(Collections.emptyList()).
-                    setAddingReplicas(Collections.emptyList()).
+                    setRemovingReplicas(List.of()).
+                    setAddingReplicas(List.of()).
                     setLeader(currentLeader.get()));
                 currentLeader.set((1 + currentLeader.get()) % numBrokers);
             });

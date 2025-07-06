@@ -556,8 +556,8 @@ listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.p
 
                     <p>See <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
                         <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
-                        <a href="#security_sasl_scram_brokerconfig">SCRAM</a> or
-                        <a href="#security_sasl_oauthbearer_brokerconfig">OAUTHBEARER</a> for example broker configurations.</p></li>
+                        <a href="#security_sasl_scram_brokerconfig">SCRAM</a>, or
+                        <a href="#security_sasl_oauthbearer_non_production_brokerconfig">non-production</a>/<a href="#security_sasl_oauthbearer_production_brokerconfig">production</a> OAUTHBEARER for example broker configurations.</p></li>
 
                 <li><h5><a id="security_jaas_client"
                            href="#security_jaas_client">JAAS configuration for Kafka clients</a></h5>
@@ -579,8 +579,8 @@ listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.p
 
                             <p>See <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
                                 <a href="#security_sasl_plain_clientconfig">PLAIN</a>,
-                                <a href="#security_sasl_scram_clientconfig">SCRAM</a> or
-                                <a href="#security_sasl_oauthbearer_clientconfig">OAUTHBEARER</a> for example configurations.</p></li>
+                                <a href="#security_sasl_scram_clientconfig">SCRAM</a>, or
+                                <a href="#security_sasl_oauthbearer_non_production_clientconfig">non-production</a>/<a href="#security_sasl_oauthbearer_production_clientconfig">production</a> OAUTHBEARER for example client configurations.</p></li>
 
                         <li><h6 class="anchor-heading"><a id="security_client_staticjaas" class="anchor-link"></a><a href="#security_client_staticjaas">JAAS configuration using static config file</a></h6>
                             To configure SASL authentication on the clients using static JAAS config file:
@@ -589,8 +589,8 @@ listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.p
                                     a login module in <code>KafkaClient</code> for the selected mechanism as described in the examples
                                     for setting up <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
                                     <a href="#security_sasl_plain_clientconfig">PLAIN</a>,
-                                    <a href="#security_sasl_scram_clientconfig">SCRAM</a> or
-                                    <a href="#security_sasl_oauthbearer_clientconfig">OAUTHBEARER</a>.
+                                    <a href="#security_sasl_scram_clientconfig">SCRAM</a>, or
+                                    <a href="#security_sasl_oauthbearer_non_production_clientconfig">non-production</a>/<a href="#security_sasl_oauthbearer_production_clientconfig">production</a> OAUTHBEARER.
                                     For example, <a href="#security_sasl_gssapi_clientconfig">GSSAPI</a>
                                     credentials may be configured as:
                                     <pre><code class="language-text">KafkaClient {
@@ -905,10 +905,13 @@ sasl.mechanism=SCRAM-SHA-256 (or SCRAM-SHA-512)</code></pre></li>
                 enables the use of the framework in a SASL (i.e. a non-HTTP) context; it is defined in <a href="https://tools.ietf.org/html/rfc7628">RFC 7628</a>.
                 The default OAUTHBEARER implementation in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>
                 and is only suitable for use in non-production Kafka installations. Refer to <a href="#security_sasl_oauthbearer_security">Security Considerations</a>
-                for more details.</p>
+                for more details. Recent versions of Apache Kafka have added production-ready OAUTHBEARER implementations that support interaction with an OAuth 2.0-standards
+                compliant identity provider. Both modes are described in the following, noted where applicable.</p>
             Under the default implementation of <code>principal.builder.class</code>, the principalName of OAuthBearerToken is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
             <ol>
-                <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_brokerconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_brokerconfig">Configuring Kafka Brokers</a></h5>
+                <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_non_production_brokerconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_non_production_brokerconfig">Configuring Non-production Kafka Brokers</a></h5>
+                    <p>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
+                    While suitable only for non-production use, it does provide the flexibility to create arbitrary tokens in a DEV or TEST environment.</p>
                     <ol>
                         <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
                             <pre><code class="language-text">KafkaServer {
@@ -917,7 +920,40 @@ sasl.mechanism=SCRAM-SHA-256 (or SCRAM-SHA-512)</code></pre></li>
 };</code></pre>
                             The property <code>unsecuredLoginStringClaim_sub</code> in the <code>KafkaServer</code> section is used by
                             the broker when it initiates connections to other brokers. In this example, <i>admin</i> will appear in the
-                            subject (<code>sub</code>) claim and will be the user for inter-broker communication.</li>
+                            subject (<code>sub</code>) claim and will be the user for inter-broker communication.
+
+                            <p>Here are the various supported JAAS module options on the broker side for <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Token</a> validation:
+                                <table>
+                                    <tr>
+                                        <th>JAAS Module Option for Unsecured Token Validation</th>
+                                        <th>Documentation</th>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredValidatorPrincipalClaimName="value"</code></td>
+                                        <td>Set to a non-empty value if you wish a particular <code>String</code> claim
+                                            holding a principal name to be checked for existence; the default is to check
+                                            for the existence of the '<code>sub</code>' claim.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredValidatorScopeClaimName="value"</code></td>
+                                        <td>Set to a custom claim name if you wish the name of the <code>String</code> or
+                                            <code>String List</code> claim holding any token scope to be something other than
+                                            '<code>scope</code>'.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredValidatorRequiredScope="value"</code></td>
+                                        <td>Set to a space-delimited list of scope values if you wish the
+                                            <code>String/String List</code> claim holding the token scope to be checked to
+                                            make sure it contains certain values.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredValidatorAllowableClockSkewMs="value"</code></td>
+                                        <td>Set to a positive integer value if you wish to allow up to some number of
+                                            positive milliseconds of clock skew (the default is 0).</td>
+                                    </tr>
+                                </table>
+                            </p>
+                        </li>
                         <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
                             <pre><code class="language-bash">-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
                         <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
@@ -927,8 +963,40 @@ sasl.mechanism.inter.broker.protocol=OAUTHBEARER
 sasl.enabled.mechanisms=OAUTHBEARER</code></pre></li>
                     </ol>
                 </li>
+                <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_production_brokerconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_production_brokerconfig">Configuring Production Kafka Brokers</a></h5>
+                    <ol>
+                        <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
+                            <pre><code class="language-text">KafkaServer {
+    org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ;
+};</code></pre></li>
+                        <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
+                            <pre><code class="language-bash">-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
+                        <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
+                            <pre><code class="language-text">listeners=SASL_SSL://host.name:port
+security.inter.broker.protocol=SASL_SSL
+sasl.mechanism.inter.broker.protocol=OAUTHBEARER
+sasl.enabled.mechanisms=OAUTHBEARER
+listener.name.&lt;listener name&gt;.oauthbearer.sasl.server.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler
+listener.name.&lt;listener name&gt;.oauthbearer.sasl.oauthbearer.jwks.endpoint.url=https://example.com/oauth2/v1/keys</code></pre>
 
-                <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_clientconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_clientconfig">Configuring Kafka Clients</a></h5>
+                            The OAUTHBEARER broker configuration includes:
+
+                            <ul>
+                                <li>sasl.oauthbearer.clock.skew.seconds</li>
+                                <li>sasl.oauthbearer.expected.audience</li>
+                                <li>sasl.oauthbearer.expected.issuer</li>
+                                <li>sasl.oauthbearer.jwks.endpoint.refresh.ms</li>
+                                <li>sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms</li>
+                                <li>sasl.oauthbearer.jwks.endpoint.retry.backoff.ms</li>
+                                <li>sasl.oauthbearer.jwks.endpoint.url</li>
+                                <li>sasl.oauthbearer.scope.claim.name</li>
+                                <li>sasl.oauthbearer.sub.claim.name</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </li>
+
+                <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_non_production_clientconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_non_production_clientconfig">Configuring Non-production Kafka Clients</a></h5>
                     To configure SASL authentication on the clients:
                     <ol>
                         <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
@@ -943,6 +1011,61 @@ sasl.enabled.mechanisms=OAUTHBEARER</code></pre></li>
                                 Different clients within a JVM may connect as different users by specifying different subject (<code>sub</code>)
                                 claims in <code>sasl.jaas.config</code>.</p>
 
+                            <p>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
+                                While suitable only for non-production use, it does provide the flexibility to create arbitrary tokens in a DEV or TEST environment.</p>
+                            <p>Here are the various supported JAAS module options on the client side (and on the broker side if OAUTHBEARER is the inter-broker protocol):
+                                <table>
+                                    <tr>
+                                        <th>JAAS Module Option for Unsecured Token Creation</th>
+                                        <th>Documentation</th>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredLoginStringClaim_&lt;claimname&gt;="value"</code></td>
+                                        <td>Creates a <code>String</code> claim with the given name and value. Any valid
+                                            claim name can be specified except '<code>iat</code>' and '<code>exp</code>' (these are
+                                            automatically generated).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredLoginNumberClaim_&lt;claimname&gt;="value"</code></td>
+                                        <td>Creates a <code>Number</code> claim with the given name and value. Any valid
+                                            claim name can be specified except '<code>iat</code>' and '<code>exp</code>' (these are
+                                            automatically generated).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredLoginListClaim_&lt;claimname&gt;="value"</code></td>
+                                        <td>Creates a <code>String List</code> claim with the given name and values parsed
+                                            from the given value where the first character is taken as the delimiter. For
+                                            example: <code>unsecuredLoginListClaim_fubar="|value1|value2"</code>. Any valid
+                                            claim name can be specified except '<code>iat</code>' and '<code>exp</code>' (these are
+                                            automatically generated).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredLoginExtension_&lt;extensionname&gt;="value"</code></td>
+                                        <td>Creates a <code>String</code> extension with the given name and value.
+                                            For example: <code>unsecuredLoginExtension_traceId="123"</code>. A valid extension name
+                                            is any sequence of lowercase or uppercase alphabet characters. In addition, the "auth" extension name is reserved.
+                                            A valid extension value is any combination of characters with ASCII codes 1-127.
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredLoginPrincipalClaimName</code></td>
+                                        <td>Set to a custom claim name if you wish the name of the <code>String</code>
+                                            claim holding the principal name to be something other than '<code>sub</code>'.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredLoginLifetimeSeconds</code></td>
+                                        <td>Set to an integer value if the token expiration is to be set to something
+                                            other than the default value of 3600 seconds (which is 1 hour). The
+                                            '<code>exp</code>' claim will be set to reflect the expiration time.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unsecuredLoginScopeClaimName</code></td>
+                                        <td>Set to a custom claim name if you wish the name of the <code>String</code> or
+                                            <code>String List</code> claim holding any token scope to be something other than
+                                            '<code>scope</code>'.</td>
+                                    </tr>
+                                </table>
+                            </p>
+
                             <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
                                 as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
                                 <code>KafkaClient</code>. This option allows only one user for all client connections from a JVM.</p></li>
@@ -953,101 +1076,64 @@ sasl.mechanism=OAUTHBEARER</code></pre></li>
                             Since it's an optional dependency, users have to configure it as a dependency via their build tool.</li>
                     </ol>
                 </li>
-                <li><h5><a id="security_sasl_oauthbearer_unsecured_retrieval" href="#security_sasl_oauthbearer_unsecured_retrieval">Unsecured Token Creation Options for SASL/OAUTHBEARER</a></h5>
-                    <ul>
-                        <li>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
-                            While suitable only for non-production use, it does provide the flexibility to create arbitrary tokens in a DEV or TEST environment.</li>
-                        <li>Here are the various supported JAAS module options on the client side (and on the broker side if OAUTHBEARER is the inter-broker protocol):
-                            <table>
-                                <tr>
-                                    <th>JAAS Module Option for Unsecured Token Creation</th>
-                                    <th>Documentation</th>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredLoginStringClaim_&lt;claimname&gt;="value"</code></td>
-                                    <td>Creates a <code>String</code> claim with the given name and value. Any valid
-                                        claim name can be specified except '<code>iat</code>' and '<code>exp</code>' (these are
-                                        automatically generated).</td>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredLoginNumberClaim_&lt;claimname&gt;="value"</code></td>
-                                    <td>Creates a <code>Number</code> claim with the given name and value. Any valid
-                                        claim name can be specified except '<code>iat</code>' and '<code>exp</code>' (these are
-                                        automatically generated).</td>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredLoginListClaim_&lt;claimname&gt;="value"</code></td>
-                                    <td>Creates a <code>String List</code> claim with the given name and values parsed
-                                        from the given value where the first character is taken as the delimiter. For
-                                        example: <code>unsecuredLoginListClaim_fubar="|value1|value2"</code>. Any valid
-                                        claim name can be specified except '<code>iat</code>' and '<code>exp</code>' (these are
-                                        automatically generated).</td>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredLoginExtension_&lt;extensionname&gt;="value"</code></td>
-                                    <td>Creates a <code>String</code> extension with the given name and value.
-                                        For example: <code>unsecuredLoginExtension_traceId="123"</code>. A valid extension name
-                                        is any sequence of lowercase or uppercase alphabet characters. In addition, the "auth" extension name is reserved.
-                                        A valid extension value is any combination of characters with ASCII codes 1-127.
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredLoginPrincipalClaimName</code></td>
-                                    <td>Set to a custom claim name if you wish the name of the <code>String</code>
-                                        claim holding the principal name to be something other than '<code>sub</code>'.</td>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredLoginLifetimeSeconds</code></td>
-                                    <td>Set to an integer value if the token expiration is to be set to something
-                                        other than the default value of 3600 seconds (which is 1 hour). The
-                                        '<code>exp</code>' claim will be set to reflect the expiration time.</td>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredLoginScopeClaimName</code></td>
-                                    <td>Set to a custom claim name if you wish the name of the <code>String</code> or
-                                        <code>String List</code> claim holding any token scope to be something other than
-                                        '<code>scope</code>'.</td>
-                                </tr>
-                            </table>
+                <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_production_clientconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_production_clientconfig">Configuring Production Kafka Clients</a></h5>
+                    To configure SASL authentication on the clients:
+                    <ol>
+                        <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
+                            The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
+                            The following is an example configuration for a client for the OAUTHBEARER mechanisms:
+                            <pre><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ;</code></pre>
+
+                            <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
+                                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
+                                <code>KafkaClient</code>. This option allows only one user for all client connections from a JVM.</p></li>
+                        <li>Configure the following properties in producer.properties or consumer.properties. For example, if using the OAuth <code>client_credentials</code> grant type
+                            to communicate with the OAuth identity provider, the configuration might look like this:
+                            <pre><code class="language-text">security.protocol=SASL_SSL
+sasl.mechanism=OAUTHBEARER
+sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever
+sasl.oauthbearer.client.credentials.client.id=jdoe
+sasl.oauthbearer.client.credentials.client.secret=$3cr3+
+sasl.oauthbearer.scope=my-application-scope
+sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token</code></pre>
+
+                            Or, if using the OAuth <code>urn:ietf:params:oauth:grant-type:jwt-bearer</code> grant type
+                            to communicate with the OAuth identity provider, the configuration might look like this:
+                            <pre><code class="language-text">security.protocol=SASL_SSL
+sasl.mechanism=OAUTHBEARER
+sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever
+sasl.oauthbearer.assertion.private.key.file=/path/to/private.key
+sasl.oauthbearer.assertion.algorithm=RS256
+sasl.oauthbearer.assertion.claim.exp.seconds=600
+sasl.oauthbearer.assertion.template.file=/path/to/template.json
+sasl.oauthbearer.scope=my-application-scope
+sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token</code></pre>
+                            The OAUTHBEARER client configuration includes:
+
+                            <ul>
+                                <li>sasl.oauthbearer.assertion.algorithm</li>
+                                <li>sasl.oauthbearer.assertion.claim.aud</li>
+                                <li>sasl.oauthbearer.assertion.claim.exp.seconds</li>
+                                <li>sasl.oauthbearer.assertion.claim.iss</li>
+                                <li>sasl.oauthbearer.assertion.claim.jti.include</li>
+                                <li>sasl.oauthbearer.assertion.claim.nbf.seconds</li>
+                                <li>sasl.oauthbearer.assertion.claim.sub</li>
+                                <li>sasl.oauthbearer.assertion.file</li>
+                                <li>sasl.oauthbearer.assertion.private.key.file</li>
+                                <li>sasl.oauthbearer.assertion.private.key.passphrase</li>
+                                <li>sasl.oauthbearer.assertion.template.file</li>
+                                <li>sasl.oauthbearer.client.credentials.client.id</li>
+                                <li>sasl.oauthbearer.client.credentials.client.secret</li>
+                                <li>sasl.oauthbearer.header.urlencode</li>
+                                <li>sasl.oauthbearer.jwt.retriever.class</li>
+                                <li>sasl.oauthbearer.jwt.validator.class</li>
+                                <li>sasl.oauthbearer.scope</li>
+                                <li>sasl.oauthbearer.token.endpoint.url</li>
+                            </ul>
                         </li>
-                    </ul>
-                </li>
-                <li><h5><a id="security_sasl_oauthbearer_unsecured_validation" href="#security_sasl_oauthbearer_unsecured_validation">Unsecured Token Validation Options for SASL/OAUTHBEARER</a></h5>
-                    <ul>
-                        <li>Here are the various supported JAAS module options on the broker side for <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Token</a> validation:
-                            <table>
-                                <tr>
-                                    <th>JAAS Module Option for Unsecured Token Validation</th>
-                                    <th>Documentation</th>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredValidatorPrincipalClaimName="value"</code></td>
-                                    <td>Set to a non-empty value if you wish a particular <code>String</code> claim
-                                        holding a principal name to be checked for existence; the default is to check
-                                        for the existence of the '<code>sub</code>' claim.</td>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredValidatorScopeClaimName="value"</code></td>
-                                    <td>Set to a custom claim name if you wish the name of the <code>String</code> or
-                                        <code>String List</code> claim holding any token scope to be something other than
-                                        '<code>scope</code>'.</td>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredValidatorRequiredScope="value"</code></td>
-                                    <td>Set to a space-delimited list of scope values if you wish the
-                                        <code>String/String List</code> claim holding the token scope to be checked to
-                                        make sure it contains certain values.</td>
-                                </tr>
-                                <tr>
-                                    <td><code>unsecuredValidatorAllowableClockSkewMs="value"</code></td>
-                                    <td>Set to a positive integer value if you wish to allow up to some number of
-                                        positive milliseconds of clock skew (the default is 0).</td>
-                                </tr>
-                            </table>
-                        </li>
-                        <li>The default unsecured SASL/OAUTHBEARER implementation may be overridden (and must be overridden in production environments)
-                            using custom login and SASL Server callback handlers.</li>
-                        <li>For more details on security considerations, refer to <a href="https://tools.ietf.org/html/rfc6749#section-10">RFC 6749, Section 10</a>.</li>
-                    </ul>
+                        <li>The default implementation of SASL/OAUTHBEARER depends on the jackson-databind library.
+                            Since it's an optional dependency, users have to configure it as a dependency via their build tool.</li>
+                    </ol>
                 </li>
                 <li><h5><a id="security_sasl_oauthbearer_refresh" href="#security_sasl_oauthbearer_refresh">Token Refresh for SASL/OAUTHBEARER</a></h5>
                     Kafka periodically refreshes any token before it expires so that the client can continue to make
@@ -1125,7 +1211,7 @@ sasl.mechanism=OAUTHBEARER</code></pre></li>
 sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechanisms)</code></pre></li>
                 <li>Follow the mechanism-specific steps in <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
                     <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
-                    <a href="#security_sasl_scram_brokerconfig">SCRAM</a> and <a href="#security_sasl_oauthbearer_brokerconfig">OAUTHBEARER</a>
+                    <a href="#security_sasl_scram_brokerconfig">SCRAM</a>, and <a href="#security_sasl_oauthbearer_non_production_brokerconfig">non-production</a>/<a href="#security_sasl_oauthbearer_production_brokerconfig">production</a> OAUTHBEARER
                     to configure SASL for the enabled mechanisms.</li>
             </ol>
         </li>
