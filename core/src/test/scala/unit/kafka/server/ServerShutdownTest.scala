@@ -143,6 +143,52 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testKafkaShutdownHookExecution(): Unit = {
+    import scala.collection.mutable
+    
+    val capturedHooks = mutable.ArrayBuffer[Runnable]()
+    @volatile var kafkaShutdownHookExecuted = false
+    @volatile var exitProcedureCalled = false
+    
+    // Capture shutdown hook registration
+    Exit.setShutdownHookAdder((name, runnable) => {
+      if ("kafka-shutdown-hook".equals(name)) {
+        capturedHooks += runnable
+      }
+    })
+    
+    // Set up exit procedure to simulate JVM shutdown hook execution
+    Exit.setExitProcedure((statusCode, message) => {
+      exitProcedureCalled = true
+      assertEquals(1, statusCode)
+      // Simulate JVM executing shutdown hooks
+      capturedHooks.foreach(_.run())
+    })
+    
+    try {
+      // Simulate registering kafka shutdown hook
+      Exit.addShutdownHook("kafka-shutdown-hook", () => {
+        kafkaShutdownHookExecuted = true
+      })
+      
+      // Verify that shutdown hook was registered
+      assertEquals(1, capturedHooks.size)
+      
+      // Simulate Exit.exit() being called (like in FatalExitError handling)
+      Exit.exit(1, "Test fatal exit")
+      
+      // Verify that both exit procedure and shutdown hook were executed
+      assertTrue(exitProcedureCalled, "Exit procedure should have been called")
+      assertTrue(kafkaShutdownHookExecuted, "Kafka shutdown hook should have been executed")
+      
+    } finally {
+      // Clean up
+      Exit.resetExitProcedure()
+      Exit.resetShutdownHookAdder()
+    }
+  }
+  
+  @Test
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
     createTopic(topic)
     shutdownBroker()
