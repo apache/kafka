@@ -344,8 +344,10 @@ public interface ClusterInstance {
         // wait for metadata
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         TestUtils.waitForCondition(
-            () -> brokers.stream().allMatch(broker -> broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
-                60000L, topic + " metadata not propagated after 60000 ms");
+            () -> brokers.stream().allMatch(broker -> partitions == 0 ?
+                broker.metadataCache().numPartitions(topic).isEmpty() :
+                broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()
+        ), 60000L, topic + " metadata not propagated after 60000 ms");
 
         for (ControllerServer controller : controllers().values()) {
             long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
