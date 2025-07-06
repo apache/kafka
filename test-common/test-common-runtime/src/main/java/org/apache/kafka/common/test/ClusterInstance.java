@@ -259,9 +259,7 @@ public interface ClusterInstance {
 
     default void waitTopicDeletion(String topic) throws InterruptedException {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
-        List<TopicPartition> topicPartitions = IntStream.range(0, 1)
-                .mapToObj(partition -> new TopicPartition(topic, partition))
-                .toList();
+        List<TopicPartition> topicPartitions = List.of(new TopicPartition(topic, 0));
 
         // Ensure that the topic-partition has been deleted from all brokers' replica managers
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
