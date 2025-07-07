@@ -258,6 +258,21 @@ public interface ClusterInstance {
 
     default void waitTopicDeletion(String topic) throws InterruptedException {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
+        // wait for metadata
+        Collection<KafkaBroker> brokers = aliveBrokers().values();
+        TestUtils.waitForCondition(
+            () -> brokers.stream().allMatch(broker -> partitions == 0 ?
+                broker.metadataCache().numPartitions(topic).isEmpty() :
+                broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
+                60000L, topic + " metadata not propagated after 60000 ms");
+
+        for (ControllerServer controller : controllers().values()) {
+            long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
+            TestUtils.waitForCondition(
+                () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
+                60000L, "Timeout waiting for controller metadata propagating to brokers");
+        }
+
         List<TopicPartition> topicPartitions = List.of(new TopicPartition(topic, 0));
 
         // Ensure that the topic-partition has been deleted from all brokers' replica managers
@@ -330,10 +345,6 @@ public interface ClusterInstance {
     void waitForReadyBrokers() throws InterruptedException;
 
     default void waitForTopic(String topic, int partitions) throws InterruptedException {
-        if (partitions < 0) {
-            throw new IllegalArgumentException("Partition count must be >= 0, but was " + partitions);
-        }
-
         // wait for metadata
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         TestUtils.waitForCondition(
