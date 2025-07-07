@@ -50,7 +50,7 @@ import java.util.function.Function;
  */
 public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CoordinatorLoader.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CoordinatorLoaderImpl.class);
 
     private final Time time;
     private final Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier;
@@ -161,8 +161,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
     }
 
     private MemoryRecords toReadableMemoryRecords(TopicPartition tp, Records records, ByteBuffer buffer) throws IOException {
-        if (records instanceof MemoryRecords) {
-            return (MemoryRecords) records;
+        if (records instanceof MemoryRecords memoryRecords) {
+            return memoryRecords;
         } else if (records instanceof FileRecords fileRecords) {
             int sizeInBytes = fileRecords.sizeInBytes();
             int bytesNeeded = Math.max(loadBufferSize, sizeInBytes);

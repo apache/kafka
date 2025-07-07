@@ -67,7 +67,6 @@ import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, Ti
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
-import scala.jdk.javaapi.OptionConverters.toJava
 
 
 /**
@@ -611,7 +610,7 @@ class BrokerServer(
     )
     val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
       time,
-      tp => toJava(replicaManager.getLog(tp)),
+      tp => replicaManager.getLog(tp).toJava,
       tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
       config.groupCoordinatorConfig.offsetsLoadBufferSize
@@ -642,7 +641,7 @@ class BrokerServer(
     val serde = new ShareCoordinatorRecordSerde
     val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
       time,
-      tp => toJava(replicaManager.getLog(tp)),
+      tp => replicaManager.getLog(tp).toJava,
       tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
       config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
