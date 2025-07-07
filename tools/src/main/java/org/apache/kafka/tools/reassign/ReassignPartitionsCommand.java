@@ -206,7 +206,7 @@ public class ReassignPartitionsCommand {
      */
     static VerifyAssignmentResult verifyAssignment(Admin adminClient,
                                                    String jsonString,
-                                                   Boolean preserveThrottles
+                                                   boolean preserveThrottles
     ) throws ExecutionException, InterruptedException, JsonProcessingException {
         Entry<List<Entry<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(jsonString);
 
@@ -246,7 +246,7 @@ public class ReassignPartitionsCommand {
      *                              in the JSON file.)
      */
     private static Entry<Map<TopicPartition, PartitionReassignmentState>, Boolean> verifyPartitionAssignments(Admin adminClient,
-                                                                                                               List<Entry<TopicPartition, List<Integer>>> targets
+                                                                                                              List<Entry<TopicPartition, List<Integer>>> targets
     ) throws ExecutionException, InterruptedException {
         Entry<Map<TopicPartition, PartitionReassignmentState>, Boolean> t0 = findPartitionReassignmentStates(adminClient, targets);
         System.out.println(partitionReassignmentStatesToString(t0.getKey()));
@@ -307,8 +307,8 @@ public class ReassignPartitionsCommand {
      *                             partition, plus whether there are any ongoing reassignments.
      */
     static Entry<Map<TopicPartition, PartitionReassignmentState>, Boolean> findPartitionReassignmentStates(Admin adminClient,
-                                                                                                            List<Entry<TopicPartition,
-                                                                                                            List<Integer>>> targetReassignments
+                                                                                                           List<Entry<TopicPartition,
+                                                                                                           List<Integer>>> targetReassignments
     ) throws ExecutionException, InterruptedException {
         Map<TopicPartition, PartitionReassignment> currentReassignments = adminClient.
             listPartitionReassignments().reassignments().get();
@@ -402,7 +402,7 @@ public class ReassignPartitionsCommand {
      *                              returns all ongoing replica reassignments.)
      */
     private static Entry<Map<TopicPartitionReplica, LogDirMoveState>, Boolean> verifyReplicaMoves(Admin adminClient,
-                                                                                                   Map<TopicPartitionReplica, String> targetReassignments
+                                                                                                  Map<TopicPartitionReplica, String> targetReassignments
     ) throws ExecutionException, InterruptedException {
         Map<TopicPartitionReplica, LogDirMoveState> moveStates = findLogDirMoveStates(adminClient, targetReassignments);
         System.out.println(replicaMoveStatesToString(moveStates));
@@ -556,9 +556,9 @@ public class ReassignPartitionsCommand {
      *                              current assignment.
      */
     public static Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> generateAssignment(Admin adminClient,
-                                                                                                             String reassignmentJson,
-                                                                                                             String brokerListString,
-                                                                                                             Boolean enableRackAwareness
+                                                                                                                   String reassignmentJson,
+                                                                                                                   String brokerListString,
+                                                                                                                   boolean enableRackAwareness
     ) throws ExecutionException, InterruptedException, JsonProcessingException {
         Entry<List<Integer>, List<String>> t0 = parseGenerateAssignmentArgs(reassignmentJson, brokerListString);
 
@@ -723,7 +723,7 @@ public class ReassignPartitionsCommand {
      * @return                       A tuple of brokers to reassign, topics to reassign
      */
     static Entry<List<Integer>, List<String>> parseGenerateAssignmentArgs(String reassignmentJson,
-                                                                           String brokerList) throws JsonMappingException {
+                                                                          String brokerList) throws JsonMappingException {
         List<Integer> brokerListToReassign = Stream.of(brokerList.split(",")).map(Integer::parseInt).collect(Collectors.toList());
         Set<Integer> duplicateReassignments = ToolsUtils.duplicates(brokerListToReassign);
         if (!duplicateReassignments.isEmpty())
@@ -751,13 +751,13 @@ public class ReassignPartitionsCommand {
      * @param time                        The Time object to use.
      */
     public static void executeAssignment(Admin adminClient,
-                                  Boolean additional,
-                                  String reassignmentJson,
-                                  Long interBrokerThrottle,
-                                  Long logDirThrottle,
-                                  Long timeoutMs,
-                                  Time time,
-                                  boolean disallowReplicationFactorChange
+                                         boolean additional,
+                                         String reassignmentJson,
+                                         long interBrokerThrottle,
+                                         long logDirThrottle,
+                                         long timeoutMs,
+                                         Time time,
+                                         boolean disallowReplicationFactorChange
     ) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
         Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> t0 = parseExecuteAssignmentArgs(reassignmentJson);
 
@@ -824,7 +824,7 @@ public class ReassignPartitionsCommand {
      */
     private static void executeMoves(Admin adminClient,
                                      Map<TopicPartitionReplica, String> proposedReplicas,
-                                     Long timeoutMs,
+                                     long timeoutMs,
                                      Time time
     ) throws InterruptedException, TerseException {
         long startTimeMs = time.milliseconds();
@@ -1143,7 +1143,7 @@ public class ReassignPartitionsCommand {
     private static void modifyReassignmentThrottle(
         Admin admin,
         Map<String, Map<Integer, PartitionMove>> moveMap,
-        Long interBrokerThrottle
+        long interBrokerThrottle
     ) throws ExecutionException, InterruptedException {
         Map<String, String> leaderThrottles = calculateLeaderThrottles(moveMap);
         Map<String, String> followerThrottles = calculateFollowerThrottles(moveMap);
@@ -1256,10 +1256,10 @@ public class ReassignPartitionsCommand {
      *                              and the replica movements that were cancelled.
      */
     static Entry<Set<TopicPartition>, Set<TopicPartitionReplica>> cancelAssignment(Admin adminClient,
-                                                                                    String jsonString,
-                                                                                    Boolean preserveThrottles,
-                                                                                    Long timeoutMs,
-                                                                                    Time time
+                                                                                   String jsonString,
+                                                                                   boolean preserveThrottles,
+                                                                                   long timeoutMs,
+                                                                                   Time time
     ) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
         Entry<List<Entry<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(jsonString);
 
@@ -1306,7 +1306,7 @@ public class ReassignPartitionsCommand {
     }
 
     public static String formatAsReassignmentJson(Map<TopicPartition, List<Integer>> partitionsToBeReassigned,
-                                                   Map<TopicPartitionReplica, String> replicaLogDirAssignment) throws JsonProcessingException {
+                                                  Map<TopicPartitionReplica, String> replicaLogDirAssignment) throws JsonProcessingException {
         List<Map<String, Object>> partitions = new ArrayList<>();
         partitionsToBeReassigned.keySet().stream().sorted(ReassignPartitionsCommand::compareTopicPartitions).forEach(tp -> {
             List<Integer> replicas = partitionsToBeReassigned.get(tp);
