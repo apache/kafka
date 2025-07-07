@@ -1641,10 +1641,17 @@ public class RemoteLogManager implements Closeable {
             int updatedFetchSize =
                     remoteStorageFetchInfo.minOneMessage && firstBatchSize > maxBytes ? firstBatchSize : maxBytes;
 
-            ByteBuffer buffer = ByteBuffer.allocate(updatedFetchSize);
-            int remainingBytes = updatedFetchSize;
+            int bufferSize = Math.max(firstBatchSize, updatedFetchSize);
+
+            ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+            int remainingBytes = bufferSize;
 
             firstBatch.writeTo(buffer);
+
+            if (bufferSize > updatedFetchSize) {
+                buffer = buffer.position(updatedFetchSize);
+            }
+
             remainingBytes -= firstBatchSize;
 
             if (remainingBytes > 0) {

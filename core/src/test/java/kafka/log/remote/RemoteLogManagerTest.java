@@ -2977,9 +2977,9 @@ public class RemoteLogManagerTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testReadForFirstBatchMoreThanMaxFetchBytes(boolean minOneMessage) throws RemoteStorageException, IOException {
+    @ParameterizedTest(name = "testReadForFirstBatchMoreThanMaxFetchBytes minOneMessage={0} hardMaxBytesLimit={1}")
+    @CsvSource(value = {"true, true", "true, false", "false, true", "false, false"})
+    public void testReadForFirstBatchMoreThanMaxFetchBytes(boolean minOneMessage, boolean hardMaxBytesLimit) throws RemoteStorageException, IOException {
         FileInputStream fileInputStream = mock(FileInputStream.class);
         ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
         RemoteLogSegmentMetadata segmentMetadata = mock(RemoteLogSegmentMetadata.class);
@@ -3001,7 +3001,7 @@ public class RemoteLogManagerTest {
         );
 
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, minOneMessage, tp, partitionData, FetchIsolation.HIGH_WATERMARK, false
+                0, minOneMessage, tp, partitionData, FetchIsolation.HIGH_WATERMARK, hardMaxBytesLimit
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
@@ -3048,9 +3048,13 @@ public class RemoteLogManagerTest {
                 // Verify that the byte buffer has capacity equal to the size of the first batch
                 assertEquals(recordBatchSizeInBytes, capture.getValue().capacity());
             } else {
-                // Verify that the first batch is never written to the buffer
-                verify(firstBatch, never()).writeTo(any(ByteBuffer.class));
-                assertEquals(MemoryRecords.EMPTY, fetchDataInfo.records);
+                if (!hardMaxBytesLimit) {
+                    // Verify that the first batch is never written to the buffer
+                    verify(firstBatch, never()).writeTo(any(ByteBuffer.class));
+                    assertEquals(MemoryRecords.EMPTY, fetchDataInfo.records);
+                } else {
+                    assertEquals(recordBatchSizeInBytes, capture.getValue().capacity());
+                }
             }
         }
     }
