@@ -334,10 +334,11 @@ public interface ClusterInstance {
      * @param topicName The name of the topic to delete
      * @throws InterruptedException If the operation is interrupted
      */
-    default void deleteTopic(String topicName) throws InterruptedException {
+    default void deleteTopic(String topicName) throws InterruptedException, ExecutionException {
         try (Admin admin = admin()) {
+            int partitions = admin.describeTopics(List.of(topicName)).allTopicNames().get().get(topicName).partitions().size();
             admin.deleteTopics(List.of(topicName));
-            waitTopicDeletion(topicName);
+            waitTopicDeletion(topicName, partitions);
         }
     }
 
@@ -364,7 +365,7 @@ public interface ClusterInstance {
         }
 
         if (partitions == 0) {
-            waitTopicDeletion(topic);
+            waitTopicDeletion(topic, 0);
         }
     }
 
