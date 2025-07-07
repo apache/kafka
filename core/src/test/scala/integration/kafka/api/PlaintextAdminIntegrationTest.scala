@@ -2870,9 +2870,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     def sleepMillisToPropagateMetadata(durationMs: Long): Unit = {
         TimeUnit.MILLISECONDS.sleep(100)
-        prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
         TestUtils.waitUntilTrue(
           () => {
+            prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
             val allSynced = brokers.forall {
               broker => val leaderIdOpt = broker.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).map(_.id())
               val leaderId = leaderIdOpt.toScala
