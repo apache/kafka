@@ -1298,11 +1298,11 @@ object TestUtils extends Logging {
     adminClient.incrementalAlterConfigs(configs)
   }
 
-  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
+  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Boolean = {
     waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
   }
 
-  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Unit = {
+  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Boolean = {
     waitForLeaderToBecome(client, topicPartition, None)
   }
 
@@ -1317,7 +1317,7 @@ object TestUtils extends Logging {
     client: Admin,
     topicPartition: TopicPartition,
     expectedLeaderOpt: Option[Int]
-  ): Unit = {
+  ): Boolean = {
     val topic = topicPartition.topic
     val partitionId = topicPartition.partition
 
@@ -1337,6 +1337,8 @@ object TestUtils extends Logging {
 
     assertTrue(isLeaderElected, s"Timed out waiting for leader to become $expectedLeaderOpt. " +
       s"Last metadata lookup returned leader = ${lastLeaderCheck.getOrElse("unknown")}")
+
+    isLeaderElected
   }
 
   def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
