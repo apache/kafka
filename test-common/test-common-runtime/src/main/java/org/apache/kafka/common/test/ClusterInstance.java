@@ -256,13 +256,12 @@ public interface ClusterInstance {
 
     //---------------------------[wait]---------------------------//
 
-    default void waitTopicDeletion(String topic, int partitions) throws InterruptedException {
+    default void waitTopicDeletion(String topic) throws InterruptedException {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         // wait for metadata
         TestUtils.waitForCondition(
-            () -> brokers.stream().allMatch(broker -> partitions == 0 ?
-                broker.metadataCache().numPartitions(topic).isEmpty() :
-                broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
+            () -> brokers.stream().allMatch(
+                broker -> broker.metadataCache().numPartitions(topic).isEmpty()),
                 60000L, topic + " metadata not propagated after 60000 ms");
 
         for (ControllerServer controller : controllers().values()) {
@@ -338,7 +337,7 @@ public interface ClusterInstance {
         try (Admin admin = admin()) {
             int partitions = admin.describeTopics(List.of(topicName)).allTopicNames().get().get(topicName).partitions().size();
             admin.deleteTopics(List.of(topicName));
-            waitTopicDeletion(topicName, partitions);
+            waitTopicDeletion(topicName);
         }
     }
 
