@@ -356,8 +356,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         );
 
         // Set all production feature levels from the image
+        metrics.maybeRemoveFinalizedFeatureLevelMetrics(image.features().finalizedVersions());
         for (var featureEntry : image.features().finalizedVersions().entrySet()) {
-            metrics.maybeRemoveFinalizedFeatureLevelMetrics(image.features().finalizedVersions());
             metrics.recordFinalizedFeatureLevel(
                 featureEntry.getKey(),
                 featureEntry.getValue()
