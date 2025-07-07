@@ -900,7 +900,6 @@ object TestUtils extends Logging {
       } else if (oldLeaderOpt.isDefined) {
           debug(s"Checking leader that has changed from $oldLeaderOpt")
           brokers.find { broker =>
-            broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
             broker.config.brokerId != oldLeaderOpt.get &&
               broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
           }.map(_.config.brokerId)
@@ -1298,11 +1297,11 @@ object TestUtils extends Logging {
     adminClient.incrementalAlterConfigs(configs)
   }
 
-  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Boolean = {
+  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
     waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
   }
 
-  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Boolean = {
+  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Unit = {
     waitForLeaderToBecome(client, topicPartition, None)
   }
 
@@ -1317,7 +1316,7 @@ object TestUtils extends Logging {
     client: Admin,
     topicPartition: TopicPartition,
     expectedLeaderOpt: Option[Int]
-  ): Boolean = {
+  ): Unit = {
     val topic = topicPartition.topic
     val partitionId = topicPartition.partition
 
@@ -1335,14 +1334,11 @@ object TestUtils extends Logging {
       case Failure(e) => throw e
     }
 
-    assertTrue(isLeaderElected, s"Timed out waiting for leader to become expectedLeaderOpt. " +
+    assertTrue(isLeaderElected, s"Timed out waiting for leader to become $expectedLeaderOpt. " +
       s"Last metadata lookup returned leader = ${lastLeaderCheck.getOrElse("unknown")}")
-
-    isLeaderElected
   }
 
-  def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Boolean = {
-    var result = false
+  def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
     waitUntilTrue(
       () => {
         val description = client.describeTopics(partition.map(_.topic).asJava).allTopicNames.get.asScala
@@ -1352,12 +1348,10 @@ object TestUtils extends Logging {
           .map(_.id)
           .toSet
 
-        result = brokerIds.intersect(isr).isEmpty
         brokerIds.intersect(isr).isEmpty
       },
       s"Expected brokers $brokerIds to no longer be in the ISR for $partition"
     )
-    result
   }
 
   def currentIsr(admin: Admin, partition: TopicPartition): Set[Int] = {
