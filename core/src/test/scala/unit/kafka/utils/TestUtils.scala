@@ -900,6 +900,7 @@ object TestUtils extends Logging {
       } else if (oldLeaderOpt.isDefined) {
           debug(s"Checking leader that has changed from $oldLeaderOpt")
           brokers.find { broker =>
+            broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
             broker.config.brokerId != oldLeaderOpt.get &&
               broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
           }.map(_.config.brokerId)
