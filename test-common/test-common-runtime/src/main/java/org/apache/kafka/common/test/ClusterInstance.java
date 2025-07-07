@@ -363,10 +363,6 @@ public interface ClusterInstance {
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");
         }
-
-        if (partitions == 0) {
-            waitTopicDeletion(topic, 0);
-        }
     }
 
     default List<Authorizer> authorizers() {
