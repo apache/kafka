@@ -27,6 +27,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -71,7 +72,8 @@ public class MetadataLoaderMetricsTest {
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
-                    ));
+                    )
+                );
 
                 // Record some feature levels and verify their metrics are registered
                 fakeMetrics.metrics.recordFinalizedFeatureLevel("metadata.version", (short) 3);
@@ -84,7 +86,8 @@ public class MetadataLoaderMetricsTest {
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion"
-                    ));
+                    )
+                );
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
                     Set.of());
@@ -176,7 +179,8 @@ public class MetadataLoaderMetricsTest {
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
-                    ));
+                    )
+                );
 
                 // Record metadata version and verify its metric
                 fakeMetrics.metrics.recordFinalizedFeatureLevel("metadata.version", (short) 5);
@@ -202,7 +206,38 @@ public class MetadataLoaderMetricsTest {
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion"
-                    ));
+                    )
+                );
+
+                // When a feature's finalized level is not present in the new image, its metric should be removed
+                fakeMetrics.metrics.maybeRemoveFinalizedFeatureLevelMetrics(
+                    Map.of("kraft.version", (short) 3)
+                );
+                ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
+                    Set.of(
+                        "kafka.server:type=MetadataLoader,name=CurrentControllerId",
+                        "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
+                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion"
+                    )
+                );
+
+                // Set the finalized feature level and check the metric is added back with its correct value
+                fakeMetrics.metrics.recordFinalizedFeatureLevel("metadata.version", (short) 6);
+                @SuppressWarnings("unchecked")
+                Gauge<Short> anotherFinalizedMetadataVersion = (Gauge<Short>) registry
+                    .allMetrics()
+                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=metadataVersion"));
+                assertEquals((short) 6, anotherFinalizedMetadataVersion.value());
+                ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
+                    Set.of(
+                        "kafka.server:type=MetadataLoader,name=CurrentControllerId",
+                        "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
+                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion"
+                    )
+                );
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
                 Set.of());

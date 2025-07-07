@@ -176,6 +176,18 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
     }
 
     /**
+     * Remove the FinalizedLevel metric for features who are no longer part of the
+     * current features image.
+     * @param newFinalizedLevels The new finalized feature levels from the features image
+     */
+    public void maybeRemoveFinalizedFeatureLevelMetrics(Map<String, Short> newFinalizedLevels) {
+        finalizedFeatureLevels.keySet().stream().filter(
+            featureName -> !newFinalizedLevels.containsKey(featureName)
+        ).forEach(this::removeFinalizedFeatureLevelMetric);
+        finalizedFeatureLevels.entrySet().removeIf(entry -> !newFinalizedLevels.containsKey(entry.getKey()));
+    }
+
+    /**
      * Record the finalized feature level and ensure the metric is registered.
      * 
      * @param featureName The name of the feature

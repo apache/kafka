@@ -33,7 +33,6 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -356,11 +355,12 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             metadataVersion.featureLevel()
         );
 
-        // Set all production feature levels from the image, defaulting to their minimum production values
-        for (var feature : Feature.PRODUCTION_FEATURES) {
+        // Set all production feature levels from the image
+        for (var featureEntry : image.features().finalizedVersions().entrySet()) {
+            metrics.maybeRemoveFinalizedFeatureLevelMetrics(image.features().finalizedVersions());
             metrics.recordFinalizedFeatureLevel(
-                feature.featureName(),
-                image.features().finalizedVersions().getOrDefault(feature.featureName(), feature.minimumProduction())
+                featureEntry.getKey(),
+                featureEntry.getValue()
             );
         }
 
