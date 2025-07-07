@@ -44,10 +44,12 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 public class LogConcurrencyTest {
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
@@ -64,7 +66,9 @@ public class LogConcurrencyTest {
     @AfterEach
     public void teardown() throws Exception {
         scheduler.shutdown();
-        log.close();
+        if (log != null) {
+            log.close();
+        }
         Utils.delete(tmpDir);
     }
 
@@ -88,15 +92,16 @@ public class LogConcurrencyTest {
             final ConsumerTask consumer = new ConsumerTask(log, maxOffset);
             final LogAppendTask appendTask = new LogAppendTask(log, maxOffset);
 
-            final Future<?> consumerFuture = executor.submit(consumer);
-            final Future<?> fetcherTaskFuture = executor.submit(appendTask);
+            final Future<List<FetchedBatch>> consumerFuture = executor.submit(consumer);
+            final Future<Void> fetcherTaskFuture = executor.submit(appendTask);
 
             fetcherTaskFuture.get();
-            consumerFuture.get();
+            List<FetchedBatch> consumedBatches = consumerFuture.get();
 
-            validateConsumedData(log, consumer.getConsumedBatches());
+            validateConsumedData(log, consumedBatches);
         } finally {
             executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5L, TimeUnit.SECONDS));
         }
     }
 
@@ -130,15 +135,13 @@ public class LogConcurrencyTest {
             segment.log().batches().forEach(batch -> {
                 if (iter.hasNext()) {
                     final FetchedBatch consumedBatch = iter.next();
-                    try {
-                        assertEquals(batch.partitionLeaderEpoch(),
-                            consumedBatch.epoch(), "Consumed batch with unexpected leader epoch");
-                        assertEquals(batch.baseOffset(),
-                            consumedBatch.baseOffset(), "Consumed batch with unexpected base offset");
-                    } catch (Throwable t) {
-                        fail("Consumed batch " + consumedBatch +
-                            " does not match next expected batch in log " + batch, t);
-                    }
+                    assertEquals(batch.partitionLeaderEpoch(),
+                        consumedBatch.epoch(),
+                        "Consumed batch " + consumedBatch + " does not match next expected batch in log " + batch);
+                    assertEquals(batch.baseOffset(),
+                        consumedBatch.baseOffset(),
+                        "Consumed batch " + consumedBatch + " does not match next expected batch in log " + batch);
+
                 }
             })
         );
@@ -148,22 +151,11 @@ public class LogConcurrencyTest {
      * Simple consumption task which reads the log in ascending order and collects
      * consumed batches for validation
      */
-    private static class ConsumerTask implements Callable<Void> {
-        private final UnifiedLog log;
-        private final int lastOffset;
-        private final List<FetchedBatch> consumedBatches = new ArrayList<>();
-
-        public ConsumerTask(UnifiedLog log, int lastOffset) {
-            this.log = log;
-            this.lastOffset = lastOffset;
-        }
-
-        public List<FetchedBatch> getConsumedBatches() {
-            return consumedBatches;
-        }
+    private record ConsumerTask(UnifiedLog log, int lastOffset) implements Callable<List<FetchedBatch>> {
 
         @Override
-        public Void call() throws Exception {
+        public List<FetchedBatch> call() throws Exception {
+            final List<FetchedBatch> consumedBatches = new ArrayList<>(); // Now a local variable
             long fetchOffset = 0L;
             while (log.highWatermark() < lastOffset) {
                 final FetchDataInfo readInfo = log.read(fetchOffset, 1, FetchIsolation.HIGH_WATERMARK, true);
@@ -172,7 +164,7 @@ public class LogConcurrencyTest {
                     fetchOffset = batch.lastOffset() + 1;
                 }
             }
-            return null;
+            return consumedBatches;
         }
     }
 
@@ -226,12 +218,5 @@ public class LogConcurrencyTest {
     }
 
     private record FetchedBatch(long baseOffset, int epoch) {
-        @Override
-        public String toString() {
-            return "FetchedBatch(" +
-                "baseOffset=" + baseOffset +
-                ", epoch=" + epoch +
-                ")";
-        }
     }
 }
