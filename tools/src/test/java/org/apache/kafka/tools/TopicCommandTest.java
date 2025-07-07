@@ -924,7 +924,7 @@ public class TopicCommandTest {
                         CLUSTER_WAIT_MS, String.format("Delete topic fail in %s ms", CLUSTER_WAIT_MS)
             );
 
-            clusterInstance.waitTopicDeletion(topicWithCollidingChar);
+            clusterInstance.waitTopicDeletion(topicWithCollidingChar, defaultNumPartitions);
 
             // recreate same topic
             adminClient.createTopics(Collections.singletonList(new NewTopic(topicWithCollidingChar, defaultNumPartitions, defaultReplicationFactor)));

@@ -275,7 +275,7 @@ public class ClusterTestExtensionsTest {
             admin.createTopics(List.of(new NewTopic(testTopic, 1, (short) 1)));
             clusterInstance.waitForTopic(testTopic, 1);
             admin.deleteTopics(List.of(testTopic));
-            clusterInstance.waitTopicDeletion(testTopic);
+            clusterInstance.waitTopicDeletion(testTopic, 1);
             Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
                     topic -> topic.name().equals(testTopic)
             ));

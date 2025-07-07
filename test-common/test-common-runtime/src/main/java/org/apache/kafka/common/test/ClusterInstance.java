@@ -256,10 +256,9 @@ public interface ClusterInstance {
 
     //---------------------------[wait]---------------------------//
 
-    default void waitTopicDeletion(String topic) throws InterruptedException {
+    default void waitTopicDeletion(String topic, int partitions) throws InterruptedException {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         // wait for metadata
-        Collection<KafkaBroker> brokers = aliveBrokers().values();
         TestUtils.waitForCondition(
             () -> brokers.stream().allMatch(broker -> partitions == 0 ?
                 broker.metadataCache().numPartitions(topic).isEmpty() :
@@ -345,6 +344,10 @@ public interface ClusterInstance {
     void waitForReadyBrokers() throws InterruptedException;
 
     default void waitForTopic(String topic, int partitions) throws InterruptedException {
+        if (partitions <= 0) {
+            throw new IllegalArgumentException("Partition count must be > 0, but was " + partitions);
+        }
+
         // wait for metadata
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         TestUtils.waitForCondition(
