@@ -376,7 +376,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
     private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "Allow automatic topic creation on the broker when" +
             " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
-            " broker allows for it using `auto.create.topics.enable` broker configuration.";
+            " broker allows for it using <code>auto.create.topics.enable</code> broker configuration.";
     public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
 
     /**

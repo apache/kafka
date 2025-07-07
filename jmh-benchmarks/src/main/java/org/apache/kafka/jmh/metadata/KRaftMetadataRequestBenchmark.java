@@ -20,9 +20,7 @@ package org.apache.kafka.jmh.metadata;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
-import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
@@ -64,6 +62,8 @@ import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.quota.ClientQuotaManager;
+import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
