@@ -182,9 +182,13 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
      */
     public void maybeRemoveFinalizedFeatureLevelMetrics(Map<String, Short> newFinalizedLevels) {
         finalizedFeatureLevels.keySet().stream().filter(
-            featureName -> !newFinalizedLevels.containsKey(featureName)
+            featureName -> !newFinalizedLevels.containsKey(featureName) &&
+                !featureName.equals(MetadataVersion.FEATURE_NAME)
         ).forEach(this::removeFinalizedFeatureLevelMetric);
-        finalizedFeatureLevels.entrySet().removeIf(entry -> !newFinalizedLevels.containsKey(entry.getKey()));
+        finalizedFeatureLevels.keySet().removeIf(
+            featureName -> !newFinalizedLevels.containsKey(featureName) &&
+                !featureName.equals(MetadataVersion.FEATURE_NAME)
+        );
     }
 
     /**
@@ -194,6 +198,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
      * @param featureLevel The finalized level for the feature
      */
     public void recordFinalizedFeatureLevel(String featureName, short featureLevel) {
+        System.out.println("Recording finalized feature level: " + featureName + " -> " + featureLevel);
         final var metricNotRegistered = finalizedFeatureLevels.put(featureName, featureLevel) == null;
         if (metricNotRegistered) addFinalizedFeatureLevelMetric(featureName);
     }
@@ -202,10 +207,10 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
      * Get the finalized feature level for a feature.
      * 
      * @param featureName The name of the feature
-     * @return The finalized level for the feature, or 0 if not found
+     * @return The finalized level for the feature
      */
     public short finalizedFeatureLevel(String featureName) {
-        return finalizedFeatureLevels.getOrDefault(featureName, (short) 0);
+        return finalizedFeatureLevels.get(featureName);
     }
 
     @Override
