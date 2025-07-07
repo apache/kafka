@@ -46,12 +46,4 @@ public record OffsetExpirationConditionImpl(
             return currentTimestampMs - baseTimestamp.apply(offset) >= offsetsRetentionMs;
         }
     }
-
-    /**
-     * @return The base timestamp.
-     */
-    @Override
-    public Function<OffsetAndMetadata, Long> baseTimestamp() {
-        return this.baseTimestamp;
-    }
 }
