@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -106,7 +107,7 @@ public class LogConcurrencyTest {
     }
 
     private UnifiedLog createLog() throws IOException {
-        return createLog(new LogConfig(new Properties()));
+        return createLog(new LogConfig(Map.of()));
     }
 
     private UnifiedLog createLog(LogConfig config) throws IOException {
