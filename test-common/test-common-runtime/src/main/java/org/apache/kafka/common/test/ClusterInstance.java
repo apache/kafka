@@ -70,7 +70,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import scala.jdk.javaapi.CollectionConverters;
 
@@ -335,23 +334,23 @@ public interface ClusterInstance {
             throw new IllegalArgumentException("Partition count must be >= 0, but was " + partitions);
         }
 
-        else if(partitions == 0){
-            waitTopicDeletion(topic);
-        }
-
         // wait for metadata
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         TestUtils.waitForCondition(
             () -> brokers.stream().allMatch(broker -> partitions == 0 ?
                 broker.metadataCache().numPartitions(topic).isEmpty() :
-                broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()
-        ), 60000L, topic + " metadata not propagated after 60000 ms");
+                broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
+                60000L, topic + " metadata not propagated after 60000 ms");
 
         for (ControllerServer controller : controllers().values()) {
             long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");
+        }
+
+        if (partitions == 0) {
+            waitTopicDeletion(topic);
         }
     }
 
