@@ -32,12 +32,10 @@ import java.util.function.Supplier;
  * @param <VR> transformed value type
  * @see ValueTransformer
  * @see ValueTransformerWithKey
- * @see KStream#transformValues(ValueTransformerSupplier, String...)
- * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  * @see TransformerSupplier
- * @see KStream#transform(TransformerSupplier, String...)
  */
+@FunctionalInterface
 public interface ValueTransformerWithKeySupplier<K, V, VR> extends ConnectedStoreProvider, Supplier<ValueTransformerWithKey<K, V, VR>> {
 
     /**
@@ -47,8 +45,7 @@ public interface ValueTransformerWithKeySupplier<K, V, VR> extends ConnectedStor
      * Creating a single {@link ValueTransformerWithKey} object and returning the same object reference in {@link ValueTransformerWithKeySupplier#get()}
      * is a violation of the supplier pattern and leads to runtime exceptions.
      *
-     * @return  a new {@link ValueTransformerWithKey} instance
-     * @return  a newly constructed {@link ValueTransformerWithKey} instance
+     * @return a newly constructed {@link ValueTransformerWithKey} instance
      */
     ValueTransformerWithKey<K, V, VR> get();
 }

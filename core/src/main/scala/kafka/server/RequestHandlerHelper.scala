@@ -17,44 +17,13 @@
 
 package kafka.server
 
-import kafka.cluster.Partition
-import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import org.apache.kafka.common.errors.ClusterAuthorizationException
-import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.GroupCoordinator
-
-import java.util.OptionalInt
-
-object RequestHandlerHelper {
-
-  def onLeadershipChange(groupCoordinator: GroupCoordinator,
-                         txnCoordinator: TransactionCoordinator,
-                         updatedLeaders: Iterable[Partition],
-                         updatedFollowers: Iterable[Partition]): Unit = {
-    // for each new leader or follower, call coordinator to handle consumer group migration.
-    // this callback is invoked under the replica state change lock to ensure proper order of
-    // leadership changes
-    updatedLeaders.foreach { partition =>
-      if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
-        groupCoordinator.onElection(partition.partitionId, partition.getLeaderEpoch)
-      else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
-        txnCoordinator.onElection(partition.partitionId, partition.getLeaderEpoch)
-    }
-
-    updatedFollowers.foreach { partition =>
-      if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
-        groupCoordinator.onResignation(partition.partitionId, OptionalInt.of(partition.getLeaderEpoch))
-      else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
-        txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
-    }
-  }
-
-}
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ThrottleCallback}
 
 class RequestHandlerHelper(
   requestChannel: RequestChannel,
@@ -71,7 +40,7 @@ class RequestHandlerHelper(
       override def startThrottling(): Unit = requestChannel.startThrottling(request)
       override def endThrottling(): Unit = requestChannel.endThrottling(request)
     }
-    quotaManager.throttle(request, callback, throttleTimeMs)
+    quotaManager.throttle(request.header.clientId(), request.session, callback, throttleTimeMs)
   }
 
   def handleError(request: RequestChannel.Request, e: Throwable): Unit = {
@@ -82,7 +51,7 @@ class RequestHandlerHelper(
       sendErrorResponseExemptThrottle(request, e)
   }
 
-  def sendErrorOrCloseConnection(
+  private def sendErrorOrCloseConnection(
     request: RequestChannel.Request,
     error: Throwable,
     throttleMs: Int
@@ -148,9 +117,11 @@ class RequestHandlerHelper(
    * Throttle the channel if the controller mutations quota or the request quota have been violated.
    * Regardless of throttling, send the response immediately.
    */
-  def sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota: ControllerMutationQuota,
-                                                   request: RequestChannel.Request,
-                                                   createResponse: Int => AbstractResponse): Unit = {
+  def sendResponseMaybeThrottleWithControllerQuota(
+    controllerMutationQuota: ControllerMutationQuota,
+    request: RequestChannel.Request,
+    response: AbstractResponse
+  ): Unit = {
     val timeMs = time.milliseconds
     val controllerThrottleTimeMs = controllerMutationQuota.throttleTime
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
@@ -165,7 +136,8 @@ class RequestHandlerHelper(
       }
     }
 
-    requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs), None)
+    response.maybeSetThrottleTimeMs(maxThrottleTimeMs)
+    requestChannel.sendResponse(request, response, None)
   }
 
   def sendResponseExemptThrottle(request: RequestChannel.Request,
@@ -175,7 +147,7 @@ class RequestHandlerHelper(
     requestChannel.sendResponse(request, response, onComplete)
   }
 
-  def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
+  private def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     quotas.request.maybeRecordExempt(request)
     sendErrorOrCloseConnection(request, error, 0)
   }

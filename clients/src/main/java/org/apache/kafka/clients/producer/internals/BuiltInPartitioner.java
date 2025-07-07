@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.util.Arrays;
@@ -27,7 +28,6 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
 /**
  * Built-in default partitioner.  Note, that this is just a utility class that is used directly from
@@ -44,8 +44,6 @@ public class BuiltInPartitioner {
     private volatile PartitionLoadStats partitionLoadStats = null;
     private final AtomicReference<StickyPartitionInfo> stickyPartitionInfo = new AtomicReference<>();
 
-    // Visible and used for testing only.
-    static volatile public Supplier<Integer> mockRandom = null;
 
     /**
      * BuiltInPartitioner constructor.
@@ -66,7 +64,7 @@ public class BuiltInPartitioner {
      * Calculate the next partition for the topic based on the partition load stats.
      */
     private int nextPartition(Cluster cluster) {
-        int random = mockRandom != null ? mockRandom.get() : Utils.toPositive(ThreadLocalRandom.current().nextInt());
+        int random = randomPartition();
 
         // Cache volatile variable in local variable.
         PartitionLoadStats partitionLoadStats = this.partitionLoadStats;
@@ -76,7 +74,7 @@ public class BuiltInPartitioner {
             // We don't have stats to do adaptive partitioning (or it's disabled), just switch to the next
             // partition based on uniform distribution.
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
-            if (availablePartitions.size() > 0) {
+            if (!availablePartitions.isEmpty()) {
                 partition = availablePartitions.get(random % availablePartitions.size()).partition();
             } else {
                 // We don't have available partitions, just pick one among all partitions.
@@ -111,6 +109,10 @@ public class BuiltInPartitioner {
 
         log.trace("Switching to partition {} in topic {}", partition, topic);
         return partition;
+    }
+
+    int randomPartition() {
+        return Utils.toPositive(ThreadLocalRandom.current().nextInt());
     }
 
     /**
@@ -331,10 +333,11 @@ public class BuiltInPartitioner {
     /**
      * The partition load stats for each topic that are used for adaptive partition distribution.
      */
-    private final static class PartitionLoadStats {
+    private static final class PartitionLoadStats {
         public final int[] cumulativeFrequencyTable;
         public final int[] partitionIds;
         public final int length;
+
         public PartitionLoadStats(int[] cumulativeFrequencyTable, int[] partitionIds, int length) {
             assert cumulativeFrequencyTable.length == partitionIds.length;
             assert length <= cumulativeFrequencyTable.length;

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

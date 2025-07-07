@@ -30,11 +30,11 @@
     { "name": "ReplicaElectionResults", "type": "[]ReplicaElectionResult", "versions": "0+",
       "about": "The election results, or an empty array if the requester did not have permission and the request asks for all partitions.", "fields": [
       { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name" },
+        "about": "The topic name." },
       { "name": "PartitionResult", "type": "[]PartitionResult", "versions": "0+",
-        "about": "The results for each partition", "fields": [
+        "about": "The results for each partition.", "fields": [
         { "name": "PartitionId", "type": "int32", "versions": "0+",
-          "about": "The partition id" },
+          "about": "The partition id." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The result error, or zero if there was no error."},
         { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+",

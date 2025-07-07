@@ -18,23 +18,23 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -65,7 +65,7 @@ public class DeleteAclsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults() {
+    public final List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults() {
         return data.filterResults();
     }
 
@@ -74,8 +74,8 @@ public class DeleteAclsResponse extends AbstractResponse {
         return errorCounts(filterResults().stream().map(r -> Errors.forCode(r.errorCode())));
     }
 
-    public static DeleteAclsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteAclsResponse(new DeleteAclsResponseData(new ByteBufferAccessor(buffer), version), version);
+    public static DeleteAclsResponse parse(Readable readable, short version) {
+        return new DeleteAclsResponse(new DeleteAclsResponseData(readable, version), version);
     }
 
     public String toString() {
@@ -107,7 +107,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     public static DeleteAclsFilterResult filterResult(AclDeleteResult result) {
-        ApiError error = result.exception().map(e -> ApiError.fromThrowable(e)).orElse(ApiError.NONE);
+        ApiError error = result.exception().map(ApiError::fromThrowable).orElse(ApiError.NONE);
         List<DeleteAclsMatchingAcl> matchingAcls = result.aclBindingDeleteResults().stream()
             .map(DeleteAclsResponse::matchingAcl)
             .collect(Collectors.toList());
@@ -118,7 +118,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     private static DeleteAclsMatchingAcl matchingAcl(AclDeleteResult.AclBindingDeleteResult result) {
-        ApiError error = result.exception().map(e -> ApiError.fromThrowable(e)).orElse(ApiError.NONE);
+        ApiError error = result.exception().map(ApiError::fromThrowable).orElse(ApiError.NONE);
         AclBinding acl = result.aclBinding();
         return matchingAcl(acl, error);
     }

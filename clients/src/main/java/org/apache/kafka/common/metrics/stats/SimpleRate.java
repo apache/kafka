@@ -33,7 +33,7 @@ public class SimpleRate extends Rate {
     @Override
     public long windowSize(MetricConfig config, long now) {
         stat.purgeObsoleteSamples(config, now);
-        long elapsed = now - stat.oldest(now).lastWindowMs;
+        long elapsed = now - stat.oldest(now).startTimeMs;
         return Math.max(elapsed, config.timeWindowMs());
     }
 }

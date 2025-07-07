@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.kstream.internals.emitstrategy.WindowCloseStrategy;
 import org.apache.kafka.streams.kstream.internals.emitstrategy.WindowUpdateStrategy;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +53,7 @@ public interface EmitStrategy {
             this.strategy = strategy;
         }
 
-        private final static Map<Short, EmitStrategy> TYPE_TO_STRATEGY = new HashMap<>();
+        private static final Map<Short, EmitStrategy> TYPE_TO_STRATEGY = new HashMap<>();
 
         static {
             for (final StrategyType type : StrategyType.values()) {
@@ -68,7 +69,8 @@ public interface EmitStrategy {
     }
 
     /**
-     * Returns the strategy type
+     * Returns the strategy type.
+     *
      * @return Emit strategy type
      */
     StrategyType type();
@@ -87,7 +89,7 @@ public interface EmitStrategy {
      * @see UnlimitedWindows
      * @see WindowUpdateStrategy
      *
-     * @return WindowCloseStrategy instance
+     * @return "window close" {@code EmitStrategy} instance
      */
     static EmitStrategy onWindowClose() {
         return new WindowCloseStrategy();
@@ -103,7 +105,7 @@ public interface EmitStrategy {
      * @see UnlimitedWindows
      * @see WindowCloseStrategy
      *
-     * @return WindowCloseStrategy instance
+     * @return "window update" {@code EmitStrategy} instance
      */
     static EmitStrategy onWindowUpdate() {
         return new WindowUpdateStrategy();

@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.storage.internals.log.StorageAction;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * A wrapper class of {@link RemoteStorageManager} that sets the context class loader when calling the respective
@@ -66,12 +68,9 @@ public class ClassLoaderAwareRemoteStorageManager implements RemoteStorageManage
         }
     }
 
-    public void copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+    public Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                    LogSegmentData logSegmentData) throws RemoteStorageException {
-        withClassLoader(() -> {
-            delegate.copyLogSegmentData(remoteLogSegmentMetadata, logSegmentData);
-            return null;
-        });
+        return withClassLoader(() -> delegate.copyLogSegmentData(remoteLogSegmentMetadata, logSegmentData));
     }
 
     @Override

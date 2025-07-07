@@ -28,7 +28,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -110,7 +109,7 @@ public class TransactionIndex implements Closeable {
 
     public void close() throws IOException {
         FileChannel channel = channelOrNull();
-        if (channel != null)
+        if (channel != null && channel.isOpen())
             channel.close();
         maybeChannel = Optional.empty();
     }
@@ -194,6 +193,14 @@ public class TransactionIndex implements Closeable {
         }
     }
 
+    /**
+     * Check if the index is empty.
+     * @return `true` if the index is empty (or) when underlying file doesn't exists, `false` otherwise.
+     */
+    public boolean isEmpty() {
+        return !iterable().iterator().hasNext();
+    }
+
     private FileChannel openChannel() throws IOException {
         FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE,
                 StandardOpenOption.READ, StandardOpenOption.WRITE);
@@ -221,7 +228,7 @@ public class TransactionIndex implements Closeable {
     private Iterable<AbortedTxnWithPosition> iterable(Supplier<ByteBuffer> allocate) {
         FileChannel channel = channelOrNull();
         if (channel == null)
-            return Collections.emptyList();
+            return List.of();
 
         PrimitiveRef.IntRef position = PrimitiveRef.ofInt(0);
 

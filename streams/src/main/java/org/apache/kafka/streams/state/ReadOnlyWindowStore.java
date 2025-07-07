@@ -174,7 +174,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * Gets all the key-value pairs in the existing windows in backward order
      * with respect to time (from end to beginning of time).
      *
-     * @return an backward iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from the end to beginning of time.
+     * @return a backward iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from the end to beginning of time.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     default KeyValueIterator<Windowed<K>, V> backwardAll() {
@@ -199,7 +199,7 @@ public interface ReadOnlyWindowStore<K, V> {
      *
      * @param timeFrom the beginning of the time slot from which to search (inclusive), where iteration ends.
      * @param timeTo   the end of the time slot from which to search (inclusive), where iteration starts.
-     * @return an backward iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from end to beginning of time.
+     * @return a backward iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from end to beginning of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if {@code null} is used for any key
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}

@@ -26,11 +26,11 @@ import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -46,7 +46,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -58,14 +58,14 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POL
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW_RESET_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.sink.SinkConnector.TOPICS_CONFIG;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration test for the endpoints that offer topic tracking of a connector's active
  * topics.
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class ConnectorTopicsIntegrationTest {
 
     private static final int NUM_WORKERS = 5;
@@ -82,7 +82,7 @@ public class ConnectorTopicsIntegrationTest {
     Map<String, String> workerProps = new HashMap<>();
     Properties brokerProps = new Properties();
 
-    @Before
+    @BeforeEach
     public void setup() {
         // setup Connect worker properties
         workerProps.put(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, "All");
@@ -90,7 +90,7 @@ public class ConnectorTopicsIntegrationTest {
         // setup Kafka broker properties
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connectBuilder = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -99,9 +99,9 @@ public class ConnectorTopicsIntegrationTest {
                 .maskExitProcedures(true); // true is the default, setting here as example
     }
 
-    @After
+    @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 
@@ -114,8 +114,6 @@ public class ConnectorTopicsIntegrationTest {
         // create test topic
         connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
         connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),
                 "Active topic set is not empty for connector: " + FOO_CONNECTOR);
@@ -150,8 +148,8 @@ public class ConnectorTopicsIntegrationTest {
         // deleting a connector resets its active topics
         connect.deleteConnector(BAR_CONNECTOR);
 
-        connect.assertions().assertConnectorAndTasksAreStopped(BAR_CONNECTOR,
-                "Connector tasks did not stop in time.");
+        connect.assertions().assertConnectorDoesNotExist(BAR_CONNECTOR,
+                "Connector wasn't deleted in time.");
 
         connect.assertions().assertConnectorActiveTopics(BAR_CONNECTOR, Collections.emptyList(),
                 "Active topic set is not empty for deleted connector: " + BAR_CONNECTOR);
@@ -179,8 +177,6 @@ public class ConnectorTopicsIntegrationTest {
         connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
         connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
-
         connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),
                 "Active topic set is not empty for connector: " + FOO_CONNECTOR);
 
@@ -199,14 +195,14 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(SINK_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Arrays.asList(FOO_TOPIC),
-                "Active topic set is not: " + Arrays.asList(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
+        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Collections.singletonList(FOO_TOPIC),
+                "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
 
         // deleting a connector resets its active topics
         connect.deleteConnector(FOO_CONNECTOR);
 
-        connect.assertions().assertConnectorAndTasksAreStopped(FOO_CONNECTOR,
-                "Connector tasks did not stop in time.");
+        connect.assertions().assertConnectorDoesNotExist(FOO_CONNECTOR,
+                "Connector wasn't deleted in time.");
 
         connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),
                 "Active topic set is not empty for deleted connector: " + FOO_CONNECTOR);
@@ -234,8 +230,6 @@ public class ConnectorTopicsIntegrationTest {
         // create test topic
         connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
         connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         // start a source connector
         connect.configureConnector(FOO_CONNECTOR, defaultSourceConnectorProps(FOO_TOPIC));
@@ -296,12 +290,13 @@ public class ConnectorTopicsIntegrationTest {
                 }
             }
         }
+        verifiableConsumer.close();
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
         props.put("throughput", String.valueOf(10));
@@ -316,7 +311,7 @@ public class ConnectorTopicsIntegrationTest {
     private Map<String, String> defaultSinkConnectorProps(String... topics) {
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, String.join(",", topics));
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

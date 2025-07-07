@@ -16,19 +16,22 @@
  */
 package kafka.server
 
-import java.util.Optional
+import java.util.{Optional, OptionalLong}
 import scala.collection.Seq
 import kafka.cluster.Partition
-import kafka.log.LogOffsetSnapshot
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogOffsetMetadata}
+import org.apache.kafka.server.LogReadResult
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogOffsetMetadata, LogOffsetSnapshot}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, when}
 
@@ -47,7 +50,7 @@ class DelayedFetchTest {
 
     val fetchStatus = FetchPartitionStatus(
       startOffsetMetadata = new LogOffsetMetadata(fetchOffset),
-      fetchInfo = new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
+      fetchInfo = new FetchRequest.PartitionData(topicIdPartition.topicId(), fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
     val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
 
     var fetchResultOpt: Option[FetchPartitionData] = None
@@ -93,7 +96,7 @@ class DelayedFetchTest {
 
     val fetchStatus = FetchPartitionStatus(
       startOffsetMetadata = new LogOffsetMetadata(fetchOffset),
-      fetchInfo = new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
+      fetchInfo = new FetchRequest.PartitionData(topicIdPartition.topicId(), fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
     val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
 
     var fetchResultOpt: Option[FetchPartitionData] = None
@@ -117,6 +120,9 @@ class DelayedFetchTest {
     assertTrue(delayedFetch.tryComplete())
     assertTrue(delayedFetch.isCompleted)
     assertTrue(fetchResultOpt.isDefined)
+
+    val fetchResult = fetchResultOpt.get
+    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.error)
   }
 
   @Test
@@ -152,7 +158,7 @@ class DelayedFetchTest {
     when(partition.fetchOffsetSnapshot(
       currentLeaderEpoch,
       fetchOnlyFromLeader = true))
-      .thenReturn(LogOffsetSnapshot(0L, endOffsetMetadata, endOffsetMetadata, endOffsetMetadata))
+      .thenReturn(new LogOffsetSnapshot(0L, endOffsetMetadata, endOffsetMetadata, endOffsetMetadata))
     when(partition.lastOffsetForLeaderEpoch(currentLeaderEpoch, lastFetchedEpoch.get, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
         .setPartition(topicIdPartition.partition)
@@ -165,17 +171,70 @@ class DelayedFetchTest {
     assertTrue(delayedFetch.tryComplete())
     assertTrue(delayedFetch.isCompleted)
     assertTrue(fetchResultOpt.isDefined)
+
+    val fetchResult = fetchResultOpt.get
+    assertEquals(Errors.NONE, fetchResult.error)
+  }
+
+  @ParameterizedTest(name = "testDelayedFetchWithMessageOnlyHighWatermark endOffset={0}")
+  @ValueSource(longs = Array(0, 500))
+  def testDelayedFetchWithMessageOnlyHighWatermark(endOffset: Long): Unit = {
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
+    val fetchOffset = 450L
+    val logStartOffset = 5L
+    val currentLeaderEpoch = Optional.of[Integer](10)
+    val replicaId = 1
+
+    val fetchStatus = FetchPartitionStatus(
+      startOffsetMetadata = new LogOffsetMetadata(fetchOffset),
+      fetchInfo = new FetchRequest.PartitionData(topicIdPartition.topicId, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
+    val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
+
+    var fetchResultOpt: Option[FetchPartitionData] = None
+    def callback(responses: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+      fetchResultOpt = Some(responses.head._2)
+    }
+
+    val delayedFetch = new DelayedFetch(
+      params = fetchParams,
+      fetchPartitionStatus = Seq(topicIdPartition -> fetchStatus),
+      replicaManager = replicaManager,
+      quota = replicaQuota,
+      responseCallback = callback
+    )
+
+    val partition: Partition = mock(classOf[Partition])
+    when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition)).thenReturn(partition)
+    // Note that the high-watermark does not contain the complete metadata
+    val endOffsetMetadata = new LogOffsetMetadata(endOffset, -1L, -1)
+    when(partition.fetchOffsetSnapshot(
+      currentLeaderEpoch,
+      fetchOnlyFromLeader = true))
+      .thenReturn(new LogOffsetSnapshot(0L, endOffsetMetadata, endOffsetMetadata, endOffsetMetadata))
+    when(replicaManager.isAddingReplica(any(), anyInt())).thenReturn(false)
+    expectReadFromReplica(fetchParams, topicIdPartition, fetchStatus.fetchInfo, Errors.NONE)
+
+    // 1. When `endOffset` is 0, it refers to the truncation case
+    // 2. When `endOffset` is 500, we won't complete because it doesn't contain offset metadata
+    val expected = endOffset == 0
+    assertEquals(expected, delayedFetch.tryComplete())
+    assertEquals(expected, delayedFetch.isCompleted)
+    assertEquals(expected, fetchResultOpt.isDefined)
+    if (fetchResultOpt.isDefined) {
+      assertEquals(Errors.NONE, fetchResultOpt.get.error)
+    }
   }
 
   private def buildFollowerFetchParams(
     replicaId: Int,
-    maxWaitMs: Int
+    maxWaitMs: Int,
+    minBytes: Int = 1,
   ): FetchParams = {
     new FetchParams(
-      ApiKeys.FETCH.latestVersion,
       replicaId,
-      maxWaitMs,
       1,
+      maxWaitMs,
+      minBytes,
       maxBytes,
       FetchIsolation.LOG_END,
       Optional.empty()
@@ -188,7 +247,7 @@ class DelayedFetchTest {
     fetchPartitionData: FetchRequest.PartitionData,
     error: Errors
   ): Unit = {
-    when(replicaManager.readFromLocalLog(
+    when(replicaManager.readFromLog(
       fetchParams,
       readPartitionInfo = Seq((topicIdPartition, fetchPartitionData)),
       quota = replicaQuota,
@@ -197,16 +256,16 @@ class DelayedFetchTest {
   }
 
   private def buildReadResult(error: Errors): LogReadResult = {
-    LogReadResult(
-      exception = if (error != Errors.NONE) Some(error.exception) else None,
-      info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
-      divergingEpoch = None,
-      highWatermark = -1L,
-      leaderLogStartOffset = -1L,
-      leaderLogEndOffset = -1L,
-      followerLogStartOffset = -1L,
-      fetchTimeMs = -1L,
-      lastStableOffset = None)
+    new LogReadResult(
+      new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+      Optional.empty(),
+      -1L,
+      -1L,
+      -1L,
+      -1L,
+      -1L,
+      OptionalLong.empty(),
+      if (error != Errors.NONE) Optional.of[Throwable](error.exception) else Optional.empty[Throwable]())
   }
 
 }

@@ -19,7 +19,6 @@ from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 
 from kafkatest.services.kafka import KafkaService, quorum
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.security.kafka_acls import ACLs
 
 class AuthorizerTest(Test):
@@ -43,21 +42,12 @@ class AuthorizerTest(Test):
         self.acls = ACLs(self.test_context)
 
     @cluster(num_nodes=4)
-    @parametrize(metadata_quorum=quorum.remote_kraft, authorizer_class=KafkaService.KRAFT_ACL_AUTHORIZER)
-    @parametrize(metadata_quorum=quorum.remote_kraft, authorizer_class=KafkaService.ZK_ACL_AUTHORIZER)
-    @parametrize(metadata_quorum=quorum.zk, authorizer_class=KafkaService.ZK_ACL_AUTHORIZER)
+    @parametrize(metadata_quorum=quorum.isolated_kraft, authorizer_class=KafkaService.KRAFT_ACL_AUTHORIZER)
     def test_authorizer(self, metadata_quorum, authorizer_class):
         topics = {"test_topic": {"partitions": 1, "replication-factor": 1}}
 
-        if (authorizer_class == KafkaService.KRAFT_ACL_AUTHORIZER):
-            self.zk = None
-        else:
-            self.zk = ZookeeperService(self.test_context, num_nodes=1)
-            self.zk.start()
-
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
-                                  topics=topics, controller_num_nodes_override=1,
-                                  allow_zk_with_kraft=True)
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=None,
+                                  topics=topics, controller_num_nodes_override=1)
 
         broker_security_protocol = "SSL"
         broker_principal = "User:CN=systemtest"
@@ -83,7 +73,7 @@ class AuthorizerTest(Test):
         node.account.ssh(alter_client_quotas_cmd)
 
         # set authorizer, restart with broker as super user
-        if (metadata_quorum == quorum.remote_kraft):
+        if (metadata_quorum == quorum.isolated_kraft):
             # we need to explicitly reconfigure/restart any remote controller quorum
             self.kafka.logger.info("Restarting Remote KRaft Controller with authorizer and broker principal as super user")
             controller_quorum = self.kafka.controller_quorum

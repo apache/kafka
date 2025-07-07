@@ -19,10 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class DescribeGroupsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DescribeGroupsRequest> {
@@ -72,7 +73,19 @@ public class DescribeGroupsRequest extends AbstractRequest {
         return new DescribeGroupsResponse(describeGroupsResponseData);
     }
 
-    public static DescribeGroupsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeGroupsRequest(new DescribeGroupsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DescribeGroupsRequest parse(Readable readable, short version) {
+        return new DescribeGroupsRequest(new DescribeGroupsRequestData(readable, version), version);
+    }
+
+    public static List<DescribeGroupsResponseData.DescribedGroup> getErrorDescribedGroupList(
+        List<String> groupIds,
+        Errors error
+    ) {
+        return groupIds.stream()
+            .map(groupId -> new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId(groupId)
+                .setErrorCode(error.code())
+            )
+            .collect(Collectors.toList());
     }
 }

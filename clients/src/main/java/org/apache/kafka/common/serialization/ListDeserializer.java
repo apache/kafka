@@ -16,9 +16,15 @@
  */
 package org.apache.kafka.common.serialization;
 
-import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.Serdes.ListSerde;
+import org.apache.kafka.common.utils.Utils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -28,15 +34,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Serdes.ListSerde;
-import org.apache.kafka.common.utils.Utils;
+import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 

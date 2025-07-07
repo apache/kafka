@@ -25,7 +25,7 @@ public final class ProducerIdsDelta {
     private long nextProducerId;
 
     public ProducerIdsDelta(ProducerIdsImage image) {
-        this.nextProducerId = image.highestSeenProducerId();
+        this.nextProducerId = image.nextProducerId();
     }
 
     public void setNextProducerId(long highestSeenProducerId) {

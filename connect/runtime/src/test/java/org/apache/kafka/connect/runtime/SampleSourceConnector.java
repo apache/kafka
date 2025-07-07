@@ -27,7 +27,7 @@ import java.util.Map;
 
 public class SampleSourceConnector extends SourceConnector {
 
-    public static final String VERSION = "an entirely different version";
+    public static final String VERSION = "some great version";
 
     @Override
     public String version() {
@@ -57,6 +57,12 @@ public class SampleSourceConnector extends SourceConnector {
     @Override
     public ConfigDef config() {
         return new ConfigDef()
+                .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
+                .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
+    }
+
+    public ConfigDef configWithCommon() {
+        return new ConfigDef(SourceConnectorConfig.configDef())
                 .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
                 .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
     }

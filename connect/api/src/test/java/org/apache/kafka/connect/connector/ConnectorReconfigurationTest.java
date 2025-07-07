@@ -46,7 +46,7 @@ public class ConnectorReconfigurationTest {
 
     private static class TestConnector extends Connector {
 
-        private boolean stopException;
+        private final boolean stopException;
         private int order = 0;
         public int stopOrder = -1;
         public int configureOrder = -1;

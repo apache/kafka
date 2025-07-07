@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
+
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import org.apache.kafka.common.TopicPartition;
 
-final class Utils {
+public final class Utils {
 
-    final static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
+    static final class PartitionComparator implements Comparator<TopicPartition>, Serializable {
         private static final long serialVersionUID = 1L;
-        private Map<String, List<String>> map;
+        private final Map<String, List<String>> map;
 
         PartitionComparator(Map<String, List<String>> map) {
             this.map = map;
@@ -44,11 +46,30 @@ final class Utils {
         }
     }
 
-    final static class TopicPartitionComparator implements Comparator<TopicPartition>, Serializable {
+    public static final class TopicPartitionComparator implements Comparator<TopicPartition>, Serializable {
         private static final long serialVersionUID = 1L;
 
         @Override
         public int compare(TopicPartition topicPartition1, TopicPartition topicPartition2) {
+            String topic1 = topicPartition1.topic();
+            String topic2 = topicPartition2.topic();
+
+            if (topic1.equals(topic2)) {
+                return topicPartition1.partition() - topicPartition2.partition();
+            } else {
+                return topic1.compareTo(topic2);
+            }
+        }
+    }
+
+    public static final class TopicIdPartitionComparator implements Comparator<TopicIdPartition>, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        /**
+         * Comparison based on topic name and partition number.
+         */
+        @Override
+        public int compare(TopicIdPartition topicPartition1, TopicIdPartition topicPartition2) {
             String topic1 = topicPartition1.topic();
             String topic2 = topicPartition2.topic();
 

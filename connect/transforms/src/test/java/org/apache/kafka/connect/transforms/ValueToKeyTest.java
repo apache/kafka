@@ -16,16 +16,23 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -33,6 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ValueToKeyTest {
     private final ValueToKey<SinkRecord> xform = new ValueToKey<>();
+
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(false, null),
+                Arguments.of(true, 42)
+        );
+    }
 
     @AfterEach
     public void teardown() {
@@ -105,5 +119,29 @@ public class ValueToKeyTest {
 
         DataException actual = assertThrows(DataException.class, () -> xform.apply(record));
         assertEquals("Field does not exist: not_exist", actual.getMessage());
+    }
+
+    @Test
+    public void testValueToKeyVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testReplaceNullWithDefaultConfig(boolean replaceNullWithDefault, Object expectedValue) {
+        Map<String, Object> config = new HashMap<>();
+        config.put("fields", "optional_with_default");
+        config.put("replace.null.with.default", replaceNullWithDefault);
+        xform.configure(config);
+
+        final Schema valueSchema = SchemaBuilder.struct()
+                .field("optional_with_default", SchemaBuilder.int32().optional().defaultValue(42).build())
+                .build();
+        final Struct value = new Struct(valueSchema).put("optional_with_default", null);
+
+        final SinkRecord record = new SinkRecord("", 0, null, null, valueSchema, value, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        assertEquals(expectedValue, ((Struct) transformedRecord.key()).getWithoutDefault("optional_with_default"));
     }
 }

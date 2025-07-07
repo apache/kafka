@@ -17,8 +17,8 @@
 package org.apache.kafka.common.utils;
 
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
@@ -30,7 +30,7 @@ import java.util.function.Supplier;
  */
 public interface Time {
 
-    Time SYSTEM = new SystemTime();
+    Time SYSTEM = SystemTime.getSystemTime();
 
     /**
      * Returns the current time in milliseconds.
@@ -98,7 +98,7 @@ public interface Time {
      * @param <T>           The type of the future.
      */
     default <T> T waitForFuture(
-        CompletableFuture<T> future,
+        Future<T> future,
         long deadlineNs
     ) throws TimeoutException, InterruptedException, ExecutionException  {
         TimeoutException timeoutException = null;

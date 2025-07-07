@@ -18,7 +18,6 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
 import java.util.Collection;
@@ -27,12 +26,9 @@ import java.util.stream.Collectors;
 
 /**
  * The result of {@link Admin#createTopics(Collection)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class CreateTopicsResult {
-    final static int UNKNOWN = -1;
+    static final int UNKNOWN = -1;
 
     private final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures;
 
@@ -46,14 +42,14 @@ public class CreateTopicsResult {
      */
     public Map<String, KafkaFuture<Void>> values() {
         return futures.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().thenApply(v -> (Void) null)));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().thenApply(v -> null)));
     }
 
     /**
      * Return a future which succeeds if all the topic creations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 
     /**
@@ -64,6 +60,7 @@ public class CreateTopicsResult {
      * If broker returned an error for topic configs, throw appropriate exception. For example,
      * {@link org.apache.kafka.common.errors.TopicAuthorizationException} is thrown if user does not
      * have permission to describe topic configs.
+     * Note that the values for the type and documentation fields will be null.
      */
     public KafkaFuture<Config> config(String topic) {
         return futures.get(topic).thenApply(TopicMetadataAndConfig::config);

@@ -18,6 +18,7 @@
 package org.apache.kafka.server.util;
 
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -47,6 +48,7 @@ public class FutureUtilsTest {
         CompletableFuture<Integer> future = new CompletableFuture<>();
         executorService.schedule(() -> future.complete(123), 1000, TimeUnit.NANOSECONDS);
         assertEquals(123, FutureUtils.waitWithLogging(log,
+            "[FutureUtilsTest] ",
             "the future to be completed",
             future,
             Deadline.fromDelay(Time.SYSTEM, 30, TimeUnit.SECONDS),
@@ -63,6 +65,7 @@ public class FutureUtilsTest {
         executorService.schedule(() -> future.complete(456), 10000, TimeUnit.MILLISECONDS);
         assertThrows(TimeoutException.class, () -> {
             FutureUtils.waitWithLogging(log,
+                "[FutureUtilsTest] ",
                 "the future to be completed",
                 future,
                 immediateTimeout ?
@@ -84,6 +87,7 @@ public class FutureUtilsTest {
         assertEquals("Received a fatal error while waiting for the future to be completed",
             assertThrows(RuntimeException.class, () -> {
                 FutureUtils.waitWithLogging(log,
+                    "[FutureUtilsTest] ",
                     "the future to be completed",
                     future,
                     Deadline.fromDelay(Time.SYSTEM, 30, TimeUnit.SECONDS),
@@ -105,11 +109,11 @@ public class FutureUtilsTest {
         assertFalse(sourceFuture.isCompletedExceptionally());
         assertFalse(destinationFuture.isCompletedExceptionally());
         sourceFuture.complete(123);
-        assertEquals(Integer.valueOf(123), destinationFuture.get());
+        assertEquals(123, destinationFuture.get());
     }
 
     @Test
-    public void testChainFutureExceptionally() throws Throwable {
+    public void testChainFutureExceptionally() {
         CompletableFuture<Integer> sourceFuture = new CompletableFuture<>();
         CompletableFuture<Number> destinationFuture = new CompletableFuture<>();
         FutureUtils.chainFuture(sourceFuture, destinationFuture);

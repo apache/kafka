@@ -35,5 +35,5 @@ public interface TransferableRecords extends BaseRecords {
      * @return The number of bytes actually written
      * @throws IOException For any IO errors
      */
-    long writeTo(TransferableChannel channel, long position, int length) throws IOException;
+    int writeTo(TransferableChannel channel, int position, int length) throws IOException;
 }

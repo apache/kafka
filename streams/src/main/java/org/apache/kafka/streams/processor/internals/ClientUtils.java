@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -34,12 +35,13 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.TaskId;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -62,26 +64,20 @@ public class ClientUtils {
         }
     }
 
-
-    // currently admin client is shared among all threads
-    public static String getSharedAdminClientId(final String clientId) {
+    public static String adminClientId(final String clientId) {
         return clientId + "-admin";
     }
 
-    public static String getConsumerClientId(final String threadClientId) {
+    public static String consumerClientId(final String threadClientId) {
         return threadClientId + "-consumer";
     }
 
-    public static String getRestoreConsumerClientId(final String threadClientId) {
+    public static String restoreConsumerClientId(final String threadClientId) {
         return threadClientId + "-restore-consumer";
     }
 
-    public static String getThreadProducerClientId(final String threadClientId) {
+    public static String producerClientId(final String threadClientId) {
         return threadClientId + "-producer";
-    }
-
-    public static String getTaskProducerClientId(final String threadClientId, final TaskId taskId) {
-        return threadClientId + "-" + taskId + "-producer";
     }
 
     public static Map<MetricName, Metric> consumerMetrics(final Consumer<byte[], byte[]> mainConsumer,
@@ -143,6 +139,40 @@ public class ClientUtils {
         ).all();
     }
 
+    public static ListOffsetsResult fetchEndOffsetsResult(final Collection<TopicPartition> partitions,
+                                                          final Admin adminClient) {
+        return adminClient.listOffsets(
+            partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
+        );
+    }
+
+    public static Map<TopicPartition, ListOffsetsResultInfo> getEndOffsets(final ListOffsetsResult resultFuture,
+                                                                           final Collection<TopicPartition> partitions) {
+        final Map<TopicPartition, ListOffsetsResultInfo> result = new HashMap<>();
+        for (final TopicPartition partition : partitions) {
+            try {
+                final KafkaFuture<ListOffsetsResultInfo> future = resultFuture.partitionResult(partition);
+
+                if (future == null) {
+                    // this NPE -> IllegalStateE translation is needed
+                    // to keep exception throwing behavior consistent
+                    throw new IllegalStateException("Could not get end offset for " + partition);
+                }
+                result.put(partition, future.get());
+            } catch (final ExecutionException e) {
+                final Throwable cause = e.getCause();
+                final String msg = String.format("Error while attempting to read end offsets for partition '%s'", partition.toString());
+                throw new StreamsException(msg, cause);
+            } catch (final InterruptedException e) {
+                Thread.interrupted();
+                final String msg = String.format("Interrupted while attempting to read end offsets for partition '%s'", partition.toString());
+                throw new StreamsException(msg, e);
+            }
+        }
+
+        return result;
+    }
+
     /**
      * A helper method that wraps the {@code Future#get} call and rethrows any thrown exception as a StreamsException
      * @throws StreamsException if the admin client request throws an exception
@@ -165,11 +195,6 @@ public class ClientUtils {
             return Collections.emptyMap();
         }
         return getEndOffsets(fetchEndOffsetsFuture(partitions, adminClient));
-    }
-
-    public static String extractThreadId(final String fullThreadName) {
-        final int index = fullThreadName.indexOf("StreamThread-");
-        return fullThreadName.substring(index);
     }
 
     public static long producerRecordSizeInBytes(final ProducerRecord<byte[], byte[]> record) {

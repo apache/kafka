@@ -20,11 +20,12 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KerberosNameTest {
 
@@ -117,25 +118,23 @@ public class KerberosNameTest {
 
     @Test
     public void testInvalidRules() {
-        testInvalidRule(Arrays.asList("default"));
-        testInvalidRule(Arrays.asList("DEFAUL"));
-        testInvalidRule(Arrays.asList("DEFAULT/L"));
-        testInvalidRule(Arrays.asList("DEFAULT/g"));
+        testInvalidRule(Collections.singletonList("default"));
+        testInvalidRule(Collections.singletonList("DEFAUL"));
+        testInvalidRule(Collections.singletonList("DEFAULT/L"));
+        testInvalidRule(Collections.singletonList("DEFAULT/g"));
 
-        testInvalidRule(Arrays.asList("rule:[1:$1]"));
-        testInvalidRule(Arrays.asList("rule:[1:$1]/L/U"));
-        testInvalidRule(Arrays.asList("rule:[1:$1]/U/L"));
-        testInvalidRule(Arrays.asList("rule:[1:$1]/LU"));
-        testInvalidRule(Arrays.asList("RULE:[1:$1/L"));
-        testInvalidRule(Arrays.asList("RULE:[1:$1]/l"));
-        testInvalidRule(Arrays.asList("RULE:[2:$1](ABC.*)s/ABC/XYZ/L/g"));
+        testInvalidRule(Collections.singletonList("rule:[1:$1]"));
+        testInvalidRule(Collections.singletonList("rule:[1:$1]/L/U"));
+        testInvalidRule(Collections.singletonList("rule:[1:$1]/U/L"));
+        testInvalidRule(Collections.singletonList("rule:[1:$1]/LU"));
+        testInvalidRule(Collections.singletonList("RULE:[1:$1/L"));
+        testInvalidRule(Collections.singletonList("RULE:[1:$1]/l"));
+        testInvalidRule(Collections.singletonList("RULE:[2:$1](ABC.*)s/ABC/XYZ/L/g"));
     }
 
     private void testInvalidRule(List<String> rules) {
-        try {
-            KerberosShortNamer.fromUnparsedRules("REALM.COM", rules);
-            fail("should have thrown IllegalArgumentException");
-        } catch (IllegalArgumentException e) {
-        }
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> KerberosShortNamer.fromUnparsedRules("REALM.COM", rules));
     }
 }

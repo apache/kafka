@@ -40,7 +40,6 @@ import org.apache.kafka.streams.kstream.Grouped;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.Locale;
 import java.util.Properties;
 
 public class BrokerCompatibilityTest {
@@ -69,8 +68,8 @@ public class BrokerCompatibilityTest {
 
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-system-test-broker-compatibility");
         streamsProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsProperties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingMode);
@@ -104,7 +103,7 @@ public class BrokerCompatibilityTest {
         System.out.println("start Kafka Streams");
         streams.start();
 
-        final boolean eosEnabled = processingMode.startsWith("exactly_once");
+        final boolean eosEnabled = processingMode.equals("exactly_once_v2");
 
         System.out.println("send data");
         final Properties producerProperties = new Properties();
@@ -146,7 +145,7 @@ public class BrokerCompatibilityTest {
         consumerProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         if (eosEnabled) {
-            consumerProperties.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+            consumerProperties.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
         }
 
         try (final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {

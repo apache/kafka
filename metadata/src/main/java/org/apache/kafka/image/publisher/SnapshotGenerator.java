@@ -21,11 +21,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LogDeltaManifest;
-import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.fault.FaultHandler;
+
 import org.slf4j.Logger;
 
 import java.util.concurrent.TimeUnit;
@@ -44,6 +45,7 @@ public class SnapshotGenerator implements MetadataPublisher {
         private long maxBytesSinceLastSnapshot = 100 * 1024L * 1024L;
         private long maxTimeSinceLastSnapshotNs = TimeUnit.DAYS.toNanos(1);
         private AtomicReference<String> disabledReason = null;
+        private String threadNamePrefix = "";
 
         public Builder(Emitter emitter) {
             this.emitter = emitter;
@@ -79,6 +81,11 @@ public class SnapshotGenerator implements MetadataPublisher {
             return this;
         }
 
+        public Builder setThreadNamePrefix(String threadNamePrefix) {
+            this.threadNamePrefix = threadNamePrefix;
+            return this;
+        }
+
         public SnapshotGenerator build() {
             if (disabledReason == null) {
                 disabledReason = new AtomicReference<>();
@@ -90,7 +97,8 @@ public class SnapshotGenerator implements MetadataPublisher {
                 faultHandler,
                 maxBytesSinceLastSnapshot,
                 maxTimeSinceLastSnapshotNs,
-                disabledReason
+                disabledReason,
+                threadNamePrefix
             );
         }
     }
@@ -173,7 +181,8 @@ public class SnapshotGenerator implements MetadataPublisher {
         FaultHandler faultHandler,
         long maxBytesSinceLastSnapshot,
         long maxTimeSinceLastSnapshotNs,
-        AtomicReference<String> disabledReason
+        AtomicReference<String> disabledReason,
+        String threadNamePrefix
     ) {
         this.nodeId = nodeId;
         this.time = time;
@@ -181,10 +190,10 @@ public class SnapshotGenerator implements MetadataPublisher {
         this.faultHandler = faultHandler;
         this.maxBytesSinceLastSnapshot = maxBytesSinceLastSnapshot;
         this.maxTimeSinceLastSnapshotNs = maxTimeSinceLastSnapshotNs;
-        LogContext logContext = new LogContext("[SnapshotGenerator " + nodeId + "] ");
+        LogContext logContext = new LogContext("[SnapshotGenerator id=" + nodeId + "] ");
         this.log = logContext.logger(SnapshotGenerator.class);
         this.disabledReason = disabledReason;
-        this.eventQueue = new KafkaEventQueue(time, logContext, "SnapshotGenerator" + nodeId);
+        this.eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix + "snapshot-generator-");
         resetSnapshotCounters();
         log.debug("Starting SnapshotGenerator.");
     }
@@ -200,34 +209,41 @@ public class SnapshotGenerator implements MetadataPublisher {
     }
 
     @Override
-    public void publishSnapshot(
+    public void onMetadataUpdate(
         MetadataDelta delta,
         MetadataImage newImage,
-        SnapshotManifest manifest
+        LoaderManifest manifest
     ) {
+        switch (manifest.type()) {
+            case LOG_DELTA:
+                publishLogDelta(newImage, (LogDeltaManifest) manifest);
+                break;
+            case SNAPSHOT:
+                publishSnapshot(newImage);
+                break;
+        }
+    }
+
+    void publishSnapshot(MetadataImage newImage) {
         log.debug("Resetting the snapshot counters because we just read {}.", newImage.provenance().snapshotName());
         resetSnapshotCounters();
     }
 
-    @Override
-    public void publishLogDelta(
-        MetadataDelta delta,
-        MetadataImage newImage,
-        LogDeltaManifest manifest
-    ) {
+    void publishLogDelta(MetadataImage newImage, LogDeltaManifest manifest) {
         bytesSinceLastSnapshot += manifest.numBytes();
         if (bytesSinceLastSnapshot >= maxBytesSinceLastSnapshot) {
             if (eventQueue.isEmpty()) {
-                scheduleEmit("we have replayed at least " + maxBytesSinceLastSnapshot +
-                    " bytes", newImage);
+                maybeScheduleEmit("we have replayed at least " + maxBytesSinceLastSnapshot +
+                    " bytes", newImage, manifest.provenance().isOffsetBatchAligned());
             } else if (log.isTraceEnabled()) {
                 log.trace("Not scheduling bytes-based snapshot because event queue is not empty yet.");
             }
         } else if (maxTimeSinceLastSnapshotNs != 0 &&
                 (time.nanoseconds() - lastSnapshotTimeNs >= maxTimeSinceLastSnapshotNs)) {
             if (eventQueue.isEmpty()) {
-                scheduleEmit("we have waited at least " +
-                    TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) + " minute(s)", newImage);
+                maybeScheduleEmit("we have waited at least " +
+                    TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) +
+                    " minute(s)", newImage, manifest.provenance().isOffsetBatchAligned());
             } else if (log.isTraceEnabled()) {
                 log.trace("Not scheduling time-based snapshot because event queue is not empty yet.");
             }
@@ -236,18 +252,21 @@ public class SnapshotGenerator implements MetadataPublisher {
         }
     }
 
-    void scheduleEmit(
+    void maybeScheduleEmit(
         String reason,
-        MetadataImage image
+        MetadataImage image,
+        boolean isOffsetBatchAligned
     ) {
-        resetSnapshotCounters();
-        eventQueue.append(() -> {
-            String currentDisabledReason = disabledReason.get();
-            if (currentDisabledReason != null) {
-                log.error("Not emitting {} despite the fact that {} because snapshots are " +
-                    "disabled; {}", image.provenance().snapshotName(), reason,
-                        currentDisabledReason);
-            } else {
+        String currentDisabledReason = disabledReason.get();
+        if (currentDisabledReason != null) {
+            log.error("Not emitting {} despite the fact that {} because snapshots are " +
+                "disabled; {}", image.provenance().snapshotName(), reason, currentDisabledReason);
+        } else if (!isOffsetBatchAligned) {
+            log.debug("Not emitting {} despite the fact that {} because snapshots are " +
+                "disabled; {}", image.provenance().snapshotName(), reason, "metadata image is not batch aligned");
+        } else {
+            eventQueue.append(() -> {
+                resetSnapshotCounters();
                 log.info("Creating new KRaft snapshot file {} because {}.",
                         image.provenance().snapshotName(), reason);
                 try {
@@ -255,8 +274,8 @@ public class SnapshotGenerator implements MetadataPublisher {
                 } catch (Throwable e) {
                     faultHandler.handleFault("KRaft snapshot file generation error", e);
                 }
-            }
-        });
+            });
+        }
     }
 
     public void beginShutdown() {

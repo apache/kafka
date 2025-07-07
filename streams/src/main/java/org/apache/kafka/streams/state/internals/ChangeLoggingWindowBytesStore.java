@@ -18,14 +18,12 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
@@ -43,7 +41,7 @@ class ChangeLoggingWindowBytesStore
     }
 
     private final boolean retainDuplicates;
-    InternalProcessorContext context;
+    InternalProcessorContext<?, ?> internalContext;
     private int seqnum = 0;
     private final ChangeLoggingKeySerializer keySerializer;
 
@@ -55,19 +53,11 @@ class ChangeLoggingWindowBytesStore
         this.keySerializer = requireNonNull(keySerializer, "keySerializer");
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
-        this.context = asInternalProcessorContext(context);
-        super.init(context, root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        this.context = asInternalProcessorContext(context);
-        super.init(context, root);
+        internalContext = asInternalProcessorContext(stateStoreContext);
+        super.init(stateStoreContext, root);
     }
 
     @Override
@@ -139,7 +129,7 @@ class ChangeLoggingWindowBytesStore
     }
 
     void log(final Bytes key, final byte[] value) {
-        context.logChange(name(), key, value, context.timestamp(), wrapped().getPosition());
+        internalContext.logChange(name(), key, value, internalContext.recordContext().timestamp(), wrapped().getPosition());
     }
 
     private int maybeUpdateSeqnumForDups() {

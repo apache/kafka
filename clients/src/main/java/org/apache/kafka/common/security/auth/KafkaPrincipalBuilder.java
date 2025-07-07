@@ -24,7 +24,7 @@ package org.apache.kafka.common.security.auth;
  * interfaces are respected if implemented. Additionally, implementations must provide a
  * default no-arg constructor.
  */
-public interface KafkaPrincipalBuilder {
+public interface KafkaPrincipalBuilder extends KafkaPrincipalSerde {
     /**
      * Build a kafka principal from the authentication context.
      * @param context The authentication context (either {@link SslAuthenticationContext} or

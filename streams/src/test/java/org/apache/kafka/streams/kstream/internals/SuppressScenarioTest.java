@@ -28,12 +28,12 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedStream;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
@@ -46,10 +46,10 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Comparator;
@@ -363,7 +363,7 @@ public class SuppressScenarioTest {
         final KTable<Windowed<String>, Long> valueCounts = builder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(TimeWindows.of(ofMillis(2L)).grace(ofMillis(1L)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(2L), ofMillis(1L)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled());
         valueCounts
             .suppress(untilWindowCloses(unbounded()))
@@ -414,7 +414,7 @@ public class SuppressScenarioTest {
         final KTable<Windowed<String>, Long> valueCounts = builder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(TimeWindows.of(ofMillis(2L)).grace(ofMillis(2L)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(2L), ofMillis(2L)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withKeySerde(STRING_SERDE));
         valueCounts
             .suppress(untilWindowCloses(unbounded()))
@@ -470,7 +470,7 @@ public class SuppressScenarioTest {
         final KTable<Windowed<String>, Long> valueCounts = builder
                 .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
                 .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(5L), ofMillis(15L)))
+                .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(5L), ofMillis(15L)))
                 .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withKeySerde(STRING_SERDE));
         valueCounts
                 .suppress(untilWindowCloses(unbounded()))
@@ -560,7 +560,7 @@ public class SuppressScenarioTest {
         final KTable<Windowed<String>, Long> valueCounts = builder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(0L)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(5L)))
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled());
         valueCounts
             .suppress(untilWindowCloses(unbounded()))
@@ -810,14 +810,40 @@ public class SuppressScenarioTest {
     }
 
     @Test
-    public void shouldWorkWithCogrouped() {
+    public void shouldWorkWithCogroupedTimeWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KGroupedStream<String, String> stream1 = builder.stream("one", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         final KGroupedStream<String, String> stream2 = builder.stream("two", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
-        final KStream<Windowed<String>, Object> cogrouped = stream1.cogroup((key, value, aggregate) -> aggregate + value).cogroup(stream2, (key, value, aggregate) -> aggregate + value)
-            .windowedBy(TimeWindows.of(Duration.ofMinutes(15)))
+        stream1.cogroup((key, value, aggregate) -> aggregate + value).cogroup(stream2, (key, value, aggregate) -> aggregate + value)
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(15)))
             .aggregate(() -> "", Named.as("test"), Materialized.as("store"))
+            .suppress(Suppressed.untilWindowCloses(unbounded()))
+            .toStream();
+    }
+
+    @Test
+    public void shouldWorkWithCogroupedSlidingWindows() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KGroupedStream<String, String> stream1 = builder.stream("one", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        final KGroupedStream<String, String> stream2 = builder.stream("two", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        stream1.cogroup((key, value, aggregate) -> aggregate + value).cogroup(stream2, (key, value, aggregate) -> aggregate + value)
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(15)))
+            .aggregate(() -> "", Named.as("test"), Materialized.as("store"))
+            .suppress(Suppressed.untilWindowCloses(unbounded()))
+            .toStream();
+    }
+
+    @Test
+    public void shouldWorkWithCogroupedSessionWindows() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KGroupedStream<String, String> stream1 = builder.stream("one", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        final KGroupedStream<String, String> stream2 = builder.stream("two", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        stream1.cogroup((key, value, aggregate) -> aggregate + value).cogroup(stream2, (key, value, aggregate) -> aggregate + value)
+            .windowedBy(SessionWindows.ofInactivityGapAndGrace(Duration.ofMinutes(15), Duration.ofMinutes(5)))
+            .aggregate(() -> "", (k, v1, v2) -> "", Named.as("test"), Materialized.as("store"))
             .suppress(Suppressed.untilWindowCloses(unbounded()))
             .toStream();
     }

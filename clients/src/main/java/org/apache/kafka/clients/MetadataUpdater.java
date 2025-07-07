@@ -86,6 +86,23 @@ public interface MetadataUpdater extends Closeable {
     void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse);
 
     /**
+     * Returns true if metadata couldn't be fetched for `rebootstrapTriggerMs` or if server requested rebootstrap.
+     *
+     * @param now Current time in milliseconds
+     * @param rebootstrapTriggerMs Configured timeout after which rebootstrap is triggered
+     */
+    default boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
+        return false;
+    }
+
+    /**
+     * Performs rebootstrap, replacing the existing cluster with the bootstrap cluster.
+     *
+     * @param now Current time in milliseconds
+     */
+    default void rebootstrap(long now) {}
+
+    /**
      * Close this updater.
      */
     @Override

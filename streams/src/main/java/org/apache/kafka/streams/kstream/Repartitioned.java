@@ -162,7 +162,7 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified and the key serde provides a {@link WindowedSerializer} for the key
-     *                    {@link WindowedStreamPartitioner} will be used—otherwise {@link DefaultStreamPartitioner} wil be used
+     *                    {@link WindowedStreamPartitioner} will be used—otherwise {@link DefaultStreamPartitioner} will be used
      * @return a new {@code Repartitioned} instance configured with provided partitioner
      */
     public Repartitioned<K, V> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {

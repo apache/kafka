@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.junit.jupiter.api.Test;
+
 import java.nio.ByteBuffer;
 import java.util.Base64;
-import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -26,7 +27,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class TopicPartitionMetadataTest {
 
     @Test
-    public void shouldGetPartitonTimeAndProcessorMeta() {
+    public void shouldGetPartitionTimeAndProcessorMeta() {
         final ProcessorMetadata metadata = new ProcessorMetadata();
         final String key = "some_key";
         final long value = 100L;

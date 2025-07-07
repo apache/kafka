@@ -17,25 +17,25 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.kafka.trogdor.common.JsonUtil;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.trogdor.common.JsonUtil;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class TopicsSpecTest {
 
-    private final static TopicsSpec FOO;
-    private final static PartitionsSpec PARTSA;
-    private final static PartitionsSpec PARTSB;
+    private static final TopicsSpec FOO;
+    private static final PartitionsSpec PARTSA;
+    private static final PartitionsSpec PARTSB;
 
     static {
         FOO = new TopicsSpec();

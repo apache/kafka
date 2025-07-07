@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockSerializer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,8 +41,10 @@ import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,13 +53,13 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class MockProducerTest {
 
     private final String topic = "topic";
-    private MockProducer<byte[], byte[]> producer;
-    private final ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(topic, "key1".getBytes(), "value1".getBytes());
-    private final ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(topic, "key2".getBytes(), "value2".getBytes());
+    private MockProducer<String, String> producer;
+    private final ProducerRecord<String, String> record1 = new ProducerRecord<>(topic, "key1", "value1");
+    private final ProducerRecord<String, String> record2 = new ProducerRecord<>(topic, "key2", "value2");
     private final String groupId = "group";
 
     private void buildMockProducer(boolean autoComplete) {
-        this.producer = new MockProducer<>(autoComplete, new MockSerializer(), new MockSerializer());
+        this.producer = new MockProducer<>(Cluster.empty(), autoComplete, null, new MockSerializer(), new MockSerializer());
     }
 
     @AfterEach
@@ -84,10 +87,16 @@ public class MockProducerTest {
         PartitionInfo partitionInfo1 = new PartitionInfo(topic, 1, null, null, null);
         Cluster cluster = new Cluster(null, new ArrayList<>(0), asList(partitionInfo0, partitionInfo1),
                 Collections.emptySet(), Collections.emptySet());
-        MockProducer<String, String> producer = new MockProducer<>(cluster, true, new StringSerializer(), new StringSerializer());
+        MockProducer<String, String> producer = new MockProducer<>(
+            cluster,
+            true,
+            new org.apache.kafka.clients.producer.RoundRobinPartitioner(),
+            new StringSerializer(),
+            new StringSerializer()
+        );
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "key", "value");
         Future<RecordMetadata> metadata = producer.send(record);
-        assertEquals(1, metadata.get().partition(), "Partition should be correct");
+        assertEquals(0, metadata.get().partition(), "Partition should be correct");
         producer.clear();
         assertEquals(0, producer.history().size(), "Clear should erase our history");
         producer.close();
@@ -101,7 +110,7 @@ public class MockProducerTest {
         Future<RecordMetadata> md2 = producer.send(record2);
         assertFalse(md2.isDone(), "Send shouldn't have completed");
         assertTrue(producer.completeNext(), "Complete the first request");
-        assertFalse(isError(md1), "Requst should be successful");
+        assertFalse(isError(md1), "Request should be successful");
         assertFalse(md2.isDone(), "Second request still incomplete");
         IllegalArgumentException e = new IllegalArgumentException("blah");
         assertTrue(producer.errorNext(e), "Complete the second request with an error");
@@ -261,7 +270,7 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.fenceProducer();
         Throwable e = assertThrows(KafkaException.class, () -> producer.send(null));
-        assertTrue(e.getCause() instanceof ProducerFencedException, "The root cause of the exception should be ProducerFenced");
+        assertInstanceOf(ProducerFencedException.class, e.getCause(), "The root cause of the exception should be ProducerFenced");
     }
 
     @Test
@@ -309,7 +318,7 @@ public class MockProducerTest {
 
         producer.commitTransaction();
 
-        List<ProducerRecord<byte[], byte[]>> expectedResult = new ArrayList<>();
+        List<ProducerRecord<String, String>> expectedResult = new ArrayList<>();
         expectedResult.add(record1);
         expectedResult.add(record2);
 
@@ -376,7 +385,7 @@ public class MockProducerTest {
         producer.beginTransaction();
         producer.abortTransaction();
 
-        List<ProducerRecord<byte[], byte[]>> expectedResult = new ArrayList<>();
+        List<ProducerRecord<String, String>> expectedResult = new ArrayList<>();
         expectedResult.add(record1);
         expectedResult.add(record2);
 
@@ -390,14 +399,14 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group1 = "g1";
-        Map<TopicPartition, OffsetAndMetadata> group1Commit = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> group1Commit = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
             }
         };
         String group2 = "g2";
-        Map<TopicPartition, OffsetAndMetadata> group2Commit = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> group2Commit = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(101L, null));
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(21L, null));
@@ -416,31 +425,12 @@ public class MockProducerTest {
         assertEquals(Collections.singletonList(expectedResult), producer.consumerGroupOffsetsHistory());
     }
 
-    @Deprecated
-    @Test
-    public void shouldThrowOnNullConsumerGroupIdWhenSendOffsetsToTransaction() {
-        buildMockProducer(true);
-        producer.initTransactions();
-        producer.beginTransaction();
-        assertThrows(NullPointerException.class, () -> producer.sendOffsetsToTransaction(Collections.emptyMap(), (String) null));
-    }
-
     @Test
     public void shouldThrowOnNullConsumerGroupMetadataWhenSendOffsetsToTransaction() {
         buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
         assertThrows(NullPointerException.class, () -> producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(null)));
-    }
-
-    @Deprecated
-    @Test
-    public void shouldIgnoreEmptyOffsetsWhenSendOffsetsToTransactionByGroupId() {
-        buildMockProducer(true);
-        producer.initTransactions();
-        producer.beginTransaction();
-        producer.sendOffsetsToTransaction(Collections.emptyMap(), "groupId");
-        assertFalse(producer.sentOffsets());
     }
 
     @Test
@@ -451,25 +441,7 @@ public class MockProducerTest {
         producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("groupId"));
         assertFalse(producer.sentOffsets());
     }
-
-    @Deprecated
-    @Test
-    public void shouldAddOffsetsWhenSendOffsetsToTransactionByGroupId() {
-        buildMockProducer(true);
-        producer.initTransactions();
-        producer.beginTransaction();
-
-        assertFalse(producer.sentOffsets());
-
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<TopicPartition, OffsetAndMetadata>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
-            }
-        };
-        producer.sendOffsetsToTransaction(groupCommit, "groupId");
-        assertTrue(producer.sentOffsets());
-    }
-
+    
     @Test
     public void shouldAddOffsetsWhenSendOffsetsToTransactionByGroupMetadata() {
         buildMockProducer(true);
@@ -478,7 +450,7 @@ public class MockProducerTest {
 
         assertFalse(producer.sentOffsets());
 
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
             }
@@ -495,7 +467,7 @@ public class MockProducerTest {
 
         assertFalse(producer.sentOffsets());
 
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
             }
@@ -522,13 +494,13 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group = "g";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit1 = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> groupCommit1 = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
             }
         };
-        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(101L, null));
                 put(new TopicPartition(topic, 2), new OffsetAndMetadata(21L, null));
@@ -540,7 +512,7 @@ public class MockProducerTest {
         assertTrue(producer.consumerGroupOffsetsHistory().isEmpty());
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> expectedResult = new HashMap<>();
-        expectedResult.put(group, new HashMap<TopicPartition, OffsetAndMetadata>() {
+        expectedResult.put(group, new HashMap<>() {
             {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(101L, null));
@@ -559,7 +531,7 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group = "g";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
@@ -588,7 +560,7 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group = "g";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
@@ -613,7 +585,7 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group = "g";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
@@ -625,7 +597,7 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group2 = "g2";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<TopicPartition, OffsetAndMetadata>() {
+        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<>() {
             {
                 put(new TopicPartition(topic, 2), new OffsetAndMetadata(53L, null));
                 put(new TopicPartition(topic, 3), new OffsetAndMetadata(84L, null));
@@ -702,11 +674,19 @@ public class MockProducerTest {
         producer.close();
         assertThrows(IllegalStateException.class, producer::flush);
     }
-    
+
+    @Test
+    public void shouldNotThrowOnFlushProducerIfProducerIsFenced() {
+        buildMockProducer(true);
+        producer.initTransactions();
+        producer.fenceProducer();
+        assertDoesNotThrow(producer::flush);
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowClassCastException() {
-        try (MockProducer<Integer, String> customProducer = new MockProducer<>(true, new IntegerSerializer(), new StringSerializer())) {
+        try (MockProducer<Integer, String> customProducer = new MockProducer<>(Cluster.empty(), true, null, new IntegerSerializer(), new StringSerializer())) {
             assertThrows(ClassCastException.class, () -> customProducer.send(new ProducerRecord(topic, "key1", "value1")));
         }
     }

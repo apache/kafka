@@ -18,25 +18,28 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 /**
- * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
- * <p>
- * It is an intermediate representation after a grouping of {@link KStream}s, before the
- * aggregations are applied to the new partitions resulting in a {@link KTable}.
- * <p>
- * A {@code CogroupedKStream} must be obtained from a {@link KGroupedStream} via
- * {@link KGroupedStream#cogroup(Aggregator) cogroup(...)}.
+ * {@code CogroupedKStream} is an abstraction of one or more {@link KGroupedStream grouped record streams} of
+ * {@link Record key-value} pairs.
  *
- * @param <K> Type of keys
- * @param <VOut> Type of values after agg
+ * <p>A {@code CogroupedKStream} can be either windowed by applying {@code windowedBy(...)} operation,
+ * or can be {@link #aggregate(Initializer) aggregated} into a {@link KTable}.
+ *
+ * <p>A {@code CogroupedKStream} is initialized from a single
+ * {@link KGroupedStream#cogroup(Aggregator) grouped record stream}, and can be combined with one or more other
+ * {@link CogroupedKStream#cogroup(KGroupedStream, Aggregator) grouped record streams},
+ * before windowing or aggregation is applied.
+ *
+ * @param <K> the key type of this co-grouped stream
+ * @param <VOut> the result value type of the applied aggregation
  */
 public interface CogroupedKStream<K, VOut> {
 
@@ -54,13 +57,17 @@ public interface CogroupedKStream<K, VOut> {
      * using the initial intermediate aggregation result provided via the {@link Initializer} that is passed into
      * {@link #aggregate(Initializer)}) and the record's value.
      *
-     * @param groupedStream a group stream
-     * @param aggregator    an {@link Aggregator} that computes a new aggregate result
-     * @param <VIn> Type of input values
+     * @param groupedStream
+     *        a group stream
+     * @param aggregator
+     *        an {@link Aggregator} that computes a new aggregate result
+     *
+     * @param <V> Type of input values
+     *
      * @return a {@code CogroupedKStream}
      */
-    <VIn> CogroupedKStream<K, VOut> cogroup(final KGroupedStream<K, VIn> groupedStream,
-                                            final Aggregator<? super K, ? super VIn, VOut> aggregator);
+    <V> CogroupedKStream<K, VOut> cogroup(final KGroupedStream<K, V> groupedStream,
+                                          final Aggregator<? super K, ? super V, VOut> aggregator);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -86,7 +93,8 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(storeQueryParams);
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -104,8 +112,10 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result. Cannot be {@code null}.
+     * @param initializer
+     *        an {@link Initializer} that computes an initial intermediate aggregation
+     *        result. Cannot be {@code null}.
+     *
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
@@ -136,7 +146,8 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(storeQueryParams);
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -154,9 +165,11 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result. Cannot be {@code null}.
-     * @param named        name the processor. Cannot be {@code null}.
+     * @param initializer
+     *        an {@link Initializer} that computes an initial intermediate aggregation result. Cannot be {@code null}.
+     * @param named
+     *        name the processor. Cannot be {@code null}.
+     *
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
@@ -187,7 +200,8 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(storeQueryParams);
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -205,10 +219,11 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result. Cannot be {@code null}.
-     * @param materialized an instance of {@link Materialized} used to materialize a state store.
-     *                     Cannot be {@code null}.
+     * @param initializer
+     *        an {@link Initializer} that computes an initial intermediate aggregation result. Cannot be {@code null}.
+     * @param materialized
+     *        an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
+     *
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
@@ -240,7 +255,8 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(storeQueryParams);
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -258,11 +274,13 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result. Cannot be {@code null}.
-     * @param materialized an instance of {@link Materialized} used to materialize a state store.
-     *                     Cannot be {@code null}.
-     * @param named        name the processors. Cannot be {@code null}.
+     * @param initializer
+     *        an {@link Initializer} that computes an initial intermediate aggregation result. Cannot be {@code null}.
+     * @param materialized
+     *        an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
+     * @param named
+     *        name the processors. Cannot be {@code null}.
+     *
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
@@ -274,8 +292,11 @@ public interface CogroupedKStream<K, VOut> {
      * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed
      * aggregations.
      *
-     * @param windows the specification of the aggregation {@link Windows}
+     * @param windows
+     *        the specification of the aggregation {@link Windows}
+     *
      * @param <W>     the window type
+     *
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
     <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows);
@@ -284,7 +305,9 @@ public interface CogroupedKStream<K, VOut> {
      * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform sliding
      * windowed aggregations.
      *
-     * @param windows the specification of the aggregation {@link SlidingWindows}
+     * @param windows
+     *        the specification of the aggregation {@link SlidingWindows}
+     *
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
     TimeWindowedCogroupedKStream<K, VOut> windowedBy(final SlidingWindows windows);
@@ -293,7 +316,9 @@ public interface CogroupedKStream<K, VOut> {
      * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
      * windowed aggregations.
      *
-     * @param windows the specification of the aggregation {@link SessionWindows}
+     * @param windows
+     *        the specification of the aggregation {@link SessionWindows}
+     *
      * @return an instance of {@link SessionWindowedCogroupedKStream}
      */
     SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows windows);

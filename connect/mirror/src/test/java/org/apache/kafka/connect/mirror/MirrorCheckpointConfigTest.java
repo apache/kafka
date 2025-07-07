@@ -17,13 +17,17 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import static org.apache.kafka.connect.mirror.TestUtils.assertEqualsExceptClientId;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -35,7 +39,7 @@ public class MirrorCheckpointConfigTest {
     public void testTaskConfigConsumerGroups() {
         List<String> groups = Arrays.asList("consumer-1", "consumer-2", "consumer-3");
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
-        Map<String, String> props = config.taskConfigForConsumerGroups(groups);
+        Map<String, String> props = config.taskConfigForConsumerGroups(groups, 1);
         MirrorCheckpointTaskConfig taskConfig = new MirrorCheckpointTaskConfig(props);
         assertEquals(taskConfig.taskConsumerGroups(), new HashSet<>(groups),
                 "Setting consumer groups property configuration failed");
@@ -76,9 +80,53 @@ public class MirrorCheckpointConfigTest {
                 "fetch.min.bytes", "1"
         );
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(connectorProps);
-        assertEquals(config.sourceConsumerConfig(), config.offsetSyncsTopicConsumerConfig());
+        Map<String, Object> sourceConsumerConfig = config.sourceConsumerConfig("test");
+        Map<String, Object> offsetSyncsTopicSourceConsumerConfig = config.offsetSyncsTopicConsumerConfig();
+        assertEqualsExceptClientId(sourceConsumerConfig, offsetSyncsTopicSourceConsumerConfig);
+        assertEquals("source1->target2|ConnectorName|test", sourceConsumerConfig.get("client.id"));
+        assertEquals(
+                "source1->target2|ConnectorName|" + MirrorCheckpointConfig.OFFSET_SYNCS_SOURCE_CONSUMER_ROLE,
+                offsetSyncsTopicSourceConsumerConfig.get("client.id"));
         connectorProps.put("offset-syncs.topic.location", "target");
         config = new MirrorCheckpointConfig(connectorProps);
-        assertEquals(config.targetConsumerConfig(), config.offsetSyncsTopicConsumerConfig());
+        Map<String, Object> targetConsumerConfig = config.targetConsumerConfig("test");
+        Map<String, Object> offsetSyncsTopicTargetConsumerConfig = config.offsetSyncsTopicConsumerConfig();
+        assertEqualsExceptClientId(targetConsumerConfig, offsetSyncsTopicTargetConsumerConfig);
+        assertEquals("source1->target2|ConnectorName|test", targetConsumerConfig.get("client.id"));
+        assertEquals(
+                "source1->target2|ConnectorName|" + MirrorCheckpointConfig.OFFSET_SYNCS_TARGET_CONSUMER_ROLE,
+                offsetSyncsTopicTargetConsumerConfig.get("client.id"));
+    }
+
+    @Test
+    public void testSkipValidationIfConnectorDisabled() {
+        Map<String, String> configValues = MirrorCheckpointConfig.validate(makeProps(
+                MirrorConnectorConfig.ENABLED, "false",
+                MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "false",
+                MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED, "false"));
+        assertTrue(configValues.isEmpty());
+
+        configValues = MirrorCheckpointConfig.validate(makeProps(
+                MirrorConnectorConfig.ENABLED, "false",
+                MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));
+        assertTrue(configValues.isEmpty());
+    }
+
+    @Test
+    public void testValidateIfConnectorEnabled() {
+        Map<String, String> configValues = MirrorCheckpointConfig.validate(makeProps(
+                MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "false",
+                MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED, "false"));
+        assertEquals(configValues.keySet(), Collections.singleton(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED));
+
+        configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));
+        assertEquals(configValues.keySet(), Set.of(MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED));
+
+        configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+                MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "true"));
+        assertTrue(configValues.isEmpty());
     }
 }

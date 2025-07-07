@@ -21,7 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * A implementation of MetricsContext, it encapsulates required metrics context properties for Kafka services and clients
+ * An implementation of MetricsContext, it encapsulates required metrics context properties for Kafka services and clients
  */
 public class KafkaMetricsContext implements MetricsContext {
     /**

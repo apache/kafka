@@ -21,10 +21,12 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
+
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
+@Deprecated
 public class RemoveNamedTopologyResult {
     private final KafkaFutureImpl<Void> removeTopologyFuture;
     private final KafkaFutureImpl<Void> resetOffsetsFuture;

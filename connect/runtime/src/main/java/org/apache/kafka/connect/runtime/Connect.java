@@ -17,33 +17,49 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.rest.ConnectRestServer;
 import org.apache.kafka.connect.runtime.rest.RestServer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * This class ties together all the components of a Kafka Connect process (herder, worker,
  * storage, command interface), managing their lifecycle.
  */
-public class Connect {
+public class Connect<H extends Herder> {
     private static final Logger log = LoggerFactory.getLogger(Connect.class);
 
-    private final Herder herder;
+    private final H herder;
+    private Future<?> herderTask;
     private final ConnectRestServer rest;
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
     private final ShutdownHook shutdownHook;
 
-    public Connect(Herder herder, ConnectRestServer rest) {
+    public Connect(H herder, ConnectRestServer rest) {
         log.debug("Kafka Connect instance created");
         this.herder = herder;
         this.rest = rest;
         shutdownHook = new ShutdownHook();
+    }
+
+    /**
+     * Track task status which have been submitted to work thread.
+     * @return {@link DistributedHerder#herderTask} to track status or null if the herder type doesn't have a separate work thread
+     */
+    public Future<?> herderTask() {
+        return this.herderTask;
+    }
+
+    public H herder() {
+        return herder;
     }
 
     public void start() {
@@ -53,6 +69,10 @@ public class Connect {
 
             herder.start();
             rest.initializeResources(herder);
+
+            if (herder instanceof DistributedHerder) {
+                herderTask = ((DistributedHerder) herder).herderTask();
+            }
 
             log.info("Kafka Connect started");
         } finally {
@@ -82,10 +102,6 @@ public class Connect {
         } catch (InterruptedException e) {
             log.error("Interrupted waiting for Kafka Connect to shutdown");
         }
-    }
-
-    public boolean isRunning() {
-        return herder.isRunning();
     }
 
     // Visible for testing

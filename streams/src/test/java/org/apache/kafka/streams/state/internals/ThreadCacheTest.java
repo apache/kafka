@@ -23,8 +23,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import static org.hamcrest.MatcherAssert.assertThat;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,13 +33,14 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.Supplier;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ThreadCacheTest {
     final String namespace = "0.0-namespace";
@@ -47,6 +48,8 @@ public class ThreadCacheTest {
     final String namespace2 = "0.2-namespace";
     private final LogContext logContext = new LogContext("testCache ");
     private final byte[][] bytes = new byte[][]{{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
+    private final byte[] rawKey = new byte[]{0};
+    private final byte[] rawValue = new byte[]{0};
 
     @Test
     public void basicPutGet() {
@@ -64,7 +67,7 @@ public class ThreadCacheTest {
         for (final KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, "", rawKey, rawValue));
         }
 
         for (final KeyValue<String, String> kvToInsert : toInsert) {
@@ -97,7 +100,7 @@ public class ThreadCacheTest {
             final String keyStr = "K" + i;
             final Bytes key = Bytes.wrap(keyStr.getBytes());
             final byte[] value = new byte[valueSizeBytes];
-            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, "", rawKey, rawValue));
         }
 
 
@@ -106,8 +109,8 @@ public class ThreadCacheTest {
         final long usedRuntimeMemory = runtime.totalMemory() - runtime.freeMemory() - prevRuntimeMemory;
         assertTrue((double) cache.sizeBytes() <= ceiling);
 
-        assertTrue("Used memory size " + usedRuntimeMemory + " greater than expected " + cache.sizeBytes() * systemFactor,
-            cache.sizeBytes() * systemFactor >= usedRuntimeMemory);
+        assertTrue(cache.sizeBytes() * systemFactor >= usedRuntimeMemory,
+                "Used memory size " + usedRuntimeMemory + " greater than expected " + cache.sizeBytes() * systemFactor);
     }
 
     @Test
@@ -175,7 +178,7 @@ public class ThreadCacheTest {
         for (final KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1, 1, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1, 1, 1, "", rawKey, rawValue));
         }
 
         for (int i = 0; i < expected.size(); i++) {
@@ -616,7 +619,7 @@ public class ThreadCacheTest {
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {
-        return new LRUCacheEntry(key, new RecordHeaders(), true, -1, -1, -1, "");
+        return new LRUCacheEntry(key, new RecordHeaders(), true, -1, -1, -1, "", rawKey, rawValue);
     }
 
     private LRUCacheEntry cleanEntry(final byte[] key) {

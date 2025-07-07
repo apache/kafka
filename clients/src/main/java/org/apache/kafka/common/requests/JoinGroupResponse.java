@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 public class JoinGroupResponse extends AbstractResponse {
@@ -36,6 +35,12 @@ public class JoinGroupResponse extends AbstractResponse {
         // string for the protocol name. Empty string should be used.
         if (version < 7 && data.protocolName() == null) {
             data.setProtocolName("");
+        }
+
+        // If nullable string for the protocol name is supported,
+        // we set empty string to be null to ensure compliance.
+        if (version >= 7 && data.protocolName() != null && data.protocolName().isEmpty()) {
+            data.setProtocolName(null);
         }
     }
 
@@ -67,8 +72,8 @@ public class JoinGroupResponse extends AbstractResponse {
         return errorCounts(Errors.forCode(data.errorCode()));
     }
 
-    public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
-        return new JoinGroupResponse(new JoinGroupResponseData(new ByteBufferAccessor(buffer), version), version);
+    public static JoinGroupResponse parse(Readable readable, short version) {
+        return new JoinGroupResponse(new JoinGroupResponseData(readable, version), version);
     }
 
     @Override

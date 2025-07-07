@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import java.util.Map;
-import java.util.HashMap;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
-/** Heartbeat message sent from MirrorHeartbeatTask to target cluster. Heartbeats are always replicated. */
+/**
+ * Heartbeat records emitted by MirrorHeartbeatConnector.
+ */
 public class Heartbeat {
     public static final String SOURCE_CLUSTER_ALIAS_KEY = "sourceClusterAlias";
     public static final String TARGET_CLUSTER_ALIAS_KEY = "targetClusterAlias";
@@ -142,4 +144,3 @@ public class Heartbeat {
         return VALUE_SCHEMA_V0;
     }
 }
-

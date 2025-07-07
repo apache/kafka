@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -61,7 +59,7 @@ public class UserScramCredentialsDescription {
      */
     public UserScramCredentialsDescription(String name, List<ScramCredentialInfo> credentialInfos) {
         this.name = Objects.requireNonNull(name);
-        this.credentialInfos = Collections.unmodifiableList(new ArrayList<>(credentialInfos));
+        this.credentialInfos = List.copyOf(credentialInfos);
     }
 
     /**

@@ -19,7 +19,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
-from kafkatest.version import get_version, V_0_11_0_0, V_3_4_0, DEV_BRANCH
+from kafkatest.version import get_version, V_3_4_0, DEV_BRANCH
 
 class JmxMixin(object):
     """This mixin helps existing service subclasses start JmxTool on their worker nodes and collect jmx stats.
@@ -115,7 +115,7 @@ class JmxMixin(object):
         # do not calculate average and maximum of jmx stats until we have read output from all nodes
         # If the service is multithreaded, this means that the results will be aggregated only when the last
         # service finishes
-        if any(len(time_to_stats) == 0 for time_to_stats in self.jmx_stats):
+        if any(not time_to_stats for time_to_stats in self.jmx_stats):
             return
 
         start_time_sec = min([min(time_to_stats.keys()) for time_to_stats in self.jmx_stats])
@@ -139,10 +139,7 @@ class JmxMixin(object):
         # To correctly wait for requested JMX metrics to be added we need the --wait option for JmxTool. This option was
         # not added until 0.11.0.1, so any earlier versions need to use JmxTool from a newer version.
         version = get_version(node)
-        if version <= V_0_11_0_0:
-            return DEV_BRANCH
-        else:
-            return version
+        return version
 
     def jmx_class_name(self, version):
         if version <= V_3_4_0:

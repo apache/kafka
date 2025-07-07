@@ -18,11 +18,10 @@ package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -36,13 +35,13 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.errors.UnknownTopologyException;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -62,13 +61,14 @@ import java.util.stream.Collectors;
  * This is currently an internal and experimental feature for enabling certain kinds of topology upgrades. Use at
  * your own risk.
  *
- * Status: additive upgrades possible, removal of NamedTopologies not yet supported
+ * Status: deprecated and planned for removal. PLEASE REACH OUT IF YOU ARE USING THIS FEATURE. Any concerns about
+ *         the deprecation can be raised by filing a ticket at https://issues.apache.org/jira/projects/KAFKA/issues
  *
  * Note: some standard features of Kafka Streams are not yet supported with NamedTopologies. These include:
  *       - global state stores
  *       - TopologyTestDriver (TTD)
  */
-@Unstable
+@Deprecated
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     private final Logger log;
@@ -152,7 +152,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     public Collection<NamedTopology> getAllTopologies() {
-        return topologyMetadata.getAllNamedTopologies();
+        return topologyMetadata.allNamedTopologies();
     }
 
     /**
@@ -215,7 +215,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             removeTopologyFuture.completeExceptionally(
                 new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state)
             );
-        } else if (!getTopologyByName(topologyToRemove).isPresent()) {
+        } else if (getTopologyByName(topologyToRemove).isEmpty()) {
             log.error("Attempted to remove unknown topology {}. This application currently contains the"
                           + "following topologies: {}.", topologyToRemove, topologyMetadata.namedTopologiesView()
             );
@@ -404,7 +404,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName, final String topologyName) {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getAllMetadataForStore(storeName, topologyName);
+        return streamsMetadataState.allMetadataForStore(storeName, topologyName);
     }
 
     /**
@@ -412,7 +412,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      */
     public Collection<StreamsMetadata> allStreamsClientsMetadataForTopology(final String topologyName) {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getAllMetadataForTopology(topologyName);
+        return streamsMetadataState.allMetadataForTopology(topologyName);
     }
 
     /**
@@ -424,14 +424,14 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                                     final String topologyName) {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
+        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
     }
 
     /**
      * See {@link KafkaStreams#allLocalStorePartitionLags()}
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLagsForTopology(final String topologyName) {
-        if (!getTopologyByName(topologyName).isPresent()) {
+        if (getTopologyByName(topologyName).isEmpty()) {
             log.error("Can't get local store partition lags since topology {} does not exist in this application",
                       topologyName);
             throw new UnknownTopologyException("Can't get local store partition lags", topologyName);

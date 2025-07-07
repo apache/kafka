@@ -19,25 +19,32 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class EndTxnRequest extends AbstractRequest {
-
+    public static final short LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 = 4;
     private final EndTxnRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<EndTxnRequest> {
         public final EndTxnRequestData data;
+        public final boolean isTransactionV2Enabled;
 
-        public Builder(EndTxnRequestData data) {
-            super(ApiKeys.END_TXN);
+        public Builder(EndTxnRequestData data, boolean isTransactionV2Enabled) {
+            this(data, false, isTransactionV2Enabled);
+        }
+
+        public Builder(EndTxnRequestData data, boolean enableUnstableLastVersion, boolean isTransactionV2Enabled) {
+            super(ApiKeys.END_TXN, enableUnstableLastVersion);
             this.data = data;
+            this.isTransactionV2Enabled = isTransactionV2Enabled;
         }
 
         @Override
         public EndTxnRequest build(short version) {
+            if (!isTransactionV2Enabled) {
+                version = (short) Math.min(version, LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2);
+            }
             return new EndTxnRequest(data, version);
         }
 
@@ -72,7 +79,7 @@ public class EndTxnRequest extends AbstractRequest {
         );
     }
 
-    public static EndTxnRequest parse(ByteBuffer buffer, short version) {
-        return new EndTxnRequest(new EndTxnRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static EndTxnRequest parse(Readable readable, short version) {
+        return new EndTxnRequest(new EndTxnRequestData(readable, version), version);
     }
 }

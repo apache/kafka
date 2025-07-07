@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

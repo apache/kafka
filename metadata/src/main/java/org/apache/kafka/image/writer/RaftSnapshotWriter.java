@@ -22,6 +22,7 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalLong;
 
 
 /**
@@ -31,6 +32,7 @@ public class RaftSnapshotWriter implements ImageWriter {
     private final SnapshotWriter<ApiMessageAndVersion> snapshotWriter;
     private final int batchSize;
     private List<ApiMessageAndVersion> records;
+    private OptionalLong frozenSize = OptionalLong.empty();
 
     public RaftSnapshotWriter(
         SnapshotWriter<ApiMessageAndVersion> snapshotWriter,
@@ -59,11 +61,18 @@ public class RaftSnapshotWriter implements ImageWriter {
                 if (!records.isEmpty()) {
                     snapshotWriter.append(records);
                 }
-                snapshotWriter.freeze();
+                frozenSize = OptionalLong.of(snapshotWriter.freeze());
             }
         } finally {
             records = null;
             snapshotWriter.close();
         }
+    }
+
+    /**
+     * @return the frozen size of the snapshot, or OptionalLong.empty if the snapshot was not frozen.
+     */
+    public OptionalLong frozenSize() {
+        return frozenSize;
     }
 }

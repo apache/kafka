@@ -18,8 +18,6 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import java.util.Set;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * The <code>b64token</code> value as defined in
  * <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section
@@ -35,19 +33,12 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * a constructor might declare {@code throws IOException} in such a case.
  * Alternatively, the retrievers could throw unchecked exceptions.
  * <p>
- * This interface was introduced in 2.0.0 and, while it feels stable, it could
- * evolve. We will try to evolve the API in a compatible manner (easier now that
- * Java 7 and its lack of default methods doesn't have to be supported), but we
- * reserve the right to make breaking changes in minor releases, if necessary.
- * We will update the {@code InterfaceStability} annotation and this notice once
- * the API is considered stable.
  * 
  * @see <a href="https://tools.ietf.org/html/rfc6749#section-1.4">RFC 6749
  *      Section 1.4</a> and
  *      <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750
  *      Section 2.1</a>
  */
-@InterfaceStability.Evolving
 public interface OAuthBearerToken {
     /**
      * The <code>b64token</code> value as defined in
@@ -78,7 +69,7 @@ public interface OAuthBearerToken {
      * epoch, as per <a href="https://tools.ietf.org/html/rfc6749#section-1.4">RFC
      * 6749 Section 1.4</a>
      * 
-     * @return the token'slifetime, expressed as the number of milliseconds since
+     * @return the token's lifetime, expressed as the number of milliseconds since
      *         the epoch, as per
      *         <a href="https://tools.ietf.org/html/rfc6749#section-1.4">RFC 6749
      *         Section 1.4</a>.

@@ -116,7 +116,6 @@ public class Histogram {
     public static class ConstantBinScheme implements BinScheme {
         private static final int MIN_BIN_NUMBER = 0;
         private final double min;
-        private final double max;
         private final int bins;
         private final double bucketWidth;
         private final int maxBinNumber;
@@ -132,7 +131,6 @@ public class Histogram {
             if (bins < 2)
                 throw new IllegalArgumentException("Must have at least 2 bins.");
             this.min = min;
-            this.max = max;
             this.bins = bins;
             this.bucketWidth = (max - min) / bins;
             this.maxBinNumber = bins - 1;

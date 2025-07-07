@@ -16,6 +16,15 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
+import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
@@ -32,14 +41,6 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslClientFactory;
 import javax.security.sasl.SaslException;
-
-import org.apache.kafka.common.errors.IllegalSaslStateException;
-import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * SaslClient implementation for SASL/SCRAM.
@@ -161,14 +162,14 @@ public class ScramSaslClient implements SaslClient {
     public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-        return Arrays.copyOfRange(incoming, offset, offset + len);
+        throw new IllegalStateException("SCRAM supports neither integrity nor privacy");
     }
 
     @Override
     public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-        return Arrays.copyOfRange(outgoing, offset, offset + len);
+        throw new IllegalStateException("SCRAM supports neither integrity nor privacy");
     }
 
     @Override

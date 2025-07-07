@@ -17,16 +17,17 @@
 
 package org.apache.kafka.timeline;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.apache.kafka.common.utils.LogContext;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.kafka.common.utils.LogContext;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 @Timeout(value = 40)
@@ -40,10 +41,7 @@ public class SnapshotRegistryTest {
 
     private static void assertIteratorContains(Iterator<Snapshot> iter,
                                                Snapshot... snapshots) {
-        List<Snapshot> expected = new ArrayList<>();
-        for (Snapshot snapshot : snapshots) {
-            expected.add(snapshot);
-        }
+        List<Snapshot> expected = List.of(snapshots);
         List<Snapshot> actual = new ArrayList<>();
         while (iter.hasNext()) {
             Snapshot snapshot = iter.next();
@@ -60,7 +58,7 @@ public class SnapshotRegistryTest {
         assertThrows(RuntimeException.class, () -> registry.getSnapshot(456));
         assertIteratorContains(registry.iterator(), snapshot123);
         assertEquals("Can't create a new in-memory snapshot at epoch 1 because there is already " +
-            "a snapshot with epoch 123", assertThrows(RuntimeException.class,
+            "a snapshot with epoch 123. Snapshot epochs are 123", assertThrows(RuntimeException.class,
                 () -> registry.getOrCreateSnapshot(1)).getMessage());
         Snapshot snapshot456 = registry.getOrCreateSnapshot(456);
         assertIteratorContains(registry.iterator(), snapshot123, snapshot456);
@@ -94,5 +92,29 @@ public class SnapshotRegistryTest {
         Snapshot duplicate = registry.getOrCreateSnapshot(12);
 
         assertEquals(latest, duplicate);
+    }
+
+    @Test
+    public void testScrub() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext(), 2);
+        new TimelineInteger(registry).set(123);
+        new TimelineInteger(registry).set(123);
+        assertEquals(0, registry.numScrubs());
+        new TimelineInteger(registry).set(123);
+        assertEquals(1, registry.numScrubs());
+        new TimelineInteger(registry).set(123);
+        new TimelineInteger(registry).set(123);
+        new TimelineInteger(registry).set(123);
+        assertEquals(2, registry.numScrubs());
+    }
+
+    @Test
+    public void testReset() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext(), 2);
+        TimelineInteger integer = new TimelineInteger(registry);
+        integer.set(123);
+        registry.reset();
+        assertEquals(0, integer.get());
+        assertEquals(1, registry.numScrubs());
     }
 }

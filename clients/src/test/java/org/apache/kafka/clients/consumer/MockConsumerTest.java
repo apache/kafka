@@ -16,26 +16,32 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MockConsumerTest {
     
-    private final MockConsumer<String, String> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final MockConsumer<String, String> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
 
     @Test
     public void testSimpleMock() {
@@ -61,39 +67,10 @@ public class MockConsumerTest {
         assertFalse(iter.hasNext());
         final TopicPartition tp = new TopicPartition("test", 0);
         assertEquals(2L, consumer.position(tp));
+        assertEquals(1, recs.nextOffsets().size());
+        assertEquals(new OffsetAndMetadata(2, Optional.empty(), ""), recs.nextOffsets().get(tp));
         consumer.commitSync();
         assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testSimpleMockDeprecated() {
-        consumer.subscribe(Collections.singleton("test"));
-        assertEquals(0, consumer.poll(1000).count());
-        consumer.rebalance(Arrays.asList(new TopicPartition("test", 0), new TopicPartition("test", 1)));
-        // Mock consumers need to seek manually since they cannot automatically reset offsets
-        HashMap<TopicPartition, Long> beginningOffsets = new HashMap<>();
-        beginningOffsets.put(new TopicPartition("test", 0), 0L);
-        beginningOffsets.put(new TopicPartition("test", 1), 0L);
-        consumer.updateBeginningOffsets(beginningOffsets);
-        consumer.seek(new TopicPartition("test", 0), 0);
-        ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME,
-            0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
-        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME,
-            0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
-        consumer.addRecord(rec1);
-        consumer.addRecord(rec2);
-        ConsumerRecords<String, String> recs = consumer.poll(1);
-        Iterator<ConsumerRecord<String, String>> iter = recs.iterator();
-        assertEquals(rec1, iter.next());
-        assertEquals(rec2, iter.next());
-        assertFalse(iter.hasNext());
-        final TopicPartition tp = new TopicPartition("test", 0);
-        assertEquals(2L, consumer.position(tp));
-        consumer.commitSync();
-        assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
-        assertEquals(new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty()),
-            consumer.groupMetadata());
     }
 
     @Test
@@ -122,6 +99,8 @@ public class MockConsumerTest {
         consumer.resume(testPartitionList);
         ConsumerRecords<String, String> recordsSecondPoll = consumer.poll(Duration.ofMillis(1));
         assertEquals(1, recordsSecondPoll.count());
+        assertEquals(1, recordsSecondPoll.nextOffsets().size());
+        assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), recordsSecondPoll.nextOffsets().get(new TopicPartition("test", 0)));
     }
 
     @Test
@@ -137,6 +116,120 @@ public class MockConsumerTest {
         assertEquals(11L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
         assertEquals(11L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
         assertEquals(11L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
+    }
+
+    @Test
+    public void testDurationBasedOffsetReset() {
+        MockConsumer<String, String> consumer = new MockConsumer<>("by_duration:PT1H");
+        consumer.subscribe(Collections.singleton("test"));
+        consumer.rebalance(Arrays.asList(new TopicPartition("test", 0), new TopicPartition("test", 1)));
+        HashMap<TopicPartition, Long> durationBasedOffsets = new HashMap<>();
+        durationBasedOffsets.put(new TopicPartition("test", 0), 10L);
+        durationBasedOffsets.put(new TopicPartition("test", 1), 11L);
+        consumer.updateDurationOffsets(durationBasedOffsets);
+        ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 10L, 0L, TimestampType.CREATE_TIME,
+                0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
+        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 11L, 0L, TimestampType.CREATE_TIME,
+                0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
+        consumer.addRecord(rec1);
+        consumer.addRecord(rec2);
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
+        Iterator<ConsumerRecord<String, String>> iter = records.iterator();
+        assertEquals(rec1, iter.next());
+        assertEquals(rec2, iter.next());
+        assertFalse(iter.hasNext());
+    }
+
+    @Test
+    public void testRebalanceListener() {
+        final List<TopicPartition> revoked = new ArrayList<>();
+        final List<TopicPartition> assigned = new ArrayList<>();
+        ConsumerRebalanceListener consumerRebalanceListener = new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revoked.clear();
+                revoked.addAll(partitions);
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                if (partitions.isEmpty()) {
+                    return;
+                }
+                assigned.clear();
+                assigned.addAll(partitions);
+            }
+        };
+
+
+        consumer.subscribe(Collections.singleton("test"), consumerRebalanceListener);
+        assertEquals(0, consumer.poll(Duration.ZERO).count());
+        List<TopicPartition> topicPartitionList = Arrays.asList(new TopicPartition("test", 0), new TopicPartition("test", 1));
+        consumer.rebalance(topicPartitionList);
+
+        assertTrue(revoked.isEmpty());
+        assertEquals(2, assigned.size());
+        assertTrue(assigned.contains(topicPartitionList.get(0)));
+        assertTrue(assigned.contains(topicPartitionList.get(1)));
+
+        consumer.rebalance(Collections.emptyList());
+        assertEquals(2, assigned.size());
+        assertTrue(revoked.contains(topicPartitionList.get(0)));
+        assertTrue(revoked.contains(topicPartitionList.get(1)));
+
+        consumer.rebalance(Collections.singletonList(topicPartitionList.get(0)));
+        assertEquals(1, assigned.size());
+        assertTrue(assigned.contains(topicPartitionList.get(0)));
+
+        consumer.rebalance(Collections.singletonList(topicPartitionList.get(1)));
+        assertEquals(1, assigned.size());
+        assertTrue(assigned.contains(topicPartitionList.get(1)));
+        assertEquals(1, revoked.size());
+        assertTrue(revoked.contains(topicPartitionList.get(0)));
+    }
+    
+    @Test
+    public void testRe2JPatternSubscription() {
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((SubscriptionPattern) null));
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(new SubscriptionPattern("")));
+
+        SubscriptionPattern pattern = new SubscriptionPattern("t.*");
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(pattern, null));
+
+        consumer.subscribe(pattern);
+        assertTrue(consumer.subscription().isEmpty());
+        // Check that the subscription to pattern was successfully applied in the mock consumer (using a different
+        // subscription type should fail)
+        assertThrows(IllegalStateException.class, () -> consumer.subscribe(List.of("topic1")));
+    }
+
+    @Test
+    public void shouldReturnMaxPollRecords() {
+        TopicPartition partition = new TopicPartition("test", 0);
+        consumer.assign(Collections.singleton(partition));
+        consumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
+
+        IntStream.range(0, 10).forEach(offset -> {
+            consumer.addRecord(new ConsumerRecord<>("test", 0, offset, null, null));
+        });
+
+        consumer.setMaxPollRecords(2L);
+
+        ConsumerRecords<String, String> records;
+
+        records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(2, records.count());
+
+        records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(2, records.count());
+
+        consumer.setMaxPollRecords(Long.MAX_VALUE);
+
+        records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(6, records.count());
+
+        records = consumer.poll(Duration.ofMillis(1));
+        assertTrue(records.isEmpty());
     }
 
 }

@@ -22,6 +22,7 @@ package org.apache.kafka.streams.errors;
  * {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} or
  * {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR} state.
  */
+@SuppressWarnings("unused")
 public class StateStoreNotAvailableException extends InvalidStateStoreException {
 
     private static final long serialVersionUID = 1L;

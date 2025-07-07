@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiMessage;
 
 public abstract class RaftResponse implements RaftMessage {
-    protected final int correlationId;
-    protected final ApiMessage data;
+    private final int correlationId;
+    private final ApiMessage data;
 
     protected RaftResponse(int correlationId, ApiMessage data) {
         this.correlationId = correlationId;
@@ -37,39 +38,41 @@ public abstract class RaftResponse implements RaftMessage {
         return data;
     }
 
-    public static class Inbound extends RaftResponse {
-        private final int sourceId;
+    public static final class Inbound extends RaftResponse {
+        private final Node source;
 
-        public Inbound(int correlationId, ApiMessage data, int sourceId) {
+        public Inbound(int correlationId, ApiMessage data, Node source) {
             super(correlationId, data);
-            this.sourceId = sourceId;
+            this.source = source;
         }
 
-        public int sourceId() {
-            return sourceId;
+        public Node source() {
+            return source;
         }
 
         @Override
         public String toString() {
-            return "InboundResponse(" +
-                    "correlationId=" + correlationId +
-                    ", data=" + data +
-                    ", sourceId=" + sourceId +
-                    ')';
+            return String.format(
+                "InboundResponse(correlationId=%d, data=%s, source=%s)",
+                correlationId(),
+                data(),
+                source
+            );
         }
     }
 
-    public static class Outbound extends RaftResponse {
+    public static final class Outbound extends RaftResponse {
         public Outbound(int requestId, ApiMessage data) {
             super(requestId, data);
         }
 
         @Override
         public String toString() {
-            return "OutboundResponse(" +
-                    "correlationId=" + correlationId +
-                    ", data=" + data +
-                    ')';
+            return String.format(
+                "OutboundResponse(correlationId=%d, data=%s)",
+                correlationId(),
+                data()
+            );
         }
     }
 }

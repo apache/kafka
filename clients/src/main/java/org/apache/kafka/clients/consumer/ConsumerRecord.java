@@ -21,23 +21,35 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 
+import java.util.ConcurrentModificationException;
 import java.util.Optional;
 
 /**
- * A key/value pair to be received from Kafka. This also consists of a topic name and 
- * a partition number from which the record is being received, an offset that points 
+ * A key/value pair to be received from Kafka. This also consists of a topic name and
+ * a partition number from which the record is being received, an offset that points
  * to the record in a Kafka partition, and a timestamp as marked by the corresponding ProducerRecord.
+ * <p>
+ *
+ * <h3>Thread Safety</h3>
+ * This consumer record is <b>not thread-safe</b>. Concurrent access to a {@code ConsumerRecord} instance by
+ * multiple threads may result in undefined behavior, including but not limited to the following:
+ * <ul>
+ *   <li>Throwing {@link ConcurrentModificationException} (e.g., when concurrently modifying {@link #headers()}).</li>
+ *   <li>Data corruption or logical errors (e.g., inconsistent state of {@code headers} or {@code value}).</li>
+ *   <li>Visibility issues (e.g., modifications by one thread not being visible to another thread).</li>
+ * </ul>
+ *
+ * <p>
+ * In particular, the {@link #headers()} method returns a mutable collection of headers. If multiple
+ * threads access or modify these headers concurrently, it may lead to race conditions or inconsistent
+ * states. It is the responsibility of the user to ensure that multi-threaded access is properly synchronized.
+ *
+ * <p>
+ * Refer to the {@link KafkaConsumer} documentation for more details on multi-threaded consumption and processing strategies.
  */
 public class ConsumerRecord<K, V> {
     public static final long NO_TIMESTAMP = RecordBatch.NO_TIMESTAMP;
     public static final int NULL_SIZE = -1;
-
-    /**
-     * @deprecated checksums are no longer exposed by this class, this constant will be removed in Apache Kafka 4.0
-     *             (deprecated since 3.0).
-     */
-    @Deprecated
-    public static final int NULL_CHECKSUM = -1;
 
     private final String topic;
     private final int partition;
@@ -50,6 +62,7 @@ public class ConsumerRecord<K, V> {
     private final K key;
     private final V value;
     private final Optional<Integer> leaderEpoch;
+    private final Optional<Short> deliveryCount;
 
     /**
      * Creates a record to be received from a specified topic and partition (provided for
@@ -72,7 +85,7 @@ public class ConsumerRecord<K, V> {
     }
 
     /**
-     * Creates a record to be received from a specified topic and partition
+     * Creates a record to be received from a specified topic and partition.
      *
      * @param topic The topic this record is received from
      * @param partition The partition of the topic this record is received from
@@ -97,6 +110,38 @@ public class ConsumerRecord<K, V> {
                           V value,
                           Headers headers,
                           Optional<Integer> leaderEpoch) {
+        this(topic, partition, offset, timestamp, timestampType, serializedKeySize, serializedValueSize, key, value,
+            headers, leaderEpoch, Optional.empty());
+    }
+
+    /**
+     * Creates a record to be received from a specified topic and partition.
+     *
+     * @param topic The topic this record is received from
+     * @param partition The partition of the topic this record is received from
+     * @param offset The offset of this record in the corresponding Kafka partition
+     * @param timestamp The timestamp of the record.
+     * @param timestampType The timestamp type
+     * @param serializedKeySize The length of the serialized key
+     * @param serializedValueSize The length of the serialized value
+     * @param key The key of the record, if one exists (null is allowed)
+     * @param value The record contents
+     * @param headers The headers of the record
+     * @param leaderEpoch Optional leader epoch of the record (may be empty for legacy record formats)
+     * @param deliveryCount Optional delivery count of the record (may be empty when deliveries not counted)
+     */
+    public ConsumerRecord(String topic,
+                          int partition,
+                          long offset,
+                          long timestamp,
+                          TimestampType timestampType,
+                          int serializedKeySize,
+                          int serializedValueSize,
+                          K key,
+                          V value,
+                          Headers headers,
+                          Optional<Integer> leaderEpoch,
+                          Optional<Short> deliveryCount) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
         if (headers == null)
@@ -113,106 +158,7 @@ public class ConsumerRecord<K, V> {
         this.value = value;
         this.headers = headers;
         this.leaderEpoch = leaderEpoch;
-    }
-
-    /**
-     * Creates a record to be received from a specified topic and partition (provided for
-     * compatibility with Kafka 0.10 before the message format supported headers).
-     *
-     * @param topic The topic this record is received from
-     * @param partition The partition of the topic this record is received from
-     * @param offset The offset of this record in the corresponding Kafka partition
-     * @param timestamp The timestamp of the record.
-     * @param timestampType The timestamp type
-     * @param serializedKeySize The length of the serialized key
-     * @param serializedValueSize The length of the serialized value
-     * @param key The key of the record, if one exists (null is allowed)
-     * @param value The record contents
-     *
-     * @deprecated use one of the constructors without a `checksum` parameter. This constructor will be removed in
-     *             Apache Kafka 4.0 (deprecated since 3.0).
-     */
-    @Deprecated
-    public ConsumerRecord(String topic,
-                          int partition,
-                          long offset,
-                          long timestamp,
-                          TimestampType timestampType,
-                          long checksum,
-                          int serializedKeySize,
-                          int serializedValueSize,
-                          K key,
-                          V value) {
-        this(topic, partition, offset, timestamp, timestampType, serializedKeySize, serializedValueSize,
-                key, value, new RecordHeaders(), Optional.empty());
-    }
-
-    /**
-     * Creates a record to be received from a specified topic and partition
-     *
-     * @param topic The topic this record is received from
-     * @param partition The partition of the topic this record is received from
-     * @param offset The offset of this record in the corresponding Kafka partition
-     * @param timestamp The timestamp of the record.
-     * @param timestampType The timestamp type
-     * @param serializedKeySize The length of the serialized key
-     * @param serializedValueSize The length of the serialized value
-     * @param key The key of the record, if one exists (null is allowed)
-     * @param value The record contents
-     * @param headers The headers of the record.
-     *
-     * @deprecated use one of the constructors without a `checksum` parameter. This constructor will be removed in
-     *             Apache Kafka 4.0 (deprecated since 3.0).
-     */
-    @Deprecated
-    public ConsumerRecord(String topic,
-                          int partition,
-                          long offset,
-                          long timestamp,
-                          TimestampType timestampType,
-                          Long checksum,
-                          int serializedKeySize,
-                          int serializedValueSize,
-                          K key,
-                          V value,
-                          Headers headers) {
-        this(topic, partition, offset, timestamp, timestampType, serializedKeySize, serializedValueSize,
-                key, value, headers, Optional.empty());
-    }
-
-    /**
-     * Creates a record to be received from a specified topic and partition
-     *
-     * @param topic The topic this record is received from
-     * @param partition The partition of the topic this record is received from
-     * @param offset The offset of this record in the corresponding Kafka partition
-     * @param timestamp The timestamp of the record.
-     * @param timestampType The timestamp type
-     * @param serializedKeySize The length of the serialized key
-     * @param serializedValueSize The length of the serialized value
-     * @param key The key of the record, if one exists (null is allowed)
-     * @param value The record contents
-     * @param headers The headers of the record
-     * @param leaderEpoch Optional leader epoch of the record (may be empty for legacy record formats)
-     *
-     * @deprecated use one of the constructors without a `checksum` parameter. This constructor will be removed in
-     *             Apache Kafka 4.0 (deprecated since 3.0).
-     */
-    @Deprecated
-    public ConsumerRecord(String topic,
-                          int partition,
-                          long offset,
-                          long timestamp,
-                          TimestampType timestampType,
-                          Long checksum,
-                          int serializedKeySize,
-                          int serializedValueSize,
-                          K key,
-                          V value,
-                          Headers headers,
-                          Optional<Integer> leaderEpoch) {
-        this(topic, partition, offset, timestamp, timestampType, serializedKeySize, serializedValueSize, key, value, headers,
-            leaderEpoch);
+        this.deliveryCount = deliveryCount;
     }
 
     /**
@@ -258,7 +204,7 @@ public class ConsumerRecord<K, V> {
     }
 
     /**
-     * The timestamp of this record
+     * The timestamp of this record, in milliseconds elapsed since unix epoch.
      */
     public long timestamp() {
         return timestamp;
@@ -296,6 +242,16 @@ public class ConsumerRecord<K, V> {
         return leaderEpoch;
     }
 
+    /**
+     * Get the delivery count for the record if available. Deliveries
+     * are counted for records delivered by share groups.
+     *
+     * @return the delivery count or empty when deliveries not counted
+     */
+    public Optional<Short> deliveryCount() {
+        return deliveryCount;
+    }
+
     @Override
     public String toString() {
         return "ConsumerRecord(topic = " + topic
@@ -303,6 +259,7 @@ public class ConsumerRecord<K, V> {
                + ", leaderEpoch = " + leaderEpoch.orElse(null)
                + ", offset = " + offset
                + ", " + timestampType + " = " + timestamp
+               + ", deliveryCount = " + deliveryCount.orElse(null)
                + ", serialized key size = "  + serializedKeySize
                + ", serialized value size = " + serializedValueSize
                + ", headers = " + headers

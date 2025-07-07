@@ -49,9 +49,9 @@ public interface StreamsMetadata {
     Set<TopicPartition> topicPartitions();
 
     /**
-     * Changelog topic partitions for the state stores the standby tasks of the Streams client replicates.
+     * Source topic partitions for which the instance acts as standby.
      *
-     * @return set of changelog topic partitions of the standby tasks
+     * @return source topic partitions of the standby tasks
      */
     Set<TopicPartition> standbyTopicPartitions();
 
@@ -65,7 +65,7 @@ public interface StreamsMetadata {
     /**
      * Host where the Streams client runs. 
      *
-     * This method is equivalent to {@code StreamsMetadata.hostInfo().host();}
+     * <p>This method is equivalent to {@code StreamsMetadata.hostInfo().host();}
      *
      * @return the host where the Streams client runs
      */
@@ -74,7 +74,7 @@ public interface StreamsMetadata {
     /**
      * Port on which the Streams client listens.
      * 
-     * This method is equivalent to {@code StreamsMetadata.hostInfo().port();}
+     * <p>This method is equivalent to {@code StreamsMetadata.hostInfo().port();}
      *
      * @return the port on which Streams client listens
      */

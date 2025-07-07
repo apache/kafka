@@ -27,6 +27,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+
 import org.slf4j.Logger;
 
 import java.util.Collection;
@@ -37,10 +38,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
-
-import static java.util.Collections.emptyMap;
 
 /**
  * Single-threaded executor class for the active tasks assigned to this thread.
@@ -88,7 +86,7 @@ public class TaskExecutor {
         return totalProcessed;
     }
 
-    private long processTask(final Task task, final int maxNumRecords, final long begin, final Time time) {
+    private int processTask(final Task task, final int maxNumRecords, final long begin, final Time time) {
         int processed = 0;
         long now = begin;
 
@@ -144,7 +142,7 @@ public class TaskExecutor {
         for (final Task task : tasksToCommit) {
             // we need to call commitNeeded first since we need to update committable offsets
             if (task.commitNeeded()) {
-                final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit(true);
                 if (!offsetAndMetadata.isEmpty()) {
                     consumedOffsetsAndMetadata.put(task, offsetAndMetadata);
                 }
@@ -177,30 +175,13 @@ public class TaskExecutor {
 
         final Set<TaskId> corruptedTasks = new HashSet<>();
 
-        if (executionMetadata.processingMode() == EXACTLY_ONCE_ALPHA) {
-            for (final Task task : taskManager.activeTaskIterable()) {
-                final Map<TopicPartition, OffsetAndMetadata> taskOffsetsToCommit = offsetsPerTask.getOrDefault(task, emptyMap());
-                if (!taskOffsetsToCommit.isEmpty() || taskManager.streamsProducerForTask(task.id()).transactionInFlight()) {
-                    try {
-                        taskManager.streamsProducerForTask(task.id())
-                            .commitTransaction(taskOffsetsToCommit, taskManager.consumerGroupMetadata());
-                        updateTaskCommitMetadata(taskOffsetsToCommit);
-                    } catch (final TimeoutException timeoutException) {
-                        log.error(
-                            String.format("Committing task %s failed.", task.id()),
-                            timeoutException
-                        );
-                        corruptedTasks.add(task.id());
-                    }
-                }
-            }
-        } else if (executionMetadata.processingMode() == EXACTLY_ONCE_V2) {
-            if (!offsetsPerTask.isEmpty() || taskManager.threadProducer().transactionInFlight()) {
+        if (executionMetadata.processingMode() == EXACTLY_ONCE_V2) {
+            if (!offsetsPerTask.isEmpty() || taskManager.streamsProducer().transactionInFlight()) {
                 final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
                     .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
                 try {
-                    taskManager.threadProducer().commitTransaction(allOffsets, taskManager.consumerGroupMetadata());
+                    taskManager.streamsProducer().commitTransaction(allOffsets, taskManager.consumerGroupMetadata());
                     updateTaskCommitMetadata(allOffsets);
                 } catch (final TimeoutException timeoutException) {
                     log.error(

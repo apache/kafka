@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -51,7 +52,7 @@ public class EagerAssignor implements ConnectAssignor {
     }
 
     @Override
-    public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol,
+    public Map<String, ByteBuffer> performAssignment(String leaderId, ConnectProtocolCompatibility protocol,
                                                      List<JoinGroupResponseMember> allMemberMetadata,
                                                      WorkerCoordinator coordinator) {
         log.debug("Performing task assignment");

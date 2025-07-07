@@ -26,17 +26,20 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.mutable.BoundedList;
+import org.apache.kafka.server.mutable.BoundedListTooLongException;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
+
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,40 +47,56 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
+
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 /**
  * The AclControlManager manages any ACLs that are stored in the __cluster_metadata topic.
  * If the ACLs are stored externally (such as in ZooKeeper) then there will be nothing for
- * this manager to do, and the authorizer field will always be Optional.empty.
- *
- * Because the Authorizer is being concurrently used by other threads, we need to be
- * careful about snapshots. We don't want the Authorizer to act based on partial state
- * during the loading process. Therefore, unlike most of the other managers,
- * AclControlManager needs to receive callbacks when we start loading a snapshot and when
- * we finish. The prepareForSnapshotLoad callback clears the authorizer field, preventing
- * any changes from affecting the authorizer until completeSnapshotLoad is called.
- * Note that the Authorizer's start() method will block until the first snapshot load has
- * completed, which is another reason the prepare / complete callbacks are needed.
+ * this manager to do.
  */
 public class AclControlManager {
+    static class Builder {
+        private LogContext logContext = null;
+        private SnapshotRegistry snapshotRegistry = null;
+
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        AclControlManager build() {
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            return new AclControlManager(logContext, snapshotRegistry);
+        }
+    }
+
+    private final Logger log;
     private final TimelineHashMap<Uuid, StandardAcl> idToAcl;
     private final TimelineHashSet<StandardAcl> existingAcls;
-    private final Optional<ClusterMetadataAuthorizer> authorizer;
 
-    AclControlManager(SnapshotRegistry snapshotRegistry,
-                      Optional<ClusterMetadataAuthorizer> authorizer) {
+    private AclControlManager(
+        LogContext logContext,
+        SnapshotRegistry snapshotRegistry
+    ) {
+        this.log = logContext.logger(AclControlManager.class);
         this.idToAcl = new TimelineHashMap<>(snapshotRegistry, 0);
         this.existingAcls = new TimelineHashSet<>(snapshotRegistry, 0);
-        this.authorizer = authorizer;
     }
 
     ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls) {
+        Set<StandardAcl> aclsToCreate = new HashSet<>(acls.size());
         List<AclCreateResult> results = new ArrayList<>(acls.size());
-        List<ApiMessageAndVersion> records = new ArrayList<>(acls.size());
+        List<ApiMessageAndVersion> records =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (AclBinding acl : acls) {
             try {
                 validateNewAcl(acl);
@@ -88,11 +107,18 @@ public class AclControlManager {
                 continue;
             }
             StandardAcl standardAcl = StandardAcl.fromAclBinding(acl);
-            if (existingAcls.add(standardAcl)) {
-                StandardAclWithId standardAclWithId = new StandardAclWithId(newAclId(), standardAcl);
-                idToAcl.put(standardAclWithId.id(), standardAcl);
-                records.add(new ApiMessageAndVersion(standardAclWithId.toRecord(), (short) 0));
+            if (!existingAcls.contains(standardAcl)) {
+                if (aclsToCreate.add(standardAcl)) {
+                    StandardAclWithId standardAclWithId = new StandardAclWithId(newAclId(), standardAcl);
+                    records.add(new ApiMessageAndVersion(standardAclWithId.toRecord(), (short) 0));
+                } else {
+                    log.debug("Ignoring duplicate ACL from request: {}", standardAcl);
+                }
+            } else {
+                log.debug("Not creating ACL since it already exists: {}", standardAcl);
             }
+
+
             results.add(AclCreateResult.SUCCESS);
         }
         return new ControllerResult<>(records, results, true);
@@ -142,6 +168,12 @@ public class AclControlManager {
         if (binding.pattern().name() == null || binding.pattern().name().isEmpty()) {
             throw new InvalidRequestException("Resource name should not be empty");
         }
+        int colonIndex = binding.entry().principal().indexOf(":");
+        if (colonIndex == -1) {
+            throw new InvalidRequestException("Could not parse principal from `" +
+                binding.entry().principal() + "` " + "(no colon is present separating the " +
+                "principal type from the principal name)");
+        }
     }
 
     ControllerResult<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> filters) {
@@ -152,11 +184,15 @@ public class AclControlManager {
                 validateFilter(filter);
                 AclDeleteResult result = deleteAclsForFilter(filter, records);
                 results.add(result);
+            } catch (BoundedListTooLongException e) {
+                // we do not return partial results here because the fact that only a portion of the deletions
+                // succeeded can be easily missed due to response size. instead fail the entire response
+                throw new InvalidRequestException(e.getMessage(), e);
             } catch (Throwable e) {
                 results.add(new AclDeleteResult(ApiError.fromThrowable(e).exception()));
             }
         }
-        return ControllerResult.atomicOf(records.stream().collect(Collectors.toList()), results);
+        return ControllerResult.atomicOf(new ArrayList<>(records), results);
     }
 
     AclDeleteResult deleteAclsForFilter(AclBindingFilter filter,
@@ -167,6 +203,11 @@ public class AclControlManager {
             StandardAcl acl = entry.getValue();
             AclBinding binding = acl.toBinding();
             if (filter.matches(binding)) {
+                // check size limitation first before adding additional records
+                if (records.size() >= MAX_RECORDS_PER_USER_OP) {
+                    throw new BoundedListTooLongException("Cannot remove more than " +
+                        MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.");
+                }
                 deleted.add(new AclBindingDeleteResult(binding));
                 records.add(new ApiMessageAndVersion(
                     new RemoveAccessControlEntryRecord().setId(id), (short) 0));
@@ -184,20 +225,15 @@ public class AclControlManager {
         }
     }
 
-    public void replay(AccessControlEntryRecord record,
-                       Optional<OffsetAndEpoch> snapshotId) {
+    public void replay(AccessControlEntryRecord record) {
         StandardAclWithId aclWithId = StandardAclWithId.fromRecord(record);
         idToAcl.put(aclWithId.id(), aclWithId.acl());
         existingAcls.add(aclWithId.acl());
-        if (!snapshotId.isPresent()) {
-            authorizer.ifPresent(a -> {
-                a.addAcl(aclWithId.id(), aclWithId.acl());
-            });
-        }
+        log.info("Replayed AccessControlEntryRecord for {}, setting {}", record.id(),
+                aclWithId.acl());
     }
 
-    public void replay(RemoveAccessControlEntryRecord record,
-                       Optional<OffsetAndEpoch> snapshotId) {
+    public void replay(RemoveAccessControlEntryRecord record) {
         StandardAcl acl = idToAcl.remove(record.id());
         if (acl == null) {
             throw new RuntimeException("Unable to replay " + record + ": no acl with " +
@@ -207,11 +243,7 @@ public class AclControlManager {
             throw new RuntimeException("Unable to replay " + record + " for " + acl +
                 ": acl not found " + "in existingAcls.");
         }
-        if (!snapshotId.isPresent()) {
-            authorizer.ifPresent(a -> {
-                a.removeAcl(record.id());
-            });
-        }
+        log.info("Replayed RemoveAccessControlEntryRecord for {}, removing {}", record.id(), acl);
     }
 
     Map<Uuid, StandardAcl> idToAcl() {

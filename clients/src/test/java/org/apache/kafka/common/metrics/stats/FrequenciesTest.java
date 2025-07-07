@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -25,11 +24,11 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,7 +45,7 @@ public class FrequenciesTest {
     public void setup() {
         config = new MetricConfig().eventWindow(50).samples(2);
         time = new MockTime();
-        metrics = new Metrics(config, Arrays.asList(new JmxReporter()), time, true);
+        metrics = new Metrics(config, Collections.singletonList(new JmxReporter()), time, true);
     }
 
     @AfterEach
@@ -73,14 +72,14 @@ public class FrequenciesTest {
     }
 
     @Test
-    public void testBooleanFrequencies() {
-        MetricName metricTrue = name("true");
-        MetricName metricFalse = name("false");
+    public void testBooleanFrequenciesStrategy1() {
+        MetricName metricTrue = metricName("true");
+        MetricName metricFalse = metricName("false");
         Frequencies frequencies = Frequencies.forBooleanValues(metricFalse, metricTrue);
         final NamedMeasurable falseMetric = frequencies.stats().get(0);
         final NamedMeasurable trueMetric = frequencies.stats().get(1);
 
-        // Record 2 windows worth of values
+        // Record 25 "false" and 75 "true"
         for (int i = 0; i != 25; ++i) {
             frequencies.record(config, 0.0, time.milliseconds());
         }
@@ -89,8 +88,17 @@ public class FrequenciesTest {
         }
         assertEquals(0.25, falseMetric.stat().measure(config, time.milliseconds()), DELTA);
         assertEquals(0.75, trueMetric.stat().measure(config, time.milliseconds()), DELTA);
+    }
 
-        // Record 2 more windows worth of values
+    @Test
+    public void testBooleanFrequenciesStrategy2() {
+        MetricName metricTrue = metricName("true");
+        MetricName metricFalse = metricName("false");
+        Frequencies frequencies = Frequencies.forBooleanValues(metricFalse, metricTrue);
+        final NamedMeasurable falseMetric = frequencies.stats().get(0);
+        final NamedMeasurable trueMetric = frequencies.stats().get(1);
+
+        // Record 40 "false" and 60 "true"
         for (int i = 0; i != 40; ++i) {
             frequencies.record(config, 0.0, time.milliseconds());
         }
@@ -102,58 +110,69 @@ public class FrequenciesTest {
     }
 
     @Test
-    public void testUseWithMetrics() {
-        MetricName name1 = name("1");
-        MetricName name2 = name("2");
-        MetricName name3 = name("3");
-        MetricName name4 = name("4");
-        Frequencies frequencies = new Frequencies(4, 1.0, 4.0,
-                                                  new Frequency(name1, 1.0),
-                                                  new Frequency(name2, 2.0),
-                                                  new Frequency(name3, 3.0),
-                                                  new Frequency(name4, 4.0));
+    public void testWithMetricsStrategy1() {
+        Frequencies frequencies = new Frequencies(4, 1.0, 4.0, freq("1", 1.0),
+                freq("2", 2.0), freq("3", 3.0), freq("4", 4.0));
         Sensor sensor = metrics.sensor("test", config);
         sensor.add(frequencies);
-        Metric metric1 = this.metrics.metrics().get(name1);
-        Metric metric2 = this.metrics.metrics().get(name2);
-        Metric metric3 = this.metrics.metrics().get(name3);
-        Metric metric4 = this.metrics.metrics().get(name4);
 
-        // Record 2 windows worth of values
-        for (int i = 0; i != 100; ++i) {
+        // Record 100 events uniformly between all buckets
+        for (int i = 0; i < 100; ++i) {
             frequencies.record(config, i % 4 + 1, time.milliseconds());
         }
-        assertEquals(0.25, (Double) metric1.metricValue(), DELTA);
-        assertEquals(0.25, (Double) metric2.metricValue(), DELTA);
-        assertEquals(0.25, (Double) metric3.metricValue(), DELTA);
-        assertEquals(0.25, (Double) metric4.metricValue(), DELTA);
+        assertEquals(0.25, metricValue("1"), DELTA);
+        assertEquals(0.25, metricValue("2"), DELTA);
+        assertEquals(0.25, metricValue("3"), DELTA);
+        assertEquals(0.25, metricValue("4"), DELTA);
+    }
 
-        // Record 2 windows worth of values
-        for (int i = 0; i != 100; ++i) {
+    @Test
+    public void testWithMetricsStrategy2() {
+        Frequencies frequencies = new Frequencies(4, 1.0, 4.0, freq("1", 1.0),
+                freq("2", 2.0), freq("3", 3.0), freq("4", 4.0));
+        Sensor sensor = metrics.sensor("test", config);
+        sensor.add(frequencies);
+
+        // Record 100 events half-half between 1st and 2nd buckets
+        for (int i = 0; i < 100; ++i) {
             frequencies.record(config, i % 2 + 1, time.milliseconds());
         }
-        assertEquals(0.50, (Double) metric1.metricValue(), DELTA);
-        assertEquals(0.50, (Double) metric2.metricValue(), DELTA);
-        assertEquals(0.00, (Double) metric3.metricValue(), DELTA);
-        assertEquals(0.00, (Double) metric4.metricValue(), DELTA);
+        assertEquals(0.50, metricValue("1"), DELTA);
+        assertEquals(0.50, metricValue("2"), DELTA);
+        assertEquals(0.00, metricValue("3"), DELTA);
+        assertEquals(0.00, metricValue("4"), DELTA);
+    }
 
-        // Record 1 window worth of values to overlap with the last window
-        // that is half 1.0 and half 2.0
-        for (int i = 0; i != 50; ++i) {
+    @Test
+    public void testWithMetricsStrategy3() {
+        Frequencies frequencies = new Frequencies(4, 1.0, 4.0, freq("1", 1.0),
+                freq("2", 2.0), freq("3", 3.0), freq("4", 4.0));
+        Sensor sensor = metrics.sensor("test", config);
+        sensor.add(frequencies);
+
+        // Record 50 events half-half between 1st and 2nd buckets
+        for (int i = 0; i < 50; ++i) {
+            frequencies.record(config, i % 2 + 1, time.milliseconds());
+        }
+        // Record 50 events to 4th bucket
+        for (int i = 0; i < 50; ++i) {
             frequencies.record(config, 4.0, time.milliseconds());
         }
-        assertEquals(0.25, (Double) metric1.metricValue(), DELTA);
-        assertEquals(0.25, (Double) metric2.metricValue(), DELTA);
-        assertEquals(0.00, (Double) metric3.metricValue(), DELTA);
-        assertEquals(0.50, (Double) metric4.metricValue(), DELTA);
+        assertEquals(0.25, metricValue("1"), DELTA);
+        assertEquals(0.25, metricValue("2"), DELTA);
+        assertEquals(0.00, metricValue("3"), DELTA);
+        assertEquals(0.50, metricValue("4"), DELTA);
     }
 
-    protected MetricName name(String metricName) {
-        return new MetricName(metricName, "group-id", "desc", Collections.emptyMap());
+    private MetricName metricName(String name) {
+        return new MetricName(name, "group-id", "desc", Collections.emptyMap());
     }
 
-    protected Frequency freq(String name, double value) {
-        return new Frequency(name(name), value);
+    private Frequency freq(String name, double value) {
+        return new Frequency(metricName(name), value);
     }
 
+    private double metricValue(String name) {
+        return (double) metrics.metrics().get(metricName(name)).metricValue();
+    }
 }

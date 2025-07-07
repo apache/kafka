@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from kafkatest.services.kafka import config_property, KafkaService
-from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.services.kafka import config_property, KafkaService, quorum
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.delegation_tokens import DelegationTokens
 from kafkatest.services.verifiable_producer import VerifiableProducer
@@ -34,8 +34,7 @@ class DelegationTokenTest(Test):
 
         self.test_context = test_context
         self.topic = "topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, zk_chroot="/kafka",
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=None,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}},
                                   server_prop_overrides=[
                                       [config_property.DELEGATION_TOKEN_MAX_LIFETIME_MS, "604800000"],
@@ -64,10 +63,6 @@ client.id=console-consumer
         self.kafka.security_protocol = 'SASL_PLAINTEXT'
         self.kafka.client_sasl_mechanism = 'GSSAPI,SCRAM-SHA-256'
         self.kafka.interbroker_sasl_mechanism = 'GSSAPI'
-
-
-    def setUp(self):
-        self.zk.start()
 
     def tearDown(self):
         self.producer.nodes[0].account.remove(self.jaas_deleg_conf_path)
@@ -111,7 +106,8 @@ client.id=console-consumer
         self.delegation_tokens.renew_delegation_token(dt["hmac"], new_expirydate_ms)
 
     @cluster(num_nodes=5)
-    def test_delegation_token_lifecycle(self):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_delegation_token_lifecycle(self, metadata_quorum):
         self.kafka.start()
         self.delegation_tokens = DelegationTokens(self.kafka, self.test_context)
 

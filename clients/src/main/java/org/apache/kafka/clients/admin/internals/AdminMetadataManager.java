@@ -21,10 +21,14 @@ import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -53,6 +57,11 @@ public class AdminMetadataManager {
     private final long metadataExpireMs;
 
     /**
+     * True if we are communicating directly with the controller quorum as specified by KIP-919.
+     */
+    private final boolean usingBootstrapControllers;
+
+    /**
      * Used to update the NetworkClient metadata.
      */
     private final AdminMetadataUpdater updater;
@@ -74,15 +83,28 @@ public class AdminMetadataManager {
     private long lastMetadataFetchAttemptMs = 0;
 
     /**
+     * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
+     * metadata has not been requested. This is the start time based on which rebootstrap is
+     * triggered if metadata is not obtained for the configured rebootstrap trigger interval.
+     * Set to Optional.of(0L) to force rebootstrap immediately.
+     */
+    private Optional<Long> metadataAttemptStartMs = Optional.empty();
+
+
+    /**
      * The current cluster information.
      */
     private Cluster cluster = Cluster.empty();
 
     /**
-     * If we got an authorization exception when we last attempted to fetch
-     * metadata, this is it; null, otherwise.
+     * If this is non-null, it is a fatal exception that will terminate all attempts at communication.
      */
-    private AuthenticationException authException = null;
+    private ApiException fatalException = null;
+
+    /**
+     * The cluster with which the metadata was bootstrapped.
+     */
+    private Cluster bootstrapCluster;
 
     public class AdminMetadataUpdater implements MetadataUpdater {
         @Override
@@ -117,6 +139,16 @@ public class AdminMetadataManager {
         }
 
         @Override
+        public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
+            return AdminMetadataManager.this.needsRebootstrap(now, rebootstrapTriggerMs);
+        }
+
+        @Override
+        public void rebootstrap(long now) {
+            AdminMetadataManager.this.rebootstrap(now);
+        }
+
+        @Override
         public void close() {
         }
     }
@@ -130,11 +162,21 @@ public class AdminMetadataManager {
         UPDATE_PENDING
     }
 
-    public AdminMetadataManager(LogContext logContext, long refreshBackoffMs, long metadataExpireMs) {
+    public AdminMetadataManager(
+        LogContext logContext,
+        long refreshBackoffMs,
+        long metadataExpireMs,
+        boolean usingBootstrapControllers
+    ) {
         this.log = logContext.logger(AdminMetadataManager.class);
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
+        this.usingBootstrapControllers = usingBootstrapControllers;
         this.updater = new AdminMetadataUpdater();
+    }
+
+    public boolean usingBootstrapControllers() {
+        return usingBootstrapControllers;
     }
 
     public AdminMetadataUpdater updater() {
@@ -142,9 +184,9 @@ public class AdminMetadataManager {
     }
 
     public boolean isReady() {
-        if (authException != null) {
-            log.debug("Metadata is not usable: failed to get metadata.", authException);
-            throw authException;
+        if (fatalException != null) {
+            log.debug("Metadata is not usable: failed to get metadata.", fatalException);
+            throw fatalException;
         }
         if (cluster.nodes().isEmpty()) {
             log.trace("Metadata is not ready: bootstrap nodes have not been " +
@@ -216,21 +258,39 @@ public class AdminMetadataManager {
         return Math.max(0, refreshBackoffMs - timeSinceAttempt);
     }
 
+    public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
+        return metadataAttemptStartMs.filter(startMs -> now - startMs > rebootstrapTriggerMs).isPresent();
+    }
+
     /**
      * Transition into the UPDATE_PENDING state.  Updates lastMetadataFetchAttemptMs.
      */
     public void transitionToUpdatePending(long now) {
         this.state = State.UPDATE_PENDING;
         this.lastMetadataFetchAttemptMs = now;
+        if (metadataAttemptStartMs.isEmpty())
+            metadataAttemptStartMs = Optional.of(now);
     }
 
     public void updateFailed(Throwable exception) {
         // We depend on pending calls to request another metadata update
         this.state = State.QUIESCENT;
 
-        if (exception instanceof AuthenticationException) {
-            log.warn("Metadata update failed due to authentication error", exception);
-            this.authException = (AuthenticationException) exception;
+        if (RequestUtils.isFatalException(exception)) {
+            log.warn("Fatal error during metadata update", exception);
+            // avoid unchecked/unconfirmed cast to ApiException
+            if (exception instanceof  ApiException) {
+                this.fatalException = (ApiException) exception;
+            }
+
+            if (exception instanceof UnsupportedVersionException) {
+                if (usingBootstrapControllers) {
+                    log.warn("The remote node is not a CONTROLLER that supports the KIP-919 " +
+                        "DESCRIBE_CLUSTER api.", exception);
+                } else {
+                    log.warn("The remote node is not a BROKER that supports the METADATA api.", exception);
+                }
+            }
         } else {
             log.info("Metadata update failed", exception);
         }
@@ -243,16 +303,31 @@ public class AdminMetadataManager {
     public void update(Cluster cluster, long now) {
         if (cluster.isBootstrapConfigured()) {
             log.debug("Setting bootstrap cluster metadata {}.", cluster);
+            bootstrapCluster = cluster;
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
             this.lastMetadataUpdateMs = now;
         }
 
         this.state = State.QUIESCENT;
-        this.authException = null;
+        this.fatalException = null;
+        this.metadataAttemptStartMs = Optional.empty();
 
         if (!cluster.nodes().isEmpty()) {
             this.cluster = cluster;
         }
+    }
+
+    public void initiateRebootstrap() {
+        this.metadataAttemptStartMs = Optional.of(0L);
+    }
+
+    /**
+     * Rebootstrap metadata with the cluster previously used for bootstrapping.
+     */
+    public void rebootstrap(long now) {
+        log.info("Rebootstrapping with {}", this.bootstrapCluster);
+        update(bootstrapCluster, now);
+        this.metadataAttemptStartMs = Optional.of(now);
     }
 }

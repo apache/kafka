@@ -17,24 +17,20 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.List;
-
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
+import java.util.List;
 
 /**
  * Options for {@link Admin#describeDelegationToken(DescribeDelegationTokenOptions)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeDelegationTokenOptions extends AbstractOptions<DescribeDelegationTokenOptions> {
     private List<KafkaPrincipal> owners;
 
     /**
-     * if owners is null, all the user owned tokens and tokens where user have Describe permission
+     * If owners is null, all the user owned tokens and tokens where user have Describe permission
      * will be returned.
-     * @param owners
+     * @param owners The owners that we want to describe delegation tokens for
      * @return this instance
      */
     public DescribeDelegationTokenOptions owners(List<KafkaPrincipal> owners) {

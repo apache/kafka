@@ -18,18 +18,20 @@ package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_DEFAULT;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RestServerConfigTest {
 
@@ -68,13 +70,11 @@ public class RestServerConfigTest {
 
         props.put(RestServerConfig.LISTENERS_CONFIG, "http://a.b:9999");
         config = RestServerConfig.forPublic(null, props);
-        assertEquals(Arrays.asList("http://a.b:9999"), config.listeners());
+        assertEquals(Collections.singletonList("http://a.b:9999"), config.listeners());
 
         props.put(RestServerConfig.LISTENERS_CONFIG, "http://a.b:9999, https://a.b:7812");
         config = RestServerConfig.forPublic(null, props);
         assertEquals(Arrays.asList("http://a.b:9999", "https://a.b:7812"), config.listeners());
-
-        config = RestServerConfig.forPublic(null, props);
     }
 
     @Test
@@ -105,7 +105,7 @@ public class RestServerConfigTest {
 
         // no value set for "admin.listeners"
         RestServerConfig config = RestServerConfig.forPublic(null, props);
-        assertNull("Default value should be null.", config.adminListeners());
+        assertNull(config.adminListeners(), "Default value should be null.");
 
         props.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "");
         config = RestServerConfig.forPublic(null, props);

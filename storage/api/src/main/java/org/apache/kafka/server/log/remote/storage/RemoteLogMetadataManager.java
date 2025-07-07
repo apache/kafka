@@ -18,7 +18,6 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.io.Closeable;
 import java.util.Iterator;
@@ -36,21 +35,23 @@ import java.util.concurrent.CompletableFuture;
  * remote.log.metadata.manager.class.name is not configured.
  * </p>
  * <p>
- * <code>remote.log.metadata.manager.class.path</code> property is about the class path of the RemoteLogStorageManager
- * implementation. If specified, the RemoteLogStorageManager implementation and its dependent libraries will be loaded
+ * <code>remote.log.metadata.manager.class.path</code> property is about the class path of the RemoteLogMetadataManager
+ * implementation. If specified, the RemoteLogMetadataManager implementation and its dependent libraries will be loaded
  * by a dedicated classloader which searches this class path before the Kafka broker class path. The syntax of this
  * parameter is same with the standard Java class path string.
  * </p>
  * <p>
  * <code>remote.log.metadata.manager.listener.name</code> property is about listener name of the local broker to which
- * it should get connected if needed by RemoteLogMetadataManager implementation. When this is configured all other
- * required properties can be passed as properties with prefix of 'remote.log.metadata.manager.listener.
+ * it should get connected if needed by RemoteLogMetadataManager implementation.
  * </p>
- * "cluster.id", "broker.id" and all other properties prefixed with "remote.log.metadata." are passed when
- * {@link #configure(Map)} is invoked on this instance.
+ * "cluster.id", "broker.id" and all other properties prefixed with the config: "remote.log.metadata.manager.impl.prefix"
+ * (default value is "rlmm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
  * <p>
+ *
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the manager to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>config</code> set to
+ * <code>remote.log.metadata.manager.class.name</code>, and <code>class</code> set to the RemoteLogMetadataManager class name.
  */
-@InterfaceStability.Evolving
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**
@@ -201,4 +202,44 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param partitions topic partitions that have been stopped.
      */
     void onStopPartitions(Set<TopicIdPartition> partitions);
+
+    /**
+     * Returns total size of the log for the given leader epoch in remote storage.
+     *
+     * @param topicIdPartition topic partition for which size needs to be calculated.
+     * @param leaderEpoch Size will only include segments belonging to this epoch.
+     * @return Total size of the log stored in remote storage in bytes.
+     */
+    long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException;
+
+    /**
+     * Returns the next segment metadata that contains the aborted transaction entries for the given topic partition, epoch and offset.
+     * <ul>
+     *     <li>The default implementation returns the segment metadata that matches the given epoch and offset
+     *     irrespective of the presence of the transaction index.</li>
+     *     <li>The custom implementation can optimize by returning the next segment metadata that contains the txn index
+     *     in the given epoch. If there are no segments with txn index in the given epoch, then return empty.</li>
+     * </ul>
+     * @param topicIdPartition topic partition to search for.
+     * @param epoch leader epoch for the given offset.
+     * @param offset offset
+     * @return The next segment metadata. The transaction index may or may not exist in the returned segment metadata
+     * which depends on the RLMM plugin implementation. The caller of this method handles for both the cases.
+     * @throws RemoteStorageException if there are any storage related errors occurred.
+     */
+    default Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
+                                                                       int epoch,
+                                                                       long offset) throws RemoteStorageException {
+        return remoteLogSegmentMetadata(topicIdPartition, epoch, offset);
+    }
+
+    /**
+     * Denotes whether the partition metadata is ready to serve.
+     *
+     * @param topicIdPartition topic partition
+     * @return True if the partition is ready to serve for remote storage operations.
+     */
+    default boolean isReady(TopicIdPartition topicIdPartition) {
+        return true;
+    }
 }

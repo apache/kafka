@@ -16,53 +16,61 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.mirror.rest.MirrorRestServer;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
-import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestClient;
-import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
-import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
-import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
+import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
+import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
+import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
-import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
-
 import org.apache.kafka.connect.util.SharedTopicAdmin;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.impl.Arguments;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.sourceforge.argparse4j.impl.Arguments;
-import net.sourceforge.argparse4j.inf.Namespace;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.ArgumentParsers;
-
-import java.io.UnsupportedEncodingException;
+import java.io.File;
+import java.net.InetAddress;
+import java.net.URI;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Arrays;
-import java.util.Properties;
 import java.util.stream.Collectors;
-import java.io.File;
+
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 
 /**
  *  Entry point for "MirrorMaker 2.0".
@@ -96,21 +104,17 @@ public class MirrorMaker {
 
     private static final long SHUTDOWN_TIMEOUT_SECONDS = 60L;
 
-    private static final List<Class<?>> CONNECTOR_CLASSES = Arrays.asList(
-        MirrorSourceConnector.class,
-        MirrorHeartbeatConnector.class,
-        MirrorCheckpointConnector.class);
- 
+    public static final List<Class<?>> CONNECTOR_CLASSES = List.of(MirrorSourceConnector.class, MirrorHeartbeatConnector.class, MirrorCheckpointConnector.class);
+
     private final Map<SourceAndTarget, Herder> herders = new HashMap<>();
     private CountDownLatch startLatch;
     private CountDownLatch stopLatch;
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
     private final ShutdownHook shutdownHook;
-    private final String advertisedUrl;
+    private final URI advertisedUrl;
     private final Time time;
     private final MirrorMakerConfig config;
     private final Set<String> clusters;
-    private final Set<SourceAndTarget> herderPairs;
     private final MirrorRestServer internalServer;
     private final RestClient restClient;
 
@@ -128,11 +132,11 @@ public class MirrorMaker {
             this.restClient = new RestClient(config);
             internalServer = new MirrorRestServer(config.originals(), restClient);
             internalServer.initializeServer();
-            this.advertisedUrl = internalServer.advertisedUrl().toString();
+            this.advertisedUrl = internalServer.advertisedUrl();
         } else {
             internalServer = null;
             restClient = null;
-            this.advertisedUrl = "NOTUSED";
+            this.advertisedUrl = URI.create("NOTUSED");
         }
         this.config = config;
         if (clusters != null && !clusters.isEmpty()) {
@@ -142,13 +146,13 @@ public class MirrorMaker {
             this.clusters = config.clusters();
         }
         log.info("Targeting clusters {}", this.clusters);
-        this.herderPairs = config.clusterPairs().stream()
+        Set<SourceAndTarget> herderPairs = config.clusterPairs().stream()
             .filter(x -> this.clusters.contains(x.target()))
             .collect(Collectors.toSet());
         if (herderPairs.isEmpty()) {
             throw new IllegalArgumentException("No source->target replication flows.");
         }
-        this.herderPairs.forEach(this::addHerder);
+        herderPairs.forEach(this::addHerder);
         shutdownHook = new ShutdownHook();
     }
 
@@ -191,8 +195,7 @@ public class MirrorMaker {
             log.info("Initializing internal REST resources");
             internalServer.initializeInternalResources(herders);
         }
-        log.info("Configuring connectors...");
-        herderPairs.forEach(this::configureConnectors);
+        log.info("Configuring connectors will happen once the worker joins the group as a leader");
         log.info("Kafka MirrorMaker started");
     }
 
@@ -222,44 +225,19 @@ public class MirrorMaker {
         }
     }
 
-    private void configureConnector(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
-        checkHerder(sourceAndTarget);
-        Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
-        herders.get(sourceAndTarget)
-                .putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
-                    if (e == null) {
-                        log.info("{} connector configured for {}.", connectorClass.getSimpleName(), sourceAndTarget);
-                    } else if (e instanceof NotLeaderException) {
-                        // No way to determine if the herder is a leader or not beforehand.
-                        log.info("This node is a follower for {}. Using existing connector configuration.", sourceAndTarget);
-                    } else {
-                        log.error("Failed to configure {} connector for {}", connectorClass.getSimpleName(), sourceAndTarget, e);
-                    }
-                });
-    }
-
     private void checkHerder(SourceAndTarget sourceAndTarget) {
         if (!herders.containsKey(sourceAndTarget)) {
             throw new IllegalArgumentException("No herder for " + sourceAndTarget.toString());
         }
     }
 
-    private void configureConnectors(SourceAndTarget sourceAndTarget) {
-        CONNECTOR_CLASSES.forEach(x -> configureConnector(sourceAndTarget, x));
-    }
-
     private void addHerder(SourceAndTarget sourceAndTarget) {
         log.info("creating herder for " + sourceAndTarget.toString());
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
-        List<String> restNamespace;
-        try {
-            String encodedSource = encodePath(sourceAndTarget.source());
-            String encodedTarget = encodePath(sourceAndTarget.target());
-            restNamespace = Arrays.asList(encodedSource, encodedTarget);
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("Unable to create encoded URL paths for source and target using UTF-8", e);
-        }
-        String workerId = sourceAndTarget.toString();
+        String encodedSource = encodePath(sourceAndTarget.source());
+        String encodedTarget = encodePath(sourceAndTarget.target());
+        List<String> restNamespace = List.of(encodedSource, encodedTarget);
+        String workerId = generateWorkerId(sourceAndTarget);
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
         DistributedConfig distributedConfig = new DistributedConfig(workerProps);
@@ -267,9 +245,12 @@ public class MirrorMaker {
         String clientIdBase = ConnectUtils.clientIdBase(distributedConfig);
         // Create the admin client to be shared by all backing stores for this herder
         Map<String, Object> adminProps = new HashMap<>(distributedConfig.originals());
+        adminProps.put(CLIENT_ID_CONFIG, clientIdBase + "shared-admin");
         ConnectUtils.addMetricsContextProperties(adminProps, distributedConfig, kafkaClusterId);
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase);
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase,
+                plugins.newInternalConverter(true, JsonConverter.class.getName(),
+                        Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(distributedConfig);
         ConnectorClientConfigOverridePolicy clientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
         clientConfigOverridePolicy.configure(config.originals());
@@ -287,15 +268,15 @@ public class MirrorMaker {
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
         // tracking the various shared admin objects in this class.
-        Herder herder = new DistributedHerder(distributedConfig, time, worker,
+        Herder herder = new MirrorHerder(config, sourceAndTarget, distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl, restClient, clientConfigOverridePolicy,
+                advertisedUrl.toString(), restClient, clientConfigOverridePolicy,
                 restNamespace, sharedAdmin);
         herders.put(sourceAndTarget, herder);
     }
 
-    private static String encodePath(String rawPath) throws UnsupportedEncodingException {
-        return URLEncoder.encode(rawPath, StandardCharsets.UTF_8.name())
+    private static String encodePath(String rawPath) {
+        return URLEncoder.encode(rawPath, StandardCharsets.UTF_8)
                 // Java's out-of-the-box URL encoder encodes spaces (' ') as pluses ('+'),
                 // and pluses as '%2B'
                 // But Jetty doesn't decode pluses at all and leaves them as-are in decoded
@@ -305,6 +286,18 @@ public class MirrorMaker {
                 // Jetty will reverse this transformation when evaluating the path parameters
                 // and will return decoded strings with all special characters as they were.
                 .replaceAll("\\+", "%20");
+    }
+
+    private String generateWorkerId(SourceAndTarget sourceAndTarget) {
+        if (config.enableInternalRest()) {
+            return advertisedUrl.getHost() + ":" + advertisedUrl.getPort() + "/" + sourceAndTarget.toString();
+        }
+        try {
+            //UUID to make sure it is unique even if multiple workers running on the same host
+            return InetAddress.getLocalHost().getCanonicalHostName() + "/" + sourceAndTarget.toString() + "/" + UUID.randomUUID();
+        } catch (UnknownHostException e) {
+            return sourceAndTarget.toString() + "/" + UUID.randomUUID();
+        }
     }
 
     private class ShutdownHook extends Thread {
@@ -320,6 +313,16 @@ public class MirrorMaker {
                 MirrorMaker.this.stop();
             }
         }
+    }
+
+    public ConnectorStateInfo connectorStatus(SourceAndTarget sourceAndTarget, String connector) {
+        checkHerder(sourceAndTarget);
+        return herders.get(sourceAndTarget).connectorStatus(connector);
+    }
+
+    public void taskConfigs(SourceAndTarget sourceAndTarget, String connector, Callback<List<TaskInfo>> cb) {
+        checkHerder(sourceAndTarget);
+        herders.get(sourceAndTarget).taskConfigs(connector, cb);
     }
 
     public static void main(String[] args) {

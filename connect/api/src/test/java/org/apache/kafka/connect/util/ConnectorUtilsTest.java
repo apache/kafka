@@ -33,7 +33,7 @@ public class ConnectorUtilsTest {
     public void testGroupPartitions() {
 
         List<List<Integer>> grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 1);
-        assertEquals(Arrays.asList(FIVE_ELEMENTS), grouped);
+        assertEquals(Collections.singletonList(FIVE_ELEMENTS), grouped);
 
         grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 2);
         assertEquals(Arrays.asList(Arrays.asList(1, 2, 3), Arrays.asList(4, 5)), grouped);
@@ -41,21 +41,21 @@ public class ConnectorUtilsTest {
         grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 3);
         assertEquals(Arrays.asList(Arrays.asList(1, 2),
                 Arrays.asList(3, 4),
-                Arrays.asList(5)), grouped);
+                Collections.singletonList(5)), grouped);
 
         grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 5);
-        assertEquals(Arrays.asList(Arrays.asList(1),
-                Arrays.asList(2),
-                Arrays.asList(3),
-                Arrays.asList(4),
-                Arrays.asList(5)), grouped);
+        assertEquals(Arrays.asList(Collections.singletonList(1),
+                Collections.singletonList(2),
+                Collections.singletonList(3),
+                Collections.singletonList(4),
+                Collections.singletonList(5)), grouped);
 
         grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 7);
-        assertEquals(Arrays.asList(Arrays.asList(1),
-                Arrays.asList(2),
-                Arrays.asList(3),
-                Arrays.asList(4),
-                Arrays.asList(5),
+        assertEquals(Arrays.asList(Collections.singletonList(1),
+                Collections.singletonList(2),
+                Collections.singletonList(3),
+                Collections.singletonList(4),
+                Collections.singletonList(5),
                 Collections.emptyList(),
                 Collections.emptyList()), grouped);
     }

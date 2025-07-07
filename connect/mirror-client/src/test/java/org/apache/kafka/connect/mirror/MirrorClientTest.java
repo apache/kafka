@@ -18,17 +18,17 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.Configurable;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.Arrays;
-
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MirrorClientTest {
 
@@ -97,8 +97,8 @@ public class MirrorClientTest {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
             "source1.heartbeats", "source2.source1.heartbeats", "source3.heartbeats"));
         Set<String> heartbeatTopics = client.heartbeatTopics();
-        assertEquals(heartbeatTopics, new HashSet<>(Arrays.asList("heartbeats", "source1.heartbeats",
-            "source2.source1.heartbeats", "source3.heartbeats")));
+        assertEquals(heartbeatTopics, Set.of("heartbeats", "source1.heartbeats",
+            "source2.source1.heartbeats", "source3.heartbeats"));
     }
 
     @Test
@@ -106,8 +106,8 @@ public class MirrorClientTest {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "checkpoints.internal",
             "source1.checkpoints.internal", "source2.source1.checkpoints.internal", "source3.checkpoints.internal"));
         Set<String> checkpointTopics = client.checkpointTopics();
-        assertEquals(new HashSet<>(Arrays.asList("source1.checkpoints.internal",
-            "source2.source1.checkpoints.internal", "source3.checkpoints.internal")), checkpointTopics);
+        assertEquals(Set.of("source1.checkpoints.internal",
+            "source2.source1.checkpoints.internal", "source3.checkpoints.internal"), checkpointTopics);
     }
 
     @Test

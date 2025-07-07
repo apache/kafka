@@ -26,13 +26,15 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.RecordQueue.UNKNOWN;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
+import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
 class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V, K, VOut> {
     private final KTableImpl<K, ?, V> parent;
@@ -59,7 +61,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
             return new KTableMaterializedValueGetterSupplier<>(queryableName);
         }
 
-        return new KTableValueGetterSupplier<K, VOut>() {
+        return new KTableValueGetterSupplier<>() {
             final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
 
             public KTableValueGetter<K, VOut> get() {
@@ -90,7 +92,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
 
     private class KTableTransformValuesProcessor extends ContextualProcessor<K, Change<V>, K, Change<VOut>> {
         private final ValueTransformerWithKey<? super K, ? super V, ? extends VOut> valueTransformer;
-        private TimestampedKeyValueStore<K, VOut> store;
+        private KeyValueStoreWrapper<K, VOut> store;
         private TimestampedTupleForwarder<K, VOut> tupleForwarder;
 
         private KTableTransformValuesProcessor(final ValueTransformerWithKey<? super K, ? super V, ? extends VOut> valueTransformer) {
@@ -103,9 +105,9 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
             final InternalProcessorContext<K, Change<VOut>> internalProcessorContext = (InternalProcessorContext<K, Change<VOut>>) context;
             valueTransformer.init(new ForwardingDisabledProcessorContext(internalProcessorContext));
             if (queryableName != null) {
-                store = context.getStateStore(queryableName);
+                store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    store.store(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
@@ -116,13 +118,16 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
         public void process(final Record<K, Change<V>> record) {
             final VOut newValue = valueTransformer.transform(record.key(), record.value().newValue);
 
-            if (queryableName == null) {
-                final VOut oldValue = sendOldValues ? valueTransformer.transform(record.key(), record.value().oldValue) : null;
-                context().forward(record.withValue(new Change<>(newValue, oldValue)));
-            } else {
+            if (queryableName != null) {
                 final VOut oldValue = sendOldValues ? getValueOrNull(store.get(record.key())) : null;
-                store.put(record.key(), ValueAndTimestamp.make(newValue, record.timestamp()));
-                tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue)));
+                final long putReturnCode = store.put(record.key(), newValue, record.timestamp());
+                // if not put to store, do not forward downstream either
+                if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
+                    tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
+                }
+            } else {
+                final VOut oldValue = sendOldValues ? valueTransformer.transform(record.key(), record.value().oldValue) : null;
+                context().forward(record.withValue(new Change<>(newValue, oldValue, record.value().isLatest)));
             }
         }
 
@@ -135,7 +140,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
 
     private class KTableTransformValuesGetter implements KTableValueGetter<K, VOut> {
         private final KTableValueGetter<K, V> parentGetter;
-        private InternalProcessorContext internalProcessorContext;
+        private InternalProcessorContext<?, ?> internalProcessorContext;
         private final ValueTransformerWithKey<? super K, ? super V, ? extends VOut> valueTransformer;
 
         KTableTransformValuesGetter(final KTableValueGetter<K, V> parentGetter,
@@ -146,15 +151,33 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            internalProcessorContext = (InternalProcessorContext) context;
+            internalProcessorContext = (InternalProcessorContext<?, ?>) context;
             parentGetter.init(context);
             valueTransformer.init(new ForwardingDisabledProcessorContext(internalProcessorContext));
         }
 
         @Override
         public ValueAndTimestamp<VOut> get(final K key) {
-            final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
+            return transformValue(key, parentGetter.get(key));
+        }
 
+        @Override
+        public ValueAndTimestamp<VOut> get(final K key, final long asOfTimestamp) {
+            return transformValue(key, parentGetter.get(key, asOfTimestamp));
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return parentGetter.isVersioned();
+        }
+
+        @Override
+        public void close() {
+            parentGetter.close();
+            valueTransformer.close();
+        }
+
+        private ValueAndTimestamp<VOut> transformValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
             final ProcessorRecordContext currentContext = internalProcessorContext.recordContext();
 
             internalProcessorContext.setRecordContext(new ProcessorRecordContext(
@@ -176,12 +199,6 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
             internalProcessorContext.setRecordContext(currentContext);
 
             return result;
-        }
-
-        @Override
-        public void close() {
-            parentGetter.close();
-            valueTransformer.close();
         }
     }
 }

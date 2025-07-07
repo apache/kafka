@@ -107,6 +107,13 @@ public final class FieldSpec {
             if (!this.type.isArray() && !this.type.isStruct()) {
                 throw new RuntimeException("Non-array or Struct field " + name + " cannot have fields");
             }
+            // Check struct invariants
+            if (this.type.isStruct() || this.type.isStructArray()) {
+                new StructSpec(name,
+                    versions,
+                    Versions.NONE_STRING, // version deprecations not supported at field level
+                    fields);
+            }
         }
 
         if (flexibleVersions == null || flexibleVersions.isEmpty()) {
@@ -454,7 +461,7 @@ public final class FieldSpec {
                     name + ".  The only valid default for a struct field " +
                     "is the empty struct or null.");
             }
-            return "new " + type.toString() + "()";
+            return "new " + type + "()";
         } else if (type.isArray()) {
             if (fieldDefault.equals("null")) {
                 validateNullDefault();

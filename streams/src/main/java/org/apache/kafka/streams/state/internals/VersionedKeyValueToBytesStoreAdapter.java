@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.List;
-import java.util.Objects;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes.ByteArraySerde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -26,7 +23,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
@@ -41,6 +37,9 @@ import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 
+import java.util.List;
+import java.util.Objects;
+
 /**
  * Adapts from {@link VersionedKeyValueStore} (user-friendly versioned store interface) to
  * {@link KeyValueStore}. By representing a {@code VersionedKeyValueStore} as a
@@ -50,11 +49,9 @@ import org.apache.kafka.streams.state.VersionedRecord;
  */
 public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore {
     private static final Serde<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_SERDE
-        = new NullableValueAndTimestampSerde<>(new ByteArraySerde());
+        = new ValueAndTimestampSerde<>(new ByteArraySerde());
     private static final Serializer<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_SERIALIZER
         = VALUE_AND_TIMESTAMP_SERDE.serializer();
-    private static final Deserializer<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_DESERIALIZER
-        = VALUE_AND_TIMESTAMP_SERDE.deserializer();
 
     final VersionedKeyValueStore<Bytes, byte[]> inner;
 
@@ -63,17 +60,8 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
-    public void put(final Bytes key, final byte[] rawValueAndTimestamp) {
-        if (rawValueAndTimestamp == null) {
-            throw new IllegalArgumentException("Put to versioned store must always include timestamp, including for tombstones.");
-        }
-        final ValueAndTimestamp<byte[]> valueAndTimestamp
-            = VALUE_AND_TIMESTAMP_DESERIALIZER.deserialize(null, rawValueAndTimestamp);
-        inner.put(
-            key,
-            valueAndTimestamp.value(),
-            valueAndTimestamp.timestamp()
-        );
+    public long put(final Bytes key, final byte[] value, final long timestamp) {
+        return inner.put(key, value, timestamp);
     }
 
     @Override
@@ -99,15 +87,9 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
         return inner.name();
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        inner.init(context, root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        inner.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        inner.init(stateStoreContext, root);
     }
 
     @Override
@@ -127,7 +109,7 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
 
     @Override
     public boolean isOpen() {
-        return inner.persistent();
+        return inner.isOpen();
     }
 
     @Override
@@ -138,6 +120,11 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     @Override
     public Position getPosition() {
         return inner.getPosition();
+    }
+
+    @Override
+    public void put(final Bytes key, final byte[] rawValueAndTimestamp) {
+        throw new UnsupportedOperationException("Versioned key-value stores should use put(key, value, timestamp) instead");
     }
 
     @Override

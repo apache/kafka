@@ -17,14 +17,13 @@
 
 package org.apache.kafka.timeline;
 
-import java.util.Arrays;
-
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsInAnyOrder;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,15 +58,13 @@ public class TimelineHashSetTest {
         set.add("b");
         set.add("c");
         set.add("d");
-        assertTrue(set.retainAll(Arrays.asList("a", "b", "c")));
-        assertFalse(set.retainAll(Arrays.asList("a", "b", "c")));
-        assertFalse(set.removeAll(Arrays.asList("d")));
+        assertTrue(set.retainAll(List.of("a", "b", "c")));
+        assertFalse(set.retainAll(List.of("a", "b", "c")));
+        assertFalse(set.removeAll(List.of("d")));
         registry.getOrCreateSnapshot(2);
-        assertTrue(set.removeAll(Arrays.asList("c")));
-        assertThat(TimelineHashMapTest.iteratorToList(set.iterator(2)),
-            containsInAnyOrder("a", "b", "c"));
-        assertThat(TimelineHashMapTest.iteratorToList(set.iterator()),
-            containsInAnyOrder("a", "b"));
+        assertTrue(set.removeAll(List.of("c")));
+        assertTrue(TimelineHashMapTest.iteratorToList(set.iterator(2)).containsAll(List.of("a", "b", "c")));
+        assertTrue(TimelineHashMapTest.iteratorToList(set.iterator()).containsAll(List.of("a", "b")));
         assertEquals(2, set.size());
         assertEquals(3, set.size(2));
         set.clear();
@@ -93,21 +90,17 @@ public class TimelineHashSetTest {
         assertFalse(set.add("xyz"));
         assertTrue(set.remove("xyz"));
         assertFalse(set.remove("xyz"));
-        assertTrue(set.addAll(Arrays.asList("abc", "def", "ghi")));
-        assertFalse(set.addAll(Arrays.asList("abc", "def", "ghi")));
-        assertTrue(set.addAll(Arrays.asList("abc", "def", "ghi", "jkl")));
-        assertTrue(set.containsAll(Arrays.asList("def", "jkl")));
-        assertFalse(set.containsAll(Arrays.asList("abc", "def", "xyz")));
-        assertTrue(set.removeAll(Arrays.asList("def", "ghi", "xyz")));
+        assertTrue(set.addAll(List.of("abc", "def", "ghi")));
+        assertFalse(set.addAll(List.of("abc", "def", "ghi")));
+        assertTrue(set.addAll(List.of("abc", "def", "ghi", "jkl")));
+        assertTrue(set.containsAll(List.of("def", "jkl")));
+        assertFalse(set.containsAll(List.of("abc", "def", "xyz")));
+        assertTrue(set.removeAll(List.of("def", "ghi", "xyz")));
         registry.getOrCreateSnapshot(5);
-        assertThat(TimelineHashMapTest.iteratorToList(set.iterator(5)),
-            containsInAnyOrder("abc", "jkl"));
-        assertThat(TimelineHashMapTest.iteratorToList(set.iterator()),
-            containsInAnyOrder("abc", "jkl"));
+        assertTrue(TimelineHashMapTest.iteratorToList(set.iterator(5)).containsAll(List.of("abc", "jkl")));
+        assertTrue(TimelineHashMapTest.iteratorToList(set.iterator()).containsAll(List.of("abc", "jkl")));
         set.removeIf(e -> e.startsWith("a"));
-        assertThat(TimelineHashMapTest.iteratorToList(set.iterator()),
-            containsInAnyOrder("jkl"));
-        assertThat(TimelineHashMapTest.iteratorToList(set.iterator(5)),
-            containsInAnyOrder("abc", "jkl"));
+        assertTrue(TimelineHashMapTest.iteratorToList(set.iterator()).contains("jkl"));
+        assertTrue(TimelineHashMapTest.iteratorToList(set.iterator(5)).containsAll(List.of("abc", "jkl")));
     }
 }

@@ -16,35 +16,39 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.stream.Collectors;
-import org.apache.kafka.clients.admin.TopicDescription;
-import java.util.Arrays;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
-import org.apache.kafka.connect.integration.MonitorableSourceConnector;
+import org.apache.kafka.connect.integration.TestableSourceConnector;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -54,18 +58,22 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -73,8 +81,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -86,23 +97,26 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
-import static org.junit.Assert.assertThrows;
 
 @SuppressWarnings("unchecked")
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class AbstractWorkerSourceTaskTest {
 
     private static final String TOPIC = "topic";
@@ -120,20 +134,20 @@ public class AbstractWorkerSourceTaskTest {
     private static final byte[] SERIALIZED_KEY = "converted-key".getBytes();
     private static final byte[] SERIALIZED_RECORD = "converted-record".getBytes();
 
-    @Mock
-    private SourceTask sourceTask;
+    @Mock private SourceTask sourceTask;
     @Mock private TopicAdmin admin;
     @Mock private KafkaProducer<byte[], byte[]> producer;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
     @Mock private HeaderConverter headerConverter;
-    @Mock private TransformationChain<SourceRecord> transformationChain;
+    @Mock private TransformationChain<SourceRecord, SourceRecord> transformationChain;
     @Mock private CloseableOffsetStorageReader offsetReader;
     @Mock private OffsetStorageWriter offsetWriter;
     @Mock private ConnectorOffsetBackingStore offsetStore;
     @Mock private StatusBackingStore statusBackingStore;
-    @Mock private WorkerSourceTaskContext sourceTaskContext;
+    @Mock private WorkerTransactionContext workerTransactionContext;
     @Mock private TaskStatus.Listener statusListener;
+    @Mock private ClusterConfigState configState;
 
     private final ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private final ConnectorTaskId taskId1 = new ConnectorTaskId("job", 1);
@@ -141,12 +155,12 @@ public class AbstractWorkerSourceTaskTest {
     private Plugins plugins;
     private WorkerConfig config;
     private SourceConnectorConfig sourceConfig;
-    private MockConnectMetrics metrics = new MockConnectMetrics();
+    private MockConnectMetrics metrics;
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
 
     private AbstractWorkerSourceTask workerTask;
 
-    @Before
+    @BeforeEach
     public void setup() {
         Map<String, String> workerProps = workerProps();
         plugins = new Plugins(workerProps);
@@ -168,7 +182,7 @@ public class AbstractWorkerSourceTaskTest {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(1));
         props.put(TOPIC_CONFIG, TOPIC);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -182,7 +196,7 @@ public class AbstractWorkerSourceTaskTest {
         return props;
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         if (metrics != null) metrics.stop();
         verifyNoMoreInteractions(statusListener);
@@ -244,6 +258,7 @@ public class AbstractWorkerSourceTaskTest {
         );
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = records;
@@ -253,7 +268,7 @@ public class AbstractWorkerSourceTaskTest {
 
         assertArrayEquals(SERIALIZED_KEY, sent.getValue().key());
         assertArrayEquals(SERIALIZED_RECORD, sent.getValue().value());
-        
+
         verifyTaskGetTopic();
         verifyTopicCreation();
     }
@@ -264,6 +279,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
@@ -283,7 +299,8 @@ public class AbstractWorkerSourceTaskTest {
         final Long timestamp = -3L;
         createWorkerTask();
 
-        expectSendRecord(emptyHeaders());
+        expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
+        expectApplyTransformationChain();
 
         workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
@@ -299,6 +316,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
@@ -324,6 +342,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(headers);
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
@@ -347,9 +366,11 @@ public class AbstractWorkerSourceTaskTest {
         StringConverter stringConverter = new StringConverter();
         SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
 
-        createWorkerTask(stringConverter, testConverter, stringConverter);
+        createWorkerTask(stringConverter, testConverter, stringConverter, RetryWithToleranceOperatorTest.noneOperator(),
+                Collections::emptyList, transformationChain);
 
         expectSendRecord(null);
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         String stringA = "Árvíztűrő tükörfúrógép";
@@ -611,6 +632,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
 
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(foundTopic(TOPIC));
@@ -635,6 +657,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
 
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
@@ -651,11 +674,154 @@ public class AbstractWorkerSourceTaskTest {
         verifyTopicCreation();
     }
 
+    @Test
+    public void testSendRecordsRetriableException() {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
+
+        when(transformationChain.apply(any(), eq(record1))).thenReturn(null);
+        when(transformationChain.apply(any(), eq(record2))).thenReturn(null);
+        when(transformationChain.apply(any(), eq(record3))).thenReturn(record3);
+
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
+        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.singletonMap(TOPIC, topicDesc));
+
+        when(producer.send(any(), any())).thenThrow(new RetriableException("Retriable exception")).thenReturn(null);
+
+        workerTask.toSend = Arrays.asList(record1, record2, record3);
+
+        // The first two records are filtered out / dropped by the transformation chain; only the third record will be attempted to be sent.
+        // The producer throws a RetriableException the first time we try to send the third record
+        assertFalse(workerTask.sendRecords());
+
+        // The next attempt to send the third record should succeed
+        assertTrue(workerTask.sendRecords());
+
+        // Ensure that the first two records that were filtered out by the transformation chain
+        // aren't re-processed when we retry the call to sendRecords()
+        verify(transformationChain, times(1)).apply(any(), eq(record1));
+        verify(transformationChain, times(1)).apply(any(), eq(record2));
+        verify(transformationChain, times(2)).apply(any(), eq(record3));
+    }
+
+    @Test
+    public void testSendRecordsFailedTransformationErrorToleranceNone() {
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.noneOperator();
+        TransformationChain<RetriableException, SourceRecord> transformationChainRetriableException =
+                WorkerTestUtils.getTransformationChain(retryWithToleranceOperator, List.of(new RetriableException("Test"), record1));
+        createWorkerTask(transformationChainRetriableException, retryWithToleranceOperator);
+
+        expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
+
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
+        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.singletonMap(TOPIC, topicDesc));
+
+        workerTask.toSend = Arrays.asList(record1);
+
+        // The transformation errored out so the error should be re-raised by sendRecords with error tolerance None
+        Exception exception = assertThrows(ConnectException.class, workerTask::sendRecords);
+        assertTrue(exception.getMessage().contains("Tolerance exceeded"));
+
+        // Ensure the transformation was called
+        verify(transformationChainRetriableException, times(1)).apply(any(), eq(record1));
+
+        // The second transform call will succeed, batch should succeed at sending the one record (none were skipped)
+        assertTrue(workerTask.sendRecords());
+        verifySendRecord(1);
+    }
+
+    @Test
+    public void testSendRecordsFailedTransformationErrorToleranceAll() {
+        RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.allOperator();
+        TransformationChain<RetriableException, SourceRecord> transformationChainRetriableException = WorkerTestUtils.getTransformationChain(
+                retryWithToleranceOperator,
+                List.of(new RetriableException("Test")));
+
+        createWorkerTask(transformationChainRetriableException, retryWithToleranceOperator);
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
+
+        workerTask.toSend = Arrays.asList(record1);
+
+        // The transformation errored out so the error should be ignored & the record skipped with error tolerance all
+        assertTrue(workerTask.sendRecords());
+
+        // Ensure the transformation was called
+        verify(transformationChainRetriableException, times(1)).apply(any(), eq(record1));
+    }
+
+    @Test
+    public void testSendRecordsConversionExceptionErrorToleranceNone() {
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.noneOperator();
+        List<Object> results = Stream.of(record1, record2, record3)
+                .collect(Collectors.toList());
+        TransformationChain<RetriableException, SourceRecord> chain = WorkerTestUtils.getTransformationChain(
+                retryWithToleranceOperator,
+                results);
+        createWorkerTask(chain, retryWithToleranceOperator);
+
+        // When we try to convert the key/value of each record, throw an exception
+        throwExceptionWhenConvertKey(emptyHeaders(), TOPIC);
+
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
+        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.singletonMap(TOPIC, topicDesc));
+
+        workerTask.toSend = Arrays.asList(record1, record2, record3);
+
+        // Send records should fail when errors.tolerance is none and the conversion call fails
+        Exception exception = assertThrows(ConnectException.class, workerTask::sendRecords);
+        assertTrue(exception.getMessage().contains("Tolerance exceeded"));
+        assertThrows(ConnectException.class, workerTask::sendRecords);
+        assertThrows(ConnectException.class, workerTask::sendRecords);
+
+        // Set the conversion call to succeed, batch should succeed at sending all three records (none were skipped)
+        expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
+        assertTrue(workerTask.sendRecords());
+        verifySendRecord(3);
+    }
+
+    @Test
+    public void testSendRecordsConversionExceptionErrorToleranceAll() {
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.allOperator();
+        List<Object> results = Stream.of(record1, record2, record3)
+                .collect(Collectors.toList());
+        TransformationChain<RetriableException, SourceRecord> chain = WorkerTestUtils.getTransformationChain(
+                retryWithToleranceOperator,
+                results);
+        createWorkerTask(chain, retryWithToleranceOperator);
+
+        // When we try to convert the key/value of each record, throw an exception
+        throwExceptionWhenConvertKey(emptyHeaders(), TOPIC);
+
+        workerTask.toSend = Arrays.asList(record1, record2, record3);
+
+        // With errors.tolerance to all, the failed conversion should simply skip the record, and record successful batch
+        assertTrue(workerTask.sendRecords());
+    }
+
     private void expectSendRecord(Headers headers) {
         if (headers != null)
             expectConvertHeadersAndKeyValue(headers, TOPIC);
-
-        expectApplyTransformationChain();
 
         expectTaskGetTopic();
     }
@@ -749,27 +915,56 @@ public class AbstractWorkerSourceTaskTest {
         when(valueConverter.fromConnectData(eq(topic), any(Headers.class), eq(RECORD_SCHEMA),
                 eq(RECORD)))
                 .thenReturn(SERIALIZED_RECORD);
+        assertEquals(SERIALIZED_KEY, keyConverter.fromConnectData(topic, headers, KEY_SCHEMA, KEY));
+        assertEquals(SERIALIZED_RECORD, valueConverter.fromConnectData(topic, headers, RECORD_SCHEMA, RECORD));
+    }
+
+    private void throwExceptionWhenConvertKey(Headers headers, String topic) {
+        if (headers.iterator().hasNext()) {
+            when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+                    anyString()))
+                    .thenAnswer((Answer<byte[]>) invocation -> {
+                        String headerValue = invocation.getArgument(3, String.class);
+                        return headerValue.getBytes(StandardCharsets.UTF_8);
+                    });
+        }
+
+        when(keyConverter.fromConnectData(eq(topic), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+                .thenThrow(new RetriableException("Failed to convert key"));
     }
 
     private void expectApplyTransformationChain() {
-        when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer(AdditionalAnswers.returnsFirstArg());
+        when(transformationChain.apply(any(), any(SourceRecord.class)))
+                .thenAnswer(AdditionalAnswers.returnsSecondArg());
+        SourceRecord randomString = mock(SourceRecord.class);
+        assertEquals(transformationChain.apply(null, randomString), randomString);
     }
 
     private RecordHeaders emptyHeaders() {
         return new RecordHeaders();
     }
 
-    private void createWorkerTask() {
-        createWorkerTask(keyConverter, valueConverter, headerConverter);
+    private void createWorkerTask(TransformationChain transformationChain, RetryWithToleranceOperator toleranceOperator) {
+        createWorkerTask(keyConverter, valueConverter, headerConverter, toleranceOperator, Collections::emptyList,
+                transformationChain);
     }
 
-    private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
+    private void createWorkerTask() {
+        createWorkerTask(
+                keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noneOperator(), Collections::emptyList, transformationChain);
+    }
+
+    private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
+                                  RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+                                  TransformationChain<SourceRecord, SourceRecord> transformationChain) {
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerTask = new AbstractWorkerSourceTask(
-                taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter, transformationChain,
-                sourceTaskContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
-                statusBackingStore, Runnable::run) {
+                taskId, sourceTask, statusListener, TargetState.STARTED, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
+                workerTransactionContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
+                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
+                statusBackingStore, Runnable::run, errorReportersSupplier, null, TestPlugins.noOpLoaderSwap()) {
             @Override
             protected void prepareToInitializeTask() {
             }
@@ -808,7 +1003,7 @@ public class AbstractWorkerSourceTaskTest {
             }
 
             @Override
-            protected void producerSendFailed(boolean synchronous, ProducerRecord<byte[], byte[]> producerRecord, SourceRecord preTransformRecord, Exception e) {
+            protected void producerSendFailed(ProcessingContext<SourceRecord> context, boolean synchronous, ProducerRecord<byte[], byte[]> producerRecord, SourceRecord preTransformRecord, Exception e) {
             }
 
             @Override

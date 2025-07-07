@@ -17,27 +17,28 @@
 
 package org.apache.kafka.jmh.partition;
 
-import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
+import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
-import kafka.cluster.Replica;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
-import kafka.server.BrokerTopicStats;
-import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
-import kafka.server.metadata.MockConfigRepository;
+
+import org.apache.kafka.common.PartitionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.metadata.MockConfigRepository;
+import org.apache.kafka.server.replica.Replica;
+import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
-import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -54,14 +55,14 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
 import scala.Option;
-import scala.compat.java8.OptionConverters;
+import scala.jdk.javaapi.OptionConverters;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -70,12 +71,12 @@ import scala.compat.java8.OptionConverters;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class UpdateFollowerFetchStateBenchmark {
-    private TopicPartition topicPartition = new TopicPartition(UUID.randomUUID().toString(), 0);
-    private Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
-    private File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
-    private LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
+    private final TopicPartition topicPartition = new TopicPartition(UUID.randomUUID().toString(), 0);
+    private final Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
+    private final File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
+    private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
+    private final LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
     private long nextOffset = 0;
     private LogManager logManager;
     private Partition partition;
@@ -87,8 +88,8 @@ public class UpdateFollowerFetchStateBenchmark {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
         logManager = new LogManagerBuilder().
-            setLogDirs(Collections.singletonList(logDir)).
-            setInitialOfflineDirs(Collections.emptyList()).
+            setLogDirs(List.of(logDir)).
+            setInitialOfflineDirs(List.of()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
             setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
@@ -97,16 +98,14 @@ public class UpdateFollowerFetchStateBenchmark {
             setFlushRecoveryOffsetCheckpointMs(10000L).
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
-            setMaxProducerIdExpirationMs(60000).
-            setInterBrokerProtocolVersion(MetadataVersion.latest()).
+            setProducerStateManagerConfig(60000, false).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
             setTime(Time.SYSTEM).
-            setKeepPartitionMetadataFile(true).
             build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Option.apply(0L));
+        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Optional.of(0L));
         DelayedOperations delayedOperations = new DelayedOperationsMock();
 
         // one leader, plus two followers
@@ -114,8 +113,7 @@ public class UpdateFollowerFetchStateBenchmark {
         replicas.add(0);
         replicas.add(1);
         replicas.add(2);
-        LeaderAndIsrPartitionState partitionState = new LeaderAndIsrPartitionState()
-            .setControllerEpoch(0)
+        PartitionState partitionState = new PartitionState()
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(replicas)
@@ -125,10 +123,10 @@ public class UpdateFollowerFetchStateBenchmark {
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(topicPartition, 100,
-                MetadataVersion.latest(), 0, Time.SYSTEM,
+                0, () -> -1, Time.SYSTEM,
                 alterPartitionListener, delayedOperations,
-                Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
-        partition.makeLeader(partitionState, offsetCheckpoints, topicId);
+                Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
+        partition.makeLeader(partitionState, offsetCheckpoints, topicId, Option.empty());
         replica1 = partition.getReplica(1).get();
         replica2 = partition.getReplica(2).get();
     }
@@ -136,7 +134,7 @@ public class UpdateFollowerFetchStateBenchmark {
     // avoid mocked DelayedOperations to avoid mocked class affecting benchmark results
     private class DelayedOperationsMock extends DelayedOperations {
         DelayedOperationsMock() {
-            super(topicPartition, null, null, null);
+            super(topicId, topicPartition, null, null, null, null);
         }
 
         @Override
@@ -147,7 +145,7 @@ public class UpdateFollowerFetchStateBenchmark {
 
     @TearDown(Level.Trial)
     public void tearDown() throws InterruptedException {
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
     }
 
@@ -160,9 +158,9 @@ public class UpdateFollowerFetchStateBenchmark {
     public void updateFollowerFetchStateBench() {
         // measure the impact of two follower fetches on the leader
         partition.updateFollowerFetchState(replica1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
-                0, 1, nextOffset);
+                0, 1, nextOffset, -1);
         partition.updateFollowerFetchState(replica2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
-                0, 1, nextOffset);
+                0, 1, nextOffset, -1);
         nextOffset++;
     }
 
@@ -172,8 +170,8 @@ public class UpdateFollowerFetchStateBenchmark {
         // measure the impact of two follower fetches on the leader when the follower didn't
         // end up fetching anything
         partition.updateFollowerFetchState(replica1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
-                0, 1, 100);
+                0, 1, 100, -1);
         partition.updateFollowerFetchState(replica2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
-                0, 1, 100);
+                0, 1, 100, -1);
     }
 }

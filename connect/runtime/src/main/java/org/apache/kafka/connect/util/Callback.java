@@ -19,6 +19,7 @@ package org.apache.kafka.connect.util;
 /**
  * Generic interface for callbacks
  */
+@FunctionalInterface
 public interface Callback<V> {
     /**
      * Invoked upon completion of the operation.
@@ -27,4 +28,22 @@ public interface Callback<V> {
      * @param result the return value, or null if the operation failed
      */
     void onCompletion(Throwable error, V result);
+
+    default void recordStage(Stage stage) {
+    }
+
+    default <V2> Callback<V2> chainStaging(Callback<V2> chained) {
+        return new Callback<>() {
+            @Override
+            public void recordStage(Stage stage) {
+                Callback.this.recordStage(stage);
+            }
+
+            @Override
+            public void onCompletion(Throwable error, V2 result) {
+                chained.onCompletion(error, result);
+            }
+        };
+    }
+
 }

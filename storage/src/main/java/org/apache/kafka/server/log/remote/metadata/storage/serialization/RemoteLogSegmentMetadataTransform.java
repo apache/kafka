@@ -22,13 +22,14 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataRecord;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
 public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTransform<RemoteLogSegmentMetadata> {
 
@@ -42,7 +43,9 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                 .setMaxTimestampMs(segmentMetadata.maxTimestampMs())
                 .setSegmentSizeInBytes(segmentMetadata.segmentSizeInBytes())
                 .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(segmentMetadata))
-                .setRemoteLogSegmentState(segmentMetadata.state().id());
+                .setRemoteLogSegmentState(segmentMetadata.state().id())
+                .setTxnIndexEmpty(segmentMetadata.isTxnIdxEmpty());
+        segmentMetadata.customMetadata().ifPresent(md -> record.setCustomMetadata(md.value()));
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
     }
@@ -52,7 +55,7 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                    .map(entry -> new RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry()
                            .setLeaderEpoch(entry.getKey())
                            .setOffset(entry.getValue()))
-                   .collect(Collectors.toList());
+                   .toList();
     }
 
     private RemoteLogSegmentMetadataRecord.RemoteLogSegmentIdEntry createRemoteLogSegmentIdEntry(RemoteLogSegmentMetadata data) {
@@ -75,13 +78,15 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
             segmentLeaderEpochs.put(segmentLeaderEpoch.leaderEpoch(), segmentLeaderEpoch.offset());
         }
 
+        Optional<CustomMetadata> customMetadata = Optional.ofNullable(record.customMetadata()).map(CustomMetadata::new);
         RemoteLogSegmentMetadata remoteLogSegmentMetadata =
                 new RemoteLogSegmentMetadata(remoteLogSegmentId, record.startOffset(), record.endOffset(),
                                              record.maxTimestampMs(), record.brokerId(),
                                              record.eventTimestampMs(), record.segmentSizeInBytes(),
-                                             segmentLeaderEpochs);
+                                             segmentLeaderEpochs, record.txnIndexEmpty());
         RemoteLogSegmentMetadataUpdate rlsmUpdate
                 = new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, record.eventTimestampMs(),
+                                                     customMetadata,
                                                      RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
                                                      record.brokerId());
 

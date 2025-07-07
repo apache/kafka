@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.Collections;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
@@ -28,13 +26,14 @@ import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
-import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_ACLS;
 
@@ -116,8 +115,8 @@ public class DeleteAclsRequest extends AbstractRequest {
             .setFilterResults(filterResults), version());
     }
 
-    public static DeleteAclsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteAclsRequest(new DeleteAclsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DeleteAclsRequest parse(Readable readable, short version) {
+        return new DeleteAclsRequest(new DeleteAclsRequestData(readable, version), version);
     }
 
     public static DeleteAclsFilter deleteAclsFilter(AclBindingFilter filter) {

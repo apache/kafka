@@ -17,11 +17,12 @@
 
 package org.apache.kafka.timeline;
 
-import java.util.Collections;
-
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -84,7 +85,7 @@ public class TimelineLongTest {
 
         registry.reset();
 
-        assertEquals(Collections.emptyList(), registry.epochsList());
+        assertEquals(List.of(), registry.epochsList());
         assertEquals(TimelineLong.INIT, value.get());
     }
 }

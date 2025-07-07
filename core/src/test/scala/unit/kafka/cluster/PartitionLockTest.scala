@@ -17,26 +17,30 @@
 
 package kafka.cluster
 
+import java.lang.{Long => JLong}
+import java.util
 import java.util.{Optional, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.api.LeaderAndIsr
-import kafka.log._
+import kafka.log.LogManager
 import kafka.server._
-import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
-import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.PartitionState
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.metadata.{LeaderAndIsr, MetadataCache, MockConfigRepository}
+import org.apache.kafka.server.common.{RequestLocal, TopicIdPartition}
+import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogAppendInfo, LogConfig, LogDirFailureChannel, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -70,6 +74,7 @@ class PartitionLockTest extends Logging {
   var partition: Partition = _
 
   private val topicPartition = new TopicPartition("test-topic", 0)
+  private val topicId = Uuid.randomUuid()
 
   @BeforeEach
   def setUp(): Unit = {
@@ -113,7 +118,7 @@ class PartitionLockTest extends Logging {
 
   /**
    * Verifies concurrent produce and replica fetch log read result update with ISR updates. This
-   * can result in delays in processing produce and replica fetch requets since write lock is obtained,
+   * can result in delays in processing produce and replica fetch requests since write lock is obtained,
    * but it should complete without any failures.
    */
   @Test
@@ -136,10 +141,9 @@ class PartitionLockTest extends Logging {
   def testGetReplicaWithUpdateAssignmentAndIsr(): Unit = {
     val active = new AtomicBoolean(true)
     val replicaToCheck = 3
-    val firstReplicaSet = Seq[Integer](3, 4, 5).asJava
-    val secondReplicaSet = Seq[Integer](1, 2, 3).asJava
-    def partitionState(replicas: java.util.List[Integer]) = new LeaderAndIsrPartitionState()
-      .setControllerEpoch(1)
+    val firstReplicaSet = util.List.of[Integer](3, 4, 5)
+    val secondReplicaSet = util.List.of[Integer](1, 2, 3)
+    def partitionState(replicas: util.List[Integer]) = new PartitionState()
       .setLeader(replicas.get(0))
       .setLeaderEpoch(1)
       .setIsr(replicas)
@@ -268,9 +272,9 @@ class PartitionLockTest extends Logging {
 
     logManager.startup(Set.empty)
     val partition = new Partition(topicPartition,
-      replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
-      interBrokerProtocolVersion = MetadataVersion.latest,
+      replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
       localBrokerId = brokerId,
+      () => 1L,
       mockTime,
       isrChangeListener,
       delayedOperations,
@@ -290,13 +294,14 @@ class PartitionLockTest extends Logging {
         }
       }
 
-      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): UnifiedLog = {
-        val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
+      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): UnifiedLog = {
+        val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
+        val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+          log.dir, log.topicPartition, logDirFailureChannel, Optional.empty, mockTime.scheduler)
         val maxTransactionTimeout = 5 * 60 * 1000
-        val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
+        val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false)
         val producerStateManager = new ProducerStateManager(
           log.topicPartition,
           log.dir,
@@ -311,12 +316,14 @@ class PartitionLockTest extends Logging {
           mockTime.scheduler,
           mockTime,
           logDirFailureChannel,
-          hadCleanShutdown = true,
+          true,
           segments,
           0L,
           0L,
           leaderEpochCache,
-          producerStateManager
+          producerStateManager,
+          new ConcurrentHashMap[String, Integer],
+          false
         ).load()
         val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
           offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
@@ -325,38 +332,36 @@ class PartitionLockTest extends Logging {
       }
     }
 
-    val topicIdPartition = new TopicIdPartition(partition.topicId.getOrElse(Uuid.ZERO_UUID), topicPartition)
+    val topicIdPartition = new TopicIdPartition(topicId, topicPartition.partition)
     when(offsetCheckpoints.fetch(
       ArgumentMatchers.anyString,
       ArgumentMatchers.eq(topicPartition)
-    )).thenReturn(None)
+    )).thenReturn(Optional.empty[JLong])
     when(alterIsrManager.submit(
       ArgumentMatchers.eq(topicIdPartition),
-      ArgumentMatchers.any[LeaderAndIsr],
-      ArgumentMatchers.anyInt()
+      ArgumentMatchers.any[LeaderAndIsr]
     )).thenReturn(new CompletableFuture[LeaderAndIsr]())
 
-    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
 
-    val controllerEpoch = 0
     val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
     val isr = replicas
+    replicas.forEach(replicaId => when(metadataCache.getAliveBrokerEpoch(replicaId)).thenReturn(Optional.of(1L)))
 
-    assertTrue(partition.makeLeader(new LeaderAndIsrPartitionState()
-      .setControllerEpoch(controllerEpoch)
+    assertTrue(partition.makeLeader(new PartitionState()
       .setLeader(brokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(isr)
       .setPartitionEpoch(1)
       .setReplicas(replicas)
-      .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
+      .setIsNew(true), offsetCheckpoints, Some(topicId)), "Expected become leader transition to succeed")
 
     partition
   }
 
   private def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000: java.lang.Integer)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, 999: java.lang.Integer)
     overrides.foreach { case (k, v) => logProps.put(k, v) }
@@ -388,8 +393,8 @@ class PartitionLockTest extends Logging {
 
     while (fetchOffset < numRecords) {
       val fetchParams = new FetchParams(
-        ApiKeys.FETCH.latestVersion,
         followerId,
+        1,
         0L,
         1,
         maxBytes,
@@ -415,7 +420,7 @@ class PartitionLockTest extends Logging {
         updateFetchState = true
       )
 
-      assertTrue(logReadInfo.divergingEpoch.isEmpty)
+      assertTrue(!logReadInfo.divergingEpoch.isPresent)
 
       val batches = logReadInfo.fetchedData.records.batches.asScala
       if (batches.nonEmpty) {
@@ -432,7 +437,7 @@ class PartitionLockTest extends Logging {
     log: UnifiedLog,
     logStartOffset: Long,
     localLog: LocalLog,
-    leaderEpochCache: Option[LeaderEpochFileCache],
+    leaderEpochCache: LeaderEpochFileCache,
     producerStateManager: ProducerStateManager,
     appendSemaphore: Semaphore
   ) extends UnifiedLog(
@@ -442,12 +447,13 @@ class PartitionLockTest extends Logging {
     log.producerIdExpirationCheckIntervalMs,
     leaderEpochCache,
     producerStateManager,
-    _topicId = None,
-    keepPartitionMetadataFile = true) {
+    Optional.empty,
+    false,
+    LogOffsetsListener.NO_OP_OFFSETS_LISTENER) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
-                                interBrokerProtocolVersion: MetadataVersion, requestLocal: RequestLocal): LogAppendInfo = {
-      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, requestLocal)
+                                requestLocal: RequestLocal, verificationGuard: VerificationGuard): LogAppendInfo = {
+      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, requestLocal, verificationGuard)
       appendSemaphore.acquire()
       appendInfo
     }

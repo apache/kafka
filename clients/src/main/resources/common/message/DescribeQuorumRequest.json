@@ -19,15 +19,17 @@
   "listeners": ["broker", "controller"],
   "name": "DescribeQuorumRequest",
   // Version 1 adds additional fields in the response. The request is unchanged (KIP-836).
-  "validVersions": "0-1",
+  // Version 2 adds additional fields in the response. The request is unchanged (KIP-853).
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "latestVersionUnstable": false,
   "fields": [
-    { "name": "Topics", "type": "[]TopicData",
-      "versions": "0+", "fields": [
+    { "name": "Topics", "type": "[]TopicData", "versions": "0+",
+      "about": "The topics to describe.", "fields": [
       { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "Partitions", "type": "[]PartitionData",
-        "versions": "0+", "fields": [
+      { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
+        "about": "The partitions to describe.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." }
       ]

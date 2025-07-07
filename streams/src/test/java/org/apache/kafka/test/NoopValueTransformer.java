@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-public class NoopValueTransformer<K, V, VR> implements ValueTransformer<V, VR> {
+@SuppressWarnings("deprecation")
+public class NoopValueTransformer<K, V, VR> implements org.apache.kafka.streams.kstream.ValueTransformer<V, VR> {
     @Override
     public void init(final ProcessorContext context) {
     }

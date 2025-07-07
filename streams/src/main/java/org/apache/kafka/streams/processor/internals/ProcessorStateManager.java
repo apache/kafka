@@ -24,17 +24,18 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -46,6 +47,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -59,12 +61,12 @@ import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_U
  * ProcessorStateManager is the source of truth for the current offset for each state store,
  * which is either the read offset during restoring, or the written offset during normal processing.
  *
- * The offset is initialized as null when the state store is registered, and then it can be updated by
+ * <p>The offset is initialized as null when the state store is registered, and then it can be updated by
  * loading checkpoint file, restore state stores, or passing from the record collector's written offsets.
  *
- * When checkpointing, if the offset is not null it would be written to the file.
+ * <p>When checkpointing, if the offset is not null it would be written to the file.
  *
- * The manager is also responsible for restoring state stores via their registered restore callback,
+ * <p>The manager is also responsible for restoring state stores via their registered restore callback,
  * which is used for both updating standby tasks as well as restoring active tasks.
  */
 public class ProcessorStateManager implements StateManager {
@@ -97,8 +99,11 @@ public class ProcessorStateManager implements StateManager {
         //      update blindly with the given offset
         private Long offset;
 
+        // Will be updated on batch restored
+        private Long endOffset;
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
+
 
         private StateStoreMetadata(final StateStore stateStore,
                                    final CommitCallback commitCallback) {
@@ -137,6 +142,14 @@ public class ProcessorStateManager implements StateManager {
             return this.offset;
         }
 
+        Long endOffset() {
+            return this.endOffset;
+        }
+
+        public void setEndOffset(final Long endOffset) {
+            this.endOffset = endOffset;
+        }
+
         TopicPartition changelogPartition() {
             return this.changelogPartition;
         }
@@ -153,12 +166,11 @@ public class ProcessorStateManager implements StateManager {
 
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
-    private Logger log;
     private String logPrefix;
 
     private final TaskId taskId;
     private final boolean eosEnabled;
-    private final ChangelogRegister changelogReader;
+    private ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
     private final Map<String, String> storeToChangelogTopic;
 
@@ -168,9 +180,11 @@ public class ProcessorStateManager implements StateManager {
 
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
+    private final boolean stateUpdaterEnabled;
 
     private TaskType taskType;
-    private final boolean stateUpdaterEnabled;
+    private Logger log;
+    private Task.State taskState;
 
     public static String storeChangelogTopic(final String prefix, final String storeName, final String namedTopology) {
         if (namedTopology == null) {
@@ -208,7 +222,40 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Created state store manager for task {}", taskId);
     }
 
-    void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext processorContext) {
+    /**
+     * Special constructor used by {@link StateDirectory} to partially initialize startup tasks for local state, before
+     * they're assigned to a thread. When the task is assigned to a thread, the initialization of this StateManager is
+     * completed in {@link #assignToStreamThread(LogContext, ChangelogRegister, Collection)}.
+     */
+    static ProcessorStateManager createStartupTaskStateManager(final TaskId taskId,
+                                                               final boolean eosEnabled,
+                                                               final LogContext logContext,
+                                                               final StateDirectory stateDirectory,
+                                                               final Map<String, String> storeToChangelogTopic,
+                                                               final Set<TopicPartition> sourcePartitions,
+                                                               final boolean stateUpdaterEnabled) {
+        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, sourcePartitions, stateUpdaterEnabled);
+    }
+
+    /**
+     * Standby tasks initialized for local state on-startup are only partially initialized, because they are not yet
+     * assigned to a StreamThread. Once assigned to a StreamThread, we complete their initialization here using the
+     * assigned StreamThread's context.
+     */
+    void assignToStreamThread(final LogContext logContext,
+                              final ChangelogRegister changelogReader,
+                              final Collection<TopicPartition> sourcePartitions) {
+        if (this.changelogReader != null) {
+            throw new IllegalStateException("Attempted to replace an existing changelogReader on a StateManager without closing it.");
+        }
+        this.sourcePartitions.clear();
+        this.log = logContext.logger(ProcessorStateManager.class);
+        this.logPrefix = logContext.logPrefix();
+        this.changelogReader = changelogReader;
+        this.sourcePartitions.addAll(sourcePartitions);
+    }
+
+    void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
             if (stores.containsKey(store.name())) {
@@ -216,7 +263,7 @@ public class ProcessorStateManager implements StateManager {
                     maybeRegisterStoreWithChangelogReader(store.name());
                 }
             } else {
-                store.init((StateStoreContext) processorContext, store);
+                store.init(processorContext, store);
             }
             log.trace("Registered state store {}", store.name());
         }
@@ -230,7 +277,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public StateStore getGlobalStore(final String name) {
+    public StateStore globalStore(final String name) {
         return globalStores.get(name);
     }
 
@@ -257,7 +304,7 @@ public class ProcessorStateManager implements StateManager {
                         final Long offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
                         store.setOffset(offset);
 
-                        log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
+                        log.info("State store {} initialized from checkpoint with offset {} at changelog {}",
                                   store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
                         // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
@@ -300,7 +347,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     private void maybeRegisterStoreWithChangelogReader(final String storeName) {
-        if (isLoggingEnabled(storeName)) {
+        if (isLoggingEnabled(storeName) && changelogReader != null) {
             changelogReader.register(getStorePartition(storeName), this);
         }
     }
@@ -365,7 +412,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public StateStore getStore(final String name) {
+    public StateStore store(final String name) {
         if (stores.containsKey(name)) {
             return stores.get(name).stateStore;
         } else {
@@ -412,6 +459,14 @@ public class ProcessorStateManager implements StateManager {
         return taskId;
     }
 
+    void transitionTaskState(final Task.State taskState) {
+        this.taskState = taskState;
+    }
+
+    Task.State taskState() {
+        return taskState;
+    }
+
     // used by the changelog reader only
     boolean changelogAsSource(final TopicPartition partition) {
         return sourcePartitions.contains(partition);
@@ -433,7 +488,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // used by the changelog reader only
-    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
+    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords, final OptionalLong optionalLag) {
         if (!stores.containsValue(storeMetadata)) {
             throw new IllegalStateException("Restoring " + storeMetadata + " which is not registered in this state manager, " +
                 "this should not happen.");
@@ -457,6 +512,10 @@ public class ProcessorStateManager implements StateManager {
             }
 
             storeMetadata.setOffset(batchEndOffset);
+            // If null means the lag for this partition is not known yet
+            if (optionalLag.isPresent()) {
+                storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
+            }
         }
     }
 
@@ -479,13 +538,20 @@ public class ProcessorStateManager implements StateManager {
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
-                        if (exception instanceof StreamsException)
+                        // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
+                        if (exception instanceof FailedProcessingException)
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to flush state store %s", logPrefix, store.name()),
+                                exception.getCause());
+                        else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
                             firstException = new ProcessorStateException(
                                 format("%sFailed to flush state store %s", logPrefix, store.name()), exception);
+                        log.error("Failed to flush state store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to flush state store {}: ", store.name(), exception);
                     }
-                    log.error("Failed to flush state store {}: ", store.name(), exception);
                 }
             }
         }
@@ -508,13 +574,18 @@ public class ProcessorStateManager implements StateManager {
                     if (store instanceof TimeOrderedKeyValueBuffer) {
                         store.flush();
                     } else if (store instanceof CachedStateStore) {
-                        ((CachedStateStore) store).flushCache();
+                        ((CachedStateStore<?, ?>) store).flushCache();
                     }
                     log.trace("Flushed cache or buffer {}", store.name());
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
-                        if (exception instanceof StreamsException) {
+                        // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
+                        if (exception instanceof FailedProcessingException) {
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to flush cache of store %s", logPrefix, store.name()),
+                                exception.getCause());
+                        } else if (exception instanceof StreamsException) {
                             firstException = exception;
                         } else {
                             firstException = new ProcessorStateException(
@@ -522,8 +593,10 @@ public class ProcessorStateManager implements StateManager {
                                 exception
                             );
                         }
+                        log.error("Failed to flush cache of store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to flush cache of store {}: ", store.name(), exception);
                     }
-                    log.error("Failed to flush cache of store {}: ", store.name(), exception);
                 }
             }
         }
@@ -543,7 +616,7 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        if (!stateUpdaterEnabled) {
+        if (!stateUpdaterEnabled && changelogReader != null) {
             changelogReader.unregister(getAllChangelogTopicPartitions());
         }
 
@@ -559,13 +632,20 @@ public class ProcessorStateManager implements StateManager {
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
-                        if (exception instanceof StreamsException)
+                        // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
+                        if (exception instanceof FailedProcessingException)
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to close state store %s", logPrefix, store.name()),
+                                exception.getCause());
+                        else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
                             firstException = new ProcessorStateException(
                                 format("%sFailed to close state store %s", logPrefix, store.name()), exception);
+                        log.error("Failed to close state store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to close state store {}: ", store.name(), exception);
                     }
-                    log.error("Failed to close state store {}: ", store.name(), exception);
                 }
             }
 
@@ -584,18 +664,34 @@ public class ProcessorStateManager implements StateManager {
     void recycle() {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
 
-        if (!stateUpdaterEnabled) {
+        if (!stateUpdaterEnabled && changelogReader != null) {
             final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
             changelogReader.unregister(allChangelogs);
         }
+
+        // when the state manager is recycled to be used, future writes may bypass its store's caching
+        // layer if they are from restoration, hence we need to clear the state store's caches just in case
+        // See KAFKA-14172 for details
+        if (!stores.isEmpty()) {
+            log.debug("Clearing all store caches registered in the state manager: {}", stores);
+            for (final StateStoreMetadata metadata : stores.values()) {
+                final StateStore store = metadata.stateStore;
+
+                if (store instanceof CachedStateStore) {
+                    ((CachedStateStore<?, ?>) store).clearCache();
+                }
+                log.trace("Cleared cache {}", store.name());
+            }
+        }
     }
 
-    void transitionTaskType(final TaskType newType) {
+    void transitionTaskType(final TaskType newType, final LogContext logContext) {
         if (taskType.equals(newType)) {
             throw new IllegalStateException("Tried to recycle state for task type conversion but new type was the same.");
         }
 
         taskType = newType;
+        log = logContext.logger(ProcessorStateManager.class);
     }
 
     @Override
@@ -639,7 +735,7 @@ public class ProcessorStateManager implements StateManager {
             }
         }
 
-        log.debug("Writing checkpoint: {}", checkpointingOffsets);
+        log.debug("Writing checkpoint: {} for task {}", checkpointingOffsets, taskId);
         try {
             checkpointFile.write(checkpointingOffsets);
         } catch (final IOException e) {

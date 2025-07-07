@@ -25,26 +25,32 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Locale;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -54,22 +60,26 @@ import java.util.function.Supplier;
 import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.AdditionalMatchers.aryEq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KafkaOffsetBackingStoreTest {
     private static final String CLIENT_ID_BASE = "test-client-id-";
     private static final String TOPIC = "connect-offsets";
@@ -103,9 +113,11 @@ public class KafkaOffsetBackingStoreTest {
     private static final ByteBuffer TP0_VALUE_NEW = buffer("VAL0_NEW");
     private static final ByteBuffer TP1_VALUE_NEW = buffer("VAL1_NEW");
 
-    private Map<String, String> props = new HashMap<>(DEFAULT_PROPS);
+    private final Map<String, String> props = new HashMap<>(DEFAULT_PROPS);
     @Mock
     KafkaBasedLog<byte[], byte[]> storeLog;
+    @Mock
+    Converter keyConverter;
     private KafkaOffsetBackingStore store;
 
     @Captor
@@ -123,8 +135,7 @@ public class KafkaOffsetBackingStoreTest {
     @Captor
     private ArgumentCaptor<Callback<Void>> storeLogCallbackArgumentCaptor;
 
-    @Before
-    public void setup() throws Exception {
+    public void setup(Boolean mockKeyConverter) {
         Supplier<TopicAdmin> adminSupplier = () -> {
             fail("Should not attempt to instantiate admin in these tests");
             // Should never be reached; only add this thrown exception to satisfy the compiler
@@ -132,14 +143,18 @@ public class KafkaOffsetBackingStoreTest {
         };
         Supplier<String> clientIdBase = () -> CLIENT_ID_BASE;
 
-        store = spy(new KafkaOffsetBackingStore(adminSupplier, clientIdBase));
+        if (mockKeyConverter) {
+            when(keyConverter.toConnectData(any(), any())).thenReturn(new SchemaAndValue(null,
+                    Arrays.asList("connector", Collections.singletonMap("partitionKey", "dummy"))));
+        }
+        store = spy(new KafkaOffsetBackingStore(adminSupplier, clientIdBase, keyConverter));
 
         doReturn(storeLog).when(store).createKafkaBasedLog(capturedTopic.capture(), capturedProducerProps.capture(),
                 capturedConsumerProps.capture(), capturedConsumedCallback.capture(),
-                capturedNewTopic.capture(), capturedAdminSupplier.capture());
+                capturedNewTopic.capture(), capturedAdminSupplier.capture(), any(), any());
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         verifyNoMoreInteractions(storeLog);
     }
@@ -152,6 +167,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testStartStop() {
+        setup(false);
         props.put("offset.storage.min.insync.replicas", "3");
         props.put("offset.storage.max.message.bytes", "1001");
 
@@ -177,6 +193,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testReloadOnStart() {
+        setup(true);
         doAnswer(invocation -> {
             capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY.array(), TP0_VALUE.array(),
                     new RecordHeaders(), Optional.empty()));
@@ -203,6 +220,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testGetSet() throws Exception {
+        setup(true);
         store.configure(mockConfig(props));
         store.start();
 
@@ -280,6 +298,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testGetSetNull() throws Exception {
+        setup(true);
         // Second get() should get the produced data and return the new values
         doAnswer(invocation -> {
             capturedConsumedCallback.getValue().onCompletion(null,
@@ -359,6 +378,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testSetFailure() {
+        setup(false);
         store.configure(mockConfig(props));
         store.start();
 
@@ -394,7 +414,7 @@ public class KafkaOffsetBackingStoreTest {
         callback0.getValue().onCompletion(null, null);
         ExecutionException e = assertThrows(ExecutionException.class, () -> setFuture.get(10000, TimeUnit.MILLISECONDS));
         assertNotNull(e.getCause());
-        assertTrue(e.getCause() instanceof KafkaException);
+        assertInstanceOf(KafkaException.class, e.getCause());
 
         store.stop();
 
@@ -403,32 +423,35 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testConsumerPropertiesInsertedByDefaultWithExactlyOnceSourceEnabled() {
+        setup(false);
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
         props.remove(ISOLATION_LEVEL_CONFIG);
 
         store.configure(mockConfig(props));
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
     }
 
     @Test
     public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() {
+        setup(false);
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
 
         store.configure(mockConfig(props));
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
     }
 
     @Test
     public void testConsumerPropertiesNotInsertedByDefaultWithoutExactlyOnceSourceEnabled() {
+        setup(false);
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
         props.remove(ISOLATION_LEVEL_CONFIG);
 
@@ -439,13 +462,14 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testConsumerPropertiesDoNotOverrideUserSuppliedValuesWithoutExactlyOnceSourceEnabled() {
+        setup(false);
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
 
         store.configure(mockConfig(props));
 
         assertEquals(
-                IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_UNCOMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
 
@@ -453,11 +477,89 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testClientIds() {
+        setup(false);
         store.configure(mockConfig(props));
 
         final String expectedClientId = CLIENT_ID_BASE + "offsets";
         assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
         assertEquals(expectedClientId, capturedConsumerProps.getValue().get(CLIENT_ID_CONFIG));
+    }
+
+    @Test
+    public void testConnectorPartitions() throws Exception {
+        JsonConverter jsonConverter = new JsonConverter();
+        jsonConverter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), true);
+        store = spy(new KafkaOffsetBackingStore(() -> {
+            fail("Should not attempt to instantiate admin in these tests");
+            return null;
+        }, () -> CLIENT_ID_BASE, jsonConverter));
+
+        doReturn(storeLog).when(store).createKafkaBasedLog(capturedTopic.capture(), capturedProducerProps.capture(),
+                capturedConsumerProps.capture(), capturedConsumedCallback.capture(),
+                capturedNewTopic.capture(), capturedAdminSupplier.capture(), any(), any());
+
+        store.configure(mockConfig(props));
+        store.start();
+
+        verify(storeLog).start();
+
+        doAnswer(invocation -> {
+            capturedConsumedCallback.getValue().onCompletion(null,
+                    new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0,
+                            jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
+                                    Collections.singletonMap("partitionKey", "partitionValue1"))), TP0_VALUE.array(),
+                            new RecordHeaders(), Optional.empty()));
+            capturedConsumedCallback.getValue().onCompletion(null,
+                    new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0,
+                            jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
+                                    Collections.singletonMap("partitionKey", "partitionValue1"))), TP1_VALUE.array(),
+                            new RecordHeaders(), Optional.empty()));
+            capturedConsumedCallback.getValue().onCompletion(null,
+                    new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0,
+                            jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
+                                    Collections.singletonMap("partitionKey", "partitionValue2"))), TP2_VALUE.array(),
+                            new RecordHeaders(), Optional.empty()));
+            capturedConsumedCallback.getValue().onCompletion(null,
+                    new ConsumerRecord<>(TOPIC, 0, 3, 0L, TimestampType.CREATE_TIME, 0, 0,
+                            jsonConverter.fromConnectData("", null, Arrays.asList("connector2",
+                                    Collections.singletonMap("partitionKey", "partitionValue"))), TP1_VALUE.array(),
+                            new RecordHeaders(), Optional.empty()));
+            storeLogCallbackArgumentCaptor.getValue().onCompletion(null, null);
+            return null;
+        }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
+
+        // Trigger a read to the end of the log
+        store.get(Collections.emptyList()).get(10000, TimeUnit.MILLISECONDS);
+
+        Set<Map<String, Object>> connectorPartitions1 = store.connectorPartitions("connector1");
+        Set<Map<String, Object>> expectedConnectorPartition1 = new HashSet<>();
+        expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue1"));
+        expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue2"));
+        assertEquals(expectedConnectorPartition1, connectorPartitions1);
+
+        Set<Map<String, Object>> connectorPartitions2 = store.connectorPartitions("connector2");
+        Set<Map<String, Object>> expectedConnectorPartition2 = Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue"));
+        assertEquals(expectedConnectorPartition2, connectorPartitions2);
+
+        doAnswer(invocation -> {
+            capturedConsumedCallback.getValue().onCompletion(null,
+                    new ConsumerRecord<>(TOPIC, 0, 4, 0L, TimestampType.CREATE_TIME, 0, 0,
+                            jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
+                                    Collections.singletonMap("partitionKey", "partitionValue1"))), null,
+                            new RecordHeaders(), Optional.empty()));
+            storeLogCallbackArgumentCaptor.getValue().onCompletion(null, null);
+            return null;
+        }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
+
+        // Trigger a read to the end of the log
+        store.get(Collections.emptyList()).get(10000, TimeUnit.MILLISECONDS);
+
+        // Null valued offset for a partition key should remove that partition for the connector
+        connectorPartitions1 = store.connectorPartitions("connector1");
+        assertEquals(Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue2")), connectorPartitions1);
+
+        store.stop();
+        verify(storeLog).stop();
     }
 
     private static ByteBuffer buffer(String v) {

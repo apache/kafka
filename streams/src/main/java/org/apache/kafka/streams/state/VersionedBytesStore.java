@@ -25,6 +25,11 @@ import org.apache.kafka.common.utils.Bytes;
 public interface VersionedBytesStore extends KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {
 
     /**
+     * The analog of {@link VersionedKeyValueStore#put(Object, Object, long)}.
+     */
+    long put(Bytes key, byte[] value, long timestamp);
+
+    /**
      * The analog of {@link VersionedKeyValueStore#get(Object, long)}.
      */
     byte[] get(Bytes key, long asOfTimestamp);

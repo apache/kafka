@@ -18,6 +18,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.utils.Time;
 
@@ -70,6 +71,17 @@ public final class NetworkClientUtils {
                 throw new IOException("Connection to " + node + " failed.");
             }
             long pollTimeout = timeoutMs - (attemptStartTime - startTime); // initialize in this order to avoid overflow
+
+            // If the network client is waiting to send data for some reason (eg. throttling or retry backoff),
+            // polling longer than that is potentially dangerous as the producer will not attempt to send
+            // any pending requests.
+            long waitingTime = client.pollDelayMs(node, startTime);
+            if (waitingTime > 0 && pollTimeout > waitingTime) {
+                // Block only until the next-scheduled time that it's okay to send data to the producer,
+                // wake up, and try again. This is the way.
+                pollTimeout = waitingTime;
+            }
+
             client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);
@@ -113,5 +125,30 @@ public final class NetworkClientUtils {
                 throw new IOException("Client was shutdown before response was read");
 
         }
+    }
+
+    /**
+     * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in
+     * reconnect backoff window following the disconnect).
+     */
+    public static boolean isUnavailable(KafkaClient client, Node node, Time time) {
+        return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
+    }
+
+    /**
+     * Check for an authentication error on a given node and raise the exception if there is one.
+     */
+    public static void maybeThrowAuthFailure(KafkaClient client, Node node) {
+        AuthenticationException exception = client.authenticationException(node);
+        if (exception != null)
+            throw exception;
+    }
+
+    /**
+     * Initiate a connection if currently possible. This is only really useful for resetting the
+     * failed status of a socket.
+     */
+    public static void tryConnect(KafkaClient client, Node node, Time time) {
+        client.ready(node, time.milliseconds());
     }
 }

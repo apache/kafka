@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 
 import org.junit.jupiter.api.Test;
+
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

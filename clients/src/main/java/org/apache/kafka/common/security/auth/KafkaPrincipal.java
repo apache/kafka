@@ -42,7 +42,7 @@ import static java.util.Objects.requireNonNull;
  */
 public class KafkaPrincipal implements Principal {
     public static final String USER_TYPE = "User";
-    public final static KafkaPrincipal ANONYMOUS = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "ANONYMOUS");
+    public static final KafkaPrincipal ANONYMOUS = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "ANONYMOUS");
 
     private final String principalType;
     private final String name;
@@ -97,4 +97,3 @@ public class KafkaPrincipal implements Principal {
         return tokenAuthenticated;
     }
 }
-

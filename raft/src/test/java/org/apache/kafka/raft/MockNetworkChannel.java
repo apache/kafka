@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 
 import java.util.ArrayList;
@@ -24,22 +25,21 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockNetworkChannel implements NetworkChannel {
+    public static final ListenerName LISTENER_NAME = VoterSetTest.DEFAULT_LISTENER_NAME;
+
     private final AtomicInteger correlationIdCounter;
-    private final Set<Integer> nodeCache;
     private final List<RaftRequest.Outbound> sendQueue = new ArrayList<>();
     private final Map<Integer, RaftRequest.Outbound> awaitingResponse = new HashMap<>();
 
-    public MockNetworkChannel(AtomicInteger correlationIdCounter, Set<Integer> destinationIds) {
+    public MockNetworkChannel(AtomicInteger correlationIdCounter) {
         this.correlationIdCounter = correlationIdCounter;
-        this.nodeCache = destinationIds;
     }
 
-    public MockNetworkChannel(Set<Integer> destinationIds) {
-        this(new AtomicInteger(0), destinationIds);
+    public MockNetworkChannel() {
+        this(new AtomicInteger(0));
     }
 
     @Override
@@ -49,16 +49,12 @@ public class MockNetworkChannel implements NetworkChannel {
 
     @Override
     public void send(RaftRequest.Outbound request) {
-        if (!nodeCache.contains(request.destinationId())) {
-            throw new IllegalArgumentException("Attempted to send to destination " +
-                request.destinationId() + ", but its address is not yet known");
-        }
         sendQueue.add(request);
     }
 
     @Override
-    public void updateEndpoint(int id, RaftConfig.InetAddressSpec address) {
-        // empty
+    public ListenerName listenerName() {
+        return LISTENER_NAME;
     }
 
     public List<RaftRequest.Outbound> drainSendQueue() {
@@ -70,8 +66,8 @@ public class MockNetworkChannel implements NetworkChannel {
         Iterator<RaftRequest.Outbound> iterator = sendQueue.iterator();
         while (iterator.hasNext()) {
             RaftRequest.Outbound request = iterator.next();
-            if (!apiKeyFilter.isPresent() || request.data().apiKey() == apiKeyFilter.get().id) {
-                awaitingResponse.put(request.correlationId, request);
+            if (apiKeyFilter.isEmpty() || request.data().apiKey() == apiKeyFilter.get().id) {
+                awaitingResponse.put(request.correlationId(), request);
                 requests.add(request);
                 iterator.remove();
             }
@@ -79,17 +75,15 @@ public class MockNetworkChannel implements NetworkChannel {
         return requests;
     }
 
-
     public boolean hasSentRequests() {
         return !sendQueue.isEmpty();
     }
 
     public void mockReceive(RaftResponse.Inbound response) {
-        RaftRequest.Outbound request = awaitingResponse.get(response.correlationId);
+        RaftRequest.Outbound request = awaitingResponse.get(response.correlationId());
         if (request == null) {
             throw new IllegalStateException("Received response for a request which is not being awaited");
         }
         request.completion.complete(response);
     }
-
 }

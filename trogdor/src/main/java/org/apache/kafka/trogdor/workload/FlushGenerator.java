@@ -17,9 +17,10 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
+
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import org.apache.kafka.clients.producer.KafkaProducer;
 
 /**
  * This interface is used to facilitate flushing the KafkaProducers on a cadence specified by the user.
@@ -33,9 +34,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
  * Please see the implementation classes for more details.
  */
 
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "type")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(value = {
     @JsonSubTypes.Type(value = ConstantFlushGenerator.class, name = "constant"),
     @JsonSubTypes.Type(value = GaussianFlushGenerator.class, name = "gaussian")

@@ -17,8 +17,6 @@
 
 package org.apache.kafka.metadata;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,7 +40,6 @@ import java.util.Map;
  *     ↓
  * SHUTTING_DOWN
  */
-@InterfaceStability.Evolving
 public enum BrokerState {
     /**
      * The state the broker is in when it first starts up.
@@ -82,7 +79,7 @@ public enum BrokerState {
      */
     UNKNOWN((byte) 127);
 
-    private final static Map<Byte, BrokerState> VALUES_TO_ENUMS = new HashMap<>();
+    private static final Map<Byte, BrokerState> VALUES_TO_ENUMS = new HashMap<>();
 
     static {
         for (BrokerState state : BrokerState.values()) {

@@ -16,21 +16,17 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * The result of the {@link AdminClient#listOffsets(Map)} call.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
 public class ListOffsetsResult {
 
     private final Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures;
@@ -56,21 +52,18 @@ public class ListOffsetsResult {
      * retrieved.
      */
     public KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
-                .thenApply(new KafkaFuture.BaseFunction<Void, Map<TopicPartition, ListOffsetsResultInfo>>() {
-                    @Override
-                    public Map<TopicPartition, ListOffsetsResultInfo> apply(Void v) {
-                        Map<TopicPartition, ListOffsetsResultInfo> offsets = new HashMap<>(futures.size());
-                        for (Map.Entry<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> entry : futures.entrySet()) {
-                            try {
-                                offsets.put(entry.getKey(), entry.getValue().get());
-                            } catch (InterruptedException | ExecutionException e) {
-                                // This should be unreachable, because allOf ensured that all the futures completed successfully.
-                                throw new RuntimeException(e);
-                            }
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]))
+                .thenApply(v -> {
+                    Map<TopicPartition, ListOffsetsResultInfo> offsets = new HashMap<>(futures.size());
+                    for (Map.Entry<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> entry : futures.entrySet()) {
+                        try {
+                            offsets.put(entry.getKey(), entry.getValue().get());
+                        } catch (InterruptedException | ExecutionException e) {
+                            // This should be unreachable, because allOf ensured that all the futures completed successfully.
+                            throw new RuntimeException(e);
                         }
-                        return offsets;
                     }
+                    return offsets;
                 });
     }
 

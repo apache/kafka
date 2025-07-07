@@ -17,27 +17,28 @@
 
 package kafka.server
 
-import java.lang.{Byte => JByte}
-import java.util.Properties
-
 import kafka.network.SocketServer
-import kafka.security.authorizer.AclEntry
 import org.apache.kafka.common.message.{DescribeClusterRequestData, DescribeClusterResponseData}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
+import java.lang.{Byte => JByte}
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 class DescribeClusterRequestTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
-    properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
+    properties.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+    properties.setProperty(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "2")
+    properties.setProperty(ServerConfigs.BROKER_RACK_CONFIG, s"rack/${properties.getProperty(ServerConfigs.BROKER_ID_CONFIG)}")
   }
 
   @BeforeEach
@@ -56,23 +57,25 @@ class DescribeClusterRequestTest extends BaseRequestTest {
   }
 
   def testDescribeClusterRequest(includeClusterAuthorizedOperations: Boolean): Unit = {
-    val expectedBrokers = servers.map { server =>
+    val expectedBrokers = brokers.map { server =>
       new DescribeClusterResponseData.DescribeClusterBroker()
         .setBrokerId(server.config.brokerId)
         .setHost("localhost")
         .setPort(server.socketServer.boundPort(listenerName))
         .setRack(server.config.rack.orNull)
     }.toSet
-    val expectedControllerId = servers.filter(_.kafkaController.isActive).last.config.brokerId
-    val expectedClusterId = servers.last.clusterId
+
+    val expectedClusterId = brokers.last.clusterId
 
     val expectedClusterAuthorizedOperations = if (includeClusterAuthorizedOperations) {
       Utils.to32BitField(
-        AclEntry.supportedOperations(ResourceType.CLUSTER)
+        AclEntry.supportedOperations(ResourceType.CLUSTER).asScala
           .map(_.code.asInstanceOf[JByte]).asJava)
     } else {
       Int.MinValue
     }
+
+    ensureConsistentKRaftMetadata()
 
     for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
       val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
@@ -80,7 +83,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .build(version.toShort)
       val describeClusterResponse = sentDescribeClusterRequest(describeClusterRequest)
 
-      assertEquals(expectedControllerId, describeClusterResponse.data.controllerId)
+      assertTrue(0 to brokerCount contains describeClusterResponse.data.controllerId)
       assertEquals(expectedClusterId, describeClusterResponse.data.clusterId)
       assertEquals(expectedClusterAuthorizedOperations, describeClusterResponse.data.clusterAuthorizedOperations)
       assertEquals(expectedBrokers, describeClusterResponse.data.brokers.asScala.toSet)

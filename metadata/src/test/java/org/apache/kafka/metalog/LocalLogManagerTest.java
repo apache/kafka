@@ -21,13 +21,12 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.COMMIT;
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
@@ -108,7 +107,7 @@ public class LocalLogManagerTest {
             long highestOffset = -1;
             for (String event : listener.serializedEvents()) {
                 if (event.startsWith(LAST_COMMITTED_OFFSET)) {
-                    long offset = Long.valueOf(
+                    long offset = Long.parseLong(
                         event.substring(LAST_COMMITTED_OFFSET.length() + 1));
                     if (offset < highestOffset) {
                         throw new RuntimeException("Invalid offset: " + offset +
@@ -140,17 +139,18 @@ public class LocalLogManagerTest {
 
             LocalLogManager activeLogManager = env.logManagers().get(leaderId);
             int epoch = activeLogManager.leaderAndEpoch().epoch();
-            List<ApiMessageAndVersion> messages = Arrays.asList(
+            List<ApiMessageAndVersion> messages = List.of(
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(0), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(1), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(2), (short) 0));
-            assertEquals(3, activeLogManager.scheduleAppend(epoch, messages));
+            assertEquals(3, activeLogManager.prepareAppend(epoch, messages));
+            activeLogManager.schedulePreparedAppend();
             for (LocalLogManager logManager : env.logManagers()) {
                 waitForLastCommittedOffset(3, logManager);
             }
             List<MockMetaLogManagerListener> listeners = env.logManagers().stream().
                 map(m -> (MockMetaLogManagerListener) m.listeners().get(0)).
-                collect(Collectors.toList());
+                toList();
             env.close();
             for (MockMetaLogManagerListener listener : listeners) {
                 List<String> events = listener.serializedEvents();

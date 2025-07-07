@@ -23,6 +23,7 @@ import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,12 +31,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
-
 
 /**
  * A read-only class that holds the controller bootstrap metadata. A file named "bootstrap.checkpoint" is used and the
@@ -45,26 +43,22 @@ public class BootstrapDirectory {
     public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
 
     private final String directoryPath;
-    private final Optional<String> ibp;
 
     /**
      * Create a new BootstrapDirectory object.
      *
      * @param directoryPath     The path to the directory with the bootstrap file.
-     * @param ibp               The configured value of inter.broker.protocol, or the empty string
-     *                          if it is not configured.
      */
     public BootstrapDirectory(
-        String directoryPath,
-        Optional<String> ibp
+        String directoryPath
     ) {
         this.directoryPath = Objects.requireNonNull(directoryPath);
-        this.ibp = Objects.requireNonNull(ibp);
     }
 
     public BootstrapMetadata read() throws Exception {
-        if (!Files.isDirectory(Paths.get(directoryPath))) {
-            if (Files.exists(Paths.get(directoryPath))) {
+        Path path = Paths.get(directoryPath);
+        if (!Files.isDirectory(path)) {
+            if (Files.exists(path)) {
                 throw new RuntimeException("Path " + directoryPath + " exists, but is not " +
                         "a directory.");
             } else {
@@ -80,16 +74,7 @@ public class BootstrapDirectory {
     }
 
     BootstrapMetadata readFromConfiguration() {
-        if (!ibp.isPresent()) {
-            return BootstrapMetadata.fromVersion(MetadataVersion.latest(), "the default bootstrap");
-        }
-        MetadataVersion version = MetadataVersion.fromVersionString(ibp.get());
-        if (version.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
-            return BootstrapMetadata.fromVersion(MINIMUM_BOOTSTRAP_VERSION,
-                "the minimum version bootstrap with metadata.version " + MINIMUM_BOOTSTRAP_VERSION);
-        }
-        return BootstrapMetadata.fromVersion(version,
-            "the configured bootstrap with metadata.version " + version);
+        return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
     }
 
     BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {
@@ -107,7 +92,7 @@ public class BootstrapDirectory {
                 "the binary bootstrap metadata file: " + binaryPath);
     }
 
-    public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws Exception {
+    public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws IOException {
         if (!Files.isDirectory(Paths.get(directoryPath))) {
             throw new RuntimeException("No such directory as " + directoryPath);
         }

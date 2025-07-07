@@ -16,10 +16,22 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.tools.MockSinkConnector;
+import org.apache.kafka.connect.tools.MockSourceConnector;
+import org.apache.kafka.connect.transforms.Transformation;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,20 +40,27 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PluginUtilsTest {
-    @Rule
-    public TemporaryFolder rootDir = new TemporaryFolder();
+    @TempDir
+    Path rootDir;
+
     private Path pluginPath;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
-        pluginPath = rootDir.newFolder("plugins").toPath().toRealPath();
+        pluginPath = rootDir.resolve("plugins");
+        Files.createDirectories(pluginPath);
+        pluginPath = pluginPath.toRealPath();
     }
 
     @Test
@@ -174,10 +193,8 @@ public class PluginUtilsTest {
         );
         // Classes in the API should never be loaded in isolation.
         for (String clazz : apiClasses) {
-            assertFalse(
-                clazz + " from 'api' is loaded in isolation but should not be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertFalse(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'api' is loaded in isolation but should not be");
         }
     }
 
@@ -205,10 +222,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.util."
         );
         for (String clazz : runtimeClasses) {
-            assertFalse(
-                clazz + " from 'runtime' is loaded in isolation but should not be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertFalse(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'runtime' is loaded in isolation but should not be");
         }
     }
 
@@ -234,10 +249,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.storage.SimpleHeaderConverter"
         );
         for (String clazz : jsonConverterClasses) {
-            assertTrue(
-                clazz + " from 'runtime' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'runtime' is not loaded in isolation but should be");
         }
     }
 
@@ -289,10 +302,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.transforms.predicates.TopicNameMatches"
         );
         for (String clazz : transformsClasses) {
-            assertTrue(
-                clazz + " from 'transforms' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'transforms' is not loaded in isolation but should be");
         }
     }
 
@@ -308,10 +319,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.json.JsonSerializer"
         );
         for (String clazz : jsonConverterClasses) {
-            assertTrue(
-                clazz + " from 'json' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'json' is not loaded in isolation but should be");
         }
     }
 
@@ -325,10 +334,8 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.file.FileStreamSourceTask"
         );
         for (String clazz : jsonConverterClasses) {
-            assertTrue(
-                clazz + " from 'file' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'file' is not loaded in isolation but should be");
         }
     }
 
@@ -340,10 +347,8 @@ public class PluginUtilsTest {
             //"org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule" TODO fix?
         );
         for (String clazz : basicAuthExtensionClasses) {
-            assertTrue(
-                clazz + " from 'basic-auth-extension' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+            assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
+                clazz + " from 'basic-auth-extension' is not loaded in isolation but should be");
         }
     }
 
@@ -372,13 +377,13 @@ public class PluginUtilsTest {
 
     @Test
     public void testEmptyPluginUrls() throws Exception {
-        assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
+        assertEquals(Collections.emptyList(), PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testEmptyStructurePluginUrls() throws Exception {
         createBasicDirectoryLayout();
-        assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
+        assertEquals(Collections.emptyList(), PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
@@ -441,7 +446,9 @@ public class PluginUtilsTest {
     public void testPluginUrlsWithAbsoluteSymlink() throws Exception {
         createBasicDirectoryLayout();
 
-        Path anotherPath = rootDir.newFolder("moreplugins").toPath().toRealPath();
+        Path anotherPath = rootDir.resolve("moreplugins");
+        Files.createDirectories(anotherPath);
+        anotherPath = anotherPath.toRealPath();
         Files.createDirectories(anotherPath.resolve("connectorB-deps"));
         Files.createSymbolicLink(
                 pluginPath.resolve("connectorB/deps/symlink"),
@@ -458,7 +465,9 @@ public class PluginUtilsTest {
     public void testPluginUrlsWithRelativeSymlinkBackwards() throws Exception {
         createBasicDirectoryLayout();
 
-        Path anotherPath = rootDir.newFolder("moreplugins").toPath().toRealPath();
+        Path anotherPath = rootDir.resolve("moreplugins");
+        Files.createDirectories(anotherPath);
+        anotherPath = anotherPath.toRealPath();
         Files.createDirectories(anotherPath.resolve("connectorB-deps"));
         Files.createSymbolicLink(
                 pluginPath.resolve("connectorB/deps/symlink"),
@@ -490,6 +499,187 @@ public class PluginUtilsTest {
         assertUrls(expectedUrls, PluginUtils.pluginUrls(pluginPath));
     }
 
+    @Test
+    public void testNonCollidingAliases() {
+        SortedSet<PluginDesc<SinkConnector>> sinkConnectors = new TreeSet<>();
+        sinkConnectors.add(new PluginDesc<>(MockSinkConnector.class, null, PluginType.SINK, MockSinkConnector.class.getClassLoader()));
+        SortedSet<PluginDesc<SourceConnector>> sourceConnectors = new TreeSet<>();
+        sourceConnectors.add(new PluginDesc<>(MockSourceConnector.class, null, PluginType.SOURCE, MockSourceConnector.class.getClassLoader()));
+        SortedSet<PluginDesc<Converter>> converters = new TreeSet<>();
+        converters.add(new PluginDesc<>(CollidingConverter.class, null, PluginType.CONVERTER, CollidingConverter.class.getClassLoader()));
+        PluginScanResult result = new PluginScanResult(
+                sinkConnectors,
+                sourceConnectors,
+                converters,
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
+        );
+        Map<String, String> actualAliases = PluginUtils.computeAliases(result);
+        Map<String, String> expectedAliases = new HashMap<>();
+        expectedAliases.put("MockSinkConnector", MockSinkConnector.class.getName());
+        expectedAliases.put("MockSink", MockSinkConnector.class.getName());
+        expectedAliases.put("MockSourceConnector", MockSourceConnector.class.getName());
+        expectedAliases.put("MockSource", MockSourceConnector.class.getName());
+        expectedAliases.put("CollidingConverter", CollidingConverter.class.getName());
+        expectedAliases.put("Colliding", CollidingConverter.class.getName());
+        assertEquals(expectedAliases, actualAliases);
+    }
+
+    @Test
+    public void testMultiVersionAlias() {
+        SortedSet<PluginDesc<SinkConnector>> sinkConnectors = new TreeSet<>();
+        // distinct versions don't cause an alias collision (the class name is the same)
+        sinkConnectors.add(new PluginDesc<>(MockSinkConnector.class, null, PluginType.SINK, MockSinkConnector.class.getClassLoader()));
+        sinkConnectors.add(new PluginDesc<>(MockSinkConnector.class, "1.0", PluginType.SINK, MockSinkConnector.class.getClassLoader()));
+        assertEquals(2, sinkConnectors.size());
+        PluginScanResult result = new PluginScanResult(
+                sinkConnectors,
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
+        );
+        Map<String, String> actualAliases = PluginUtils.computeAliases(result);
+        Map<String, String> expectedAliases = new HashMap<>();
+        expectedAliases.put("MockSinkConnector", MockSinkConnector.class.getName());
+        expectedAliases.put("MockSink", MockSinkConnector.class.getName());
+        assertEquals(expectedAliases, actualAliases);
+    }
+
+    @Test
+    public void testCollidingPrunedAlias() {
+        SortedSet<PluginDesc<Converter>> converters = new TreeSet<>();
+        converters.add(new PluginDesc<>(CollidingConverter.class, null, PluginType.CONVERTER, CollidingConverter.class.getClassLoader()));
+        SortedSet<PluginDesc<HeaderConverter>> headerConverters = new TreeSet<>();
+        headerConverters.add(new PluginDesc<>(CollidingHeaderConverter.class, null, PluginType.HEADER_CONVERTER, CollidingHeaderConverter.class.getClassLoader()));
+        PluginScanResult result = new PluginScanResult(
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                converters,
+                headerConverters,
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
+        );
+        Map<String, String> actualAliases = PluginUtils.computeAliases(result);
+        Map<String, String> expectedAliases = new HashMap<>();
+        expectedAliases.put("CollidingConverter", CollidingConverter.class.getName());
+        expectedAliases.put("CollidingHeaderConverter", CollidingHeaderConverter.class.getName());
+        assertEquals(expectedAliases, actualAliases);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCollidingSimpleAlias() {
+        SortedSet<PluginDesc<Converter>> converters = new TreeSet<>();
+        converters.add(new PluginDesc<>(CollidingConverter.class, null, PluginType.CONVERTER, CollidingConverter.class.getClassLoader()));
+        SortedSet<PluginDesc<Transformation<?>>> transformations = new TreeSet<>();
+        transformations.add(new PluginDesc<>((Class<? extends Transformation<?>>) (Class<?>) Colliding.class, null, PluginType.TRANSFORMATION, Colliding.class.getClassLoader()));
+        PluginScanResult result = new PluginScanResult(
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                converters,
+                Collections.emptySortedSet(),
+                transformations,
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
+        );
+        Map<String, String> actualAliases = PluginUtils.computeAliases(result);
+        Map<String, String> expectedAliases = new HashMap<>();
+        expectedAliases.put("CollidingConverter", CollidingConverter.class.getName());
+        assertEquals(expectedAliases, actualAliases);
+    }
+
+    public static class CollidingConverter implements Converter, Versioned {
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+        }
+
+        @Override
+        public byte[] fromConnectData(String topic, Schema schema, Object value) {
+            return new byte[0];
+        }
+
+        @Override
+        public SchemaAndValue toConnectData(String topic, byte[] value) {
+            return null;
+        }
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
+    }
+
+    public static class CollidingHeaderConverter implements HeaderConverter, Versioned {
+
+        @Override
+        public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
+            return null;
+        }
+
+        @Override
+        public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
+            return new byte[0];
+        }
+
+        @Override
+        public ConfigDef config() {
+            return null;
+        }
+
+        @Override
+        public void close() throws IOException {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+        }
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
+    }
+
+    public static class Colliding<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+        }
+
+        @Override
+        public R apply(R record) {
+            return null;
+        }
+
+        @Override
+        public ConfigDef config() {
+            return null;
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
     private void createBasicDirectoryLayout() throws IOException {
         Files.createDirectories(pluginPath.resolve("connectorA"));
         Files.createDirectories(pluginPath.resolve("connectorB/deps"));
@@ -511,7 +701,7 @@ public class PluginUtilsTest {
 
     private void assertUrls(List<Path> expected, List<Path> actual) {
         Collections.sort(expected);
-        // not sorting 'actual' because it should be returned sorted from withing the PluginUtils.
+        // not sorting 'actual' because it should be returned sorted from within the PluginUtils.
         assertEquals(expected, actual);
     }
 }

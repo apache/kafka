@@ -20,15 +20,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Optional;
-import java.util.function.UnaryOperator;
 
-final public class FetchSnapshotRequest extends AbstractRequest {
+public final class FetchSnapshotRequest extends AbstractRequest {
     private final FetchSnapshotRequestData data;
 
     public FetchSnapshotRequest(FetchSnapshotRequestData data, short version) {
@@ -51,35 +48,6 @@ final public class FetchSnapshotRequest extends AbstractRequest {
     }
 
     /**
-     * Creates a FetchSnapshotRequestData with a single PartitionSnapshot for the topic partition.
-     *
-     * The partition index will already be populated when calling operator.
-     *
-     * @param topicPartition the topic partition to include
-     * @param operator unary operator responsible for populating all the appropriate fields
-     * @return the created fetch snapshot request data
-     */
-    public static FetchSnapshotRequestData singleton(
-        String clusterId,
-        TopicPartition topicPartition,
-        UnaryOperator<FetchSnapshotRequestData.PartitionSnapshot> operator
-    ) {
-        FetchSnapshotRequestData.PartitionSnapshot partitionSnapshot = operator.apply(
-            new FetchSnapshotRequestData.PartitionSnapshot().setPartition(topicPartition.partition())
-        );
-
-        return new FetchSnapshotRequestData()
-            .setClusterId(clusterId)
-            .setTopics(
-                Collections.singletonList(
-                    new FetchSnapshotRequestData.TopicSnapshot()
-                        .setName(topicPartition.topic())
-                        .setPartitions(Collections.singletonList(partitionSnapshot))
-                )
-            );
-    }
-
-    /**
      * Finds the PartitionSnapshot for a given topic partition.
      *
      * @param data the fetch snapshot request data
@@ -99,8 +67,8 @@ final public class FetchSnapshotRequest extends AbstractRequest {
             .findAny();
     }
 
-    public static FetchSnapshotRequest parse(ByteBuffer buffer, short version) {
-        return new FetchSnapshotRequest(new FetchSnapshotRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static FetchSnapshotRequest parse(Readable readable, short version) {
+        return new FetchSnapshotRequest(new FetchSnapshotRequestData(readable, version), version);
     }
 
     public static class Builder extends AbstractRequest.Builder<FetchSnapshotRequest> {

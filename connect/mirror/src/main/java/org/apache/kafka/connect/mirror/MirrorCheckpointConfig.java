@@ -17,14 +17,13 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class MirrorCheckpointConfig extends MirrorConnectorConfig {
-
     protected static final String REFRESH_GROUPS = "refresh.groups";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
     protected static final String SYNC_GROUP_OFFSETS = "sync.group.offsets";
@@ -33,7 +32,6 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String GROUPS_DEFAULT = DefaultGroupFilter.GROUPS_INCLUDE_DEFAULT;
     private static final String GROUPS_DOC = "Consumer groups to replicate. Supports comma-separated group IDs and regexes.";
     public static final String GROUPS_EXCLUDE = DefaultGroupFilter.GROUPS_EXCLUDE_CONFIG;
-    public static final String GROUPS_EXCLUDE_ALIAS = DefaultGroupFilter.GROUPS_EXCLUDE_CONFIG_ALIAS;
 
     public static final String GROUPS_EXCLUDE_DEFAULT = DefaultGroupFilter.GROUPS_EXCLUDE_DEFAULT;
     private static final String GROUPS_EXCLUDE_DOC = "Exclude groups. Supports comma-separated group IDs and regexes."
@@ -73,11 +71,14 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String GROUP_FILTER_CLASS = "group.filter.class";
     private static final String GROUP_FILTER_CLASS_DOC = "GroupFilter to use. Selects consumer groups to replicate.";
     public static final Class<?> GROUP_FILTER_CLASS_DEFAULT = DefaultGroupFilter.class;
+    public static final String OFFSET_SYNCS_SOURCE_CONSUMER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-consumer";
+    public static final String OFFSET_SYNCS_TARGET_CONSUMER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-consumer";
+    public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
+    public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
+    public static final String CHECKPOINTS_TARGET_CONSUMER_ROLE = "checkpoints-target-consumer";
 
     public MirrorCheckpointConfig(Map<String, String> props) {
-        super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {GROUPS_EXCLUDE, GROUPS_EXCLUDE_ALIAS},
-        }));
+        super(CONNECTOR_CONFIG_DEF, props);
     }
 
     public MirrorCheckpointConfig(ConfigDef configDef, Map<String, String> props) {
@@ -123,9 +124,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         }
     }
 
-    Map<String, String> taskConfigForConsumerGroups(List<String> groups) {
+    Map<String, String> taskConfigForConsumerGroups(List<String> groups, int taskIndex) {
         Map<String, String> props = originalsStrings();
         props.put(TASK_CONSUMER_GROUPS, String.join(",", groups));
+        props.put(TASK_INDEX, String.valueOf(taskIndex));
         return props;
     }
 
@@ -146,108 +148,126 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
 
     Map<String, Object> offsetSyncsTopicConsumerConfig() {
         return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
-                ? sourceConsumerConfig()
-                : targetConsumerConfig();
+                ? sourceConsumerConfig(OFFSET_SYNCS_SOURCE_CONSUMER_ROLE)
+                : targetConsumerConfig(OFFSET_SYNCS_TARGET_CONSUMER_ROLE);
     }
 
     Map<String, Object> offsetSyncsTopicAdminConfig() {
         return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
-                ? sourceAdminConfig()
-                : targetAdminConfig();
+                ? sourceAdminConfig(OFFSET_SYNCS_SOURCE_ADMIN_ROLE)
+                : targetAdminConfig(OFFSET_SYNCS_TARGET_ADMIN_ROLE);
     }
 
     Duration consumerPollTimeout() {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
-    protected static final ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef(BASE_CONNECTOR_CONFIG_DEF)
-            .define(
-                    CONSUMER_POLL_TIMEOUT_MILLIS,
-                    ConfigDef.Type.LONG,
-                    CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    CONSUMER_POLL_TIMEOUT_MILLIS_DOC)
-            .define(
-                    GROUPS,
-                    ConfigDef.Type.LIST,
-                    GROUPS_DEFAULT,
-                    ConfigDef.Importance.HIGH,
-                    GROUPS_DOC)
-            .define(
-                    GROUPS_EXCLUDE,
-                    ConfigDef.Type.LIST,
-                    GROUPS_EXCLUDE_DEFAULT,
-                    ConfigDef.Importance.HIGH,
-                    GROUPS_EXCLUDE_DOC)
-            .define(
-                    GROUPS_EXCLUDE_ALIAS,
-                    ConfigDef.Type.LIST,
-                    null,
-                    ConfigDef.Importance.HIGH,
-                    "Deprecated. Use " + GROUPS_EXCLUDE + " instead.")
-            .define(
-                    GROUP_FILTER_CLASS,
-                    ConfigDef.Type.CLASS,
-                    GROUP_FILTER_CLASS_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    GROUP_FILTER_CLASS_DOC)
-            .define(
-                    REFRESH_GROUPS_ENABLED,
-                    ConfigDef.Type.BOOLEAN,
-                    REFRESH_GROUPS_ENABLED_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    REFRESH_GROUPS_ENABLED_DOC)
-            .define(
-                    REFRESH_GROUPS_INTERVAL_SECONDS,
-                    ConfigDef.Type.LONG,
-                    REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    REFRESH_GROUPS_INTERVAL_SECONDS_DOC)
-            .define(
-                    EMIT_CHECKPOINTS_ENABLED,
-                    ConfigDef.Type.BOOLEAN,
-                    EMIT_CHECKPOINTS_ENABLED_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    EMIT_CHECKPOINTS_ENABLED_DOC)
-            .define(
-                    EMIT_CHECKPOINTS_INTERVAL_SECONDS,
-                    ConfigDef.Type.LONG,
-                    EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC)
-            .define(
-                    SYNC_GROUP_OFFSETS_ENABLED,
-                    ConfigDef.Type.BOOLEAN,
-                    SYNC_GROUP_OFFSETS_ENABLED_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    SYNC_GROUP_OFFSETS_ENABLED_DOC)
-            .define(
-                    SYNC_GROUP_OFFSETS_INTERVAL_SECONDS,
-                    ConfigDef.Type.LONG,
-                    SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DOC)
-            .define(
-                    CHECKPOINTS_TOPIC_REPLICATION_FACTOR,
-                    ConfigDef.Type.SHORT,
-                    CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DOC)
-            .define(
-                    OFFSET_SYNCS_TOPIC_LOCATION,
-                    ConfigDef.Type.STRING,
-                    OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT,
-                    ConfigDef.ValidString.in(SOURCE_CLUSTER_ALIAS_DEFAULT, TARGET_CLUSTER_ALIAS_DEFAULT),
-                    ConfigDef.Importance.LOW,
-                    OFFSET_SYNCS_TOPIC_LOCATION_DOC)
-            .define(
-                    TOPIC_FILTER_CLASS,
-                    ConfigDef.Type.CLASS,
-                    TOPIC_FILTER_CLASS_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    TOPIC_FILTER_CLASS_DOC);
+    public static Map<String, String> validate(Map<String, String> configs) {
+        Map<String, String> invalidConfigs = new HashMap<>();
+
+        // No point to validate when connector is disabled.
+        if ("false".equals(configs.getOrDefault(ENABLED, "true"))) {
+            return invalidConfigs;
+        }
+
+        if ("false".equals(configs.get(EMIT_CHECKPOINTS_ENABLED))) {
+            invalidConfigs.putIfAbsent(EMIT_CHECKPOINTS_ENABLED, "MirrorCheckpointConnector can't run with " +
+                    EMIT_CHECKPOINTS_ENABLED + " set to false");
+        }
+
+        if ("false".equals(configs.get(EMIT_OFFSET_SYNCS_ENABLED))) {
+            invalidConfigs.putIfAbsent(EMIT_OFFSET_SYNCS_ENABLED, "MirrorCheckpointConnector can't run without offset syncs");
+        }
+
+        return invalidConfigs;
+    }
+
+    private static ConfigDef defineCheckpointConfig(ConfigDef baseConfig) {
+        return baseConfig
+                .define(
+                        CONSUMER_POLL_TIMEOUT_MILLIS,
+                        ConfigDef.Type.LONG,
+                        CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        CONSUMER_POLL_TIMEOUT_MILLIS_DOC)
+                .define(
+                        GROUPS,
+                        ConfigDef.Type.LIST,
+                        GROUPS_DEFAULT,
+                        ConfigDef.Importance.HIGH,
+                        GROUPS_DOC)
+                .define(
+                        GROUPS_EXCLUDE,
+                        ConfigDef.Type.LIST,
+                        GROUPS_EXCLUDE_DEFAULT,
+                        ConfigDef.Importance.HIGH,
+                        GROUPS_EXCLUDE_DOC)
+                .define(
+                        GROUP_FILTER_CLASS,
+                        ConfigDef.Type.CLASS,
+                        GROUP_FILTER_CLASS_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        GROUP_FILTER_CLASS_DOC)
+                .define(
+                        REFRESH_GROUPS_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        REFRESH_GROUPS_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        REFRESH_GROUPS_ENABLED_DOC)
+                .define(
+                        REFRESH_GROUPS_INTERVAL_SECONDS,
+                        ConfigDef.Type.LONG,
+                        REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        REFRESH_GROUPS_INTERVAL_SECONDS_DOC)
+                .define(
+                        EMIT_CHECKPOINTS_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        EMIT_CHECKPOINTS_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        EMIT_CHECKPOINTS_ENABLED_DOC)
+                .define(
+                        EMIT_CHECKPOINTS_INTERVAL_SECONDS,
+                        ConfigDef.Type.LONG,
+                        EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC)
+                .define(
+                        SYNC_GROUP_OFFSETS_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        SYNC_GROUP_OFFSETS_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        SYNC_GROUP_OFFSETS_ENABLED_DOC)
+                .define(
+                        SYNC_GROUP_OFFSETS_INTERVAL_SECONDS,
+                        ConfigDef.Type.LONG,
+                        SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DOC)
+                .define(
+                        CHECKPOINTS_TOPIC_REPLICATION_FACTOR,
+                        ConfigDef.Type.SHORT,
+                        CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DOC)
+                .define(
+                        OFFSET_SYNCS_TOPIC_LOCATION,
+                        ConfigDef.Type.STRING,
+                        OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT,
+                        ConfigDef.ValidString.in(SOURCE_CLUSTER_ALIAS_DEFAULT, TARGET_CLUSTER_ALIAS_DEFAULT),
+                        ConfigDef.Importance.LOW,
+                        OFFSET_SYNCS_TOPIC_LOCATION_DOC)
+                .define(
+                        TOPIC_FILTER_CLASS,
+                        ConfigDef.Type.CLASS,
+                        TOPIC_FILTER_CLASS_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        TOPIC_FILTER_CLASS_DOC);
+    }
+
+    protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineCheckpointConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
 
     public static void main(String[] args) {
-        System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_checkpoint_" + config));
+        System.out.println(defineCheckpointConfig(new ConfigDef()).toHtml(4, config -> "mirror_checkpoint_" + config));
     }
 }

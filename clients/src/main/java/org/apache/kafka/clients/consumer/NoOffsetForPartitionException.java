@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -40,11 +39,11 @@ public class NoOffsetForPartitionException extends InvalidOffsetException {
 
     public NoOffsetForPartitionException(Collection<TopicPartition> partitions) {
         super("Undefined offset with no reset policy for partitions: " + partitions);
-        this.partitions = Collections.unmodifiableSet(new HashSet<>(partitions));
+        this.partitions = Set.copyOf(partitions);
     }
 
     /**
-     * returns all partitions for which no offests are defined.
+     * returns all partitions for which no offsets are defined.
      * @return all partitions without offsets
      */
     public Set<TopicPartition> partitions() {

@@ -25,9 +25,7 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -49,7 +47,7 @@ public final class QueryableStoreTypes {
     }
 
     /**
-     * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>}.
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore ReadOnlyKeyValueStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;}.
      *
      * @param <K> key type of the store
      * @param <V> value type of the store
@@ -71,7 +69,7 @@ public final class QueryableStoreTypes {
     }
 
     /**
-     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore ReadOnlyWindowStore<K, ValueAndTimestamp<V>>}.
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore ReadOnlyWindowStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;}.
      *
      * @param <K> key type of the store
      * @param <V> value type of the store
@@ -92,18 +90,17 @@ public final class QueryableStoreTypes {
         return new SessionStoreType<>();
     }
 
-    private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
+    private abstract static class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
 
-        private final Set<Class> matchTo;
+        private final Set<Class<?>> matchTo;
 
-        QueryableStoreTypeMatcher(final Set<Class> matchTo) {
+        QueryableStoreTypeMatcher(final Set<Class<?>> matchTo) {
             this.matchTo = matchTo;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public boolean accepts(final StateStore stateStore) {
-            for (final Class matchToClass : matchTo) {
+            for (final Class<?> matchToClass : matchTo) {
                 if (!matchToClass.isAssignableFrom(stateStore.getClass())) {
                     return false;
                 }
@@ -130,9 +127,9 @@ public final class QueryableStoreTypes {
         extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedKeyValueStoreType() {
-            super(new HashSet<>(Arrays.asList(
+            super(Set.of(
                 TimestampedKeyValueStore.class,
-                ReadOnlyKeyValueStore.class)));
+                ReadOnlyKeyValueStore.class));
         }
 
         @Override
@@ -159,9 +156,9 @@ public final class QueryableStoreTypes {
         extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedWindowStoreType() {
-            super(new HashSet<>(Arrays.asList(
+            super(Set.of(
                 TimestampedWindowStore.class,
-                ReadOnlyWindowStore.class)));
+                ReadOnlyWindowStore.class));
         }
 
         @Override

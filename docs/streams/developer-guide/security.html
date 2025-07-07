@@ -85,8 +85,8 @@
                 it is recommended to use ACLs on prefixed resource pattern
                 to configure control lists to allow client to manage all topics and consumer groups started with this prefix
                 as <code class="docutils literal"><span class="pre">--resource-pattern-type prefixed --topic your.application.id --operation All </span></code>
-                (see <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-277+-+Fine+Grained+ACL+for+CreateTopics+API">KIP-277</a>
-                and <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a> for details).
+                (see <a class="reference external" href="https://cwiki.apache.org/confluence/x/zlOHB">KIP-277</a>
+                and <a class="reference external" href="https://cwiki.apache.org/confluence/x/QpvLB">KIP-290</a> for details).
             </p>
         </div>
         <div class="section" id="security-example">
@@ -98,7 +98,7 @@
                 then you must also include these SSL certificates in the correct locations within the Docker image.</p>
             <p>The snippet below shows the settings to enable client authentication and SSL encryption for data-in-transit between your
                 Kafka Streams application and the Kafka cluster it is reading and writing from:</p>
-            <pre class="line-numbers"><code class="language-bash"># Essential security settings to enable client authentication and SSL encryption
+            <pre><code class="language-bash"># Essential security settings to enable client authentication and SSL encryption
 bootstrap.servers=kafka.example.com:9093
 security.protocol=SSL
 ssl.truststore.location=/etc/security/tls/kafka.client.truststore.jks

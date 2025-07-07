@@ -82,7 +82,7 @@ public abstract class Type {
     /**
      * A Type that can return its description for documentation purposes.
      */
-    public static abstract class DocumentedType extends Type {
+    public abstract static class DocumentedType extends Type {
 
         /**
          * Short name of the type to identify it in documentation;
@@ -231,7 +231,7 @@ public abstract class Type {
         @Override
         public Object read(ByteBuffer buffer) {
             short value = buffer.getShort();
-            return Integer.valueOf(Short.toUnsignedInt(value));
+            return Short.toUnsignedInt(value);
         }
 
         @Override
@@ -1071,7 +1071,7 @@ public abstract class Type {
         public String documentation() {
             return "Represents an integer between -2<sup>31</sup> and 2<sup>31</sup>-1 inclusive. " +
                     "Encoding follows the variable-length zig-zag encoding from " +
-                    " <a href=\"http://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
+                    " <a href=\"https://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
         }
     };
 
@@ -1106,17 +1106,17 @@ public abstract class Type {
         public String documentation() {
             return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
                     "Encoding follows the variable-length zig-zag encoding from " +
-                    " <a href=\"http://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
+                    " <a href=\"https://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
         }
     };
 
     private static String toHtml() {
         DocumentedType[] types = {
             BOOLEAN, INT8, INT16, INT32, INT64,
-            UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
+            UINT16, UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
             STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
-            RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};
+            RECORDS, COMPACT_RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");

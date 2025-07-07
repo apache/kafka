@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ensure() {
+  if [[ -z "${!1}" ]]; then
+    echo "$1 environment variable not set"
+    exit 1
+  fi
+}
+
+path() {
+  if [[ $2 == "writable" ]]; then
+    if [[ ! -w "$1" ]]; then
+      echo "$1 file not writable"
+      exit 1
+    fi
+  elif [[ $2 == "existence" ]]; then
+    if [[ ! -e "$1" ]]; then
+      echo "$1 file does not exist"
+      exit 1
+    fi
+  fi
+}
+
+# unset KAFKA_ADVERTISED_LISTENERS from ENV in KRaft mode when running as controller only
+if [[ -n "${KAFKA_PROCESS_ROLES-}" ]]
+then
+  echo "Running in KRaft mode..."
+  ensure CLUSTER_ID
+  if [[ $KAFKA_PROCESS_ROLES == "controller" ]]
+  then
+    if [[ -n "${KAFKA_ADVERTISED_LISTENERS-}" ]]
+    then
+      echo "KAFKA_ADVERTISED_LISTENERS is not supported on a KRaft controller."
+      exit 1
+    else
+      # Unset in case env variable is set with empty value
+      unset KAFKA_ADVERTISED_LISTENERS
+    fi
+  fi 
+fi
+
+# By default, LISTENERS is derived from ADVERTISED_LISTENERS by replacing
+# hosts with 0.0.0.0. This is good default as it ensures that the broker
+# process listens on all ports.
+if [[ -z "${KAFKA_LISTENERS-}" ]] && ( [[ -z "${KAFKA_PROCESS_ROLES-}" ]] || [[ $KAFKA_PROCESS_ROLES != "controller" ]] ) && [[ -n "${KAFKA_ADVERTISED_LISTENERS-}" ]]
+then
+  export KAFKA_LISTENERS
+  KAFKA_LISTENERS=$(echo "$KAFKA_ADVERTISED_LISTENERS" | sed -e 's|://[^:]*:|://0.0.0.0:|g')
+fi
+
+path /opt/kafka/config/ writable
+
+# Set if ADVERTISED_LISTENERS has SSL:// or SASL_SSL:// endpoints.
+if [[ -n "${KAFKA_ADVERTISED_LISTENERS-}" ]] && [[ $KAFKA_ADVERTISED_LISTENERS == *"SSL://"* ]]
+then
+  echo "SSL is enabled."
+
+  ensure KAFKA_SSL_KEYSTORE_FILENAME
+  export KAFKA_SSL_KEYSTORE_LOCATION="/etc/kafka/secrets/$KAFKA_SSL_KEYSTORE_FILENAME"
+  path "$KAFKA_SSL_KEYSTORE_LOCATION" existence
+
+  ensure KAFKA_SSL_KEY_CREDENTIALS
+  KAFKA_SSL_KEY_CREDENTIALS_LOCATION="/etc/kafka/secrets/$KAFKA_SSL_KEY_CREDENTIALS"
+  path "$KAFKA_SSL_KEY_CREDENTIALS_LOCATION" existence
+  export KAFKA_SSL_KEY_PASSWORD
+  KAFKA_SSL_KEY_PASSWORD=$(cat "$KAFKA_SSL_KEY_CREDENTIALS_LOCATION")
+
+  ensure KAFKA_SSL_KEYSTORE_CREDENTIALS
+  KAFKA_SSL_KEYSTORE_CREDENTIALS_LOCATION="/etc/kafka/secrets/$KAFKA_SSL_KEYSTORE_CREDENTIALS"
+  path "$KAFKA_SSL_KEYSTORE_CREDENTIALS_LOCATION" existence
+  export KAFKA_SSL_KEYSTORE_PASSWORD
+  KAFKA_SSL_KEYSTORE_PASSWORD=$(cat "$KAFKA_SSL_KEYSTORE_CREDENTIALS_LOCATION")
+
+  if [[ -n "${KAFKA_SSL_CLIENT_AUTH-}" ]] && ( [[ $KAFKA_SSL_CLIENT_AUTH == *"required"* ]] || [[ $KAFKA_SSL_CLIENT_AUTH == *"requested"* ]] )
+  then
+      ensure KAFKA_SSL_TRUSTSTORE_FILENAME
+      export KAFKA_SSL_TRUSTSTORE_LOCATION="/etc/kafka/secrets/$KAFKA_SSL_TRUSTSTORE_FILENAME"
+      path "$KAFKA_SSL_TRUSTSTORE_LOCATION" existence
+
+      ensure KAFKA_SSL_TRUSTSTORE_CREDENTIALS
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS_LOCATION="/etc/kafka/secrets/$KAFKA_SSL_TRUSTSTORE_CREDENTIALS"
+      path "$KAFKA_SSL_TRUSTSTORE_CREDENTIALS_LOCATION" existence
+      export KAFKA_SSL_TRUSTSTORE_PASSWORD
+      KAFKA_SSL_TRUSTSTORE_PASSWORD=$(cat "$KAFKA_SSL_TRUSTSTORE_CREDENTIALS_LOCATION")
+  fi
+fi
+
+# Set if KAFKA_ADVERTISED_LISTENERS has SASL_PLAINTEXT:// or SASL_SSL:// endpoints.
+if [[ -n "${KAFKA_ADVERTISED_LISTENERS-}" ]] && [[ $KAFKA_ADVERTISED_LISTENERS =~ .*SASL_.*://.* ]]
+then
+  echo "SASL" is enabled.
+
+  ensure KAFKA_OPTS
+
+  if [[ ! $KAFKA_OPTS == *"java.security.auth.login.config"*  ]]
+  then
+    echo "KAFKA_OPTS should contain 'java.security.auth.login.config' property."
+  fi
+fi
+
+if [[ -n "${KAFKA_JMX_OPTS-}" ]]
+then
+  if [[ ! $KAFKA_JMX_OPTS == *"com.sun.management.jmxremote.rmi.port"*  ]]
+  then
+    echo "KAFKA_OPTS should contain 'com.sun.management.jmxremote.rmi.port' property. It is required for accessing the JMX metrics externally."
+  fi
+fi

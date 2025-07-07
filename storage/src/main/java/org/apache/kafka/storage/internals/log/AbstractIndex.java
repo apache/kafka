@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.utils.ByteBufferUnmapper;
 import org.apache.kafka.common.utils.OperatingSystem;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,6 +73,7 @@ public abstract class AbstractIndex implements Closeable {
      * @param baseOffset the base offset of the segment that this index is corresponding to.
      * @param maxIndexSize The maximum index size in bytes.
      */
+    @SuppressWarnings("this-escape")
     public AbstractIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
         Objects.requireNonNull(file);
         this.file = file;
@@ -261,7 +263,9 @@ public abstract class AbstractIndex implements Closeable {
     public void trimToValidSize() throws IOException {
         lock.lock();
         try {
-            resize(entrySize() * entries);
+            if (mmap != null) {
+                resize(entrySize() * entries);
+            }
         } finally {
             lock.unlock();
         }
@@ -340,8 +344,8 @@ public abstract class AbstractIndex implements Closeable {
      * algorithm will read index entries in page #0, 6, 9, 11, and 12.
      * page number: |0|1|2|3|4|5|6|7|8|9|10|11|12 |
      * steps:       |1| | | | | |3| | |4|  |5 |2/6|
-     * In each page, there are hundreds log entries, corresponding to hundreds to thousands of kafka messages. When the
-     * index gradually growing from the 1st entry in page #12 to the last entry in page #12, all the write (append)
+     * In each page, there are hundreds of log entries, corresponding to hundreds to thousands of kafka messages. When the
+     * index gradually grows from the 1st entry in page #12 to the last entry in page #12, all the write (append)
      * operations are in page #12, and all the in-sync follower / consumer lookups read page #0,6,9,11,12. As these pages
      * are always used in each in-sync lookup, we can assume these pages are fairly recently used, and are very likely to be
      * in the page cache. When the index grows to page #13, the pages needed in a in-sync lookup change to #0, 7, 10, 12,
@@ -397,8 +401,8 @@ public abstract class AbstractIndex implements Closeable {
     /**
      * Forcefully free the buffer's mmap.
      */
-    // Visible for testing, we can make this protected once OffsetIndexTest is in the same package as this class
-    public void forceUnmap() throws IOException {
+    // Visible for testing
+    protected void forceUnmap() throws IOException {
         try {
             ByteBufferUnmapper.unmap(file.getAbsolutePath(), mmap);
         } finally {

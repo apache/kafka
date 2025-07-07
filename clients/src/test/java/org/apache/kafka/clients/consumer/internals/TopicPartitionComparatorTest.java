@@ -16,18 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.common.TopicPartition;
+
+import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
-import org.apache.kafka.common.TopicPartition;
-import org.junit.jupiter.api.Test;
-
 public class TopicPartitionComparatorTest {
-    private final static TopicPartition TP1 = new TopicPartition("t1", 0);
-    private final static TopicPartition TP1_COPY = new TopicPartition("t1", 0);
-    private final static TopicPartition TP2 = new TopicPartition("t1", 1);
-    private final static TopicPartition TP3 = new TopicPartition("t11", 1);
+    private static final TopicPartition TP1 = new TopicPartition("t1", 0);
+    private static final TopicPartition TP1_COPY = new TopicPartition("t1", 0);
+    private static final TopicPartition TP2 = new TopicPartition("t1", 1);
+    private static final TopicPartition TP3 = new TopicPartition("t11", 1);
 
     private final TopicPartitionComparator comparator = new TopicPartitionComparator();
 

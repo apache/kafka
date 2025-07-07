@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
@@ -27,7 +28,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -41,19 +42,103 @@ import java.util.stream.Collectors;
  * An immutable class which represents broker registrations.
  */
 public class BrokerRegistration {
-    private static Map<String, Endpoint> listenersToMap(Collection<Endpoint> listeners) {
-        Map<String, Endpoint> listenersMap = new HashMap<>();
-        for (Endpoint endpoint : listeners) {
-            listenersMap.put(endpoint.listenerName().get(), endpoint);
-        }
-        return listenersMap;
-    }
+    public static class Builder {
+        private int id;
+        private long epoch;
+        private Uuid incarnationId;
+        private Map<String, Endpoint> listeners;
+        private Map<String, VersionRange> supportedFeatures;
+        private Optional<String> rack;
+        private boolean fenced;
+        private boolean inControlledShutdown;
+        private boolean isMigratingZkBroker;
+        private List<Uuid> directories;
 
-    public static Optional<Long> zkBrokerEpoch(long value) {
-        if (value == -1) {
-            return Optional.empty();
-        } else {
-            return Optional.of(value);
+        public Builder() {
+            this.id = 0;
+            this.epoch = -1;
+            this.incarnationId = null;
+            this.listeners = new HashMap<>();
+            this.supportedFeatures = new HashMap<>();
+            this.rack = Optional.empty();
+            this.fenced = false;
+            this.inControlledShutdown = false;
+            this.isMigratingZkBroker = false;
+            this.directories = List.of();
+        }
+
+        public Builder setId(int id) {
+            this.id = id;
+            return this;
+        }
+
+        public Builder setEpoch(long epoch) {
+            this.epoch = epoch;
+            return this;
+        }
+
+        public Builder setIncarnationId(Uuid incarnationId) {
+            this.incarnationId = incarnationId;
+            return this;
+        }
+
+        public Builder setListeners(List<Endpoint> listeners) {
+            Map<String, Endpoint> listenersMap = new HashMap<>();
+            for (Endpoint endpoint : listeners) {
+                listenersMap.put(endpoint.listener(), endpoint);
+            }
+            this.listeners = listenersMap;
+            return this;
+        }
+
+        public Builder setListeners(Map<String, Endpoint> listeners) {
+            this.listeners = listeners;
+            return this;
+        }
+
+        public Builder setSupportedFeatures(Map<String, VersionRange> supportedFeatures) {
+            this.supportedFeatures = supportedFeatures;
+            return this;
+        }
+
+        public Builder setRack(Optional<String> rack) {
+            Objects.requireNonNull(rack);
+            this.rack = rack;
+            return this;
+        }
+
+        public Builder setFenced(boolean fenced) {
+            this.fenced = fenced;
+            return this;
+        }
+
+        public Builder setInControlledShutdown(boolean inControlledShutdown) {
+            this.inControlledShutdown = inControlledShutdown;
+            return this;
+        }
+
+        public Builder setIsMigratingZkBroker(boolean isMigratingZkBroker) {
+            this.isMigratingZkBroker = isMigratingZkBroker;
+            return this;
+        }
+
+        public Builder setDirectories(List<Uuid> directories) {
+            this.directories = directories;
+            return this;
+        }
+
+        public BrokerRegistration build() {
+            return new BrokerRegistration(
+                id,
+                epoch,
+                incarnationId,
+                listeners,
+                supportedFeatures,
+                rack,
+                fenced,
+                inControlledShutdown,
+                isMigratingZkBroker,
+                directories);
         }
     }
 
@@ -66,60 +151,26 @@ public class BrokerRegistration {
     private final boolean fenced;
     private final boolean inControlledShutdown;
     private final boolean isMigratingZkBroker;
+    private final List<Uuid> directories;
 
-    // Visible for testing
-    public BrokerRegistration(int id,
-                              long epoch,
-                              Uuid incarnationId,
-                              List<Endpoint> listeners,
-                              Map<String, VersionRange> supportedFeatures,
-                              Optional<String> rack,
-                              boolean fenced,
-                              boolean inControlledShutdown) {
-        this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack,
-            fenced, inControlledShutdown, false);
-    }
-
-    public BrokerRegistration(int id,
-                              long epoch,
-                              Uuid incarnationId,
-                              List<Endpoint> listeners,
-                              Map<String, VersionRange> supportedFeatures,
-                              Optional<String> rack,
-                              boolean fenced,
-                              boolean inControlledShutdown,
-                              boolean isMigratingZkBroker) {
-        this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack,
-            fenced, inControlledShutdown, isMigratingZkBroker);
-    }
-
-    // Visible for testing
-    public BrokerRegistration(int id,
-                              long epoch,
-                              Uuid incarnationId,
-                              Map<String, Endpoint> listeners,
-                              Map<String, VersionRange> supportedFeatures,
-                              Optional<String> rack,
-                              boolean fenced,
-                              boolean inControlledShutdown) {
-        this(id, epoch, incarnationId, listeners, supportedFeatures, rack, fenced, inControlledShutdown, false);
-    }
-
-    public BrokerRegistration(int id,
-                              long epoch,
-                              Uuid incarnationId,
-                              Map<String, Endpoint> listeners,
-                              Map<String, VersionRange> supportedFeatures,
-                              Optional<String> rack,
-                              boolean fenced,
-                              boolean inControlledShutdown,
-                              boolean isMigratingZkBroker) {
+    private BrokerRegistration(
+        int id,
+        long epoch,
+        Uuid incarnationId,
+        Map<String, Endpoint> listeners,
+        Map<String, VersionRange> supportedFeatures,
+        Optional<String> rack,
+        boolean fenced,
+        boolean inControlledShutdown,
+        boolean isMigratingZkBroker,
+        List<Uuid> directories
+    ) {
         this.id = id;
         this.epoch = epoch;
         this.incarnationId = incarnationId;
         Map<String, Endpoint> newListeners = new HashMap<>(listeners.size());
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
-            if (!entry.getValue().listenerName().isPresent()) {
+            if (entry.getValue().listener().isEmpty()) {
                 throw new IllegalArgumentException("Broker listeners must be named.");
             }
             newListeners.put(entry.getKey(), entry.getValue());
@@ -127,11 +178,13 @@ public class BrokerRegistration {
         this.listeners = Collections.unmodifiableMap(newListeners);
         Objects.requireNonNull(supportedFeatures);
         this.supportedFeatures = new HashMap<>(supportedFeatures);
-        Objects.requireNonNull(rack);
         this.rack = rack;
         this.fenced = fenced;
         this.inControlledShutdown = inControlledShutdown;
         this.isMigratingZkBroker = isMigratingZkBroker;
+        directories = new ArrayList<>(directories);
+        directories.sort(Uuid::compareTo);
+        this.directories = Collections.unmodifiableList(directories);
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {
@@ -155,7 +208,8 @@ public class BrokerRegistration {
             Optional.ofNullable(record.rack()),
             record.fenced(),
             record.inControlledShutdown(),
-            record.isMigratingZkBroker());
+            record.isMigratingZkBroker(),
+            record.logDirs());
     }
 
     public int id() {
@@ -179,7 +233,11 @@ public class BrokerRegistration {
         if (endpoint == null) {
             return Optional.empty();
         }
-        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null)));
+        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null), fenced));
+    }
+    
+    public List<Node> nodes() {
+        return listeners.keySet().stream().flatMap(l -> node(l).stream()).toList();
     }
 
     public Map<String, VersionRange> supportedFeatures() {
@@ -198,8 +256,32 @@ public class BrokerRegistration {
         return inControlledShutdown;
     }
 
-    public boolean isMigratingZkBroker() {
-        return isMigratingZkBroker;
+    public List<Uuid> directories() {
+        return directories;
+    }
+
+    public boolean hasOnlineDir(Uuid dir) {
+        return DirectoryId.isOnline(dir, directories);
+    }
+
+    public List<Uuid> directoryIntersection(List<Uuid> otherDirectories) {
+        List<Uuid> results = new ArrayList<>();
+        for (Uuid directory : directories) {
+            if (otherDirectories.contains(directory)) {
+                results.add(directory);
+            }
+        }
+        return results;
+    }
+
+    public List<Uuid> directoryDifference(List<Uuid> otherDirectories) {
+        List<Uuid> results = new ArrayList<>();
+        for (Uuid directory : directories) {
+            if (!otherDirectories.contains(directory)) {
+                results.add(directory);
+            }
+        }
+        return results;
     }
 
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
@@ -208,15 +290,8 @@ public class BrokerRegistration {
             setRack(rack.orElse(null)).
             setBrokerEpoch(epoch).
             setIncarnationId(incarnationId).
-            setFenced(fenced);
-
-        if (inControlledShutdown) {
-            if (options.metadataVersion().isInControlledShutdownStateSupported()) {
-                registrationRecord.setInControlledShutdown(true);
-            } else {
-                options.handleLoss("the inControlledShutdown state of one or more brokers");
-            }
-        }
+            setFenced(fenced).
+            setInControlledShutdown(inControlledShutdown);
 
         if (isMigratingZkBroker) {
             if (options.metadataVersion().isMigrationSupported()) {
@@ -224,6 +299,12 @@ public class BrokerRegistration {
             } else {
                 options.handleLoss("the isMigratingZkBroker state of one or more brokers");
             }
+        }
+
+        if (directories.isEmpty() || options.metadataVersion().isDirectoryAssignmentSupported()) {
+            registrationRecord.setLogDirs(directories);
+        } else {
+            options.handleLoss("the online log directories of one or more brokers");
         }
 
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
@@ -249,13 +330,12 @@ public class BrokerRegistration {
     @Override
     public int hashCode() {
         return Objects.hash(id, epoch, incarnationId, listeners, supportedFeatures,
-            rack, fenced, inControlledShutdown, isMigratingZkBroker);
+            rack, fenced, inControlledShutdown, isMigratingZkBroker, directories);
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof BrokerRegistration)) return false;
-        BrokerRegistration other = (BrokerRegistration) o;
+        if (!(o instanceof BrokerRegistration other)) return false;
         return other.id == id &&
             other.epoch == epoch &&
             other.incarnationId.equals(incarnationId) &&
@@ -264,40 +344,42 @@ public class BrokerRegistration {
             other.rack.equals(rack) &&
             other.fenced == fenced &&
             other.inControlledShutdown == inControlledShutdown &&
-            other.isMigratingZkBroker == isMigratingZkBroker;
+            other.isMigratingZkBroker == isMigratingZkBroker &&
+            other.directories.equals(directories);
     }
 
     @Override
     public String toString() {
-        StringBuilder bld = new StringBuilder();
-        bld.append("BrokerRegistration(id=").append(id);
-        bld.append(", epoch=").append(epoch);
-        bld.append(", incarnationId=").append(incarnationId);
-        bld.append(", listeners=[").append(
-            listeners.keySet().stream().sorted().
-                map(n -> listeners.get(n).toString()).
-                collect(Collectors.joining(", ")));
-        bld.append("], supportedFeatures={").append(
-            supportedFeatures.keySet().stream().sorted().
-                map(k -> k + ": " + supportedFeatures.get(k)).
-                collect(Collectors.joining(", ")));
-        bld.append("}");
-        bld.append(", rack=").append(rack);
-        bld.append(", fenced=").append(fenced);
-        bld.append(", inControlledShutdown=").append(inControlledShutdown);
-        bld.append(", isMigratingZkBroker=").append(isMigratingZkBroker);
-        bld.append(")");
-        return bld.toString();
+        return "BrokerRegistration(id=" + id +
+                ", epoch=" + epoch +
+                ", incarnationId=" + incarnationId +
+                ", listeners=[" +
+                listeners.keySet().stream().sorted().
+                        map(n -> listeners.get(n).toString()).
+                        collect(Collectors.joining(", ")) +
+                "], supportedFeatures={" +
+                supportedFeatures.keySet().stream().sorted().
+                        map(k -> k + ": " + supportedFeatures.get(k)).
+                        collect(Collectors.joining(", ")) +
+                "}" +
+                ", rack=" + rack +
+                ", fenced=" + fenced +
+                ", inControlledShutdown=" + inControlledShutdown +
+                ", isMigratingZkBroker=" + isMigratingZkBroker +
+                ", directories=" + directories +
+                ")";
     }
 
     public BrokerRegistration cloneWith(
         Optional<Boolean> fencingChange,
-        Optional<Boolean> inControlledShutdownChange
+        Optional<Boolean> inControlledShutdownChange,
+        Optional<List<Uuid>> directoriesChange
     ) {
         boolean newFenced = fencingChange.orElse(fenced);
         boolean newInControlledShutdownChange = inControlledShutdownChange.orElse(inControlledShutdown);
+        List<Uuid> newDirectories = directoriesChange.orElse(directories);
 
-        if (newFenced == fenced && newInControlledShutdownChange == inControlledShutdown)
+        if (newFenced == fenced && newInControlledShutdownChange == inControlledShutdown && newDirectories.equals(directories))
             return this;
 
         return new BrokerRegistration(
@@ -309,7 +391,8 @@ public class BrokerRegistration {
             rack,
             newFenced,
             newInControlledShutdownChange,
-            isMigratingZkBroker
+            isMigratingZkBroker,
+            newDirectories
         );
     }
 }

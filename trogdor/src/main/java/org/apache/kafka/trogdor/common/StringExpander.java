@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
  * Strings that have no range expressions will not be expanded.
  */
 public class StringExpander {
-    private final static Pattern NUMERIC_RANGE_PATTERN =
+    private static final Pattern NUMERIC_RANGE_PATTERN =
         Pattern.compile("(.*)\\[([0-9]*)\\-([0-9]*)\\](.*)");
 
     public static HashSet<String> expand(String val) {

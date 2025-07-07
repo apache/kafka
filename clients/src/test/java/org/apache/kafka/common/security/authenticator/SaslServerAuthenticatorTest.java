@@ -17,9 +17,10 @@
 package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.network.DefaultChannelMetadataRegistry;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -49,6 +51,8 @@ import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
@@ -56,25 +60,26 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
 
-import javax.security.auth.Subject;
-import javax.security.sasl.Sasl;
-import javax.security.sasl.SaslException;
-import javax.security.sasl.SaslServer;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import javax.security.auth.Subject;
+import javax.security.sasl.Sasl;
+import javax.security.sasl.SaslException;
+import javax.security.sasl.SaslServer;
+
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -104,7 +109,7 @@ public class SaslServerAuthenticatorTest {
     }
 
     @Test
-    public void testUnexpectedRequestType() throws IOException {
+    public void testUnexpectedRequestTypeWithValidRequestHeader() throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
@@ -123,13 +128,35 @@ public class SaslServerAuthenticatorTest {
             return headerBuffer.remaining();
         });
 
-        try {
-            authenticator.authenticate();
-            fail("Expected authenticate() to raise an exception");
-        } catch (IllegalSaslStateException e) {
-            // expected exception
-        }
+        assertThrows(InvalidRequestException.class, authenticator::authenticate);
+        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+    }
 
+    @Test
+    public void testInvalidRequestHeader() throws IOException {
+        TransportLayer transportLayer = mock(TransportLayer.class);
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+                Collections.singletonList(SCRAM_SHA_256.mechanismName()));
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
+                SCRAM_SHA_256.mechanismName(), new DefaultChannelMetadataRegistry());
+
+        short invalidApiKeyId = (short) (Arrays.stream(ApiKeys.values()).mapToInt(k -> k.id).max().getAsInt() + 1);
+        ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(new RequestHeader(
+            new RequestHeaderData()
+                .setRequestApiKey(invalidApiKeyId)
+                .setRequestApiVersion((short) 0),
+                (short) 2));
+
+        when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
+            invocation.<ByteBuffer>getArgument(0).putInt(headerBuffer.remaining());
+            return 4;
+        }).then(invocation -> {
+            // serialize only the request header. the authenticator should not parse beyond this
+            invocation.<ByteBuffer>getArgument(0).put(headerBuffer.duplicate());
+            return headerBuffer.remaining();
+        });
+
+        assertThrows(InvalidRequestException.class, authenticator::authenticate);
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 
@@ -172,7 +199,7 @@ public class SaslServerAuthenticatorTest {
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(new ByteBufferAccessor(secondResponseSent), (short) 2);
             assertEquals(tokenExpirationDuration.toMillis(), response.sessionLifetimeMs());
         }
     }
@@ -205,7 +232,7 @@ public class SaslServerAuthenticatorTest {
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(new ByteBufferAccessor(secondResponseSent), (short) 2);
             assertEquals(maxReauthMs, response.sessionLifetimeMs());
         }
     }
@@ -238,7 +265,7 @@ public class SaslServerAuthenticatorTest {
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(new ByteBufferAccessor(secondResponseSent), (short) 2);
             assertEquals(tokenExpiryShorterThanMaxReauth.toMillis(), response.sessionLifetimeMs());
         }
     }
@@ -328,7 +355,7 @@ public class SaslServerAuthenticatorTest {
     private void mockRequest(RequestHeader header, AbstractRequest request, TransportLayer transportLayer) throws IOException {
         ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
-        ByteBuffer requestBuffer = request.serialize();
+        ByteBuffer requestBuffer = request.serialize().buffer();
         requestBuffer.rewind();
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
@@ -374,14 +401,14 @@ public class SaslServerAuthenticatorTest {
         Map<String, Subject> subjects = Collections.singletonMap(mechanism, new Subject());
         Map<String, AuthenticateCallbackHandler> callbackHandlers = Collections.singletonMap(
                 mechanism, new SaslServerCallbackHandler());
-        ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
-                ApiMessageType.ListenerType.ZK_BROKER);
+        ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
+                ApiMessageType.ListenerType.BROKER);
         Map<String, Long> connectionsMaxReauthMsByMechanism = maxReauth != null ?
                 Collections.singletonMap(mechanism, maxReauth) : Collections.emptyMap();
 
         return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, connectionsMaxReauthMsByMechanism,
-                metadataRegistry, time, () -> apiVersionsResponse);
+                metadataRegistry, time, version -> apiVersionsResponse);
     }
 
 }

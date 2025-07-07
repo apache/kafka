@@ -16,21 +16,21 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientCallbackHandler;
+
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.Collections;
 import java.util.Set;
+import java.util.concurrent.CompletionException;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 
-import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientCallbackHandler;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OAuthBearerSaslClientCallbackHandlerTest {
     private static OAuthBearerToken createTokenWithLifetimeMillis(final long lifetimeMillis) {
@@ -65,8 +65,8 @@ public class OAuthBearerSaslClientCallbackHandlerTest {
     @Test
     public void testWithZeroTokens() {
         OAuthBearerSaslClientCallbackHandler handler = createCallbackHandler();
-        PrivilegedActionException e = assertThrows(PrivilegedActionException.class, () -> Subject.doAs(new Subject(),
-            (PrivilegedExceptionAction<Void>) () -> {
+        CompletionException e = assertThrows(CompletionException.class, () -> SecurityManagerCompatibility.get().callAs(new Subject(),
+            () -> {
                 OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
                 handler.handle(new Callback[] {callback});
                 return null;
@@ -76,11 +76,11 @@ public class OAuthBearerSaslClientCallbackHandlerTest {
     }
 
     @Test()
-    public void testWithPotentiallyMultipleTokens() throws Exception {
+    public void testWithPotentiallyMultipleTokens() {
         OAuthBearerSaslClientCallbackHandler handler = createCallbackHandler();
-        Subject.doAs(new Subject(), (PrivilegedExceptionAction<Void>) () -> {
+        SecurityManagerCompatibility.get().callAs(new Subject(), () -> {
             final int maxTokens = 4;
-            final Set<Object> privateCredentials = Subject.getSubject(AccessController.getContext())
+            final Set<Object> privateCredentials = SecurityManagerCompatibility.get().current()
                     .getPrivateCredentials();
             privateCredentials.clear();
             for (int num = 1; num <= maxTokens; ++num) {

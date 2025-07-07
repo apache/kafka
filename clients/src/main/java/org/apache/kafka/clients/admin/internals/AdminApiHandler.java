@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 
@@ -38,8 +39,8 @@ public interface AdminApiHandler<K, V> {
      * Build the requests necessary for the given keys. The set of keys is derived by
      * {@link AdminApiDriver} during the lookup stage as the set of keys which all map
      * to the same destination broker. Handlers can choose to issue a single request for
-     * all of the provided keys (see {@link Batched}, issue one request per key (see
-     * {@link Unbatched}, or implement their own custom grouping logic if necessary.
+     * all of the provided keys (see {@link Batched}), issue one request per key (see
+     * {@link Unbatched}), or implement their own custom grouping logic if necessary.
      *
      * @param brokerId the target brokerId for the request
      * @param keys the set of keys that should be handled by this request
@@ -69,6 +70,23 @@ public interface AdminApiHandler<K, V> {
      * @return result indicating key completion, failure, and unmapping
      */
     ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response);
+
+    /**
+     * Callback that is invoked when a fulfillment request hits an UnsupportedVersionException.
+     * Keys for which the exception cannot be handled and the request shouldn't be retried must be mapped
+     * to an error and returned. The request will then be retried for the remainder of the keys.
+     *
+     * @return The failure mappings for the keys for which the exception cannot be handled and the
+     * request shouldn't be retried. If the exception cannot be handled all initial keys will be in
+     * the returned map.
+     */
+    default Map<K, Throwable> handleUnsupportedVersionException(
+        int brokerId,
+        UnsupportedVersionException exception,
+        Set<K> keys
+    ) {
+        return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
+    }
 
     /**
      * Get the lookup strategy that is responsible for finding the brokerId

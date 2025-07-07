@@ -17,28 +17,29 @@
 
 package kafka.api
 
-import java.util.Properties
+import java.util.{Locale, Properties}
 import java.util.concurrent.{ExecutionException, Future, TimeUnit}
 import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.clients.producer.{BufferExhaustedException, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.nio.charset.StandardCharsets
 
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testWrongSerializer(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testWrongSerializer(groupProtocol: String): Unit = {
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
@@ -48,9 +49,9 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     assertThrows(classOf[SerializationException], () => producer.send(record))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testBatchSizeZero(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testBatchSizeZero(groupProtocol: String): Unit = {
     val producer = createProducer(
       lingerMs = Int.MaxValue,
       deliveryTimeoutMs = Int.MaxValue,
@@ -59,13 +60,13 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @Timeout(value = 15, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testBatchSizeZeroNoPartitionNoRecordKey(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testBatchSizeZeroNoPartitionNoRecordKey(groupProtocol: String): Unit = {
     val producer = createProducer(batchSize = 0)
-    val numRecords = 10;
+    val numRecords = 10
     try {
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2)
       val futures = for (i <- 1 to numRecords) yield {
         val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, s"value$i".getBytes(StandardCharsets.UTF_8))
         producer.send(record)
@@ -82,9 +83,9 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testSendCompressedMessageWithLogAppendTime(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSendCompressedMessageWithLogAppendTime(groupProtocol: String): Unit = {
     val producer = createProducer(
       compressionType = "gzip",
       lingerMs = Int.MaxValue,
@@ -92,9 +93,9 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testSendNonCompressedMessageWithLogAppendTime(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSendNonCompressedMessageWithLogAppendTime(groupProtocol: String): Unit = {
     val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
@@ -104,9 +105,9 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
    *
    * The topic should be created upon sending the first message
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testAutoCreateTopic(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAutoCreateTopic(groupProtocol: String): Unit = {
     val producer = createProducer()
     try {
       // Send a message to auto-create the topic
@@ -120,17 +121,19 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testSendWithInvalidCreateTime(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("timestampConfigProvider"))
+  def testSendWithInvalidBeforeAndAfterTimestamp(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
     val topicProps = new Properties()
-    topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
+    // set the TopicConfig for timestamp validation to have 1 minute threshold. Note that recordTimestamp has 5 minutes diff
+    val oneMinuteInMs: Long = 1 * 60 * 60 * 1000L
+    topicProps.setProperty(messageTimeStampConfig, oneMinuteInMs.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()
     try {
       val e = assertThrows(classOf[ExecutionException],
-        () => producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
+        () => producer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)).get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
     } finally {
       producer.close()
@@ -140,19 +143,60 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val compressedProducer = createProducer(compressionType = "gzip")
     try {
       val e = assertThrows(classOf[ExecutionException],
-        () => compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
+        () => compressedProducer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)).get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
     } finally {
       compressedProducer.close()
     }
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("timestampConfigProvider"))
+  def testValidBeforeAndAfterTimestampsAtThreshold(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
+    val topicProps = new Properties()
+
+    // set the TopicConfig for timestamp validation to be the same as the record timestamp
+    topicProps.setProperty(messageTimeStampConfig, recordTimestamp.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
+
+    val producer = createProducer()
+
+    assertDoesNotThrow(() => producer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)))
+    producer.close()
+
+    // Test compressed messages.
+    val compressedProducer = createProducer(compressionType = "gzip")
+    assertDoesNotThrow(() => compressedProducer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)))
+    compressedProducer.close()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("timestampConfigProvider"))
+  def testValidBeforeAndAfterTimestampsWithinThreshold(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
+    val topicProps = new Properties()
+
+    // set the TopicConfig for timestamp validation to have 10 minute threshold. Note that recordTimestamp has 5 minutes diff
+    val tenMinutesInMs: Long = 10 * 60 * 60 * 1000L
+    topicProps.setProperty(messageTimeStampConfig, tenMinutesInMs.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
+
+    val producer = createProducer()
+
+    assertDoesNotThrow(() => producer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)))
+    producer.close()
+
+    // Test compressed messages.
+    val compressedProducer = createProducer(compressionType = "gzip")
+    assertDoesNotThrow(() => compressedProducer.send(new ProducerRecord(topic, 0, recordTimestamp, "key".getBytes, "value".getBytes)))
+    compressedProducer.close()
+  }
+
   // Test that producer with max.block.ms=0 can be used to send in non-blocking mode
   // where requests are failed immediately without blocking if metadata is not available
   // or buffer is full.
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testNonBlockingProducer(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNonBlockingProducer(groupProtocol: String): Unit = {
 
     def send(producer: KafkaProducer[Array[Byte],Array[Byte]]): Future[RecordMetadata] = {
       producer.send(new ProducerRecord(topic, 0, "key".getBytes, new Array[Byte](1000)))
@@ -206,9 +250,9 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     verifySendSuccess(future2)               // previous batch should be completed and sent now
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testSendRecordBatchWithMaxRequestSizeAndHigher(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSendRecordBatchWithMaxRequestSizeAndHigher(groupProtocol: String): Unit = {
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val producer = registerProducer(new KafkaProducer(producerProps, new ByteArraySerializer, new ByteArraySerializer))
@@ -218,7 +262,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val valueLengthSize = 3
     val overhead = Records.LOG_OVERHEAD + DefaultRecordBatch.RECORD_BATCH_OVERHEAD + DefaultRecord.MAX_RECORD_OVERHEAD +
       keyLengthSize + headerLengthSize + valueLengthSize
-    val valueSize = LogConfig.DEFAULT_MAX_MESSAGE_BYTES - overhead
+    val valueSize = ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT - overhead
 
     val record0 = new ProducerRecord(topic, new Array[Byte](0), new Array[Byte](valueSize))
     assertEquals(record0.value.length, producer.send(record0).get.serializedValueSize)
@@ -227,4 +271,18 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     assertEquals(classOf[RecordTooLargeException], assertThrows(classOf[ExecutionException], () => producer.send(record1).get).getCause.getClass)
   }
 
+}
+
+object PlaintextProducerSendTest {
+
+  def timestampConfigProvider: java.util.stream.Stream[Arguments] = {
+    val now: Long = System.currentTimeMillis()
+    val fiveMinutesInMs: Long = 5 * 60 * 60 * 1000L
+    val data = new java.util.ArrayList[Arguments]()
+    for (groupProtocol <- GroupProtocol.values().map(gp => gp.name.toLowerCase(Locale.ROOT))) {
+      data.add(Arguments.of(groupProtocol, TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)))
+      data.add(Arguments.of(groupProtocol, TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.box(now + fiveMinutesInMs)))
+    }
+    data.stream()
+  }
 }

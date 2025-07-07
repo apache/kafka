@@ -27,6 +27,7 @@ import java.util.Objects;
  * Represents a memory record set which is not necessarily offset-aligned
  */
 public class UnalignedMemoryRecords implements UnalignedRecords {
+    private static final UnalignedMemoryRecords EMPTY = new UnalignedMemoryRecords(ByteBuffer.allocate(0));
 
     private final ByteBuffer buffer;
 
@@ -44,13 +45,14 @@ public class UnalignedMemoryRecords implements UnalignedRecords {
     }
 
     @Override
-    public long writeTo(TransferableChannel channel, long position, int length) throws IOException {
-        if (position > Integer.MAX_VALUE)
-            throw new IllegalArgumentException("position should not be greater than Integer.MAX_VALUE: " + position);
-        if (position + length > buffer.limit())
+    public int writeTo(TransferableChannel channel, int position, int length) throws IOException {
+        if (((long) position) + length > buffer.limit())
             throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
                     + position + ", length: " + length + ", buffer.limit(): " + buffer.limit());
-        return Utils.tryWriteTo(channel, (int) position, length, buffer);
+        return Utils.tryWriteTo(channel, position, length, buffer);
     }
 
+    public static UnalignedMemoryRecords empty() {
+        return EMPTY;
+    }
 }

@@ -16,64 +16,50 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.compress.KafkaLZ4BlockInputStream;
-import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream;
-import org.apache.kafka.common.compress.SnappyFactory;
-import org.apache.kafka.common.compress.ZstdFactory;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
+import java.util.zip.Deflater;
+
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 
 /**
  * The compression type to use
  */
 public enum CompressionType {
-    NONE(0, "none", 1.0f) {
-        @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
-            return buffer;
-        }
-
-        @Override
-        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            return new ByteBufferInputStream(buffer);
-        }
-    },
+    NONE((byte) 0, "none", 1.0f),
 
     // Shipped with the JDK
-    GZIP(1, "gzip", 1.0f) {
+    GZIP((byte) 1, "gzip", 1.0f) {
+        public static final int MIN_LEVEL = Deflater.BEST_SPEED;
+        public static final int MAX_LEVEL = Deflater.BEST_COMPRESSION;
+        public static final int DEFAULT_LEVEL = Deflater.DEFAULT_COMPRESSION;
+
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
-            try {
-                // Set input buffer (uncompressed) to 16 KB (none by default) and output buffer (compressed) to
-                // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller passes a small
-                // number of bytes to write (potentially a single byte)
-                return new BufferedOutputStream(new GZIPOutputStream(buffer, 8 * 1024), 16 * 1024);
-            } catch (Exception e) {
-                throw new KafkaException(e);
-            }
+        public int defaultLevel() {
+            return DEFAULT_LEVEL;
         }
 
         @Override
-        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            try {
-                // Set output buffer (uncompressed) to 16 KB (none by default) and input buffer (compressed) to
-                // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller reads a small
-                // number of bytes (potentially a single byte)
-                return new BufferedInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024),
-                        16 * 1024);
-            } catch (Exception e) {
-                throw new KafkaException(e);
-            }
+        public int maxLevel() {
+            return MAX_LEVEL;
+        }
+
+        @Override
+        public int minLevel() {
+            return MIN_LEVEL;
+        }
+
+        @Override
+        public ConfigDef.Validator levelValidator() {
+            return ConfigDef.LambdaValidator.with((name, value) -> {
+                if (value == null)
+                    throw new ConfigException(name, null, "Value must be non-null");
+                int level = ((Number) value).intValue();
+                if (level > MAX_LEVEL || (level < MIN_LEVEL && level != DEFAULT_LEVEL)) {
+                    throw new ConfigException(name, value, "Value must be between " + MIN_LEVEL + " and " + MAX_LEVEL + " or equal to " + DEFAULT_LEVEL);
+                }
+            }, () -> "[" + MIN_LEVEL + ",...," + MAX_LEVEL + "] or " + DEFAULT_LEVEL);
         }
     },
 
@@ -82,82 +68,78 @@ public enum CompressionType {
     // in case the platform is not supported and the compression library is not actually used.
     // To ensure this, we only reference compression library code from classes that are only invoked when actual usage
     // happens.
+    SNAPPY((byte) 2, "snappy", 1.0f),
+    LZ4((byte) 3, "lz4", 1.0f) {
+        // These values come from net.jpountz.lz4.LZ4Constants
+        // We may need to update them if the lz4 library changes these values.
+        private static final int MIN_LEVEL = 1;
+        private static final int MAX_LEVEL = 17;
+        private static final int DEFAULT_LEVEL = 9;
 
-    SNAPPY(2, "snappy", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
-            return SnappyFactory.wrapForOutput(buffer);
+        public int defaultLevel() {
+            return DEFAULT_LEVEL;
         }
 
         @Override
-        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            return SnappyFactory.wrapForInput(buffer);
-        }
-    },
-
-    LZ4(3, "lz4", 1.0f) {
-        @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
-            try {
-                return new KafkaLZ4BlockOutputStream(buffer, messageVersion == RecordBatch.MAGIC_VALUE_V0);
-            } catch (Throwable e) {
-                throw new KafkaException(e);
-            }
+        public int maxLevel() {
+            return MAX_LEVEL;
         }
 
         @Override
-        public InputStream wrapForInput(ByteBuffer inputBuffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            try {
-                return new KafkaLZ4BlockInputStream(inputBuffer, decompressionBufferSupplier,
-                                                    messageVersion == RecordBatch.MAGIC_VALUE_V0);
-            } catch (Throwable e) {
-                throw new KafkaException(e);
-            }
+        public int minLevel() {
+            return MIN_LEVEL;
+        }
+
+        @Override
+        public ConfigDef.Validator levelValidator() {
+            return between(MIN_LEVEL, MAX_LEVEL);
         }
     },
+    ZSTD((byte) 4, "zstd", 1.0f) {
+        // These values come from the zstd library. We don't use the Zstd.minCompressionLevel(),
+        // Zstd.maxCompressionLevel() and Zstd.defaultCompressionLevel() methods to not load the Zstd library
+        // while parsing configuration.
+        // See ZSTD_minCLevel in https://github.com/facebook/zstd/blob/dev/lib/compress/zstd_compress.c#L6987
+        // and ZSTD_TARGETLENGTH_MAX https://github.com/facebook/zstd/blob/dev/lib/zstd.h#L1249
+        private static final int MIN_LEVEL = -131072;
+        // See ZSTD_MAX_CLEVEL in https://github.com/facebook/zstd/blob/dev/lib/compress/clevels.h#L19
+        private static final int MAX_LEVEL = 22;
+        // See ZSTD_CLEVEL_DEFAULT in https://github.com/facebook/zstd/blob/dev/lib/zstd.h#L129
+        private static final int DEFAULT_LEVEL = 3;
 
-    ZSTD(4, "zstd", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
-            return ZstdFactory.wrapForOutput(buffer);
+        public int defaultLevel() {
+            return DEFAULT_LEVEL;
         }
 
         @Override
-        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            return ZstdFactory.wrapForInput(buffer, messageVersion, decompressionBufferSupplier);
+        public int maxLevel() {
+            return MAX_LEVEL;
+        }
+
+        @Override
+        public int minLevel() {
+            return MIN_LEVEL;
+        }
+
+        @Override
+        public ConfigDef.Validator levelValidator() {
+            return between(MIN_LEVEL, MAX_LEVEL);
         }
     };
 
-    public final int id;
+    // compression type is represented by two bits in the attributes field of the record batch header, so `byte` is
+    // large enough
+    public final byte id;
     public final String name;
     public final float rate;
 
-    CompressionType(int id, String name, float rate) {
+    CompressionType(byte id, String name, float rate) {
         this.id = id;
         this.name = name;
         this.rate = rate;
     }
-
-    /**
-     * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
-     *
-     * Note: Unlike {@link #wrapForInput}, {@link #wrapForOutput} cannot take {@link ByteBuffer}s directly.
-     * Currently, {@link MemoryRecordsBuilder#writeDefaultBatchHeader()} and {@link MemoryRecordsBuilder#writeLegacyCompressedWrapperHeader()}
-     * write to the underlying buffer in the given {@link ByteBufferOutputStream} after the compressed data has been written.
-     * In the event that the buffer needs to be expanded while writing the data, access to the underlying buffer needs to be preserved.
-     */
-    public abstract OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion);
-
-    /**
-     * Wrap buffer with an InputStream that will decompress data with this CompressionType.
-     *
-     * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
-     *                                    For small record batches, allocating a potentially large buffer (64 KB for LZ4)
-     *                                    will dominate the cost of decompressing and iterating over the records in the
-     *                                    batch. As such, a supplier that reuses buffers will have a significant
-     *                                    performance impact.
-     */
-    public abstract InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier);
 
     public static CompressionType forId(int id) {
         switch (id) {
@@ -189,6 +171,22 @@ public enum CompressionType {
             return ZSTD;
         else
             throw new IllegalArgumentException("Unknown compression name: " + name);
+    }
+
+    public int defaultLevel() {
+        throw new UnsupportedOperationException("Compression levels are not defined for this compression type: " + name);
+    }
+
+    public int maxLevel() {
+        throw new UnsupportedOperationException("Compression levels are not defined for this compression type: " + name);
+    }
+
+    public int minLevel() {
+        throw new UnsupportedOperationException("Compression levels are not defined for this compression type: " + name);
+    }
+
+    public ConfigDef.Validator levelValidator() {
+        throw new UnsupportedOperationException("Compression levels are not defined for this compression type: " + name);
     }
 
     @Override

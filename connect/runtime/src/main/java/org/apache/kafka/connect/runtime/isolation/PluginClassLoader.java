@@ -22,9 +22,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.Objects;
-import java.util.Vector;
 
 /**
  * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
@@ -55,19 +57,7 @@ public class PluginClassLoader extends URLClassLoader {
      */
     public PluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
         super(urls, parent);
-        this.pluginLocation = pluginLocation;
-    }
-
-    /**
-     * Constructor that defines the system classloader as parent of this plugin classloader.
-     *
-     * @param pluginLocation the top-level location of the plugin to be loaded in isolation by this
-     * classloader.
-     * @param urls the list of urls from which to load classes and resources for this plugin.
-     */
-    public PluginClassLoader(URL pluginLocation, URL[] urls) {
-        super(urls);
-        this.pluginLocation = pluginLocation;
+        this.pluginLocation = Objects.requireNonNull(pluginLocation, "Plugin location must be non-null");
     }
 
     /**
@@ -99,7 +89,7 @@ public class PluginClassLoader extends URLClassLoader {
     @Override
     public Enumeration<URL> getResources(String name) throws IOException {
         Objects.requireNonNull(name);
-        Vector<URL> resources = new Vector<>();
+        List<URL> resources = new ArrayList<>();
         for (Enumeration<URL> foundLocally = findResources(name); foundLocally.hasMoreElements();) {
             URL url = foundLocally.nextElement();
             if (url != null)
@@ -111,7 +101,7 @@ public class PluginClassLoader extends URLClassLoader {
             if (url != null)
                 resources.add(url);
         }
-        return resources.elements();
+        return Collections.enumeration(resources);
     }
 
     // This method needs to be thread-safe because it is supposed to be called by multiple
@@ -142,4 +132,3 @@ public class PluginClassLoader extends URLClassLoader {
         }
     }
 }
-

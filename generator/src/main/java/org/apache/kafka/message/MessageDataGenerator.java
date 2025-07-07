@@ -409,7 +409,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                      Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.READABLE_CLASS);
         buffer.printf("@Override%n");
-        buffer.printf("public void read(Readable _readable, short _version) {%n");
+        buffer.printf("public final void read(Readable _readable, short _version) {%n");
         buffer.incrementIndent();
         VersionConditional.forVersions(parentVersions, struct.versions()).
             allowMembershipCheckAlwaysFalse(false).
@@ -485,7 +485,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 for (FieldSpec field : struct.fields()) {
                     Versions validTaggedVersions = field.versions().intersect(field.taggedVersions());
                     if (!validTaggedVersions.empty()) {
-                        if (!field.tag().isPresent()) {
+                        if (field.tag().isEmpty()) {
                             throw new RuntimeException("Field " + field.name() + " has tagged versions, but no tag.");
                         }
                         buffer.printf("case %d: {%n", field.tag().get());
@@ -585,7 +585,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         } else if (type instanceof FieldType.Float64FieldType) {
             return "_readable.readDouble()";
         } else if (type.isStruct()) {
-            return String.format("new %s(_readable, _version)", type.toString());
+            return String.format("new %s(_readable, _version)", type);
         } else {
             throw new RuntimeException("Unsupported field type " + type);
         }
@@ -804,7 +804,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             ifNotMember(__ -> {
                 generateCheckForUnsupportedNumTaggedFields("_numTaggedFields > 0");
             }).
-            ifMember(__ -> {
+            ifMember(flexibleVersions -> {
                 buffer.printf("_writable.writeUnsignedVarint(_numTaggedFields);%n");
                 int prevTag = -1;
                 for (FieldSpec field : taggedFields.values()) {
@@ -812,7 +812,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         buffer.printf("_rawWriter.writeRawTags(_writable, %d);%n", field.tag().get());
                     }
                     VersionConditional.
-                        forVersions(field.versions(), field.taggedVersions().intersect(field.versions())).
+                        forVersions(field.taggedVersions().intersect(field.versions()), flexibleVersions).
                         allowMembershipCheckAlwaysFalse(false).
                         ifMember(presentAndTaggedVersions -> {
                             IsNullConditional cond = IsNullConditional.forName(field.camelCaseName()).
@@ -1332,19 +1332,24 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         }).
                         generate(buffer);
                 } else if (field.type().isStruct()) {
-                    // Adding a byte if the field is nullable. A byte works for both regular and tagged struct fields.
-                    VersionConditional.forVersions(field.nullableVersions(), possibleVersions).
-                        ifMember(__ -> {
-                            buffer.printf("_size.addBytes(1);%n");
-                        }).
-                        generate(buffer);
-
                     if (tagged) {
                         buffer.printf("int _sizeBeforeStruct = _size.totalSize();%n", field.camelCaseName());
+                        // Add a byte if the field is nullable.
+                        VersionConditional.forVersions(field.nullableVersions(), possibleVersions).
+                            ifMember(__ -> {
+                                buffer.printf("_size.addBytes(1);%n");
+                            }).
+                            generate(buffer);
                         buffer.printf("this.%s.addSize(_size, _cache, _version);%n", field.camelCaseName());
                         buffer.printf("int _structSize = _size.totalSize() - _sizeBeforeStruct;%n", field.camelCaseName());
                         buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_structSize));%n");
                     } else {
+                        // Add a byte if the field is nullable.
+                        VersionConditional.forVersions(field.nullableVersions(), possibleVersions).
+                            ifMember(__ -> {
+                                buffer.printf("_size.addBytes(1);%n");
+                            }).
+                            generate(buffer);
                         buffer.printf("this.%s.addSize(_size, _cache, _version);%n", field.camelCaseName());
                     }
                 } else {

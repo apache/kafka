@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.connect.json;
 
-import java.util.Locale;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.connect.storage.ConverterConfig;
 
+import java.util.Locale;
 import java.util.Map;
 
 /**
  * Configuration options for {@link JsonConverter} instances.
  */
-public class JsonConverterConfig extends ConverterConfig {
+public final class JsonConverterConfig extends ConverterConfig {
 
     public static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
     public static final boolean SCHEMAS_ENABLE_DEFAULT = true;
@@ -46,7 +46,12 @@ public class JsonConverterConfig extends ConverterConfig {
         + " This value is case insensitive and can be either 'BASE64' (default) or 'NUMERIC'";
     private static final String DECIMAL_FORMAT_DISPLAY = "Decimal Format";
 
-    private final static ConfigDef CONFIG;
+    public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
+    public static final boolean REPLACE_NULL_WITH_DEFAULT_DEFAULT = true;
+    private static final String REPLACE_NULL_WITH_DEFAULT_DOC = "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.";
+    private static final String REPLACE_NULL_WITH_DEFAULT_DISPLAY = "Replace null with default";
+
+    private static final ConfigDef CONFIG;
 
     static {
         String group = "Schemas";
@@ -66,6 +71,10 @@ public class JsonConverterConfig extends ConverterConfig {
                 DecimalFormat.NUMERIC.name()),
             Importance.LOW, DECIMAL_FORMAT_DOC, group, orderInGroup++,
             Width.MEDIUM, DECIMAL_FORMAT_DISPLAY);
+        CONFIG.define(
+                REPLACE_NULL_WITH_DEFAULT_CONFIG, Type.BOOLEAN, REPLACE_NULL_WITH_DEFAULT_DEFAULT,
+                Importance.LOW, REPLACE_NULL_WITH_DEFAULT_DOC, group, orderInGroup++,
+                Width.MEDIUM, REPLACE_NULL_WITH_DEFAULT_DISPLAY);
     }
 
     public static ConfigDef configDef() {
@@ -76,12 +85,14 @@ public class JsonConverterConfig extends ConverterConfig {
     private final boolean schemasEnabled;
     private final int schemaCacheSize;
     private final DecimalFormat decimalFormat;
+    private final boolean replaceNullWithDefault;
 
     public JsonConverterConfig(Map<String, ?> props) {
         super(CONFIG, props);
         this.schemasEnabled = getBoolean(SCHEMAS_ENABLE_CONFIG);
         this.schemaCacheSize = getInt(SCHEMAS_CACHE_SIZE_CONFIG);
         this.decimalFormat = DecimalFormat.valueOf(getString(DECIMAL_FORMAT_CONFIG).toUpperCase(Locale.ROOT));
+        this.replaceNullWithDefault = getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     /**
@@ -109,6 +120,14 @@ public class JsonConverterConfig extends ConverterConfig {
      */
     public DecimalFormat decimalFormat() {
         return decimalFormat;
+    }
+
+    /**
+     * Whether to replace null values with the default value when serializing and deserializing fields
+     * @return true if we want to use the default value
+     */
+    public boolean replaceNullWithDefault() {
+        return replaceNullWithDefault;
     }
 
 }

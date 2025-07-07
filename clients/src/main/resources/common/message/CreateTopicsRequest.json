@@ -16,8 +16,10 @@
 {
   "apiKey": 19,
   "type": "request",
-  "listeners": ["zkBroker", "broker", "controller"],
+  "listeners": ["broker", "controller"],
   "name": "CreateTopicsRequest",
+  // Versions 0-1 were removed in Apache Kafka 4.0, Version 2 is the new baseline.
+  //
   // Version 1 adds validateOnly.
   //
   // Version 4 makes partitions/replicationFactor optional even when assignments are not present (KIP-464)
@@ -29,7 +31,7 @@
   // in the response if the topics creation is throttled (KIP-599).
   //
   // Version 7 is the same as version 6.
-  "validVersions": "0-7",
+  "validVersions": "2-7",
   "flexibleVersions": "5+",
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",
@@ -47,7 +49,7 @@
         { "name": "BrokerIds", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The brokers to place the partition on." }
       ]},
-      { "name": "Configs", "type": "[]CreateableTopicConfig", "versions": "0+",
+      { "name": "Configs", "type": "[]CreatableTopicConfig", "versions": "0+",
         "about": "The custom topic configurations to set.", "fields": [
         { "name": "Name", "type": "string", "versions": "0+" , "mapKey": true,
           "about": "The configuration name." },

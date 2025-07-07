@@ -17,10 +17,15 @@
 package org.apache.kafka.streams.processor.internals.tasks;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
+
+import java.time.Duration;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public interface TaskManager {
 
@@ -57,7 +62,7 @@ public interface TaskManager {
     KafkaFuture<Void> lockTasks(final Set<TaskId> taskIds);
 
     /**
-     * Lock all of the managed active tasks from the task manager. Similar to {@link #lockTasks(Set)}.
+     * Lock all the managed active tasks from the task manager. Similar to {@link #lockTasks(Set)}.
      *
      * This method does not block, instead a future is returned.
      */
@@ -69,9 +74,7 @@ public interface TaskManager {
     void unlockTasks(final Set<TaskId> taskIds);
 
     /**
-     * Unlock all of the managed active tasks from the task manager. Similar to {@link #unlockTasks(Set)}.
-     *
-     * This method does not block, instead a future is returned.
+     * Unlock all the managed active tasks from the task manager. Similar to {@link #unlockTasks(Set)}.
      */
     void unlockAllTasks();
 
@@ -98,4 +101,55 @@ public interface TaskManager {
      * @return set of all managed active tasks
      */
     Set<ReadOnlyTask> getTasks();
+
+    /**
+     * Called whenever an existing task has thrown an uncaught exception.
+     *
+     * Setting an uncaught exception for a task prevents it from being reassigned until the
+     * corresponding exception has been handled in the polling thread.
+     *
+     */
+    void setUncaughtException(StreamsException exception, TaskId taskId);
+
+    /**
+     * Returns and clears all uncaught exceptions that were fell through to the processing
+     * threads and need to be handled in the polling thread.
+     *
+     * Called by the polling thread to handle processing exceptions, e.g. to abort
+     * transactions or shut down the application.
+     *
+     * @return A map from task ID to the exception that occurred.
+     */
+    Map<TaskId, RuntimeException> drainUncaughtExceptions();
+
+    /**
+     * Can be used to check if a specific task has an uncaught exception.
+     *
+     * @param taskId the task ID to check for
+     */
+    boolean hasUncaughtException(final TaskId taskId);
+
+    /**
+     * Signals that at least one task has become processable, e.g. because it was resumed or new records may be available.
+     */
+    void signalTaskExecutors();
+
+    /**
+     * Blocks until unassigned processable tasks may be available.
+     */
+    void awaitProcessableTasks(Supplier<Boolean> isShuttingDown) throws InterruptedException;
+
+    /**
+     * Starts all threads associated with this task manager.
+     */
+    void startTaskExecutors();
+
+    /**
+     * Shuts down all threads associated with this task manager.
+     * All tasks will be unlocked and unassigned by the end of this.
+     *
+     * @param duration Time to wait for each thread to shut down.
+     */
+    void shutdown(final Duration duration);
+
 }

@@ -22,9 +22,11 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 
-import java.util.Arrays;
+import org.glassfish.hk2.api.TypeLiteral;
+import org.glassfish.hk2.utilities.binding.AbstractBinder;
+import org.glassfish.jersey.server.ResourceConfig;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -45,15 +47,28 @@ public class MirrorRestServer extends RestServer {
     }
 
     @Override
-    protected Collection<ConnectResource> regularResources() {
-        return Arrays.asList(
-                new InternalMirrorResource(herders, restClient)
+    protected Collection<Class<?>> regularResources() {
+        return Collections.singletonList(
+                InternalMirrorResource.class
         );
     }
 
     @Override
-    protected Collection<ConnectResource> adminResources() {
+    protected Collection<Class<?>> adminResources() {
         return Collections.emptyList();
+    }
+
+    @Override
+    protected void configureRegularResources(ResourceConfig resourceConfig) {
+        resourceConfig.register(new Binder());
+    }
+
+    private class Binder extends AbstractBinder {
+        @Override
+        protected void configure() {
+            bind(herders).to(new TypeLiteral<Map<SourceAndTarget, Herder>>() { });
+            bind(restClient).to(RestClient.class);
+        }
     }
 
 }

@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.server.util;
 
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
+
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-import org.junit.jupiter.api.Test;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -32,21 +33,21 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class CommandLineUtilsTest {
     @Test
     public void testParseEmptyArg() {
-        List<String> argArray = Arrays.asList("my.empty.property=");
+        List<String> argArray = List.of("my.empty.property=");
 
         assertThrows(IllegalArgumentException.class, () -> CommandLineUtils.parseKeyValueArgs(argArray, false));
     }
 
     @Test
     public void testParseEmptyArgWithNoDelimiter() {
-        List<String> argArray = Arrays.asList("my.empty.property");
+        List<String> argArray = List.of("my.empty.property");
 
         assertThrows(IllegalArgumentException.class, () -> CommandLineUtils.parseKeyValueArgs(argArray, false));
     }
 
     @Test
     public void testParseEmptyArgAsValid() {
-        List<String> argArray = Arrays.asList("my.empty.property=", "my.empty.property1");
+        List<String> argArray = List.of("my.empty.property=", "my.empty.property1");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
         assertEquals(props.getProperty("my.empty.property"), "", "Value of a key with missing value should be an empty string");
@@ -55,7 +56,7 @@ public class CommandLineUtilsTest {
 
     @Test
     public void testParseSingleArg() {
-        List<String> argArray = Arrays.asList("my.property=value");
+        List<String> argArray = List.of("my.property=value");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
         assertEquals(props.getProperty("my.property"), "value", "Value of a single property should be 'value'");
@@ -63,7 +64,7 @@ public class CommandLineUtilsTest {
 
     @Test
     public void testParseArgs() {
-        List<String> argArray = Arrays.asList("first.property=first", "second.property=second");
+        List<String> argArray = List.of("first.property=first", "second.property=second");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
         assertEquals(props.getProperty("first.property"), "first", "Value of first property should be 'first'");
@@ -72,7 +73,7 @@ public class CommandLineUtilsTest {
 
     @Test
     public void testParseArgsWithMultipleDelimiters() {
-        List<String> argArray = Arrays.asList("first.property==first", "second.property=second=", "third.property=thi=rd");
+        List<String> argArray = List.of("first.property==first", "second.property=second=", "third.property=thi=rd");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
         assertEquals(props.getProperty("first.property"), "=first", "Value of first property should be '=first'");
@@ -223,5 +224,46 @@ public class CommandLineUtilsTest {
         assertEquals("400", props.get("iokey"));
         assertEquals("existing-string-3", props.get("sondkey"));
         assertEquals("500", props.get("iondkey"));
+    }
+
+    private static Properties createTestProps() {
+        Properties props = new Properties();
+        props.setProperty("bootstrap.servers", "this");
+        props.setProperty("bootstrap.controllers", "that");
+        return props;
+    }
+
+    @Test
+    public void testInitializeBootstrapPropertiesWithNoBootstraps() {
+        assertEquals("You must specify either --bootstrap-controller or --bootstrap-server.",
+            assertThrows(CommandLineUtils.InitializeBootstrapException.class,
+                () -> CommandLineUtils.initializeBootstrapProperties(createTestProps(),
+                    Optional.empty(), Optional.empty())).getMessage());
+    }
+
+    @Test
+    public void testInitializeBootstrapPropertiesWithBrokerBootstrap() {
+        Properties props = createTestProps();
+        CommandLineUtils.initializeBootstrapProperties(props,
+            Optional.of("127.0.0.2:9094"), Optional.empty());
+        assertEquals("127.0.0.2:9094", props.getProperty("bootstrap.servers"));
+        assertNull(props.getProperty("bootstrap.controllers"));
+    }
+
+    @Test
+    public void testInitializeBootstrapPropertiesWithControllerBootstrap() {
+        Properties props = createTestProps();
+        CommandLineUtils.initializeBootstrapProperties(props,
+            Optional.empty(), Optional.of("127.0.0.2:9094"));
+        assertNull(props.getProperty("bootstrap.servers"));
+        assertEquals("127.0.0.2:9094", props.getProperty("bootstrap.controllers"));
+    }
+
+    @Test
+    public void testInitializeBootstrapPropertiesWithBothBootstraps() {
+        assertEquals("You cannot specify both --bootstrap-controller and --bootstrap-server.",
+            assertThrows(CommandLineUtils.InitializeBootstrapException.class,
+                () -> CommandLineUtils.initializeBootstrapProperties(createTestProps(),
+                    Optional.of("127.0.0.2:9094"), Optional.of("127.0.0.3:9095"))).getMessage());
     }
 }

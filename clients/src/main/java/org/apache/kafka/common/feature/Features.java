@@ -18,8 +18,8 @@ package org.apache.kafka.common.feature;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.joining;
 
@@ -145,7 +145,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
             return false;
         }
 
-        final Features that = (Features) other;
+        final Features<?> that = (Features<?>) other;
         return Objects.equals(this.features, that.features);
     }
 

@@ -16,9 +16,18 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.KafkaException;
+
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MetadataQuorumCommandErrorTest {
 
@@ -45,4 +54,32 @@ public class MetadataQuorumCommandErrorTest {
                 MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092", "describe", "--status", "--replication")));
     }
 
+    @Test
+    public void testRelativeTimeMs() {
+        long validEpochMs = Instant.now().minusSeconds(5).toEpochMilli();
+        assertTrue(MetadataQuorumCommand.relativeTimeMs(validEpochMs, "test") >= 0);
+        long nowMs = Instant.now().toEpochMilli();
+        assertTrue(MetadataQuorumCommand.relativeTimeMs(nowMs, "test") >= 0);
+        long invalidEpochMs = Instant.EPOCH.minus(1, ChronoUnit.DAYS).toEpochMilli();
+        assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(invalidEpochMs, "test"));
+        long futureEpochMs = Instant.now().plus(1, ChronoUnit.DAYS).toEpochMilli();
+        assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(futureEpochMs, "test"));
+    }
+
+    @Test
+    public void testRemoveControllerRequiresControllerId() {
+        assertThrows(ArgumentParserException.class, () ->
+            MetadataQuorumCommand.execute("--bootstrap-server", "localhost:9092",
+                "remove-controller",
+                "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
+                "--dry-run"));
+    }
+
+    @Test
+    public void testRemoveControllerRequiresControllerDirectoryId() {
+        assertThrows(ArgumentParserException.class, () ->
+            MetadataQuorumCommand.execute("--bootstrap-server", "localhost:9092",
+                "remove-controller",
+                "--controller-id", "1"));
+    }
 }

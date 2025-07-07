@@ -17,27 +17,36 @@
 
 package kafka.server
 
-import kafka.raft.KafkaRaftManager
-import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
+import kafka.metrics.KafkaMetricsReporter
+import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager}
 import kafka.server.Server.MetricsPrefix
-import kafka.server.metadata.BrokerServerMetrics
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
-import org.apache.kafka.controller.QuorumControllerMetrics
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
+import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
+import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
+import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
+import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
 import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
+import org.apache.kafka.metadata.ListenerInfo
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.raft.RaftConfig.AddressSpec
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
+import org.apache.kafka.raft.Endpoints
+import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics}
 
-import java.util
-import java.util.Collections
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.net.InetSocketAddress
+import java.util.Arrays
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicReference
-
+import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.{Collection => JCollection}
+import java.util.{Map => JMap}
+import scala.jdk.CollectionConverters._
 
 /**
  * Creates a fault handler.
@@ -85,30 +94,39 @@ class StandardFaultHandlerFactory extends FaultHandlerFactory {
  */
 class SharedServer(
   private val sharedServerConfig: KafkaConfig,
-  val metaProps: MetaProperties,
+  val metaPropsEnsemble: MetaPropertiesEnsemble,
   val time: Time,
   private val _metrics: Metrics,
-  val threadNamePrefix: Option[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-  val faultHandlerFactory: FaultHandlerFactory
+  val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
+  val bootstrapServers: JCollection[InetSocketAddress],
+  val faultHandlerFactory: FaultHandlerFactory,
+  val socketFactory: ServerSocketFactory
 ) extends Logging {
+  KafkaMetricsReporter.startReporters(VerifiableProperties(sharedServerConfig.originals))
+  KafkaYammerMetrics.INSTANCE.configure(sharedServerConfig.originals)
+
   private val logContext: LogContext = new LogContext(s"[SharedServer id=${sharedServerConfig.nodeId}] ")
   this.logIdent = logContext.logPrefix
   private var started = false
   private var usedByBroker: Boolean = false
   private var usedByController: Boolean = false
-  val brokerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
-  val controllerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
+  val brokerConfig = new KafkaConfig(sharedServerConfig.props, false)
+  val controllerConfig = new KafkaConfig(sharedServerConfig.props, false)
   @volatile var metrics: Metrics = _metrics
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _
-  @volatile var controllerMetrics: QuorumControllerMetrics = _
+  @volatile var controllerServerMetrics: ControllerMetadataMetrics = _
   @volatile var loader: MetadataLoader = _
-  val snapshotsDiabledReason = new AtomicReference[String](null)
+  private val snapshotsDisabledReason = new AtomicReference[String](null)
   @volatile var snapshotEmitter: SnapshotEmitter = _
-  @volatile var snapshotGenerator: SnapshotGenerator = _
+  @volatile private var snapshotGenerator: SnapshotGenerator = _
+  @volatile private var metadataLoaderMetrics: MetadataLoaderMetrics = _
 
-  def isUsed(): Boolean = synchronized {
+  def clusterId: String = metaPropsEnsemble.clusterId().get()
+
+  def nodeId: Int = metaPropsEnsemble.nodeId().getAsInt
+
+  private def isUsed(): Boolean = synchronized {
     usedByController || usedByBroker
   }
 
@@ -117,7 +135,7 @@ class SharedServer(
    */
   def startForBroker(): Unit = synchronized {
     if (!isUsed()) {
-      start()
+      start(Endpoints.empty())
     }
     usedByBroker = true
   }
@@ -125,9 +143,22 @@ class SharedServer(
   /**
    * The start function called by the controller.
    */
-  def startForController(): Unit = synchronized {
+  def startForController(listenerInfo: ListenerInfo): Unit = synchronized {
     if (!isUsed()) {
-      start()
+      val endpoints = Endpoints.fromInetSocketAddresses(
+        listenerInfo
+          .listeners()
+          .asScala
+          .map { case (listenerName, endpoint) =>
+            (
+              ListenerName.normalised(listenerName),
+              InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+            )
+          }
+          .toMap
+          .asJava
+      )
+      start(endpoints)
     }
     usedByController = true
   }
@@ -152,7 +183,7 @@ class SharedServer(
     }
   }
 
-  def raftManagerFaultHandler: FaultHandler = faultHandlerFactory.build(
+  private def raftManagerFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "raft manager",
     fatal = true,
     action = () => {}
@@ -161,13 +192,24 @@ class SharedServer(
   /**
    * The fault handler to use when metadata loading fails.
    */
-  def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build(
+  private def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "metadata loading",
-    fatal = sharedServerConfig.processRoles.contains(ControllerRole),
+    fatal = sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole),
     action = () => SharedServer.this.synchronized {
-      if (brokerMetrics != null) brokerMetrics.metadataLoadErrorCount.getAndIncrement()
-      if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
-      snapshotsDiabledReason.compareAndSet(null, "metadata loading fault")
+      Option(brokerMetrics).foreach(_.metadataLoadErrorCount.getAndIncrement())
+      Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
+      snapshotsDisabledReason.compareAndSet(null, "metadata loading fault")
+    })
+
+  /**
+   * The fault handler to use when ControllerServer.startup throws an exception.
+   */
+  def controllerStartupFaultHandler: FaultHandler = faultHandlerFactory.build(
+    name = "controller startup",
+    fatal = true,
+    action = () => SharedServer.this.synchronized {
+      Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
+      snapshotsDisabledReason.compareAndSet(null, "controller startup fault")
     })
 
   /**
@@ -177,20 +219,30 @@ class SharedServer(
     name = "initial broker metadata loading",
     fatal = true,
     action = () => SharedServer.this.synchronized {
-      if (brokerMetrics != null) brokerMetrics.metadataApplyErrorCount.getAndIncrement()
-      if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
-      snapshotsDiabledReason.compareAndSet(null, "initial broker metadata loading fault")
+      Option(brokerMetrics).foreach(_.metadataApplyErrorCount.getAndIncrement())
+      Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
+      snapshotsDisabledReason.compareAndSet(null, "initial broker metadata loading fault")
     })
 
   /**
-   * The fault handler to use when the QuorumController experiences a fault.
+   * The fault handler to use when the QuorumController experiences a fatal fault.
    */
-  def quorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build(
+  def fatalQuorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "quorum controller",
     fatal = true,
     action = () => SharedServer.this.synchronized {
-      if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
-      snapshotsDiabledReason.compareAndSet(null, "quorum controller fault")
+      Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
+      snapshotsDisabledReason.compareAndSet(null, "quorum controller fatal fault")
+    })
+
+  /**
+   * The fault handler to use when the QuorumController experiences a non-fatal fault.
+   */
+  def nonFatalQuorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build(
+    name = "quorum controller",
+    fatal = false,
+    action = () => SharedServer.this.synchronized {
+      Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
     })
 
   /**
@@ -200,12 +252,12 @@ class SharedServer(
     name = "metadata publishing",
     fatal = false,
     action = () => SharedServer.this.synchronized {
-      if (brokerMetrics != null) brokerMetrics.metadataApplyErrorCount.getAndIncrement()
-      if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
+      Option(brokerMetrics).foreach(_.metadataApplyErrorCount.getAndIncrement())
+      Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
       // Note: snapshot generation does not need to be disabled for a publishing fault.
     })
 
-  private def start(): Unit = synchronized {
+  private def start(listenerEndpoints: Endpoints): Unit = synchronized {
     if (started) {
       debug("SharedServer has already been started.")
     } else {
@@ -216,67 +268,86 @@ class SharedServer(
           // This is only done in tests.
           metrics = new Metrics()
         }
-        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None)
+        sharedServerConfig.dynamicConfig.initialize(clientMetricsReceiverPluginOpt = None)
 
-        if (sharedServerConfig.processRoles.contains(BrokerRole)) {
-          brokerMetrics = BrokerServerMetrics(metrics)
+        if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
+          brokerMetrics = new BrokerServerMetrics(metrics)
         }
-        if (sharedServerConfig.processRoles.contains(ControllerRole)) {
-          controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
+        if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
+          controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
-        raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-          metaProps,
+
+        val externalKRaftMetrics = new DefaultExternalKRaftMetrics(Option(brokerMetrics), Option(controllerServerMetrics))
+
+        val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
+          clusterId,
           sharedServerConfig,
+          metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
           new MetadataRecordSerde,
           KafkaRaftServer.MetadataPartition,
           KafkaRaftServer.MetadataTopicId,
           time,
           metrics,
-          threadNamePrefix,
+          externalKRaftMetrics,
+          Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
           controllerQuorumVotersFuture,
+          bootstrapServers,
+          listenerEndpoints,
           raftManagerFaultHandler
         )
-        raftManager.startup()
+        raftManager = _raftManager
+        _raftManager.startup()
 
-        if (sharedServerConfig.processRoles.contains(ControllerRole)) {
-          val loaderBuilder = new MetadataLoader.Builder().
-            setNodeId(metaProps.nodeId).
-            setTime(time).
-            setThreadNamePrefix(threadNamePrefix.getOrElse("")).
-            setFaultHandler(metadataLoaderFaultHandler).
-            setHighWaterMarkAccessor(() => raftManager.client.highWatermark())
-          if (brokerMetrics != null) {
-            loaderBuilder.setMetadataLoaderMetrics(brokerMetrics)
-          }
-          loader = loaderBuilder.build()
-          snapshotEmitter = new SnapshotEmitter.Builder().
-            setNodeId(metaProps.nodeId).
-            setRaftClient(raftManager.client).
-            build()
-          snapshotGenerator = new SnapshotGenerator.Builder(snapshotEmitter).
-            setNodeId(metaProps.nodeId).
-            setTime(time).
-            setFaultHandler(metadataPublishingFaultHandler).
-            setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
-            setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(sharedServerConfig.metadataSnapshotMaxIntervalMs)).
-            setDisabledReason(snapshotsDiabledReason).
-            build()
-          raftManager.register(loader)
-          try {
-            loader.installPublishers(Collections.singletonList(snapshotGenerator))
-          } catch {
-            case t: Throwable => {
-              error("Unable to install metadata publishers", t)
-              throw new RuntimeException("Unable to install metadata publishers.", t)
-            }
+        metadataLoaderMetrics = if (brokerMetrics != null) {
+          new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
+            elapsedNs => brokerMetrics.updateBatchProcessingTime(elapsedNs),
+            batchSize => brokerMetrics.updateBatchSize(batchSize),
+            brokerMetrics.lastAppliedImageProvenance)
+        } else {
+          new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
+            _ => {},
+            _ => {},
+            new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY))
+        }
+        val loaderBuilder = new MetadataLoader.Builder().
+          setNodeId(nodeId).
+          setTime(time).
+          setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
+          setFaultHandler(metadataLoaderFaultHandler).
+          setHighWaterMarkAccessor(() => _raftManager.client.highWatermark()).
+          setMetrics(metadataLoaderMetrics)
+        loader = loaderBuilder.build()
+        snapshotEmitter = new SnapshotEmitter.Builder().
+          setNodeId(nodeId).
+          setRaftClient(_raftManager.client).
+          setMetrics(new SnapshotEmitterMetrics(
+            Optional.of(KafkaYammerMetrics.defaultRegistry()), time)).
+          build()
+        snapshotGenerator = new SnapshotGenerator.Builder(snapshotEmitter).
+          setNodeId(nodeId).
+          setTime(time).
+          setFaultHandler(metadataPublishingFaultHandler).
+          setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
+          setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(sharedServerConfig.metadataSnapshotMaxIntervalMs)).
+          setDisabledReason(snapshotsDisabledReason).
+          setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
+          build()
+        try {
+          loader.installPublishers(Arrays.asList(snapshotGenerator)).get()
+        } catch {
+          case t: Throwable => {
+            error("Unable to install metadata publishers", t)
+            throw new RuntimeException("Unable to install metadata publishers.", t)
           }
         }
+        _raftManager.register(loader)
         debug("Completed SharedServer startup.")
         started = true
       } catch {
         case e: Throwable => {
           error("Got exception while starting SharedServer", e)
           stop()
+          throw e
         }
       }
     }
@@ -285,10 +356,10 @@ class SharedServer(
   def ensureNotRaftLeader(): Unit = synchronized {
     // Ideally, this would just resign our leadership, if we had it. But we don't have an API in
     // RaftManager for that yet, so shut down the RaftManager.
-    if (raftManager != null) {
-      CoreUtils.swallow(raftManager.shutdown(), this)
+    Option(raftManager).foreach(_raftManager => {
+      CoreUtils.swallow(_raftManager.shutdown(), this)
       raftManager = null
-    }
+    })
   }
 
   private def stop(): Unit = synchronized {
@@ -302,30 +373,22 @@ class SharedServer(
       if (snapshotGenerator != null) {
         CoreUtils.swallow(snapshotGenerator.beginShutdown(), this)
       }
-      if (loader != null) {
-        CoreUtils.swallow(loader.close(), this)
-        loader = null
-      }
-      if (snapshotGenerator != null) {
-        CoreUtils.swallow(snapshotGenerator.close(), this)
-        snapshotGenerator = null
-      }
+      Utils.closeQuietly(loader, "loader")
+      loader = null
+      Utils.closeQuietly(metadataLoaderMetrics, "metadata loader metrics")
+      metadataLoaderMetrics = null
+      Utils.closeQuietly(snapshotGenerator, "snapshot generator")
+      snapshotGenerator = null
       if (raftManager != null) {
         CoreUtils.swallow(raftManager.shutdown(), this)
         raftManager = null
       }
-      if (controllerMetrics != null) {
-        CoreUtils.swallow(controllerMetrics.close(), this)
-        controllerMetrics = null
-      }
-      if (brokerMetrics != null) {
-        CoreUtils.swallow(brokerMetrics.close(), this)
-        brokerMetrics = null
-      }
-      if (metrics != null) {
-        CoreUtils.swallow(metrics.close(), this)
-        metrics = null
-      }
+      Utils.closeQuietly(controllerServerMetrics, "controller server metrics")
+      controllerServerMetrics = null
+      Utils.closeQuietly(brokerMetrics, "broker metrics")
+      brokerMetrics = null
+      Utils.closeQuietly(metrics, "metrics")
+      metrics = null
       CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, sharedServerConfig.nodeId.toString, metrics), this)
       started = false
     }

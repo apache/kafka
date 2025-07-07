@@ -29,7 +29,7 @@ import java.util.Objects;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableDeserializer;
 
 class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<ValueAndTimestamp<V>, Void, V> {
-    private final static LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
+    private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
     public final Deserializer<V> valueDeserializer;
     private final Deserializer<Long> timestampDeserializer;
@@ -66,6 +66,10 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
     }
 
     static byte[] rawValue(final byte[] rawValueAndTimestamp) {
+        if (rawValueAndTimestamp == null) {
+            return null;
+        }
+
         final int rawValueLength = rawValueAndTimestamp.length - 8;
         return ByteBuffer
             .allocate(rawValueLength)

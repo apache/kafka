@@ -37,13 +37,13 @@ import java.util.Set;
 
 public class SchemaProjector {
 
-    private static Set<AbstractMap.SimpleImmutableEntry<Type, Type>> promotable = new HashSet<>();
+    private static final Set<AbstractMap.SimpleImmutableEntry<Type, Type>> PROMOTABLE = new HashSet<>();
 
     static {
         Type[] promotableTypes = {Type.INT8, Type.INT16, Type.INT32, Type.INT64, Type.FLOAT32, Type.FLOAT64};
         for (int i = 0; i < promotableTypes.length; ++i) {
             for (int j = i; j < promotableTypes.length; ++j) {
-                promotable.add(new AbstractMap.SimpleImmutableEntry<>(promotableTypes[i], promotableTypes[j]));
+                PROMOTABLE.add(new AbstractMap.SimpleImmutableEntry<>(promotableTypes[i], promotableTypes[j]));
             }
         }
     }
@@ -160,8 +160,7 @@ public class SchemaProjector {
         assert source.type().isPrimitive();
         assert target.type().isPrimitive();
         Object result;
-        if (isPromotable(source.type(), target.type()) && record instanceof Number) {
-            Number numberRecord = (Number) record;
+        if (isPromotable(source.type(), target.type()) && record instanceof Number numberRecord) {
             switch (target.type()) {
                 case INT8:
                     result = numberRecord.byteValue();
@@ -191,6 +190,6 @@ public class SchemaProjector {
     }
 
     private static boolean isPromotable(Type sourceType, Type targetType) {
-        return promotable.contains(new AbstractMap.SimpleImmutableEntry<>(sourceType, targetType));
+        return PROMOTABLE.contains(new AbstractMap.SimpleImmutableEntry<>(sourceType, targetType));
     }
 }

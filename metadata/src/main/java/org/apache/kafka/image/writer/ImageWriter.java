@@ -48,7 +48,7 @@ public interface ImageWriter extends AutoCloseable {
     void write(ApiMessageAndVersion record);
 
     /**
-     * Close the image writer, dicarding all progress. Calling this function more than once has
+     * Close the image writer, discarding all progress. Calling this function more than once has
      * no effect.
      */
     default void close() {

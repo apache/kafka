@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollectionTest.TestElement;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -114,11 +115,9 @@ public class ImplicitLinkedHashMultiCollectionTest {
             new TestElement(101),
             new TestElement(105)
         };
-        for (int i = 0; i < testElements.length; i++) {
-            assertTrue(multiSet.add(testElements[i]));
-        }
-        for (int i = 0; i < testElements.length; i++) {
-            assertFalse(multiSet.add(testElements[i]));
+        for (TestElement testElement : testElements) {
+            assertTrue(multiSet.add(testElement));
+            assertFalse(multiSet.add(testElement));
         }
         assertEquals(23, multiSet.numSlots());
         assertEquals(testElements.length, multiSet.size());

@@ -22,10 +22,9 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class FindCoordinatorRequest extends AbstractRequest {
@@ -79,10 +78,6 @@ public class FindCoordinatorRequest extends AbstractRequest {
     public static class NoBatchedFindCoordinatorsException extends UnsupportedVersionException {
         private static final long serialVersionUID = 1L;
 
-        public NoBatchedFindCoordinatorsException(String message, Throwable cause) {
-            super(message, cause);
-        }
-
         public NoBatchedFindCoordinatorsException(String message) {
             super(message);
         }
@@ -109,8 +104,8 @@ public class FindCoordinatorRequest extends AbstractRequest {
         }
     }
 
-    public static FindCoordinatorRequest parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorRequest(new FindCoordinatorRequestData(new ByteBufferAccessor(buffer), version),
+    public static FindCoordinatorRequest parse(Readable readable, short version) {
+        return new FindCoordinatorRequest(new FindCoordinatorRequestData(readable, version),
             version);
     }
 
@@ -120,7 +115,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
     }
 
     public enum CoordinatorType {
-        GROUP((byte) 0), TRANSACTION((byte) 1);
+        GROUP((byte) 0), TRANSACTION((byte) 1), SHARE((byte) 2);
 
         final byte id;
 
@@ -138,6 +133,8 @@ public class FindCoordinatorRequest extends AbstractRequest {
                     return GROUP;
                 case 1:
                     return TRANSACTION;
+                case 2:
+                    return SHARE;
                 default:
                     throw new InvalidRequestException("Unknown coordinator type received: " + id);
             }

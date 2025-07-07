@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 public class RocksDbVersionedKeyValueBytesStoreSupplierTest {
 
-    private final static String STORE_NAME = "versioned_store";
+    private static final String STORE_NAME = "versioned_store";
 
     @Test
     public void shouldUseDefaultSegmentInterval() {

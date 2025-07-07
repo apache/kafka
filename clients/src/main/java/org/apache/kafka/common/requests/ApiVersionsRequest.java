@@ -16,42 +16,54 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.regex.Pattern;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.utils.AppInfoParser;
 
-import java.nio.ByteBuffer;
+import java.util.regex.Pattern;
 
 public class ApiVersionsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
         private static final String DEFAULT_CLIENT_SOFTWARE_NAME = "apache-kafka-java";
 
-        private static final ApiVersionsRequestData DATA = new ApiVersionsRequestData()
+        private static final ApiVersionsRequestData DEFAULT_DATA = new ApiVersionsRequestData()
             .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
             .setClientSoftwareVersion(AppInfoParser.getVersion());
 
+        private final ApiVersionsRequestData data;
+
         public Builder() {
-            super(ApiKeys.API_VERSIONS);
+            this(DEFAULT_DATA,
+                ApiKeys.API_VERSIONS.oldestVersion(),
+                ApiKeys.API_VERSIONS.latestVersion());
         }
 
         public Builder(short version) {
-            super(ApiKeys.API_VERSIONS, version);
+            this(DEFAULT_DATA, version, version);
+        }
+
+        public Builder(
+            ApiVersionsRequestData data,
+            short oldestAllowedVersion,
+            short latestAllowedVersion
+        ) {
+            super(ApiKeys.API_VERSIONS, oldestAllowedVersion, latestAllowedVersion);
+            this.data = data.duplicate();
         }
 
         @Override
         public ApiVersionsRequest build(short version) {
-            return new ApiVersionsRequest(DATA, version);
+            return new ApiVersionsRequest(data, version);
         }
 
         @Override
         public String toString() {
-            return DATA.toString();
+            return data.toString();
         }
     }
 
@@ -115,8 +127,8 @@ public class ApiVersionsRequest extends AbstractRequest {
         return new ApiVersionsResponse(data);
     }
 
-    public static ApiVersionsRequest parse(ByteBuffer buffer, short version) {
-        return new ApiVersionsRequest(new ApiVersionsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ApiVersionsRequest parse(Readable readable, short version) {
+        return new ApiVersionsRequest(new ApiVersionsRequestData(readable, version), version);
     }
 
 }

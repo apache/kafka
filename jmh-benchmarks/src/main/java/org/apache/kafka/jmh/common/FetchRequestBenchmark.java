@@ -17,15 +17,17 @@
 
 package org.apache.kafka.jmh.common;
 
-import kafka.network.RequestConvertToJson;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.network.RequestConvertToJson;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -40,7 +42,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -70,7 +71,7 @@ public class FetchRequestBenchmark {
 
     FetchRequest replicaRequest;
 
-    ByteBuffer requestBuffer;
+    Readable serializedRequest;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -90,15 +91,15 @@ public class FetchRequestBenchmark {
         this.header = new RequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), "jmh-benchmark", 100);
         this.consumerRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 0, fetchData)
             .build(ApiKeys.FETCH.latestVersion());
-        this.replicaRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData)
+        this.replicaRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion(), 1, 1, 0, 0, fetchData)
             .build(ApiKeys.FETCH.latestVersion());
-        this.requestBuffer = this.consumerRequest.serialize();
+        this.serializedRequest = this.consumerRequest.serialize();
 
     }
 
     @Benchmark
     public short testFetchRequestFromBuffer() {
-        return AbstractRequest.parseRequest(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), requestBuffer).request.version();
+        return AbstractRequest.parseRequest(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), serializedRequest).request.version();
     }
 
     @Benchmark
@@ -111,7 +112,7 @@ public class FetchRequestBenchmark {
     @Benchmark
     public int testFetchRequestForReplica() {
         FetchRequest fetchRequest = FetchRequest.Builder.forReplica(
-            ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData)
+            ApiKeys.FETCH.latestVersion(), 1, 1, 0, 0, fetchData)
                 .build(ApiKeys.FETCH.latestVersion());
         return fetchRequest.fetchData(topicNames).size();
     }

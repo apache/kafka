@@ -27,7 +27,7 @@ import java.util.Set;
 
 public class MockChangelogReader implements ChangelogReader {
     private final Set<TopicPartition> restoringPartitions = new HashSet<>();
-    private Map<TopicPartition, Long> restoredOffsets = Collections.emptyMap();
+    private final Map<TopicPartition, Long> restoredOffsets = Collections.emptyMap();
 
     public boolean isPartitionRegistered(final TopicPartition partition) {
         return restoringPartitions.contains(partition);

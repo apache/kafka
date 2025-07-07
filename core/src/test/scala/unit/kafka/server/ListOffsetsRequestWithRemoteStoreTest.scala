@@ -16,13 +16,20 @@
  */
 package kafka.server
 
-import kafka.utils.TestUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
+import org.junit.jupiter.api.TestInfo
 
 import java.util.Properties
+import scala.collection.Seq
 
 class ListOffsetsRequestWithRemoteStoreTest extends ListOffsetsRequestTest {
+
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
+    val props = new Properties
+    brokerPropertyOverrides(props)
+    Seq(props)
+  }
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
@@ -33,6 +40,6 @@ class ListOffsetsRequestWithRemoteStoreTest extends ListOffsetsRequestTest {
   override def createTopic(numPartitions: Int, replicationFactor: Int): Map[Int, Int] = {
     val props = new Properties()
     props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, servers, props)
+    super.createTopic(topic, numPartitions, replicationFactor, props)
   }
 }

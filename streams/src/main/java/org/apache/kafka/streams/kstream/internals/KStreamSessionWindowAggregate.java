@@ -33,15 +33,21 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
 import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emitFinalLatencySensor;
@@ -53,6 +59,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private static final Logger LOG = LoggerFactory.getLogger(KStreamSessionWindowAggregate.class);
 
     private final String storeName;
+    private final StoreFactory storeFactory;
     private final SessionWindows windows;
     private final Initializer<VAgg> initializer;
     private final Aggregator<? super KIn, ? super VIn, VAgg> aggregator;
@@ -62,17 +69,23 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private boolean sendOldValues = false;
 
     public KStreamSessionWindowAggregate(final SessionWindows windows,
-                                         final String storeName,
+                                         final StoreFactory storeFactory,
                                          final EmitStrategy emitStrategy,
                                          final Initializer<VAgg> initializer,
                                          final Aggregator<? super KIn, ? super VIn, VAgg> aggregator,
                                          final Merger<? super KIn, VAgg> sessionMerger) {
         this.windows = windows;
-        this.storeName = storeName;
+        this.storeName = storeFactory.storeName();
+        this.storeFactory = storeFactory;
         this.emitStrategy = emitStrategy;
         this.initializer = initializer;
         this.aggregator = aggregator;
         this.sessionMerger = sessionMerger;
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override
@@ -264,22 +277,24 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                                   final long emitRangeUpperBound) {
             final long startMs = time.milliseconds();
 
+            int emittedCount = 0;
+
             // Only time ordered (indexed) session store should have implemented
             // this function, otherwise a not-supported exception would throw
-            final KeyValueIterator<Windowed<KIn>, VAgg> windowToEmit = store
-                .findSessions(emitRangeLowerBound, emitRangeUpperBound);
+            try (final KeyValueIterator<Windowed<KIn>, VAgg> windowToEmit = store
+                    .findSessions(emitRangeLowerBound, emitRangeUpperBound)) {
 
-            int emittedCount = 0;
-            while (windowToEmit.hasNext()) {
-                emittedCount++;
-                final KeyValue<Windowed<KIn>, VAgg> kv = windowToEmit.next();
+                while (windowToEmit.hasNext()) {
+                    emittedCount++;
+                    final KeyValue<Windowed<KIn>, VAgg> kv = windowToEmit.next();
 
-                tupleForwarder.maybeForward(
-                    record.withKey(kv.key)
-                        .withValue(new Change<>(kv.value, null))
-                        // set the timestamp as the window end timestamp
-                        .withTimestamp(kv.key.window().end())
-                        .withHeaders(record.headers()));
+                    tupleForwarder.maybeForward(
+                        record.withKey(kv.key)
+                            .withValue(new Change<>(kv.value, null))
+                            // set the timestamp as the window end timestamp
+                            .withTimestamp(kv.key.window().end())
+                            .withHeaders(record.headers()));
+                }
             }
             emittedRecordsSensor.record(emittedCount);
             emitFinalLatencySensor.record(time.milliseconds() - startMs);
@@ -378,6 +393,11 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             return ValueAndTimestamp.make(
                 store.fetchSession(key.key(), key.window().start(), key.window().end()),
                 key.window().end());
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return false;
         }
     }
 }

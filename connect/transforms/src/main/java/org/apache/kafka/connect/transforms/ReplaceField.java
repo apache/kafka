@@ -20,9 +20,9 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.ConfigUtils;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -33,13 +33,15 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC = "Filter or rename fields."
             + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
@@ -49,55 +51,51 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         String EXCLUDE = "exclude";
         String INCLUDE = "include";
 
-        // for backwards compatibility
-        String INCLUDE_ALIAS = "whitelist";
-        String EXCLUDE_ALIAS = "blacklist";
-
-        String RENAME = "renames";
+        String RENAMES = "renames";
+        String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
     }
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.EXCLUDE, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.MEDIUM,
                     "Fields to exclude. This takes precedence over the fields to include.")
-            .define("blacklist", ConfigDef.Type.LIST, null, Importance.LOW,
-                    "Deprecated. Use " + ConfigName.EXCLUDE + " instead.")
             .define(ConfigName.INCLUDE, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.MEDIUM,
                     "Fields to include. If specified, only these fields will be used.")
-            .define("whitelist", ConfigDef.Type.LIST, null, Importance.LOW,
-                    "Deprecated. Use " + ConfigName.INCLUDE + " instead.")
-            .define(ConfigName.RENAME, ConfigDef.Type.LIST, Collections.emptyList(), new ConfigDef.Validator() {
-                @SuppressWarnings("unchecked")
-                @Override
-                public void ensureValid(String name, Object value) {
-                    parseRenameMappings((List<String>) value);
-                }
-
-                @Override
-                public String toString() {
-                    return "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>";
-                }
-            }, ConfigDef.Importance.MEDIUM, "Field rename mappings.");
+            .define(ConfigName.RENAMES, ConfigDef.Type.LIST, Collections.emptyList(),
+                ConfigDef.LambdaValidator.with(
+                    (name, value) -> {
+                        @SuppressWarnings("unchecked")
+                        List<String> valueList = (List<String>) value;
+                        parseRenameMappings(valueList);
+                    },
+                    () -> "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>"),
+                ConfigDef.Importance.MEDIUM, "Field rename mappings.")
+            .define(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private static final String PURPOSE = "field replacement";
 
-    private List<String> exclude;
-    private List<String> include;
+    private Set<String> exclude;
+    private Set<String> include;
     private Map<String, String> renames;
     private Map<String, String> reverseRenames;
+    private boolean replaceNullWithDefault;
 
     private Cache<Schema, Schema> schemaUpdateCache;
 
     @Override
-    public void configure(Map<String, ?> configs) {
-        final SimpleConfig config = new SimpleConfig(CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(configs, new String[][]{
-            {ConfigName.INCLUDE, "whitelist"},
-            {ConfigName.EXCLUDE, "blacklist"},
-        }));
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
-        exclude = config.getList(ConfigName.EXCLUDE);
-        include = config.getList(ConfigName.INCLUDE);
-        renames = parseRenameMappings(config.getList(ConfigName.RENAME));
+    @Override
+    public void configure(Map<String, ?> configs) {
+        final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
+
+        exclude = new HashSet<>(config.getList(ConfigName.EXCLUDE));
+        include = new HashSet<>(config.getList(ConfigName.INCLUDE));
+        renames = parseRenameMappings(config.getList(ConfigName.RENAMES));
         reverseRenames = invert(renames);
+        replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
@@ -107,7 +105,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         for (String mapping : mappings) {
             final String[] parts = mapping.split(":");
             if (parts.length != 2) {
-                throw new ConfigException(ConfigName.RENAME, mappings, "Invalid rename mapping: " + mapping);
+                throw new ConfigException(ConfigName.RENAMES, mappings, "Invalid rename mapping: " + mapping);
             }
             m.put(parts[0], parts[1]);
         }
@@ -175,7 +173,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         final Struct updatedValue = new Struct(updatedSchema);
 
         for (Field field : updatedSchema.fields()) {
-            final Object fieldValue = value.get(reverseRenamed(field.name()));
+            final Object fieldValue = replaceNullWithDefault ? value.get(reverseRenamed(field.name())) : value.getWithoutDefault(reverseRenamed(field.name()));
             updatedValue.put(field.name(), fieldValue);
         }
 

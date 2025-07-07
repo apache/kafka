@@ -17,10 +17,10 @@
 package org.apache.kafka.common.security.auth;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
+
 import javax.security.auth.Subject;
 
 /**
@@ -32,7 +32,7 @@ import javax.security.auth.Subject;
  * overrides the standard {@link #equals(Object)} and {@link #hashCode()} methods calling their
  * respective {@link Object#equals(Object)} and {@link Object#hashCode()} implementations. In so
  * doing, it provides equality <em>only</em> via reference identity and will not base equality on
- * the underlying values of its {@link #extensionsMap extentions map}.
+ * the underlying values of its {@link #extensionsMap extensions map}.
  *
  * <p/>
  *
@@ -50,7 +50,7 @@ public class SaslExtensions {
     private final Map<String, String> extensionsMap;
 
     public SaslExtensions(Map<String, String> extensionsMap) {
-        this.extensionsMap = Collections.unmodifiableMap(new HashMap<>(extensionsMap));
+        this.extensionsMap = Map.copyOf(extensionsMap);
     }
 
     /**

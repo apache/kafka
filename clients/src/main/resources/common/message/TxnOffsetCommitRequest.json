@@ -16,14 +16,21 @@
 {
   "apiKey": 28,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "TxnOffsetCommitRequest",
   // Version 1 is the same as version 0.
   //
   // Version 2 adds the committed leader epoch.
   //
   // Version 3 adds the member.id, group.instance.id and generation.id.
-  "validVersions": "0-3",
+  //
+  // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
+  //
+  // Version 5 is the same as version 4 (KIP-890). Note when TxnOffsetCommit requests are used in transaction, if
+  // transaction V2 (KIP_890 part 2) is enabled, the TxnOffsetCommit request will also include the function for a
+  // AddOffsetsToTxn call. If V2 is disabled, the client can't use TxnOffsetCommit request version higher than 4 within
+  // a transaction.
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
@@ -46,7 +53,7 @@
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]TxnOffsetCommitRequestPartition", "versions": "0+",
-        "about": "The partitions inside the topic that we want to committ offsets for.", "fields": [
+        "about": "The partitions inside the topic that we want to commit offsets for.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The index of the partition within the topic." },
         { "name": "CommittedOffset", "type": "int64", "versions": "0+",

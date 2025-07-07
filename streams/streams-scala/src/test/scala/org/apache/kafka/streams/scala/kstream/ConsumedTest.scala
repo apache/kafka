@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
-import org.apache.kafka.streams.Topology
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy
+import org.apache.kafka.streams.AutoOffsetReset
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp
 import org.apache.kafka.streams.scala.serialization.Serdes
@@ -38,15 +39,15 @@ class ConsumedTest {
   @Test
   def testCreateConsumedWithTimestampExtractorAndResetPolicy(): Unit = {
     val timestampExtractor = new FailOnInvalidTimestamp()
-    val resetPolicy = Topology.AutoOffsetReset.LATEST
+    val resetPolicy = AutoOffsetReset.latest()
     val consumed: Consumed[String, Long] =
-      Consumed.`with`[String, Long](timestampExtractor, resetPolicy)
+      Consumed.`with`(timestampExtractor, resetPolicy)
 
     val internalConsumed = new ConsumedInternal(consumed)
     assertEquals(Serdes.stringSerde.getClass, internalConsumed.keySerde.getClass)
     assertEquals(Serdes.longSerde.getClass, internalConsumed.valueSerde.getClass)
     assertEquals(timestampExtractor, internalConsumed.timestampExtractor)
-    assertEquals(resetPolicy, internalConsumed.offsetResetPolicy)
+    assertEquals(AutoOffsetResetStrategy.StrategyType.LATEST, internalConsumed.offsetResetPolicy.offsetResetStrategy())
   }
 
   @Test
@@ -59,14 +60,15 @@ class ConsumedTest {
     assertEquals(Serdes.longSerde.getClass, internalConsumed.valueSerde.getClass)
     assertEquals(timestampExtractor, internalConsumed.timestampExtractor)
   }
+
   @Test
   def testCreateConsumedWithResetPolicy(): Unit = {
-    val resetPolicy = Topology.AutoOffsetReset.LATEST
+    val resetPolicy = AutoOffsetReset.latest()
     val consumed: Consumed[String, Long] = Consumed.`with`[String, Long](resetPolicy)
 
     val internalConsumed = new ConsumedInternal(consumed)
     assertEquals(Serdes.stringSerde.getClass, internalConsumed.keySerde.getClass)
     assertEquals(Serdes.longSerde.getClass, internalConsumed.valueSerde.getClass)
-    assertEquals(resetPolicy, internalConsumed.offsetResetPolicy)
+    assertEquals(AutoOffsetResetStrategy.StrategyType.LATEST, internalConsumed.offsetResetPolicy.offsetResetStrategy())
   }
 }

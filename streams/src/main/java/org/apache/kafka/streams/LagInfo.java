@@ -20,7 +20,7 @@ import java.util.Objects;
 
 /**
  * Encapsulates information about lag, at a store partition replica (active or standby). This information is constantly changing as the
- * tasks process records and thus, they should be treated as simply instantaenous measure of lag.
+ * tasks process records and thus, they should be treated as simply instantaneous measure of lag.
  */
 public class LagInfo {
 
@@ -40,7 +40,7 @@ public class LagInfo {
      * Get the current maximum offset on the store partition's changelog topic, that has been successfully written into
      * the store partition's state store.
      *
-     * @return current consume offset for standby/restoring store partitions &amp;   simply endoffset for active store partition replicas
+     * @return current consume offset for standby/restoring store partitions &amp; simply end offset for active store partition replicas
      */
     public long currentOffsetPosition() {
         return this.currentOffsetPosition;

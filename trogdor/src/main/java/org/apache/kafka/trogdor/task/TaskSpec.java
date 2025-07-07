@@ -17,9 +17,10 @@
 
 package org.apache.kafka.trogdor.task;
 
+import org.apache.kafka.trogdor.common.JsonUtil;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import org.apache.kafka.trogdor.common.JsonUtil;
 
 import java.util.Collections;
 import java.util.Map;
@@ -29,9 +30,7 @@ import java.util.Objects;
 /**
  * The specification for a task. This should be immutable and suitable for serializing and sending over the wire.
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS,
-              include = JsonTypeInfo.As.PROPERTY,
-              property = "class")
+@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "class")
 public abstract class TaskSpec {
     /**
      * The maximum task duration.
@@ -40,7 +39,7 @@ public abstract class TaskSpec {
      * point rounding.  (Objects serialized as JSON canonically contain only floating point numbers,
      * because JavaScript did not support integers.)
      */
-    public final static long MAX_TASK_DURATION_MS = 1000000000000000L;
+    public static final long MAX_TASK_DURATION_MS = 1000000000000000L;
 
     /**
      * When the time should start in milliseconds.
@@ -112,7 +111,7 @@ public abstract class TaskSpec {
         return JsonUtil.toJsonString(this);
     }
 
-    protected Map<String, String> configOrEmptyMap(Map<String, String> config) {
-        return (config == null) ? Collections.<String, String>emptyMap() : config;
+    protected static Map<String, String> configOrEmptyMap(Map<String, String> config) {
+        return (config == null) ? Collections.emptyMap() : config;
     }
 }

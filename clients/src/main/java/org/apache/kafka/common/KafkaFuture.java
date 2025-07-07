@@ -48,14 +48,6 @@ public abstract class KafkaFuture<T> implements Future<T> {
     }
 
     /**
-     * A function which takes objects of type A and returns objects of type B.
-     *
-     * @deprecated Since Kafka 3.0. Use the {@link BaseFunction} functional interface.
-     */
-    @Deprecated
-    public static abstract class Function<A, B> implements BaseFunction<A, B> { }
-
-    /**
      * A consumer of two different types of object.
      */
     @FunctionalInterface
@@ -110,7 +102,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * {@code CompletionStage} will work normally.
      *
      * <p>If you want to block on the completion of a KafkaFuture you should use
-     * {@link #get()}, {@link #get(long, TimeUnit)} or {@link #getNow(Object)}, rather then calling
+     * {@link #get()}, {@link #get(long, TimeUnit)} or {@link #getNow(Object)}, rather than calling
      * {@code .toCompletionStage().toCompletableFuture().get()} etc.
      *
      * @since Kafka 3.0
@@ -125,12 +117,6 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * completes the future.
      */
     public abstract <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function);
-
-    /**
-     * Prefer {@link KafkaFuture#thenApply(BaseFunction)} as this function is here for backwards compatibility reasons
-     * and might be deprecated/removed in a future release.
-     */
-    public abstract <R> KafkaFuture<R> thenApply(Function<T, R> function);
 
     /**
      * Returns a new KafkaFuture with the same result or exception as this future, that executes the given action
@@ -149,7 +135,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * The action may be invoked by the thread that calls {@code whenComplete} or it may be invoked by the thread that
      * completes the future.
      *
-     * @param action the action to preform
+     * @param action the action to perform
      * @return the new future
      */
     public abstract KafkaFuture<T> whenComplete(BiConsumer<? super T, ? super Throwable> action);

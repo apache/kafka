@@ -18,14 +18,17 @@
 package org.apache.kafka.image.publisher;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RaftSnapshotWriter;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.SnapshotWriter;
+
 import org.slf4j.Logger;
 
 import java.util.Optional;
@@ -40,12 +43,19 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
      * However, it's more convenient to limit the batch size here in terms of number of records.
      * So we chose a low number that will not cause problems.
      */
-    private final static int DEFAULT_BATCH_SIZE = 1024;
+    private static final int DEFAULT_BATCH_SIZE = 1024;
 
     public static class Builder {
+        private Time time = Time.SYSTEM;
         private int nodeId = 0;
         private RaftClient<ApiMessageAndVersion> raftClient = null;
         private int batchSize = DEFAULT_BATCH_SIZE;
+        private SnapshotEmitterMetrics metrics = null;
+
+        public Builder setTime(Time time) {
+            this.time = time;
+            return this;
+        }
 
         public Builder setNodeId(int nodeId) {
             this.nodeId = nodeId;
@@ -62,11 +72,21 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             return this;
         }
 
+        public Builder setMetrics(SnapshotEmitterMetrics metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
         public SnapshotEmitter build() {
             if (raftClient == null) throw new RuntimeException("You must set the raftClient.");
-            return new SnapshotEmitter(nodeId,
+            if (metrics == null) metrics = new SnapshotEmitterMetrics(
+                    Optional.empty(),
+                    time);
+            return new SnapshotEmitter(time,
+                    nodeId,
                     raftClient,
-                    batchSize);
+                    batchSize,
+                    metrics);
         }
     }
 
@@ -74,6 +94,11 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
      * The slf4j logger to use.
      */
     private final Logger log;
+
+    /**
+     * The clock object.
+     */
+    private final Time time;
 
     /**
      * The RaftClient to use.
@@ -85,14 +110,27 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
      */
     private final int batchSize;
 
+    /**
+     * The metrics to use.
+     */
+    private final SnapshotEmitterMetrics metrics;
+
     private SnapshotEmitter(
-            int nodeId,
-            RaftClient<ApiMessageAndVersion> raftClient,
-            int batchSize
+        Time time,
+        int nodeId,
+        RaftClient<ApiMessageAndVersion> raftClient,
+        int batchSize,
+        SnapshotEmitterMetrics metrics
     ) {
+        this.time = time;
         this.log = new LogContext("[SnapshotEmitter id=" + nodeId + "] ").logger(SnapshotEmitter.class);
         this.raftClient = raftClient;
         this.batchSize = batchSize;
+        this.metrics = metrics;
+    }
+
+    public SnapshotEmitterMetrics metrics() {
+        return metrics;
     }
 
     @Override
@@ -102,23 +140,24 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             provenance.snapshotId(),
             provenance.lastContainedLogTimeMs()
         );
-        if (!snapshotWriter.isPresent()) {
+        if (snapshotWriter.isEmpty()) {
             log.error("Not generating {} because it already exists.", provenance.snapshotName());
             return;
         }
         RaftSnapshotWriter writer = new RaftSnapshotWriter(snapshotWriter.get(), batchSize);
         try {
-            image.write(writer, new ImageWriterOptions.Builder().
-                    setMetadataVersion(image.features().metadataVersion()).
+            image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
+                    setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
                     build());
             writer.close(true);
+            metrics.setLatestSnapshotGeneratedTimeMs(time.milliseconds());
+            metrics.setLatestSnapshotGeneratedBytes(writer.frozenSize().getAsLong());
+            log.info("Successfully wrote {}", provenance.snapshotName());
         } catch (Throwable e) {
             log.error("Encountered error while writing {}", provenance.snapshotName(), e);
             throw e;
         } finally {
             Utils.closeQuietly(writer, "RaftSnapshotWriter");
-            Utils.closeQuietly(snapshotWriter.get(), "SnapshotWriter");
         }
-        log.info("Successfully wrote {}", provenance.snapshotName());
     }
 }

@@ -18,6 +18,7 @@
 package kafka.metrics
 
 import java.lang.management.ManagementFactory
+import java.util
 import java.util.Properties
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricPredicate
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Assertions._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.utils._
+import org.apache.kafka.clients.consumer.GroupProtocol
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -32,10 +34,12 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.junit.jupiter.api.Timeout
+import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
+import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 
 @Timeout(120)
 class MetricsTest extends KafkaServerTestHarness with Logging {
@@ -44,79 +48,72 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   val requiredKafkaServerPrefix = "kafka.server:type=KafkaServer,name"
   val overridingProps = new Properties
-  overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+  overridingProps.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, numParts.toString)
   overridingProps.put(JmxReporter.EXCLUDE_CONFIG, s"$requiredKafkaServerPrefix=ClusterId")
 
   def generateConfigs: Seq[KafkaConfig] =
-    TestUtils.createBrokerConfigs(numNodes, zkConnectOrNull, enableControlledShutdown = false).
+    TestUtils.createBrokerConfigs(numNodes, enableControlledShutdown = false).
       map(KafkaConfig.fromProps(_, overridingProps))
 
   val nMessages = 2
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testMetricsReporterAfterDeletingTopic(quorum: String): Unit = {
+  @Test
+  def testMetricsReporterAfterDeletingTopic(): Unit = {
     val topic = "test-topic-metric"
-    createTopic(topic, 1, 1)
+    createTopic(topic)
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
+    TestUtils.verifyTopicDeletion(topic, 1, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(quorum: String): Unit = {
+  @Test
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(): Unit = {
     val topic = "test-broker-topic-metric"
-    createTopic(topic, 2, 1)
+    createTopic(topic, 2)
     // Produce a few messages to create the metrics
     // Don't consume messages as it may cause metrics to be re-created causing the test to fail, see KAFKA-5238
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
     assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics don't exist")
     brokers.foreach(b => assertNotNull(b.brokerTopicStats.topicStats(topic)))
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
+    TestUtils.verifyTopicDeletion(topic, 1, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testClusterIdMetric(quorum: String): Unit = {
+  @Test
+  def testClusterIdMetric(): Unit = {
     // Check if clusterId metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=ClusterId"), 1)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testBrokerStateMetric(quorum: String): Unit = {
+  @Test
+  def testBrokerStateMetric(): Unit = {
     // Check if BrokerState metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=BrokerState"), 1)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testYammerMetricsCountMetric(quorum: String): Unit = {
+  @Test
+  def testYammerMetricsCountMetric(): Unit = {
     // Check if yammer-metrics-count metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=yammer-metrics-count"), 1)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testLinuxIoMetrics(quorum: String): Unit = {
+  @Test
+  def testLinuxIoMetrics(): Unit = {
     // Check if linux-disk-{read,write}-bytes metrics either do or do not exist depending on whether we are or are not
     // able to collect those metrics on the platform where this test is running.
-    val usable = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying).usable()
+    val usable = new LinuxIoMetricsCollector("/proc", Time.SYSTEM).usable()
     val expectedCount = if (usable) 1 else 0
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     Set("linux-disk-read-bytes", "linux-disk-write-bytes").foreach(name =>
       assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=$name"), expectedCount))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testJMXFilter(quorum: String): Unit = {
+  @Test
+  def testJMXFilter(): Unit = {
     // Check if cluster id metrics is not exposed in JMX
     assertTrue(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
@@ -124,12 +121,11 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
                   .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testUpdateJMXFilter(quorum: String): Unit = {
+  @Test
+  def testUpdateJMXFilter(): Unit = {
     // verify previously exposed metrics are removed and existing matching metrics are added
     brokers.foreach(broker => broker.kafkaYammerMetrics.reconfigure(
-      Map(JmxReporter.EXCLUDE_CONFIG -> "kafka.controller:type=KafkaController,name=ActiveControllerCount").asJava
+      util.Map.of(JmxReporter.EXCLUDE_CONFIG, "kafka.controller:type=KafkaController,name=ActiveControllerCount")
     ))
     assertFalse(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
@@ -137,39 +133,38 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
                   .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testGeneralBrokerTopicMetricsAreGreedilyRegistered(quorum: String): Unit = {
+  @Test
+  def testGeneralBrokerTopicMetricsAreGreedilyRegistered(): Unit = {
     val topic = "test-broker-topic-metric"
-    createTopic(topic, 2, 1)
+    createTopic(topic, 2)
 
     // The broker metrics for all topics should be greedily registered
     assertTrue(topicMetrics(None).nonEmpty, "General topic metrics don't exist")
-    assertEquals(brokers.head.brokerTopicStats.allTopicsStats.metricMap.size, topicMetrics(None).size)
+    assertEquals(brokers.head.brokerTopicStats.allTopicsStats.metricMapKeySet().size, topicMetrics(None).size)
+    assertEquals(0, brokers.head.brokerTopicStats.allTopicsStats.metricGaugeMap.size)
     // topic metrics should be lazily registered
     assertTrue(topicMetricGroups(topic).isEmpty, "Topic metrics aren't lazily registered")
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
     assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics aren't registered")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testWindowsStyleTagNames(quorum: String): Unit = {
+  @Test
+  def testWindowsStyleTagNames(): Unit = {
     val path = "C:\\windows-path\\kafka-logs"
-    val tags = Map("dir" -> path)
-    val expectedMBeanName = Set(tags.keySet.head, ObjectName.quote(path)).mkString("=")
-    val metric = KafkaMetricsGroup.metricName("test-metric", tags)
+    val tags = util.Map.of("dir", path)
+    val expectedMBeanName = Set(tags.keySet().iterator().next(), ObjectName.quote(path)).mkString("=")
+    val metric = new KafkaMetricsGroup(this.getClass).metricName("test-metric", tags)
     assert(metric.getMBeanName.endsWith(expectedMBeanName))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testBrokerTopicMetricsBytesInOut(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testBrokerTopicMetricsBytesInOut(groupProtocol: String): Unit = {
     val topic = "test-bytes-in-out"
-    val replicationBytesIn = BrokerTopicStats.ReplicationBytesInPerSec
-    val replicationBytesOut = BrokerTopicStats.ReplicationBytesOutPerSec
-    val bytesIn = s"${BrokerTopicStats.BytesInPerSec},topic=$topic"
-    val bytesOut = s"${BrokerTopicStats.BytesOutPerSec},topic=$topic"
+    val replicationBytesIn = BrokerTopicMetrics.REPLICATION_BYTES_IN_PER_SEC
+    val replicationBytesOut = BrokerTopicMetrics.REPLICATION_BYTES_OUT_PER_SEC
+    val bytesIn = s"${BrokerTopicMetrics.BYTES_IN_PER_SEC},topic=$topic"
+    val bytesOut = s"${BrokerTopicMetrics.BYTES_OUT_PER_SEC},topic=$topic"
 
     val topicConfig = new Properties
     topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
@@ -188,14 +183,11 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     }
 
     // Consume messages to make bytesOut tick
-    TestUtils.consumeTopicRecords(brokers, topic, nMessages)
+    TestUtils.consumeTopicRecords(brokers, topic, nMessages, GroupProtocol.of(groupProtocol))
     val initialReplicationBytesIn = TestUtils.meterCount(replicationBytesIn)
     val initialReplicationBytesOut = TestUtils.meterCount(replicationBytesOut)
     val initialBytesIn = TestUtils.meterCount(bytesIn)
     val initialBytesOut = TestUtils.meterCount(bytesOut)
-
-    // BytesOut doesn't include replication, so it shouldn't have changed
-    assertEquals(initialBytesOut, TestUtils.meterCount(bytesOut))
 
     // Produce a few messages to make the metrics tick
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
@@ -203,34 +195,17 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(TestUtils.meterCount(replicationBytesIn) > initialReplicationBytesIn)
     assertTrue(TestUtils.meterCount(replicationBytesOut) > initialReplicationBytesOut)
     assertTrue(TestUtils.meterCount(bytesIn) > initialBytesIn)
+    // BytesOut doesn't include replication, so it shouldn't have changed
+    assertEquals(initialBytesOut, TestUtils.meterCount(bytesOut))
 
     // Consume messages to make bytesOut tick
-    TestUtils.consumeTopicRecords(brokers, topic, nMessages)
+    TestUtils.consumeTopicRecords(brokers, topic, nMessages, GroupProtocol.of(groupProtocol))
 
     assertTrue(TestUtils.meterCount(bytesOut) > initialBytesOut)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk"))
-  def testZkControllerMetrics(quorum: String): Unit = {
-    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ActiveControllerCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=OfflinePartitionsCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalTopicCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalPartitionCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=TopicsToDeleteCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ReplicasToDeleteCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ActiveBrokerCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=FencedBrokerCount"), 1)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft"))
-  def testKRaftControllerMetrics(quorum: String): Unit = {
+  @Test
+  def testKRaftControllerMetrics(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     Set(
       "kafka.controller:type=KafkaController,name=ActiveControllerCount",
@@ -245,25 +220,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
     ).foreach(expected => {
       assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName.equals(expected)),
-        s"Unable to find ${expected}")
+        s"Unable to find $expected")
     })
-  }
-
-  /**
-   * Test that the metrics are created with the right name, testZooKeeperStateChangeRateMetrics
-   * and testZooKeeperSessionStateMetric in ZooKeeperClientTest test the metrics behaviour.
-   */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testSessionExpireListenerMetrics(quorum: String): Unit = {
-    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    val expectedNumMetrics = if (isKRaftTest()) 0 else 1
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=SessionState"))
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperExpiresPerSec"))
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperDisconnectsPerSec"))
   }
 
   private def topicMetrics(topic: Option[String]): Set[String] = {

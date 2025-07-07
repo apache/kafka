@@ -17,12 +17,18 @@
 
 package kafka.server
 
+import kafka.network.RequestChannel.Request
+import org.apache.kafka.clients.admin.EndpointType
+
 import java.net.InetAddress
 import java.util
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.internals.Plugin
+import org.apache.kafka.common.message.{DescribeClusterRequestData, DescribeClusterResponseData}
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{DescribeClusterRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
@@ -35,13 +41,38 @@ import org.mockito.Mockito.{mock, verify, when}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
+object AuthHelperTest {
+  def newMockDescribeClusterRequest(
+    data: DescribeClusterRequestData,
+    requestVersion: Int
+  ): Request = {
+    val requestContext = new RequestContext(
+      new RequestHeader(ApiKeys.DESCRIBE_CLUSTER, requestVersion.toShort, "", 0),
+      "",
+      InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS,
+      new ListenerName("PLAINTEXT"),
+      SecurityProtocol.PLAINTEXT,
+      ClientInformation.EMPTY,
+      false)
+    val request: Request = mock(classOf[Request])
+    when(request.body[DescribeClusterRequest]).thenReturn(
+      new DescribeClusterRequest(data, requestVersion.toShort))
+    when(request.context).thenReturn(requestContext)
+    when(request.header).thenReturn(requestContext.header)
+    request
+  }
+}
+
 class AuthHelperTest {
+  import AuthHelperTest.newMockDescribeClusterRequest
 
   private val clientId = ""
 
   @Test
   def testAuthorize(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
 
     val operation = AclOperation.WRITE
     val resourceType = ResourceType.TOPIC
@@ -59,7 +90,7 @@ class AuthHelperTest {
     when(authorizer.authorize(requestContext, expectedActions.asJava))
       .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val result = new AuthHelper(Some(authorizer)).authorize(
+    val result = new AuthHelper(Some(authorizerPlugin)).authorize(
       requestContext, operation, resourceType, resourceName)
 
     verify(authorizer).authorize(requestContext, expectedActions.asJava)
@@ -70,6 +101,7 @@ class AuthHelperTest {
   @Test
   def testFilterByAuthorized(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
 
     val operation = AclOperation.WRITE
     val resourceType = ResourceType.TOPIC
@@ -103,7 +135,7 @@ class AuthHelperTest {
       }.asJava
     }
 
-    val result = new AuthHelper(Some(authorizer)).filterByAuthorized(
+    val result = new AuthHelper(Some(authorizerPlugin)).filterByAuthorized(
       requestContext,
       operation,
       resourceType,
@@ -118,4 +150,113 @@ class AuthHelperTest {
     assertEquals(Set(resourceName1, resourceName3), result)
   }
 
+  @Test
+  def testComputeDescribeClusterResponseV1WithUnknownEndpointType(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
+    val request = newMockDescribeClusterRequest(
+      new DescribeClusterRequestData().setEndpointType(123.toByte), 1)
+    val responseData = authHelper.computeDescribeClusterResponse(request,
+      EndpointType.BROKER,
+      "ltCWoi9wRhmHSQCIgAznEg",
+      () => new DescribeClusterBrokerCollection(),
+      () => 1)
+    assertEquals(new DescribeClusterResponseData().
+      setErrorCode(Errors.UNSUPPORTED_ENDPOINT_TYPE.code()).
+      setErrorMessage("Unsupported endpoint type 123"), responseData)
+  }
+
+  @Test
+  def testComputeDescribeClusterResponseV0WithUnknownEndpointType(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
+    val request = newMockDescribeClusterRequest(
+      new DescribeClusterRequestData().setEndpointType(123.toByte), 0)
+    val responseData = authHelper.computeDescribeClusterResponse(request,
+      EndpointType.BROKER,
+      "ltCWoi9wRhmHSQCIgAznEg",
+      () => new DescribeClusterBrokerCollection(),
+      () => 1)
+    assertEquals(new DescribeClusterResponseData().
+      setErrorCode(Errors.INVALID_REQUEST.code()).
+      setErrorMessage("Unsupported endpoint type 123"), responseData)
+  }
+
+  @Test
+  def testComputeDescribeClusterResponseV1WithUnexpectedEndpointType(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
+    val request = newMockDescribeClusterRequest(
+      new DescribeClusterRequestData().setEndpointType(EndpointType.BROKER.id()), 1)
+    val responseData = authHelper.computeDescribeClusterResponse(request,
+      EndpointType.CONTROLLER,
+      "ltCWoi9wRhmHSQCIgAznEg",
+      () => new DescribeClusterBrokerCollection(),
+      () => 1)
+    assertEquals(new DescribeClusterResponseData().
+      setErrorCode(Errors.MISMATCHED_ENDPOINT_TYPE.code()).
+      setErrorMessage("The request was sent to an endpoint of type CONTROLLER, but we wanted an endpoint of type BROKER"), responseData)
+  }
+
+  @Test
+  def testComputeDescribeClusterResponseV0WithUnexpectedEndpointType(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
+    val request = newMockDescribeClusterRequest(
+      new DescribeClusterRequestData().setEndpointType(EndpointType.BROKER.id()), 0)
+    val responseData = authHelper.computeDescribeClusterResponse(request,
+      EndpointType.CONTROLLER,
+      "ltCWoi9wRhmHSQCIgAznEg",
+      () => new DescribeClusterBrokerCollection(),
+      () => 1)
+    assertEquals(new DescribeClusterResponseData().
+      setErrorCode(Errors.INVALID_REQUEST.code()).
+      setErrorMessage("The request was sent to an endpoint of type CONTROLLER, but we wanted an endpoint of type BROKER"), responseData)
+  }
+
+  @Test
+  def testComputeDescribeClusterResponseWhereControllerIsNotFound(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
+    val request = newMockDescribeClusterRequest(
+      new DescribeClusterRequestData().setEndpointType(EndpointType.CONTROLLER.id()), 1)
+    val responseData = authHelper.computeDescribeClusterResponse(request,
+      EndpointType.CONTROLLER,
+      "ltCWoi9wRhmHSQCIgAznEg",
+      () => new DescribeClusterBrokerCollection(),
+      () => 1)
+    assertEquals(new DescribeClusterResponseData().
+      setClusterId("ltCWoi9wRhmHSQCIgAznEg").
+      setControllerId(-1).
+      setClusterAuthorizedOperations(Int.MinValue).
+      setEndpointType(2.toByte), responseData)
+  }
+
+  @Test
+  def testComputeDescribeClusterResponseSuccess(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
+    val request = newMockDescribeClusterRequest(
+      new DescribeClusterRequestData().setEndpointType(EndpointType.CONTROLLER.id()), 1)
+    val nodes = new DescribeClusterBrokerCollection(
+      java.util.Arrays.asList[DescribeClusterResponseData.DescribeClusterBroker](
+        new DescribeClusterResponseData.DescribeClusterBroker().setBrokerId(1)).iterator())
+    val responseData = authHelper.computeDescribeClusterResponse(request,
+      EndpointType.CONTROLLER,
+      "ltCWoi9wRhmHSQCIgAznEg",
+      () => nodes,
+      () => 1)
+    assertEquals(new DescribeClusterResponseData().
+      setClusterId("ltCWoi9wRhmHSQCIgAznEg").
+      setControllerId(1).
+      setClusterAuthorizedOperations(Int.MinValue).
+      setBrokers(nodes).
+      setEndpointType(2.toByte), responseData)
+  }
 }

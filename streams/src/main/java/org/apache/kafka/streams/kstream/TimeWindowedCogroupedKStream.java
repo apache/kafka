@@ -18,39 +18,16 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.WindowStore;
 
-import java.time.Duration;
 
 /**
- * {@code TimeWindowedCogroupKStream} is an abstraction of a <i>windowed</i> record stream of {@link KeyValue} pairs.
- * It is an intermediate representation of a {@link CogroupedKStream} in order to apply a windowed aggregation operation
- * on the original {@link KGroupedStream} records resulting in a windowed {@link KTable} (a <emph>windowed</emph>
- * {@code KTable} is a {@link KTable} with key type {@link Windowed Windowed<K>}).
- * <p>
- * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
- * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
- * <p>
- * The result is written into a local {@link WindowStore} (which is basically an ever-updating
- * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
- * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
- * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
- * New events are added to windows until their grace period ends (see {@link TimeWindows#grace(Duration)}).
- * <p>
- * A {@code TimeWindowedCogroupedKStream} must be obtained from a {@link CogroupedKStream} via
- * {@link CogroupedKStream#windowedBy(Windows)}.
- *
- * @param <K> Type of keys
- * @param <V> Type of values
- * @see KStream
- * @see KGroupedStream
- * @see CogroupedKStream
+ * Same as a {@link TimeWindowedKStream}, however, for multiple co-grouped {@link KStream KStreams}.
  */
 public interface TimeWindowedCogroupedKStream<K, V> {
 
@@ -164,8 +141,8 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * Store queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
-     * ReadOnlyWindowStore<K, ValueAndTimestamp<V>> localWindowStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedWindowStore());
-     *
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VR>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedWindowStore());
+     * ReadOnlyWindowStore<K, ValueAndTimestamp<VR>> localWindowStore = streams.store(storeQueryParams);
      * K key = "some-word";
      * long fromTime = ...;
      * long toTime = ...;
@@ -181,7 +158,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
-     * provide store name defined in {@link Materialized}, and "-changelog" is a fixed suffix.
+     * name of the store defined in {@link Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -221,7 +198,8 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * Store queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
-     * ReadOnlyWindowStore<K, ValueAndTimestamp<V>> localWindowStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedWindowStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VR>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedWindowStore());
+     * ReadOnlyWindowStore<K, ValueAndTimestamp<VR>> localWindowStore = streams.store(storeQueryParams);
      *
      * K key = "some-word";
      * long fromTime = ...;
@@ -238,7 +216,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
-     * provide store name defined in {@link Materialized}, and "-changelog" is a fixed suffix.
+     * name of the store defined in {@link Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *

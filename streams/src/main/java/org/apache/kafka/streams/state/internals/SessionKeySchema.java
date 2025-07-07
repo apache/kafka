@@ -23,10 +23,10 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 
-import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
-
 import java.nio.ByteBuffer;
 import java.util.List;
+
+import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
 
 public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
@@ -190,7 +190,7 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         // since the session window length can vary, we define the search boundary as:
         // lower: [0, ESET]
         // upper: [LSST, INF]
-        // and by puting the end time first and then the start time, the serialized search boundary
+        // and by putting the end time first and then the start time, the serialized search boundary
         // is: [(ESET-0), (INF-LSST)]
         buf.put(key.get());
         buf.putLong(endTime);

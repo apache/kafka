@@ -17,24 +17,30 @@
 
 package org.apache.kafka.queue;
 
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+
+import org.slf4j.Logger;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
-
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.KafkaThread;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
+import java.util.function.UnaryOperator;
 
 
 public final class KafkaEventQueue implements EventQueue {
+
+    public static final String EVENT_HANDLER_THREAD_SUFFIX = "event-handler";
+
     /**
      * A context object that wraps events.
      */
@@ -201,7 +207,7 @@ public final class KafkaEventQueue implements EventQueue {
             }
         }
 
-        private void handleEvents() throws InterruptedException {
+        private void handleEvents() {
             Throwable toDeliver = null;
             EventContext toRun = null;
             boolean wasInterrupted = false;
@@ -245,12 +251,12 @@ public final class KafkaEventQueue implements EventQueue {
                             continue;
                         } else if (interrupted) {
                             remove(eventContext);
-                            toDeliver = new InterruptedException();
+                            toDeliver = new InterruptedException("The event handler thread is interrupted");
                             toRun = eventContext;
                             continue;
                         } else if (shuttingDown) {
                             remove(eventContext);
-                            toDeliver = new RejectedExecutionException();
+                            toDeliver = new RejectedExecutionException("The event queue is shutting down");
                             toRun = eventContext;
                             continue;
                         }
@@ -264,7 +270,7 @@ public final class KafkaEventQueue implements EventQueue {
                         }
                     } else {
                         if (interrupted) {
-                            toDeliver = new InterruptedException();
+                            toDeliver = new InterruptedException("The event handler thread is interrupted");
                         } else {
                             toDeliver = null;
                         }
@@ -300,10 +306,10 @@ public final class KafkaEventQueue implements EventQueue {
             lock.lock();
             try {
                 if (shuttingDown) {
-                    return new RejectedExecutionException();
+                    return new RejectedExecutionException("The event queue is shutting down");
                 }
                 if (interrupted) {
-                    return new InterruptedException();
+                    return new InterruptedException("The event handler thread is interrupted");
                 }
                 OptionalLong existingDeadlineNs = OptionalLong.empty();
                 if (eventContext.tag != null) {
@@ -332,7 +338,7 @@ public final class KafkaEventQueue implements EventQueue {
                         }
                         break;
                     case DEFERRED:
-                        if (!deadlineNs.isPresent()) {
+                        if (deadlineNs.isEmpty()) {
                             return new RuntimeException(
                                 "You must specify a deadline for deferred events.");
                         }
@@ -439,7 +445,7 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix
     ) {
-        this(time, logContext, threadNamePrefix, VoidEvent::new);
+        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE);
     }
 
     public KafkaEventQueue(
@@ -453,17 +459,21 @@ public final class KafkaEventQueue implements EventQueue {
         this.lock = new ReentrantLock();
         this.log = logContext.logger(KafkaEventQueue.class);
         this.eventHandler = new EventHandler();
-        this.eventHandlerThread = new KafkaThread(threadNamePrefix + "EventHandler",
+        this.eventHandlerThread = new KafkaThread(threadNamePrefix + EVENT_HANDLER_THREAD_SUFFIX,
             this.eventHandler, false);
         this.shuttingDown = false;
         this.interrupted = false;
         this.eventHandlerThread.start();
     }
 
+    public Time time() {
+        return time;
+    }
+
     @Override
     public void enqueue(EventInsertionType insertionType,
                         String tag,
-                        Function<OptionalLong, OptionalLong> deadlineNsCalculator,
+                        UnaryOperator<OptionalLong> deadlineNsCalculator,
                         Event event) {
         EventContext eventContext = new EventContext(event, insertionType, tag);
         Exception e = eventHandler.enqueue(eventContext, deadlineNsCalculator);
@@ -508,5 +518,37 @@ public final class KafkaEventQueue implements EventQueue {
         beginShutdown("KafkaEventQueue#close");
         eventHandlerThread.join();
         log.info("closed event queue.");
+    }
+
+    /**
+     * Returns the deferred event that the queue is waiting for, idling until
+     * its deadline comes, if there is any.
+     * If the queue has immediate work to do, this returns empty.
+     * This is useful for unit tests, where to make progress, we need to
+     * speed the clock up until the next scheduled event is ready to run.
+     */
+    public Optional<Event> firstDeferredIfIdling() {
+        lock.lock();
+        try {
+            if (eventHandler.head.next != eventHandler.head) {
+                // There are events ready to run immediately. The queue is not idling.
+                return Optional.empty();
+            }
+            Map.Entry<Long, EventContext> entry = eventHandler.deadlineMap.firstEntry();
+            if (entry == null) {
+                // The queue is idling, but not waiting for any deadline.
+                return Optional.empty();
+            }
+            EventContext eventContext = entry.getValue();
+            if (eventContext.insertionType != EventInsertionType.DEFERRED) {
+                // Any event with a deadline is put in `deadlineMap`.
+                // But events of type other than DEFERRED will run immediately,
+                // so the queue will not idle waiting for their deadline.
+                return Optional.empty();
+            }
+            return Optional.of(eventContext.event);
+        } finally {
+            lock.unlock();
+        }
     }
 }

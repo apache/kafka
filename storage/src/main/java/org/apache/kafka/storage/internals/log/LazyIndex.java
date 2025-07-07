@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -23,7 +25,6 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import org.apache.kafka.common.utils.Utils;
 
 /**
  * A wrapper over an `AbstractIndex` instance that provides a mechanism to defer loading
@@ -41,7 +42,7 @@ import org.apache.kafka.common.utils.Utils;
  * Methods of this class are thread safe. Make sure to check `AbstractIndex` subclasses
  * documentation to establish their thread safety.
  */
-public class LazyIndex<T extends AbstractIndex> {
+public class LazyIndex<T extends AbstractIndex> implements Closeable {
 
     private enum IndexType {
       OFFSET, TIME
@@ -166,20 +167,24 @@ public class LazyIndex<T extends AbstractIndex> {
 
     @SuppressWarnings("unchecked")
     public T get() throws IOException {
-        if (indexWrapper instanceof IndexValue<?>)
-            return ((IndexValue<T>) indexWrapper).index;
-        else if (indexWrapper instanceof IndexFile) {
+        IndexWrapper wrapper = indexWrapper;
+        if (wrapper instanceof IndexValue<?>)
+            return ((IndexValue<T>) wrapper).index;
+        else {
             lock.lock();
             try {
-                IndexFile indexFile = (IndexFile) indexWrapper;
-                IndexValue<T> indexValue = new IndexValue<>(loadIndex(indexFile.file));
-                indexWrapper = indexValue;
-                return indexValue.index;
+                if (indexWrapper instanceof IndexValue<?>)
+                    return ((IndexValue<T>) indexWrapper).index;
+                else if (indexWrapper instanceof IndexFile indexFile) {
+                    IndexValue<T> indexValue = new IndexValue<>(loadIndex(indexFile.file));
+                    indexWrapper = indexValue;
+                    return indexValue.index;
+                } else
+                    throw new IllegalStateException("Unexpected type for indexWrapper " + indexWrapper.getClass());
             } finally {
                 lock.unlock();
             }
-        } else
-            throw new IllegalStateException("Unexpected type for indexWrapper " + indexWrapper.getClass());
+        }
     }
 
     public void updateParentDir(File parentDir) {
@@ -209,6 +214,7 @@ public class LazyIndex<T extends AbstractIndex> {
         }
     }
 
+    @Override
     public void close() throws IOException {
         lock.lock();
         try {

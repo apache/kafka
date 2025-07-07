@@ -17,12 +17,8 @@
 
 package org.apache.kafka.connect.transforms;
 
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
@@ -33,14 +29,23 @@ import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -53,6 +58,12 @@ public class CastTest {
     private static final long MILLIS_PER_HOUR = TimeUnit.HOURS.toMillis(1);
     private static final long MILLIS_PER_DAY = TimeUnit.DAYS.toMillis(1);
 
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(false, null),
+                Arguments.of(true, "10")
+        );
+    }
     @AfterEach
     public void teardown() {
         xformKey.close();
@@ -72,6 +83,7 @@ public class CastTest {
     @Test
     public void testConfigInvalidTargetType() {
         assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array")));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "array")));
     }
 
     @Test
@@ -96,6 +108,23 @@ public class CastTest {
             Schema.STRING_SCHEMA, "key", Schema.STRING_SCHEMA, null);
         SourceRecord transformed = xformValue.apply(original);
         assertEquals(original, transformed);
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void castFieldWithDefaultValueRecordWithSchema(boolean replaceNullWithDefault, Object expectedValue) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(Cast.SPEC_CONFIG, "magic:string");
+        configs.put(Cast.REPLACE_NULL_WITH_DEFAULT_CONFIG, replaceNullWithDefault);
+        xformValue.configure(configs);
+        Schema structSchema = SchemaBuilder.struct()
+                .field("magic", SchemaBuilder.int32().optional().defaultValue(10).build()).build();
+        SourceRecord original = new SourceRecord(null, null, "topic", 0,
+                Schema.STRING_SCHEMA, "key", structSchema, new Struct(structSchema).put("magic", null));
+        SourceRecord transformed = xformValue.apply(original);
+
+        assertEquals(Type.STRING, transformed.valueSchema().field("magic").schema().type());
+        assertEquals(expectedValue, ((Struct) transformed.value()).getWithoutDefault("magic"));
     }
 
     @Test
@@ -571,6 +600,14 @@ public class CastTest {
         assertEquals(true, ((Map<String, Object>) transformed.value()).get("float64"));
         assertEquals((byte) 1, ((Map<String, Object>) transformed.value()).get("boolean"));
         assertEquals(42, ((Map<String, Object>) transformed.value()).get("string"));
+    }
+
+    @Test
+    public void testCastVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xformKey.version());
+        assertEquals(AppInfoParser.getVersion(), xformValue.version());
+
+        assertEquals(xformKey.version(), xformValue.version());
     }
 
 }

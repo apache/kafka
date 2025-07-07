@@ -24,9 +24,11 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 
@@ -101,12 +103,6 @@ public class ForwardingAdmin implements Admin {
         return delegate.describeConfigs(resources, options);
     }
 
-    @Deprecated
-    @Override
-    public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
-        return delegate.alterConfigs(configs, options);
-    }
-
     @Override
     public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
         return delegate.incrementalAlterConfigs(configs, options);
@@ -163,6 +159,8 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    @Deprecated
+    @SuppressWarnings("removal")
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         return delegate.listConsumerGroups(options);
     }
@@ -173,13 +171,28 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs, ListStreamsGroupOffsetsOptions options) {
+        return delegate.listStreamsGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
     public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
         return delegate.deleteConsumerGroups(groupIds, options);
     }
 
     @Override
+    public DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options) {
+        return delegate.deleteStreamsGroups(groupIds, options);
+    }
+
+    @Override
     public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
         return delegate.deleteConsumerGroupOffsets(groupId, partitions, options);
+    }
+
+    @Override
+    public DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteStreamsGroupOffsetsOptions options) {
+        return delegate.deleteStreamsGroupOffsets(groupId, partitions, options);
     }
 
     @Override
@@ -205,6 +218,11 @@ public class ForwardingAdmin implements Admin {
     @Override
     public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
         return delegate.alterConsumerGroupOffsets(groupId, offsets, options);
+    }
+
+    @Override
+    public AlterStreamsGroupOffsetsResult alterStreamsGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterStreamsGroupOffsetsOptions options) {
+        return delegate.alterStreamsGroupOffsets(groupId, offsets, options);
     }
 
     @Override
@@ -268,6 +286,11 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public TerminateTransactionResult forceTerminateTransaction(String transactionalId, TerminateTransactionOptions options) {
+        return delegate.forceTerminateTransaction(transactionalId, options);
+    }
+
+    @Override
     public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
         return delegate.listTransactions(options);
     }
@@ -275,6 +298,82 @@ public class ForwardingAdmin implements Admin {
     @Override
     public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
         return delegate.fenceProducers(transactionalIds, options);
+    }
+
+    @Override
+    public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+        return delegate.listConfigResources(configResourceTypes, options);
+    }
+
+    @SuppressWarnings({"deprecation", "removal"})
+    @Override
+    public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
+        return delegate.listClientMetricsResources(options);
+    }
+
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        return delegate.clientInstanceId(timeout);
+    }
+
+    @Override
+    public AddRaftVoterResult addRaftVoter(int voterId, Uuid voterDirectoryId, Set<RaftVoterEndpoint> endpoints, AddRaftVoterOptions options) {
+        return delegate.addRaftVoter(voterId, voterDirectoryId, endpoints, options);
+    }
+
+    @Override
+    public RemoveRaftVoterResult removeRaftVoter(int voterId, Uuid voterDirectoryId, RemoveRaftVoterOptions options) {
+        return delegate.removeRaftVoter(voterId, voterDirectoryId, options);
+    }
+
+    @Override
+    public DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds, DescribeShareGroupsOptions options) {
+        return delegate.describeShareGroups(groupIds, options);
+    }
+
+    @Override
+    public AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options) {
+        return delegate.alterShareGroupOffsets(groupId, offsets, options);
+    }
+
+    @Override
+    public ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs, ListShareGroupOffsetsOptions options) {
+        return delegate.listShareGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options) {
+        return delegate.deleteShareGroupOffsets(groupId, topics, options);
+    }
+
+    @Override
+    public DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options) {
+        return delegate.deleteShareGroups(groupIds, options);
+    }
+
+    @Override
+    public DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds, DescribeStreamsGroupsOptions options) {
+        return delegate.describeStreamsGroups(groupIds, options);
+    }
+
+    @Override
+    public ListGroupsResult listGroups(ListGroupsOptions options) {
+        return delegate.listGroups(options);
+    }
+
+    @Override
+    public DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds, DescribeClassicGroupsOptions options) {
+        return delegate.describeClassicGroups(groupIds, options);
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException();
     }
 
     @Override

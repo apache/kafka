@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static java.time.Duration.ofMillis;
-import static java.time.Duration.ofSeconds;
-
-import java.util.List;
-import java.util.Properties;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -37,7 +32,14 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Properties;
+
+import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 
 public class KStreamKStreamSelfJoinTest {
     private final String topic1 = "topic1";

@@ -17,8 +17,6 @@
 
 package org.apache.kafka.trogdor.common;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.coordinator.CoordinatorClient;
@@ -28,6 +26,10 @@ import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.task.TaskSpec;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -142,7 +144,7 @@ public class ExpectedTasks {
 
     public ExpectedTasks waitFor(final CoordinatorClient client) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
-            TasksResponse tasks = null;
+            TasksResponse tasks;
             try {
                 tasks = client.tasks(new TasksRequest(null, 0, 0, 0, 0, Optional.empty()));
             } catch (Exception e) {
@@ -172,7 +174,7 @@ public class ExpectedTasks {
 
     public ExpectedTasks waitFor(final AgentClient client) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
-            AgentStatusResponse status = null;
+            AgentStatusResponse status;
             try {
                 status = client.status();
             } catch (Exception e) {

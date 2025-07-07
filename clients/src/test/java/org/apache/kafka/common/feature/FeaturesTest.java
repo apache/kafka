@@ -17,18 +17,18 @@
 
 package org.apache.kafka.common.feature;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.HashMap;
 import java.util.Map;
-
-import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FeaturesTest {
 
@@ -100,7 +100,7 @@ public class FeaturesTest {
     }
 
     @Test
-    public void testSuppportedFeaturesFromMapFailureWithInvalidMissingMaxVersion() {
+    public void testSupportedFeaturesFromMapFailureWithInvalidMissingMaxVersion() {
         // This is invalid because 'max_version' key is missing.
         Map<String, Map<String, Short>> invalidFeatures = mkMap(
             mkEntry("feature_1", mkMap(mkEntry("min_version", (short) 1))));

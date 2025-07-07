@@ -62,21 +62,6 @@ class KafkaVersion(LooseVersion):
 
         return LooseVersion._cmp(self, other)
 
-    def consumer_supports_bootstrap_server(self):
-        """
-        Kafka supported a new consumer beginning with v0.9.0 where
-        we can specify --bootstrap-server instead of --zookeeper.
-
-        This version also allowed a --consumer-config file where we could specify
-        a security protocol other than PLAINTEXT.
-
-        :return: true if the version of Kafka supports a new consumer with --bootstrap-server
-        """
-        return self >= V_0_9_0_0
-
-    def supports_named_listeners(self):
-        return self >= V_0_10_2_0
-
     def acl_command_supports_bootstrap_server(self):
         return self >= V_2_1_0
 
@@ -107,7 +92,13 @@ class KafkaVersion(LooseVersion):
         return self >= V_2_8_0
 
     def supports_fk_joins(self):
-        return hasattr(self, "version") and self >= V_2_4_0
+        # while we support FK joins since 2.4, rolling upgrade is broken in older versions
+        # it's only fixed in 3.3.3 (unreleased) and 3.4.0
+        # -> https://issues.apache.org/jira/browse/KAFKA-14646
+        return hasattr(self, "version") and self >= V_3_4_0
+
+    def supports_feature_command(self):
+        return self >= V_3_8_0
 
 def get_version(node=None):
     """Return the version attached to the given node.
@@ -119,61 +110,11 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("3.5.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("4.2.0-SNAPSHOT")
 
-LATEST_METADATA_VERSION = "3.3"
-
-# 0.8.2.x versions
-V_0_8_2_1 = KafkaVersion("0.8.2.1")
-V_0_8_2_2 = KafkaVersion("0.8.2.2")
-LATEST_0_8_2 = V_0_8_2_2
-
-# 0.9.0.x versions
-V_0_9_0_0 = KafkaVersion("0.9.0.0")
-V_0_9_0_1 = KafkaVersion("0.9.0.1")
-LATEST_0_9 = V_0_9_0_1
-
-# 0.10.0.x versions
-V_0_10_0_0 = KafkaVersion("0.10.0.0")
-V_0_10_0_1 = KafkaVersion("0.10.0.1")
-LATEST_0_10_0 = V_0_10_0_1
-
-# 0.10.1.x versions
-V_0_10_1_0 = KafkaVersion("0.10.1.0")
-V_0_10_1_1 = KafkaVersion("0.10.1.1")
-LATEST_0_10_1 = V_0_10_1_1
-
-# 0.10.2.x versions
-V_0_10_2_0 = KafkaVersion("0.10.2.0")
-V_0_10_2_1 = KafkaVersion("0.10.2.1")
-V_0_10_2_2 = KafkaVersion("0.10.2.2")
-LATEST_0_10_2 = V_0_10_2_2
-
-LATEST_0_10 = LATEST_0_10_2
-
-# 0.11.0.x versions
-V_0_11_0_0 = KafkaVersion("0.11.0.0")
-V_0_11_0_1 = KafkaVersion("0.11.0.1")
-V_0_11_0_2 = KafkaVersion("0.11.0.2")
-V_0_11_0_3 = KafkaVersion("0.11.0.3")
-LATEST_0_11_0 = V_0_11_0_3
-LATEST_0_11 = LATEST_0_11_0
-
-# 1.0.x versions
-V_1_0_0 = KafkaVersion("1.0.0")
-V_1_0_1 = KafkaVersion("1.0.1")
-V_1_0_2 = KafkaVersion("1.0.2")
-LATEST_1_0 = V_1_0_2
-
-# 1.1.x versions
-V_1_1_0 = KafkaVersion("1.1.0")
-V_1_1_1 = KafkaVersion("1.1.1")
-LATEST_1_1 = V_1_1_1
-
-# 2.0.x versions
-V_2_0_0 = KafkaVersion("2.0.0")
-V_2_0_1 = KafkaVersion("2.0.1")
-LATEST_2_0 = V_2_0_1
+LATEST_STABLE_TRANSACTION_VERSION = 2
+# This should match the LATEST_PRODUCTION version defined in MetadataVersion.java
+LATEST_STABLE_METADATA_VERSION = "4.0-IV3"
 
 # 2.1.x versions
 V_2_1_0 = KafkaVersion("2.1.0")
@@ -205,12 +146,14 @@ LATEST_2_5 = V_2_5_1
 V_2_6_0 = KafkaVersion("2.6.0")
 V_2_6_1 = KafkaVersion("2.6.1")
 V_2_6_2 = KafkaVersion("2.6.2")
-LATEST_2_6 = V_2_6_2
+V_2_6_3 = KafkaVersion("2.6.3")
+LATEST_2_6 = V_2_6_3
 
 # 2.7.x versions
 V_2_7_0 = KafkaVersion("2.7.0")
 V_2_7_1 = KafkaVersion("2.7.1")
-LATEST_2_7 = V_2_7_1
+V_2_7_2 = KafkaVersion("2.7.2")
+LATEST_2_7 = V_2_7_2
 
 # 2.8.x versions
 V_2_8_0 = KafkaVersion("2.8.0")
@@ -240,12 +183,46 @@ LATEST_3_2 = V_3_2_3
 # 3.3.x versions
 V_3_3_0 = KafkaVersion("3.3.0")
 V_3_3_1 = KafkaVersion("3.3.1")
-LATEST_3_3 = V_3_3_1
+V_3_3_2 = KafkaVersion("3.3.2")
+LATEST_3_3 = V_3_3_2
 
 # 3.4.x versions
 V_3_4_0 = KafkaVersion("3.4.0")
-LATEST_3_4 = V_3_4_0
+V_3_4_1 = KafkaVersion("3.4.1")
+LATEST_3_4 = V_3_4_1
 
 # 3.5.x versions
 V_3_5_0 = KafkaVersion("3.5.0")
-LATEST_3_5 = V_3_5_0
+V_3_5_1 = KafkaVersion("3.5.1")
+V_3_5_2 = KafkaVersion("3.5.2")
+LATEST_3_5 = V_3_5_2
+
+# 3.6.x versions
+V_3_6_0 = KafkaVersion("3.6.0")
+V_3_6_1 = KafkaVersion("3.6.1")
+V_3_6_2 = KafkaVersion("3.6.2")
+LATEST_3_6 = V_3_6_2
+
+# 3.7.x version
+V_3_7_0 = KafkaVersion("3.7.0")
+V_3_7_1 = KafkaVersion("3.7.1")
+V_3_7_2 = KafkaVersion("3.7.2")
+LATEST_3_7 = V_3_7_2
+
+# 3.8.x version
+V_3_8_0 = KafkaVersion("3.8.0")
+V_3_8_1 = KafkaVersion("3.8.1")
+LATEST_3_8 = V_3_8_1
+
+# 3.9.x version
+V_3_9_0 = KafkaVersion("3.9.0")
+V_3_9_1 = KafkaVersion("3.9.1")
+LATEST_3_9 = V_3_9_1
+
+# 4.0.x version
+V_4_0_0 = KafkaVersion("4.0.0")
+LATEST_4_0 = V_4_0_0
+
+# 4.1.x version
+V_4_1_0 = KafkaVersion("4.1.0")
+LATEST_4_1 = V_4_1_0

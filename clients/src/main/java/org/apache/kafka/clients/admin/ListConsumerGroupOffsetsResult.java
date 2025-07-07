@@ -17,25 +17,22 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.clients.admin.internals.CoordinatorKey;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * The result of the {@link Admin#listConsumerGroupOffsets(Map)} and
  * {@link Admin#listConsumerGroupOffsets(String)} call.
  * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListConsumerGroupOffsetsResult {
 
     final Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures;
@@ -73,7 +70,7 @@ public class ListConsumerGroupOffsetsResult {
      * if requests for all the groups succeed.
      */
     public KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(
             nil -> {
                 Map<String, Map<TopicPartition, OffsetAndMetadata>> listedConsumerGroupOffsets = new HashMap<>(futures.size());
                 futures.forEach((key, future) -> {

@@ -19,31 +19,30 @@ package org.apache.kafka.jmh.server;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
-import kafka.server.BrokerFeatures;
-import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
-import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
-import kafka.server.metadata.ConfigRepository;
-import kafka.server.metadata.MockConfigRepository;
+import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
-import kafka.zk.KafkaZkClient;
+
+import org.apache.kafka.common.PartitionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.metadata.ConfigRepository;
+import org.apache.kafka.metadata.MockConfigRepository;
+import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.server.util.Scheduler;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
-import org.apache.kafka.server.util.KafkaScheduler;
-import org.apache.kafka.server.util.Scheduler;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -61,13 +60,15 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+
 import scala.Option;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
+
+import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 
 @Warmup(iterations = 5)
 @Measurement(iterations = 5)
@@ -78,7 +79,7 @@ public class PartitionCreationBench {
     @Param({"false", "true"})
     public boolean useTopicIds;
 
-    @Param({"2000"})
+    @Param({"20"})
     public int numPartitions;
 
     private final String topicName = "foo";
@@ -91,13 +92,11 @@ public class PartitionCreationBench {
 
     private ReplicaManager replicaManager;
     private QuotaFactory.QuotaManagers quotaManagers;
-    private KafkaZkClient zkClient;
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
     private AlterPartitionManager alterPartitionManager;
     private List<TopicPartition> topicPartitions;
 
-    @SuppressWarnings("deprecation")
     @Setup(Level.Invocation)
     public void setup() {
         if (useTopicIds)
@@ -107,15 +106,14 @@ public class PartitionCreationBench {
 
         this.scheduler = new KafkaScheduler(1, true, "scheduler-thread");
         this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
-                0, TestUtils.MockZkConnect(), true, true, 9092, Option.empty(), Option.empty(),
+                0, true, true, 9092, Option.empty(), Option.empty(),
                 Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
                 (short) 1, false));
         this.metrics = new Metrics();
         this.time = Time.SYSTEM;
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
-        final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
-        final List<File> files =
-                JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
+        final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
+        final List<File> files = brokerProperties.logDirs().stream().map(File::new).toList();
         CleanerConfig cleanerConfig = new CleanerConfig(1,
                 4 * 1024 * 1024L, 0.9d,
                 1024 * 1024, 32 * 1024 * 1024,
@@ -124,7 +122,7 @@ public class PartitionCreationBench {
         ConfigRepository configRepository = new MockConfigRepository();
         this.logManager = new LogManagerBuilder().
             setLogDirs(files).
-            setInitialOfflineDirs(Collections.emptyList()).
+            setInitialOfflineDirs(List.of()).
             setConfigRepository(configRepository).
             setInitialDefaultConfig(createLogConfig()).
             setCleanerConfig(cleanerConfig).
@@ -133,35 +131,24 @@ public class PartitionCreationBench {
             setFlushRecoveryOffsetCheckpointMs(10000L).
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
-            setMaxProducerIdExpirationMs(60000).
-            setInterBrokerProtocolVersion(MetadataVersion.latest()).
+            setProducerStateManagerConfig(60000, false).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(failureChannel).
             setTime(Time.SYSTEM).
-            setKeepPartitionMetadataFile(true).
             build();
         scheduler.startup();
-        this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "");
-        this.zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
-            @Override
-            public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
-                return new Properties();
-            }
-        };
+        this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "", "");
         this.alterPartitionManager = TestUtils.createAlterIsrManager();
         this.replicaManager = new ReplicaManagerBuilder().
             setConfig(brokerProperties).
             setMetrics(metrics).
             setTime(time).
-            setZkClient(zkClient).
             setScheduler(scheduler).
             setLogManager(logManager).
             setQuotaManagers(quotaManagers).
             setBrokerTopicStats(brokerTopicStats).
-            setMetadataCache(MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
-                this.brokerProperties.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(),
-                null)).
+            setMetadataCache(new KRaftMetadataCache(this.brokerProperties.brokerId(), () -> KRAFT_VERSION_1)).
             setLogDirFailureChannel(failureChannel).
             setAlterPartitionManager(alterPartitionManager).
             build();
@@ -172,14 +159,13 @@ public class PartitionCreationBench {
     @TearDown(Level.Invocation)
     public void tearDown() throws Exception {
         this.replicaManager.shutdown(false);
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
-        for (File dir : JavaConverters.asJavaCollection(logManager.liveLogDirs())) {
+        for (File dir : CollectionConverters.asJava(logManager.liveLogDirs())) {
             Utils.delete(dir);
         }
-        this.zkClient.close();
     }
 
     private static LogConfig createLogConfig() {
@@ -200,7 +186,7 @@ public class PartitionCreationBench {
         replicas.add(1);
         replicas.add(2);
 
-        OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Option.apply(0L);
+        OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Optional.of(0L);
         for (TopicPartition topicPartition : topicPartitions) {
             final Partition partition = this.replicaManager.createPartition(topicPartition);
             List<Integer> inSync = new ArrayList<>();
@@ -208,8 +194,7 @@ public class PartitionCreationBench {
             inSync.add(1);
             inSync.add(2);
 
-            LeaderAndIsrRequestData.LeaderAndIsrPartitionState partitionState = new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
-                    .setControllerEpoch(0)
+            PartitionState partitionState = new PartitionState()
                     .setLeader(0)
                     .setLeaderEpoch(0)
                     .setIsr(inSync)
@@ -217,7 +202,7 @@ public class PartitionCreationBench {
                     .setReplicas(replicas)
                     .setIsNew(true);
 
-            partition.makeFollower(partitionState, checkpoints, topicId);
+            partition.makeFollower(partitionState, checkpoints, topicId, Option.empty());
         }
     }
 }

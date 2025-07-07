@@ -13,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.utils.util import wait_until
 from ducktape.mark import matrix, parametrize
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 
 from kafkatest.services.kafka import KafkaService, quorum
-from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
+from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService, ShareConsumerPerformanceService
 from kafkatest.services.performance import latency, compute_aggregate_throughput
-from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_1_1, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_2_1, V_4_1_0, KafkaVersion
 
 
 class PerformanceServiceTest(Test):
@@ -31,22 +31,10 @@ class PerformanceServiceTest(Test):
         self.num_records = 10000
         self.topic = "topic"
 
-        self.zk = ZookeeperService(test_context, 1) if quorum.for_test(test_context) == quorum.zk else None
-
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
-
-    @cluster(num_nodes=5)
-    # We are keeping 0.8.2 here so that we don't inadvertently break support for it. Since this is just a sanity check,
-    # the overhead should be manageable.
-    @parametrize(version=str(LATEST_0_8_2), new_consumer=False)
-    @parametrize(version=str(LATEST_0_9), new_consumer=False)
-    @parametrize(version=str(LATEST_0_9))
-    @parametrize(version=str(LATEST_1_1), new_consumer=False)
-    @cluster(num_nodes=5)
-    @matrix(version=[str(DEV_BRANCH)], metadata_quorum=quorum.all)
-    def test_version(self, version=str(LATEST_0_9), new_consumer=True, metadata_quorum=quorum.zk):
+    @cluster(num_nodes=6)
+    @matrix(version=[str(LATEST_2_1)], metadata_quorum=quorum.all_kraft)
+    @matrix(version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_kraft, use_share_groups=[True])
+    def test_version(self, version=str(LATEST_2_1), metadata_quorum=quorum.zk, use_share_groups=False):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
         number of messages. The actual stats here are pretty meaningless since the number of messages is quite small.
@@ -54,7 +42,7 @@ class PerformanceServiceTest(Test):
         version = KafkaVersion(version)
         self.kafka = KafkaService(
             self.test_context, 1,
-            self.zk, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=version)
+            None, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=DEV_BRANCH)
         self.kafka.start()
 
         # check basic run of producer performance
@@ -80,15 +68,31 @@ class PerformanceServiceTest(Test):
 
         # check basic run of consumer performance service
         self.consumer_perf = ConsumerPerformanceService(
-            self.test_context, 1, self.kafka, new_consumer=new_consumer,
+            self.test_context, 1, self.kafka,
             topic=self.topic, version=version, messages=self.num_records)
         self.consumer_perf.group = "test-consumer-group"
         self.consumer_perf.run()
         consumer_perf_data = compute_aggregate_throughput(self.consumer_perf)
         assert consumer_perf_data['records_per_sec'] > 0
 
-        return {
+        results = {
             "producer_performance": producer_perf_data,
             "end_to_end_latency": end_to_end_data,
-            "consumer_performance": consumer_perf_data
+            "consumer_performance": consumer_perf_data,
         }
+
+        if version >= V_4_1_0:
+            # check basic run of share consumer performance service
+            self.share_consumer_perf = ShareConsumerPerformanceService(
+                self.test_context, 1, self.kafka,
+                topic=self.topic, version=version, messages=self.num_records)
+            share_group = "test-share-consumer-group"
+            self.share_consumer_perf.group = share_group
+            wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=share_group, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
+            self.share_consumer_perf.run()
+            share_consumer_perf_data = compute_aggregate_throughput(self.share_consumer_perf)
+            assert share_consumer_perf_data['records_per_sec'] > 0
+            results["share_consumer_performance"] = share_consumer_perf_data
+
+        return results

@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
-import org.apache.kafka.common.utils.ThreadUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,14 +69,7 @@ class SourceTaskOffsetCommitter {
     }
 
     public void close(long timeoutMs) {
-        commitExecutorService.shutdown();
-        try {
-            if (!commitExecutorService.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)) {
-                log.error("Graceful shutdown of offset commitOffsets thread timed out.");
-            }
-        } catch (InterruptedException e) {
-            // ignore and allow to exit immediately
-        }
+        ThreadUtils.shutdownExecutorServiceQuietly(commitExecutorService, timeoutMs, TimeUnit.MILLISECONDS);
     }
 
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {

@@ -20,7 +20,9 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.controller.BrokersToIsrs.PartitionsOnReplicaIterator;
+import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -38,11 +40,7 @@ public class BrokersToIsrsTest {
     };
 
     private static Set<TopicIdPartition> toSet(TopicIdPartition... partitions) {
-        HashSet<TopicIdPartition> set = new HashSet<>();
-        for (TopicIdPartition partition : partitions) {
-            set.add(partition);
-        }
-        return set;
+        return Set.of(partitions);
     }
 
     private static Set<TopicIdPartition> toSet(PartitionsOnReplicaIterator iterator) {

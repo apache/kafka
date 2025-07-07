@@ -21,14 +21,15 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -37,12 +38,13 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.toStoreKeyBinary;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
 
 public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
-    private final static String STORE_NAME = "InMemoryWindowStore";
+    private static final String STORE_NAME = "InMemoryWindowStore";
 
     @Override
     <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
@@ -92,7 +94,6 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldNotExpireFromOpenIterator() {
-
         windowStore.put(1, "one", 0L);
         windowStore.put(1, "two", 10L);
 
@@ -123,7 +124,6 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void testExpiration() {
-
         long currentTime = 0;
         windowStore.put(1, "one", currentTime);
 

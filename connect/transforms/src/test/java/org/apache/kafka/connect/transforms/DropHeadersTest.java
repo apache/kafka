@@ -17,9 +17,11 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -86,6 +88,11 @@ public class DropHeadersTest {
         assertThrows(ConfigException.class, () -> xform.configure(config()));
     }
 
+    @Test
+    public void testDropHeadersVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
+    }
+
     private void assertNonHeaders(SourceRecord original, SourceRecord xformed) {
         assertEquals(original.sourcePartition(), xformed.sourcePartition());
         assertEquals(original.sourceOffset(), xformed.sourceOffset());
@@ -113,4 +120,3 @@ public class DropHeadersTest {
                 keySchema, key, valueSchema, value, timestamp, headers);
     }
 }
-

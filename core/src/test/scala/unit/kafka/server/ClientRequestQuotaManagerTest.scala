@@ -16,23 +16,33 @@
  */
 package kafka.server
 
-import kafka.server.QuotaType.Request
 import org.apache.kafka.common.metrics.Quota
-
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
+import org.apache.kafka.server.quota.{ClientQuotaManager, QuotaType}
+import org.apache.kafka.server.quota.ClientQuotaEntity
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import java.util.Optional
+
 class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
-  private val config = ClientQuotaManagerConfig()
+  private val config = new ClientQuotaManagerConfig()
 
   @Test
   def testRequestPercentageQuotaViolation(): Unit = {
-    val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", None)
-    clientRequestQuotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some("test-client"), Some(Quota.upperBound(1)))
-    val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", Request.toString, ""))
-    def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientRequestQuotaManager.NanosToPercentagePerSecond
+    val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", Optional.empty())
+    val userEntity: ClientQuotaEntity.ConfigEntity = new ClientQuotaManager.UserEntity("ANONYMOUS")
+    val clientEntity: ClientQuotaEntity.ConfigEntity = new ClientQuotaManager.ClientIdEntity("test-client")
+
+    clientRequestQuotaManager.updateQuota(
+      Optional.of(userEntity),
+      Optional.of(clientEntity),
+      Optional.of(Quota.upperBound(1))
+    )
+    val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", QuotaType.REQUEST.toString, ""))
+    def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientRequestQuotaManager.NANOS_TO_PERCENTAGE_PER_SECOND
     try {
-      // We have 10 second windows. Make sure that there is no quota violation
+      // We have 10 seconds windows. Make sure that there is no quota violation
       // if we are under the quota
       for (_ <- 0 until 10) {
         assertEquals(0, maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", millisToPercent(4)))
@@ -53,12 +63,12 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
       throttle(clientRequestQuotaManager, "ANONYMOUS", "test-client", throttleTime, callback)
       assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       // After a request is delayed, the callback cannot be triggered immediately
-      clientRequestQuotaManager.throttledChannelReaper.doWork()
+      clientRequestQuotaManager.processThrottledChannelReaperDoWork()
       assertEquals(0, numCallbacks)
       time.sleep(throttleTime)
 
       // Callback can only be triggered after the delay time passes
-      clientRequestQuotaManager.throttledChannelReaper.doWork()
+      clientRequestQuotaManager.processThrottledChannelReaperDoWork()
       assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       assertEquals(1, numCallbacks)
 

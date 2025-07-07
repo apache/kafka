@@ -16,36 +16,50 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
-
-import java.util.Objects;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.MultiVersionedKeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.ResultOrder;
+import org.apache.kafka.streams.query.VersionedKeyQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
+import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
+
+import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
  * A metered {@link VersionedKeyValueStore} wrapper that is used for recording operation
  * metrics, and hence its inner {@link VersionedBytesStore} implementation does not need to provide
  * its own metrics collecting functionality. The inner {@code VersionedBytesStore} of this class
  * is a {@link KeyValueStore} of type &lt;Bytes,byte[]&gt;, so we use {@link Serde}s
- * to convert from &lt;K,ValueAndTimestamp&lt;V&gt&gt; to &lt;Bytes,byte[]&gt;. In particular,
- * {@link NullableValueAndTimestampSerde} is used since putting a tombstone to a versioned key-value
- * store requires putting a null value associated with a timestamp.
+ * to convert from &lt;K,ValueAndTimestamp&lt;V&gt&gt; to &lt;Bytes,byte[]&gt;.
  *
  * @param <K> The key type
  * @param <V> The (raw) value type
@@ -60,7 +74,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                                   final String metricScope,
                                   final Time time,
                                   final Serde<K> keySerde,
-                                  final Serde<ValueAndTimestamp<V>> valueSerde) {
+                                  final Serde<V> valueSerde) {
         super(inner);
         internal = new MeteredVersionedKeyValueStoreInternal(inner, metricScope, time, keySerde, valueSerde);
     }
@@ -84,22 +98,57 @@ public class MeteredVersionedKeyValueStore<K, V>
         extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
 
         private final VersionedBytesStore inner;
+        private final Serde<V> plainValueSerde;
+        private StateSerdes<K, V> plainValueSerdes;
+
+        private final Map<Class<?>, QueryHandler> queryHandlers =
+            mkMap(
+                mkEntry(
+                    RangeQuery.class,
+                    (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
+                ),
+                mkEntry(
+                    KeyQuery.class,
+                    (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
+                ),
+                mkEntry(
+                    VersionedKeyQuery.class,
+                    (query, positionBound, config, store) -> runVersionedKeyQuery(query, positionBound, config)
+                ),
+                mkEntry(
+                    MultiVersionedKeyQuery.class,
+                    (query, positionBound, config, store) -> runMultiVersionedKeyQuery(query, positionBound, config)
+                )
+            );
 
         MeteredVersionedKeyValueStoreInternal(final VersionedBytesStore inner,
                                               final String metricScope,
                                               final Time time,
                                               final Serde<K> keySerde,
-                                              final Serde<ValueAndTimestamp<V>> valueSerde) {
-            super(inner, metricScope, time, keySerde, valueSerde);
+                                              final Serde<V> valueSerde) {
+            super(
+                inner,
+                metricScope,
+                time,
+                keySerde,
+                valueSerde == null
+                    ? null
+                    : new ValueAndTimestampSerde<>(valueSerde)
+            );
             this.inner = inner;
+            this.plainValueSerde = valueSerde;
         }
 
-        @Override
-        public void put(final K key, final ValueAndTimestamp<V> value) {
-            if (value == null) {
-                throw new IllegalStateException("Versioned store requires timestamp associated with all puts, including tombstones/deletes");
+        public long put(final K key, final V value, final long timestamp) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                final long validTo = maybeMeasureLatency(() -> inner.put(keyBytes(key), plainValueSerdes.rawValue(value), timestamp), time, putSensor);
+                maybeRecordE2ELatency();
+                return validTo;
+            } catch (final ProcessorStateException e) {
+                final String message = String.format(e.getMessage(), key, value);
+                throw new ProcessorStateException(message, e);
             }
-            super.put(key, value);
         }
 
         public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
@@ -122,22 +171,114 @@ public class MeteredVersionedKeyValueStore<K, V>
             }
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        protected <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                                   final PositionBound positionBound,
-                                                   final QueryConfig config) {
+        public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
+
+            final long start = time.nanoseconds();
+            final QueryResult<R> result;
+
+            final QueryHandler handler = queryHandlers.get(query.getClass());
+            if (handler == null) {
+                result = wrapped().query(query, positionBound, config);
+                if (config.isCollectExecutionInfo()) {
+                    result.addExecutionInfo(
+                        "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                }
+            } else {
+                result = (QueryResult<R>) handler.apply(
+                    query,
+                    positionBound,
+                    config,
+                    this
+                );
+                if (config.isCollectExecutionInfo()) {
+                    result.addExecutionInfo(
+                        "Handled in " + getClass() + " with serdes "
+                            + serdes + " in " + (time.nanoseconds() - start) + "ns");
+                }
+            }
+            return result;
+        }
+
+        @SuppressWarnings("unused")
+        private <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                                 final PositionBound positionBound,
+                                                 final QueryConfig config) {
             // throw exception for now to reserve the ability to implement this in the future
             // without clashing with users' custom implementations in the meantime
             throw new UnsupportedOperationException("Versioned stores do not support RangeQuery queries at this time.");
         }
 
-        @Override
-        protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                                 final PositionBound positionBound,
-                                                 final QueryConfig config) {
+        @SuppressWarnings("unused")
+        private <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                               final PositionBound positionBound,
+                                               final QueryConfig config) {
             // throw exception for now to reserve the ability to implement this in the future
             // without clashing with users' custom implementations in the meantime
             throw new UnsupportedOperationException("Versioned stores do not support KeyQuery queries at this time.");
+        }
+
+        @SuppressWarnings("unchecked")
+        private <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
+                                                          final PositionBound positionBound,
+                                                          final QueryConfig config) {
+            final QueryResult<R> result;
+            final VersionedKeyQuery<K, V> typedKeyQuery = (VersionedKeyQuery<K, V>) query;
+            VersionedKeyQuery<Bytes, byte[]> rawKeyQuery = VersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+            if (typedKeyQuery.asOfTimestamp().isPresent()) {
+                rawKeyQuery = rawKeyQuery.asOf(typedKeyQuery.asOfTimestamp().get());
+            }
+            final QueryResult<VersionedRecord<byte[]>> rawResult =
+                wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess() && rawResult.getResult() != null) {
+                final VersionedRecord<V> versionedRecord = StoreQueryUtils.deserializeVersionedRecord(plainValueSerdes, rawResult.getResult());
+                final QueryResult<VersionedRecord<V>> typedQueryResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, versionedRecord);
+                result = (QueryResult<R>) typedQueryResult;
+            } else {
+                // the generic type doesn't matter, since failed queries have no result set.
+                result = (QueryResult<R>) rawResult;
+            }
+            return result;
+        }
+
+        @SuppressWarnings("unchecked")
+        private <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
+            final QueryResult<R> result;
+            final MultiVersionedKeyQuery<K, V> typedKeyQuery = (MultiVersionedKeyQuery<K, V>) query;
+
+            final Instant fromTime = typedKeyQuery.fromTime().orElse(Instant.ofEpochMilli(Long.MIN_VALUE));
+            final Instant toTime = typedKeyQuery.toTime().orElse(Instant.ofEpochMilli(Long.MAX_VALUE));
+            if (fromTime.compareTo(toTime) > 0) {
+                throw new IllegalArgumentException("The `fromTime` timestamp must be smaller than the `toTime` timestamp.");
+            }
+            MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+            rawKeyQuery = rawKeyQuery.fromTime(fromTime).toTime(toTime);
+            if (typedKeyQuery.resultOrder().equals(ResultOrder.DESCENDING)) {
+                rawKeyQuery = rawKeyQuery.withDescendingTimestamps();
+            } else if (typedKeyQuery.resultOrder().equals(ResultOrder.ASCENDING)) {
+                rawKeyQuery = rawKeyQuery.withAscendingTimestamps();
+            }
+
+            final QueryResult<VersionedRecordIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
+                final MeteredMultiVersionedKeyQueryIterator<V> typedResult =
+                        new MeteredMultiVersionedKeyQueryIterator<>(
+                            rawResult.getResult(),
+                            iteratorDurationSensor,
+                            time,
+                            StoreQueryUtils.deserializeValue(plainValueSerdes),
+                            openIterators
+                        );
+                final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
+                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                result = (QueryResult<R>) typedQueryResult;
+            } else {
+                // the generic type doesn't matter, since failed queries have no result set.
+                result = (QueryResult<R>) rawResult;
+            }
+            return result;
         }
 
         @SuppressWarnings("unchecked")
@@ -147,16 +288,27 @@ public class MeteredVersionedKeyValueStore<K, V>
             final SerdeGetter getter
         ) {
             if (valueSerde == null) {
-                return new NullableValueAndTimestampSerde<>((Serde<V>) getter.valueSerde());
+                return new ValueAndTimestampSerde<>((Serde<V>) getter.valueSerde());
             } else {
                 return super.prepareValueSerdeForStore(valueSerde, getter);
             }
         }
+
+        @Override
+        protected void initStoreSerde(final StateStoreContext context) {
+            super.initStoreSerde(context);
+
+            // additionally init raw value serde
+            final String storeName = super.name();
+            final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
+            plainValueSerdes = StoreSerdeInitializer.prepareStoreSerde(
+                context, storeName, changelogTopic, keySerde, plainValueSerde, WrappingNullableUtils::prepareValueSerde);
+        }
     }
 
     @Override
-    public void put(final K key, final V value, final long timestamp) {
-        internal.put(key, ValueAndTimestamp.makeAllowNullable(value, timestamp));
+    public long put(final K key, final V value, final long timestamp) {
+        return internal.put(key, value, timestamp);
     }
 
     @Override
@@ -188,15 +340,9 @@ public class MeteredVersionedKeyValueStore<K, V>
         return internal.name();
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        internal.init(context, root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        internal.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        internal.init(stateStoreContext, root);
     }
 
     @Override

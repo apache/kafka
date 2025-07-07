@@ -16,8 +16,43 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-interface StandbyTaskAssignor extends TaskAssignor {
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+
+import java.util.Map;
+import java.util.Set;
+
+interface StandbyTaskAssignor extends LegacyTaskAssignor {
     default boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {
         return true;
     }
+
+    /**
+     * If a specific task can be moved from source to destination
+     * @param source Source client
+     * @param destination Destination client
+     * @param sourceTask Task to move
+     * @param clientStateMap All client metadata
+     * @return True if task can be moved, false otherwise
+     */
+    default boolean isAllowedTaskMovement(final ClientState source,
+                                          final ClientState destination,
+                                          final TaskId sourceTask,
+                                          final Map<ProcessId, ClientState> clientStateMap) {
+        return true;
+    }
+
+    default boolean assign(final Map<ProcessId, ClientState> clients,
+                           final Set<TaskId> allTaskIds,
+                           final Set<TaskId> statefulTaskIds,
+                           final RackAwareTaskAssignor rackAwareTaskAssignor,
+                           final AssignmentConfigs configs) {
+        return assign(clients, allTaskIds, statefulTaskIds, configs);
+    }
+
+    boolean assign(final Map<ProcessId, ClientState> clients,
+                   final Set<TaskId> allTaskIds,
+                   final Set<TaskId> statefulTaskIds,
+                   final AssignmentConfigs configs);
 }

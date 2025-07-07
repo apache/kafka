@@ -22,8 +22,10 @@
   "fields": [
     { "name": "Owner", "type": "string", "versions": "0+",
       "about": "The delegation token owner." },
+    { "name": "Requester", "type": "string", "versions": "0+",
+      "about": "The delegation token requester." },
     { "name": "Renewers", "type": "[]string", "versions": "0+",
-      "about": "The principals which have renewed this token." },
+      "about": "The principals which can renew this token." },
     { "name": "IssueTimestamp", "type": "int64", "versions": "0+",
       "about": "The time at which this timestamp was issued." },
     { "name": "MaxTimestamp", "type": "int64", "versions": "0+",

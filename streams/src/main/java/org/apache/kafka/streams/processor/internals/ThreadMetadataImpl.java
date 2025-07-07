@@ -51,13 +51,13 @@ public class ThreadMetadataImpl implements ThreadMetadata {
                               final String threadState,
                               final String mainConsumerClientId,
                               final String restoreConsumerClientId,
-                              final Set<String> producerClientIds,
+                              final String producerClientIds,
                               final String adminClientId,
                               final Set<TaskMetadata> activeTasks,
                               final Set<TaskMetadata> standbyTasks) {
         this.mainConsumerClientId = mainConsumerClientId;
         this.restoreConsumerClientId = restoreConsumerClientId;
-        this.producerClientIds = Collections.unmodifiableSet(producerClientIds);
+        this.producerClientIds = Collections.singleton(producerClientIds);
         this.adminClientId = adminClientId;
         this.threadName = threadName;
         this.threadState = threadState;

@@ -18,19 +18,21 @@
 package kafka.server.metadata
 
 import kafka.network.ConnectionQuotas
-import kafka.server.ConfigEntityName
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.ClientQuotaMetadataManager.transferToClientQuotaEntity
 import kafka.utils.Logging
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
+import org.apache.kafka.server.quota.ClientQuotaEntity.ConfigEntity
 import org.apache.kafka.common.utils.Sanitizer
+
 import java.net.{InetAddress, UnknownHostException}
-
+import java.util.Optional
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
+import org.apache.kafka.server.config.QuotaConfig
+import org.apache.kafka.server.quota.ClientQuotaManager
 
-import scala.compat.java8.OptionConverters._
-
+import scala.jdk.OptionConverters.RichOptionalDouble
 
 // A strict hierarchy of entities that we support
 sealed trait QuotaEntity
@@ -52,8 +54,8 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
                                  private[metadata] val connectionQuotas: ConnectionQuotas) extends Logging {
 
   def update(quotasDelta: ClientQuotasDelta): Unit = {
-    quotasDelta.changes().entrySet().forEach { e =>
-      update(e.getKey, e.getValue)
+    quotasDelta.changes().forEach { (key, value) =>
+      update(key, value)
     }
   }
 
@@ -97,15 +99,15 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
           ClientIdEntity(clientIdVal)
         }
       }
-      quotaDelta.changes().entrySet().forEach { e =>
-        handleUserClientQuotaChange(userClientEntity, e.getKey, e.getValue.asScala.map(_.toDouble))
+      quotaDelta.changes().forEach { (key, value) =>
+        handleUserClientQuotaChange(userClientEntity, key, value.toScala)
       }
     } else {
       warn(s"Ignoring unsupported quota entity $entity.")
     }
   }
 
-  def handleIpQuota(ipEntity: QuotaEntity, quotaDelta: ClientQuotaDelta): Unit = {
+  private[metadata] def handleIpQuota(ipEntity: QuotaEntity, quotaDelta: ClientQuotaDelta): Unit = {
     val inetAddress = ipEntity match {
       case IpEntity(ip) =>
         try {
@@ -117,15 +119,15 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       case _ => throw new IllegalStateException("Should only handle IP quota entities here")
     }
 
-    quotaDelta.changes().entrySet().forEach { e =>
+    quotaDelta.changes().forEach { (key, value) =>
       // The connection quota only understands the connection rate limit
-      val quotaName = e.getKey
-      val quotaValue = e.getValue
-      if (!quotaName.equals(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
+      val quotaName = key
+      val quotaValue = value
+      if (!quotaName.equals(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
         warn(s"Ignoring unexpected quota key $quotaName for entity $ipEntity")
       } else {
         try {
-          connectionQuotas.updateIpConnectionRateQuota(inetAddress, quotaValue.asScala.map(_.toInt))
+          connectionQuotas.updateIpConnectionRateQuota(inetAddress, quotaValue.toScala.map(_.toInt))
         } catch {
           case t: Throwable => error(s"Failed to update IP quota $ipEntity", t)
         }
@@ -133,39 +135,54 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     }
   }
 
-  def handleUserClientQuotaChange(quotaEntity: QuotaEntity, key: String, newValue: Option[Double]): Unit = {
+  private def handleUserClientQuotaChange(quotaEntity: QuotaEntity, key: String, newValue: Option[Double]): Unit = {
     val manager = key match {
-      case QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.fetch
-      case QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.produce
-      case QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG => quotaManagers.request
-      case QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG => quotaManagers.controllerMutation
+      case QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.fetch
+      case QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.produce
+      case QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG => quotaManagers.request
+      case QuotaConfig.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG => quotaManagers.controllerMutation
       case _ =>
         warn(s"Ignoring unexpected quota key $key for entity $quotaEntity")
         return
     }
 
     // Convert entity into Options with sanitized values for QuotaManagers
-    val (sanitizedUser, sanitizedClientId) = quotaEntity match {
-      case UserEntity(user) => (Some(Sanitizer.sanitize(user)), None)
-      case DefaultUserEntity => (Some(ConfigEntityName.Default), None)
-      case ClientIdEntity(clientId) => (None, Some(Sanitizer.sanitize(clientId)))
-      case DefaultClientIdEntity => (None, Some(ConfigEntityName.Default))
-      case ExplicitUserExplicitClientIdEntity(user, clientId) => (Some(Sanitizer.sanitize(user)), Some(Sanitizer.sanitize(clientId)))
-      case ExplicitUserDefaultClientIdEntity(user) => (Some(Sanitizer.sanitize(user)), Some(ConfigEntityName.Default))
-      case DefaultUserExplicitClientIdEntity(clientId) => (Some(ConfigEntityName.Default), Some(Sanitizer.sanitize(clientId)))
-      case DefaultUserDefaultClientIdEntity => (Some(ConfigEntityName.Default), Some(ConfigEntityName.Default))
-      case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
-    }
+    val (userEntity, clientEntity) = transferToClientQuotaEntity(quotaEntity)
+    val quotaValue = newValue.map(v => Optional.of(new Quota(v, true))).getOrElse(Optional.empty[Quota]())
 
-    val quotaValue = newValue.map(new Quota(_, true))
     try {
       manager.updateQuota(
-        sanitizedUser = sanitizedUser,
-        clientId = sanitizedClientId.map(Sanitizer.desanitize),
-        sanitizedClientId = sanitizedClientId,
-        quota = quotaValue)
+        userEntity,
+        clientEntity,
+        quotaValue
+      )
     } catch {
       case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
+    }
+  }
+}
+
+object ClientQuotaMetadataManager {
+
+  def transferToClientQuotaEntity(quotaEntity: QuotaEntity): (Optional[ConfigEntity], Optional[ConfigEntity]) = {
+    quotaEntity match {
+      case UserEntity(user) =>
+        (Optional.of(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Optional.empty())
+      case DefaultUserEntity =>
+        (Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.empty())
+      case ClientIdEntity(clientId) =>
+        (Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)))
+      case DefaultClientIdEntity =>
+        (Optional.empty(), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID))
+      case ExplicitUserExplicitClientIdEntity(user, clientId) =>
+        (Optional.of(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)))
+      case ExplicitUserDefaultClientIdEntity(user) =>
+        (Optional.of(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID))
+      case DefaultUserExplicitClientIdEntity(clientId) =>
+        (Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)))
+      case DefaultUserDefaultClientIdEntity =>
+        (Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID))
+      case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
     }
   }
 }

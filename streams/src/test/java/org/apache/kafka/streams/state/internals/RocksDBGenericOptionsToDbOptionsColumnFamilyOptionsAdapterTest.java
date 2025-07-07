@@ -17,14 +17,17 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.easymock.EasyMockRunner;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.invocation.Invocation;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.rocksdb.AbstractCompactionFilter;
 import org.rocksdb.AbstractCompactionFilter.Context;
 import org.rocksdb.AbstractCompactionFilterFactory;
 import org.rocksdb.AbstractWalFilter;
-import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.CompactionPriority;
@@ -52,63 +55,65 @@ import org.rocksdb.util.BytewiseComparator;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-
-import java.util.Arrays;
-import java.util.Set;
 import java.util.ArrayList;
-import java.util.LinkedList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.reset;
-import static org.easymock.EasyMock.resetToNice;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.matchesPattern;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockingDetails;
 
 /**
  * The purpose of this test is, to catch interface changes if we upgrade {@link RocksDB}.
  * Using reflections, we make sure the {@link RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter} maps all
  * methods from {@link DBOptions} and {@link ColumnFamilyOptions} to/from {@link Options} correctly.
  */
-@RunWith(EasyMockRunner.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
-    private final List<String> walRelatedMethods = new LinkedList<String>() {
-        {
-            add("setManualWalFlush");
-            add("setMaxTotalWalSize");
-            add("setWalBytesPerSync");
-            add("setWalDir");
-            add("setWalFilter");
-            add("setWalRecoveryMode");
-            add("setWalSizeLimitMB");
-            add("setWalTtlSeconds");
-        }
-    };
+    private final List<String> walRelatedMethods = List.of(
+        "setManualWalFlush",
+        "setMaxTotalWalSize",
+        "setWalBytesPerSync",
+        "setWalDir",
+        "setWalFilter",
+        "setWalRecoveryMode",
+        "setWalSizeLimitMB",
+        "setWalTtlSeconds"
+    );
 
-    private final List<String> ignoreMethods = new LinkedList<String>() {
-        {
-            add("isOwningHandle");
-            add("getNativeHandle");
-            add("dispose");
-            add("wait");
-            add("equals");
-            add("getClass");
-            add("hashCode");
-            add("notify");
-            add("notifyAll");
-            add("toString");
-            add("getOptionStringFromProps");
-            addAll(walRelatedMethods);
-        }
-    };
+    private final List<String> ignoreMethods = Stream.concat(
+        Stream.of(
+            "isOwningHandle",
+            "getNativeHandle",
+            "dispose",
+            "wait",
+            "equals",
+            "getClass",
+            "hashCode",
+            "notify",
+            "notifyAll",
+            "toString",
+            "getOptionStringFromProps",
+            "maxBackgroundCompactions",
+            "setMaxBackgroundCompactions",
+            "maxBackgroundFlushes",
+            "setMaxBackgroundFlushes",
+            "tablePropertiesCollectorFactory",
+            "setTablePropertiesCollectorFactory"
+        ),
+        walRelatedMethods.stream()
+    ).collect(Collectors.toList());
 
     @Test
     public void shouldOverwriteAllOptionsMethods() throws Exception {
@@ -140,17 +145,15 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         final Object[] parameters = getDBOptionsParameters(method.getParameterTypes());
 
         try {
-            reset(mockedDbOptions);
-            replay(mockedDbOptions);
             method.invoke(optionsFacadeDbOptions, parameters);
-            verify();
-            fail("Should have called DBOptions." + method.getName() + "()");
+            final Collection<Invocation> invocations = mockingDetails(mockedDbOptions).getInvocations();
+            final Set<String> invokedMethodNames = invocations.stream().map(invocation -> invocation.getMethod().getName()).collect(Collectors.toSet());
+            assertTrue(invokedMethodNames.contains(method.getName()), "Should have called DBOptions." + method.getName() + "()");
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
                 matchesPattern("Unexpected method call DBOptions\\." + method.getName() + "((.*\n*)*):"));
         } finally {
-            resetToNice(mockedDbOptions);
             optionsFacadeDbOptions.close();
         }
     }
@@ -171,9 +174,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     break;
                 case "java.util.Collection":
                     parameters[i] = new ArrayList<>();
-                    break;
-                case "org.rocksdb.AccessHint":
-                    parameters[i] = AccessHint.NONE;
                     break;
                 case "org.rocksdb.Cache":
                     parameters[i] = new LRUCache(1L);
@@ -248,17 +248,15 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         final Object[] parameters = getColumnFamilyOptionsParameters(method.getParameterTypes());
 
         try {
-            reset(mockedColumnFamilyOptions);
-            replay(mockedColumnFamilyOptions);
             method.invoke(optionsFacadeColumnFamilyOptions, parameters);
-            verify();
-            fail("Should have called ColumnFamilyOptions." + method.getName() + "()");
+            final Collection<Invocation> invocations = mockingDetails(mockedColumnFamilyOptions).getInvocations();
+            final Set<String> invokedMethodNames = invocations.stream().map(invocation -> invocation.getMethod().getName()).collect(Collectors.toSet());
+            assertTrue(invokedMethodNames.contains(method.getName()), "Should have called ColumnFamilyOptions." + method.getName() + "()");
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
                 matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
         } finally {
-            resetToNice(mockedColumnFamilyOptions);
             optionsFacadeColumnFamilyOptions.close();
         }
     }

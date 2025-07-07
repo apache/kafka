@@ -19,11 +19,12 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Collection;
 
+@SuppressWarnings("rawtypes")
 public class KTablePassThrough<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final Collection<KStreamAggProcessorSupplier> parents;
     private final String storeName;
@@ -79,11 +80,11 @@ public class KTablePassThrough<KIn, VIn> implements KTableProcessorSupplier<KIn,
     }
 
     private class KTablePassThroughValueGetter implements KTableValueGetter<KIn, VIn> {
-        private TimestampedKeyValueStore<KIn, VIn> store;
+        private KeyValueStoreWrapper<KIn, VIn> store;
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            store = context.getStateStore(storeName);
+            store = new KeyValueStoreWrapper<>(context, storeName);
         }
 
         @Override
@@ -91,5 +92,14 @@ public class KTablePassThrough<KIn, VIn> implements KTableProcessorSupplier<KIn,
             return store.get(key);
         }
 
+        @Override
+        public ValueAndTimestamp<VIn> get(final KIn key, final long asOfTimestamp) {
+            return store.get(key, asOfTimestamp);
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return store.isVersionedStore();
+        }
     }
 }

@@ -17,30 +17,50 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 
 public final class LocalReplicaChanges {
+    // partitions for which the broker is not a replica anymore
     private final Set<TopicPartition> deletes;
+    // partitions for which the broker is now a leader (leader epoch bump on the leader)
+    private final Map<TopicPartition, PartitionInfo> electedLeaders;
+    // partitions for which the isr or replicas change if the broker is a leader (partition epoch bump on the leader)
     private final Map<TopicPartition, PartitionInfo> leaders;
+    // partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)
     private final Map<TopicPartition, PartitionInfo> followers;
+    // The topic name -> topic id map in leaders and followers changes
+    private final Map<String, Uuid> topicIds;
+    // partitions for which directory id changes or newly added to the broker
+    private final Map<TopicIdPartition, Uuid> directoryIds;
 
     LocalReplicaChanges(
         Set<TopicPartition> deletes,
+        Map<TopicPartition, PartitionInfo> electedLeaders,
         Map<TopicPartition, PartitionInfo> leaders,
-        Map<TopicPartition, PartitionInfo> followers
+        Map<TopicPartition, PartitionInfo> followers,
+        Map<String, Uuid> topicIds,
+        Map<TopicIdPartition, Uuid> directoryIds
     ) {
         this.deletes = deletes;
+        this.electedLeaders = electedLeaders;
         this.leaders = leaders;
         this.followers = followers;
+        this.topicIds = topicIds;
+        this.directoryIds = directoryIds;
     }
 
     public Set<TopicPartition> deletes() {
         return deletes;
+    }
+
+    public Map<TopicPartition, PartitionInfo> electedLeaders() {
+        return electedLeaders;
     }
 
     public Map<TopicPartition, PartitionInfo> leaders() {
@@ -51,13 +71,24 @@ public final class LocalReplicaChanges {
         return followers;
     }
 
+    public Map<String, Uuid> topicIds() {
+        return topicIds;
+    }
+
+    public Map<TopicIdPartition, Uuid> directoryIds() {
+        return directoryIds;
+    }
+
     @Override
     public String toString() {
         return String.format(
-            "LocalReplicaChanges(deletes = %s, leaders = %s, followers = %s)",
+            "LocalReplicaChanges(deletes = %s, newly elected leaders = %s, leaders = %s, followers = %s, topicIds = %s, directoryIds = %s)",
             deletes,
+            electedLeaders,
             leaders,
-            followers
+            followers,
+            topicIds,
+            directoryIds
         );
     }
 
@@ -70,17 +101,17 @@ public final class LocalReplicaChanges {
             this.partition = partition;
         }
 
-        @Override
-        public String toString() {
-            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
-        }
-
         public Uuid topicId() {
             return topicId;
         }
 
         public PartitionRegistration partition() {
             return partition;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
         }
     }
 }

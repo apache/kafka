@@ -16,20 +16,6 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -45,7 +31,20 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetDeleteRequest;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class DeleteConsumerGroupOffsetsHandlerTest {
 
@@ -54,7 +53,7 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
     private final TopicPartition t0p0 = new TopicPartition("t0", 0);
     private final TopicPartition t0p1 = new TopicPartition("t0", 1);
     private final TopicPartition t1p0 = new TopicPartition("t1", 0);
-    private final Set<TopicPartition> tps = new HashSet<>(Arrays.asList(t0p0, t0p1, t1p0));
+    private final Set<TopicPartition> tps = Set.of(t0p0, t0p1, t1p0);
 
     @Test
     public void testBuildRequest() {
@@ -122,7 +121,7 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
     }
 
     private OffsetDeleteResponse buildPartitionErrorResponse(Errors error) {
-        OffsetDeleteResponse response = new OffsetDeleteResponse(
+        return new OffsetDeleteResponse(
             new OffsetDeleteResponseData()
                 .setThrottleTimeMs(0)
                 .setTopics(new OffsetDeleteResponseTopicCollection(singletonList(
@@ -135,7 +134,6 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
                         ).iterator()))
                 ).iterator()))
         );
-        return response;
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleWithGroupError(
@@ -189,7 +187,7 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.failedKeys.keySet());
-        assertTrue(expectedExceptionType.isInstance(result.failedKeys.get(key)));
+        assertInstanceOf(expectedExceptionType, result.failedKeys.get(key));
     }
 
     private void assertPartitionFailed(

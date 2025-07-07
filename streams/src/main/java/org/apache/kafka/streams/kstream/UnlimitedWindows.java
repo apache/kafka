@@ -91,7 +91,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     /**
      * {@inheritDoc}
-     * As unlimited windows have conceptually infinite size, this methods just returns {@link Long#MAX_VALUE}.
+     * As unlimited windows have conceptually infinite size, this method just returns {@link Long#MAX_VALUE}.
      *
      * @return the size of the specified windows which is {@link Long#MAX_VALUE}
      */

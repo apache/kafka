@@ -57,7 +57,7 @@ public class Position {
     }
 
     /**
-     * Create a new Position and populate it with a mapping of topic -> partition -> offset.
+     * Create a new Position and populate it with a mapping of topic -&gt; partition -&gt; offset.
      * <p>
      * Note, the resulting Position does not share any structure with the provided map, so
      * subsequent changes to the map or Position will not affect the other.
@@ -95,7 +95,7 @@ public class Position {
     /**
      * Merges the provided Position into the current instance.
      * <p>
-     * If both Positions contain the same topic -> partition -> offset mapping, the resulting
+     * If both Positions contain the same topic -&gt; partition -&gt; offset mapping, the resulting
      * Position will contain a mapping with the larger of the two offsets.
      */
     public Position merge(final Position other) {
@@ -104,15 +104,11 @@ public class Position {
         } else {
             for (final Entry<String, ConcurrentHashMap<Integer, Long>> entry : other.position.entrySet()) {
                 final String topic = entry.getKey();
-                final Map<Integer, Long> partitionMap =
-                    position.computeIfAbsent(topic, k -> new ConcurrentHashMap<>());
+
                 for (final Entry<Integer, Long> partitionOffset : entry.getValue().entrySet()) {
                     final Integer partition = partitionOffset.getKey();
                     final Long offset = partitionOffset.getValue();
-                    if (!partitionMap.containsKey(partition)
-                        || partitionMap.get(partition) < offset) {
-                        partitionMap.put(partition, offset);
-                    }
+                    withComponent(topic, partition, offset);
                 }
             }
             return this;
@@ -127,7 +123,7 @@ public class Position {
     }
 
     /**
-     * Return the partition -> offset mapping for a specific topic.
+     * Return the partition -&gt; offset mapping for a specific topic.
      */
     public Map<Integer, Long> getPartitionPositions(final String topic) {
         final ConcurrentHashMap<Integer, Long> bound = position.get(topic);

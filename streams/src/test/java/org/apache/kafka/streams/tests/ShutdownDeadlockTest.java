@@ -16,21 +16,20 @@
  */
 package org.apache.kafka.streams.tests;
 
-import java.time.Duration;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 
+import java.time.Duration;
 import java.util.Properties;
 
 public class ShutdownDeadlockTest {
@@ -49,11 +48,8 @@ public class ShutdownDeadlockTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> source = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
 
-        source.foreach(new ForeachAction<String, String>() {
-            @Override
-            public void apply(final String key, final String value) {
-                throw new RuntimeException("KABOOM!");
-            }
+        source.foreach((key, value) -> {
+            throw new RuntimeException("KABOOM!");
         });
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.setUncaughtExceptionHandler(e -> {

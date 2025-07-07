@@ -31,6 +31,41 @@ public final class LogFileUtils {
      */
     public static final String DELETED_FILE_SUFFIX = ".deleted";
 
+    /**
+     * Suffix of a log file
+     */
+    public static final String LOG_FILE_SUFFIX = ".log";
+
+    /**
+     * Suffix of an index file
+     */
+    public static final String INDEX_FILE_SUFFIX = ".index";
+
+    /**
+     * Suffix of a time index file
+     */
+    public static final String TIME_INDEX_FILE_SUFFIX = ".timeindex";
+
+    /**
+     * Suffix of an aborted txn index
+     */
+    public static final String TXN_INDEX_FILE_SUFFIX = ".txnindex";
+
+    /** Suffix of a temporary file that is being used for log cleaning */
+    public static final String CLEANED_FILE_SUFFIX = ".cleaned";
+
+    /** Suffix of a temporary file used when swapping files into the log */
+    public static final String SWAP_FILE_SUFFIX = ".swap";
+
+    /** Suffix of a directory that is scheduled to be deleted */
+    public static final String DELETE_DIR_SUFFIX = "-delete";
+
+    /** Suffix of a directory that is used for future partition */
+    public static final String FUTURE_DIR_SUFFIX = "-future";
+
+    /** Suffix of a directory that is used for stray partition */
+    public static final String STRAY_DIR_SUFFIX = "-stray";
+
     private LogFileUtils() {
     }
 
@@ -64,12 +99,116 @@ public final class LogFileUtils {
      * @param offset The offset to use in the file name
      * @return The filename
      */
-    private static String filenamePrefixFromOffset(long offset) {
+    public static String filenamePrefixFromOffset(long offset) {
         NumberFormat nf = NumberFormat.getInstance();
         nf.setMinimumIntegerDigits(20);
         nf.setMaximumFractionDigits(0);
         nf.setGroupingUsed(false);
         return nf.format(offset);
+    }
+
+    /**
+     * Construct a log file name in the given dir with the given base offset.
+     *
+     * @param dir    The directory in which the log will reside
+     * @param offset The base offset of the log file
+     */
+    public static File logFile(File dir, long offset) {
+        return logFile(dir, offset, "");
+    }
+
+    /**
+     * Construct a log file name in the given dir with the given base offset and the given suffix.
+     *
+     * @param dir    The directory in which the log will reside
+     * @param offset The base offset of the log file
+     * @param suffix The suffix to be appended to the file name (e.g. "", ".deleted", ".cleaned", ".swap", etc.)
+     */
+    public static File logFile(File dir, long offset, String suffix) {
+        return new File(dir, filenamePrefixFromOffset(offset) + LOG_FILE_SUFFIX + suffix);
+    }
+
+    /**
+     * Construct an index file name in the given dir using the given base offset.
+     *
+     * @param dir    The directory in which the log will reside
+     * @param offset The base offset of the log file
+     */
+    public static File offsetIndexFile(File dir, long offset) {
+        return offsetIndexFile(dir, offset, "");
+    }
+
+    /**
+     * Construct an index file name in the given dir using the given base offset and the given suffix.
+     *
+     * @param dir    The directory in which the log will reside
+     * @param offset The base offset of the log file
+     * @param suffix The suffix to be appended to the file name ("", ".deleted", ".cleaned", ".swap", etc.)
+     */
+    public static File offsetIndexFile(File dir, long offset, String suffix) {
+        return new File(dir, filenamePrefixFromOffset(offset) + INDEX_FILE_SUFFIX + suffix);
+    }
+
+    /**
+     * Construct a time index file name in the given dir using the given base offset.
+     *
+     * @param dir    The directory in which the log will reside
+     * @param offset The base offset of the log file
+     */
+    public static File timeIndexFile(File dir, long offset) {
+        return timeIndexFile(dir, offset, "");
+    }
+
+    /**
+     * Construct a time index file name in the given dir using the given base offset and the given suffix.
+     *
+     * @param dir    The directory in which the log will reside
+     * @param offset The base offset of the log file
+     * @param suffix The suffix to be appended to the file name ("", ".deleted", ".cleaned", ".swap", etc.)
+     */
+    public static File timeIndexFile(File dir, long offset, String suffix) {
+        return new File(dir, filenamePrefixFromOffset(offset) + TIME_INDEX_FILE_SUFFIX + suffix);
+    }
+
+    /**
+     * Construct a transaction index file name in the given dir using the given base offset.
+     *
+     * @param dir    The directory in which the log will reside
+     * @param offset The base offset of the log file
+     */
+    public static File transactionIndexFile(File dir, long offset) {
+        return transactionIndexFile(dir, offset, "");
+    }
+
+    /**
+     * Construct a transaction index file name in the given dir using the given base offset and the given suffix.
+     *
+     * @param dir    The directory in which the log will reside
+     * @param offset The base offset of the log file
+     * @param suffix The suffix to be appended to the file name ("", ".deleted", ".cleaned", ".swap", etc.)
+     */
+    public static File transactionIndexFile(File dir, long offset, String suffix) {
+        return new File(dir, filenamePrefixFromOffset(offset) + TXN_INDEX_FILE_SUFFIX + suffix);
+    }
+
+    /**
+     * Returns the offset from the given file. The file name is of the form: {number}.{suffix}. This method extracts
+     * the number from the given file's name.
+     *
+     * @param file file with the offset information as part of its name.
+     * @return offset of the given file
+     */
+    public static Long offsetFromFile(File file) {
+        return offsetFromFileName(file.getName());
+    }
+
+    public static boolean isLogFile(File file) {
+        return file.getPath().endsWith(LOG_FILE_SUFFIX);
+    }
+
+    public static boolean isIndexFile(File file) {
+        String fileName = file.getName();
+        return fileName.endsWith(INDEX_FILE_SUFFIX) || fileName.endsWith(TIME_INDEX_FILE_SUFFIX) || fileName.endsWith(TXN_INDEX_FILE_SUFFIX);
     }
 
 }

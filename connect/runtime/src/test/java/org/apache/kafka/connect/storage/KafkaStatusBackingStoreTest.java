@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.config.ConfigException;
@@ -35,32 +34,41 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 
-import java.util.Collections;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KafkaStatusBackingStoreTest {
 
     private static final String STATUS_TOPIC = "status-topic";
@@ -74,9 +82,9 @@ public class KafkaStatusBackingStoreTest {
     Converter converter = mock(Converter.class);
     WorkerConfig workerConfig = mock(WorkerConfig.class);
 
-    @Before
+    @BeforeEach
     public void setup() {
-        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
+        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, () -> null, kafkaBasedLog);
     }
 
     @Test
@@ -309,6 +317,58 @@ public class KafkaStatusBackingStoreTest {
     }
 
     @Test
+    public void readTaskStateShouldIgnoreStaleStatusesFromOtherWorkers() {
+        byte[] value = new byte[0];
+        String otherWorkerId = "anotherhost:8083";
+        String yetAnotherWorkerId = "yetanotherhost:8083";
+
+        // This worker sends a RUNNING status in the most recent generation
+        Map<String, Object> firstStatusRead = new HashMap<>();
+        firstStatusRead.put("worker_id", otherWorkerId);
+        firstStatusRead.put("state", "RUNNING");
+        firstStatusRead.put("generation", 10L);
+
+        // Another worker still ends up producing an UNASSIGNED status before it could
+        // read the newer RUNNING status from above belonging to an older generation.
+        Map<String, Object> secondStatusRead = new HashMap<>();
+        secondStatusRead.put("worker_id", WORKER_ID);
+        secondStatusRead.put("state", "UNASSIGNED");
+        secondStatusRead.put("generation", 9L);
+
+        Map<String, Object> thirdStatusRead = new HashMap<>();
+        thirdStatusRead.put("worker_id", yetAnotherWorkerId);
+        thirdStatusRead.put("state", "RUNNING");
+        thirdStatusRead.put("generation", 1L);
+
+        when(converter.toConnectData(STATUS_TOPIC, value))
+                .thenReturn(new SchemaAndValue(null, firstStatusRead))
+                .thenReturn(new SchemaAndValue(null, secondStatusRead))
+                .thenReturn(new SchemaAndValue(null, thirdStatusRead));
+
+        when(converter.fromConnectData(eq(STATUS_TOPIC), any(Schema.class), any(Struct.class)))
+                .thenReturn(value);
+
+        doAnswer(invocation -> {
+            ((Callback) invocation.getArgument(2)).onCompletion(null, null);
+            store.read(consumerRecord(2, "status-task-conn-0", value));
+            return null;
+        }).when(kafkaBasedLog).send(eq("status-task-conn-0"), eq(value), any(Callback.class));
+
+        store.read(consumerRecord(0, "status-task-conn-0", value));
+        store.read(consumerRecord(1, "status-task-conn-0", value));
+
+        // The latest task status should reflect RUNNING status from the newer generation
+        TaskStatus status = new TaskStatus(TASK, TaskStatus.State.RUNNING, otherWorkerId, 10);
+        assertEquals(status, store.get(TASK));
+
+        // This  status is from the another worker not necessarily belonging to the above group.
+        // In this case, the status should get updated irrespective of whatever status info was present before.
+        TaskStatus latestStatus = new TaskStatus(TASK, TaskStatus.State.RUNNING, yetAnotherWorkerId, 1);
+        store.put(latestStatus);
+        assertEquals(latestStatus, store.get(TASK));
+    }
+
+    @Test
     public void deleteConnectorState() {
         final byte[] value = new byte[0];
         Map<String, Object> statusMap = new HashMap<>();
@@ -316,7 +376,6 @@ public class KafkaStatusBackingStoreTest {
         statusMap.put("state", "RUNNING");
         statusMap.put("generation", 0L);
 
-        when(converter.fromConnectData(eq(STATUS_TOPIC), any(Schema.class), any(Struct.class))).thenReturn(value);
         when(converter.fromConnectData(eq(STATUS_TOPIC), any(Schema.class), any(Struct.class))).thenReturn(value);
         when(converter.toConnectData(STATUS_TOPIC, value)).thenReturn(new SchemaAndValue(null, statusMap));
 
@@ -329,8 +388,8 @@ public class KafkaStatusBackingStoreTest {
         verify(kafkaBasedLog).send(eq("status-connector-" + CONNECTOR), eq(value), any(Callback.class));
         verify(kafkaBasedLog).send(eq("status-task-conn-0"), eq(value), any(Callback.class));
 
-        assertEquals(new HashSet<>(Collections.singletonList(CONNECTOR)), store.connectors());
-        assertEquals(new HashSet<>(Collections.singletonList(taskStatus)), new HashSet<>(store.getAll(CONNECTOR)));
+        assertEquals(Set.of(CONNECTOR), store.connectors());
+        assertEquals(Set.of(taskStatus), new HashSet<>(store.getAll(CONNECTOR)));
         store.read(consumerRecord(0, "status-connector-conn", null));
         assertTrue(store.connectors().isEmpty());
         assertTrue(store.getAll(CONNECTOR).isEmpty());
@@ -353,7 +412,7 @@ public class KafkaStatusBackingStoreTest {
 
         verify(kafkaBasedLog).send(eq("status-task-conn-0"), eq(value), any(Callback.class));
 
-        assertEquals(new HashSet<>(Collections.singletonList(taskStatus)), new HashSet<>(store.getAll(CONNECTOR)));
+        assertEquals(Set.of(taskStatus), new HashSet<>(store.getAll(CONNECTOR)));
         store.read(consumerRecord(0, "status-task-conn-0", null));
         assertTrue(store.getAll(CONNECTOR).isEmpty());
     }
@@ -363,24 +422,22 @@ public class KafkaStatusBackingStoreTest {
         String clientIdBase = "test-client-id-";
         Supplier<TopicAdmin> topicAdminSupplier = () -> mock(TopicAdmin.class);
 
-        Map<String, Object> capturedProducerProps = new HashMap<>();
-        Map<String, Object> capturedConsumerProps = new HashMap<>();
+        ArgumentCaptor<Map<String, Object>> capturedProducerProps = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> capturedConsumerProps = ArgumentCaptor.forClass(Map.class);
 
-        store = new KafkaStatusBackingStore(new MockTime(), converter, topicAdminSupplier, clientIdBase) {
-            @Override
-            protected KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps, Map<String, Object> consumerProps, org.apache.kafka.connect.util.Callback<ConsumerRecord<String, byte[]>> consumedCallback, NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
-                capturedProducerProps.putAll(producerProps);
-                capturedConsumerProps.putAll(consumerProps);
-                return kafkaBasedLog;
-            }
-        };
+        store = spy(new KafkaStatusBackingStore(new MockTime(), converter, topicAdminSupplier, clientIdBase));
+        KafkaBasedLog<String, byte[]> kafkaLog = mock(KafkaBasedLog.class);
+        doReturn(kafkaLog).when(store).createKafkaBasedLog(any(), capturedProducerProps.capture(),
+                capturedConsumerProps.capture(), any(),
+                any(), any(), any(), any());
+
 
         when(workerConfig.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG)).thenReturn("connect-statuses");
         store.configure(workerConfig);
 
         final String expectedClientId = clientIdBase + "statuses";
-        assertEquals(expectedClientId, capturedProducerProps.get(CLIENT_ID_CONFIG));
-        assertEquals(expectedClientId, capturedConsumerProps.get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId, capturedConsumerProps.getValue().get(CLIENT_ID_CONFIG));
     }
 
     private static ConsumerRecord<String, byte[]> consumerRecord(long offset, String key, byte[] value) {

@@ -40,7 +40,8 @@ public class CacheFlushListenerStub<K, V> implements CacheFlushListener<byte[], 
             keyDeserializer.deserialize(null, record.key()),
             new Change<>(
                 valueDeserializer.deserialize(null, record.value().newValue),
-                valueDeserializer.deserialize(null, record.value().oldValue)
+                valueDeserializer.deserialize(null, record.value().oldValue),
+                record.value().isLatest
             )
         );
     }

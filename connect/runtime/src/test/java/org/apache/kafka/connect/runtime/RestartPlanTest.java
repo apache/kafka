@@ -19,14 +19,15 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo.TaskState;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RestartPlanTest {
     private static final String CONNECTOR_NAME = "foo";
@@ -34,17 +35,15 @@ public class RestartPlanTest {
     @Test
     public void testRestartPlan() {
         ConnectorStateInfo.ConnectorState state = new ConnectorStateInfo.ConnectorState(
-                AbstractStatus.State.RESTARTING.name(),
-                "foo",
-                null
+                AbstractStatus.State.RESTARTING.name(), "foo", null, null
         );
         List<TaskState> tasks = new ArrayList<>();
-        tasks.add(new TaskState(1, AbstractStatus.State.RUNNING.name(), "worker1", null));
-        tasks.add(new TaskState(2, AbstractStatus.State.PAUSED.name(), "worker1", null));
-        tasks.add(new TaskState(3, AbstractStatus.State.RESTARTING.name(), "worker1", null));
-        tasks.add(new TaskState(4, AbstractStatus.State.DESTROYED.name(), "worker1", null));
-        tasks.add(new TaskState(5, AbstractStatus.State.RUNNING.name(), "worker1", null));
-        tasks.add(new TaskState(6, AbstractStatus.State.RUNNING.name(), "worker1", null));
+        tasks.add(new TaskState(1, AbstractStatus.State.RUNNING.name(), "worker1", null, null));
+        tasks.add(new TaskState(2, AbstractStatus.State.PAUSED.name(), "worker1", null, null));
+        tasks.add(new TaskState(3, AbstractStatus.State.RESTARTING.name(), "worker1", null, null));
+        tasks.add(new TaskState(4, AbstractStatus.State.DESTROYED.name(), "worker1", null, null));
+        tasks.add(new TaskState(5, AbstractStatus.State.RUNNING.name(), "worker1", null, null));
+        tasks.add(new TaskState(6, AbstractStatus.State.RUNNING.name(), "worker1", null, null));
         ConnectorStateInfo connectorStateInfo = new ConnectorStateInfo(CONNECTOR_NAME, state, tasks, ConnectorType.SOURCE);
 
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
@@ -60,13 +59,11 @@ public class RestartPlanTest {
     @Test
     public void testNoRestartsPlan() {
         ConnectorStateInfo.ConnectorState state = new ConnectorStateInfo.ConnectorState(
-                AbstractStatus.State.RUNNING.name(),
-                "foo",
-                null
+                AbstractStatus.State.RUNNING.name(), "foo", null, null
         );
         List<TaskState> tasks = new ArrayList<>();
-        tasks.add(new TaskState(1, AbstractStatus.State.RUNNING.name(), "worker1", null));
-        tasks.add(new TaskState(2, AbstractStatus.State.PAUSED.name(), "worker1", null));
+        tasks.add(new TaskState(1, AbstractStatus.State.RUNNING.name(), "worker1", null, null));
+        tasks.add(new TaskState(2, AbstractStatus.State.PAUSED.name(), "worker1", null, null));
         ConnectorStateInfo connectorStateInfo = new ConnectorStateInfo(CONNECTOR_NAME, state, tasks, ConnectorType.SOURCE);
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
         RestartPlan restartPlan = new RestartPlan(restartRequest, connectorStateInfo);
@@ -80,13 +77,11 @@ public class RestartPlanTest {
     @Test
     public void testRestartsOnlyConnector() {
         ConnectorStateInfo.ConnectorState state = new ConnectorStateInfo.ConnectorState(
-                AbstractStatus.State.RESTARTING.name(),
-                "foo",
-                null
+                AbstractStatus.State.RESTARTING.name(), "foo", null, null
         );
         List<TaskState> tasks = new ArrayList<>();
-        tasks.add(new TaskState(1, AbstractStatus.State.RUNNING.name(), "worker1", null));
-        tasks.add(new TaskState(2, AbstractStatus.State.PAUSED.name(), "worker1", null));
+        tasks.add(new TaskState(1, AbstractStatus.State.RUNNING.name(), "worker1", null, null));
+        tasks.add(new TaskState(2, AbstractStatus.State.PAUSED.name(), "worker1", null, null));
         ConnectorStateInfo connectorStateInfo = new ConnectorStateInfo(CONNECTOR_NAME, state, tasks, ConnectorType.SOURCE);
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
         RestartPlan restartPlan = new RestartPlan(restartRequest, connectorStateInfo);

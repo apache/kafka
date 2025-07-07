@@ -21,6 +21,8 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -40,13 +42,14 @@ import java.util.Map;
 import static java.lang.String.format;
 import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 
-public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String FIELDS_FIELD = "fields";
     public static final String HEADERS_FIELD = "headers";
     public static final String OPERATION_FIELD = "operation";
     private static final String MOVE_OPERATION = "move";
     private static final String COPY_OPERATION = "copy";
+    public static final String REPLACE_NULL_WITH_DEFAULT_FIELD = "replace.null.with.default";
 
     public static final String OVERVIEW_DOC =
             "Moves or copies fields in the key/value of a record into that record's headers. " +
@@ -68,8 +71,11 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
             .define(OPERATION_FIELD, ConfigDef.Type.STRING, NO_DEFAULT_VALUE,
                     ConfigDef.ValidString.in(MOVE_OPERATION, COPY_OPERATION), ConfigDef.Importance.HIGH,
                     "Either <code>move</code> if the fields are to be moved to the headers (removed from the key/value), " +
-                            "or <code>copy</code> if the fields are to be copied to the headers (retained in the key/value).");
+                            "or <code>copy</code> if the fields are to be copied to the headers (retained in the key/value).")
+            .define(REPLACE_NULL_WITH_DEFAULT_FIELD, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
+    private final Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
     enum Operation {
         MOVE(MOVE_OPERATION),
         COPY(COPY_OPERATION);
@@ -102,7 +108,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
 
     private Operation operation;
 
-    private Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
+    private boolean replaceNullWithDefault;
 
     @Override
     public R apply(R record) {
@@ -116,6 +122,11 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         }
     }
 
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
+
     private R applyWithSchema(R record, Object operatingValue, Schema operatingSchema) {
         Headers updatedHeaders = record.headers().duplicate();
         Struct value = Requirements.requireStruct(operatingValue, "header " + operation);
@@ -125,7 +136,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
             updatedSchema = moveSchema(operatingSchema);
             updatedValue = new Struct(updatedSchema);
             for (Field field : updatedSchema.fields()) {
-                updatedValue.put(field, value.get(field.name()));
+                updatedValue.put(field, getFieldValue(value, field));
             }
         } else {
             updatedSchema = operatingSchema;
@@ -134,7 +145,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         for (int i = 0; i < fields.size(); i++) {
             String fieldName = fields.get(i);
             String headerName = headers.get(i);
-            Object fieldValue = value.schema().field(fieldName) != null ? value.get(fieldName) : null;
+            Object fieldValue = value.schema().field(fieldName) != null ? getFieldValue(value, value.schema().field(fieldName)) : null;
             Schema fieldSchema = operatingSchema.field(fieldName).schema();
             updatedHeaders.add(headerName, fieldValue, fieldSchema);
         }
@@ -170,6 +181,13 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
             updatedHeaders.add(headerName, fieldValue, null);
         }
         return newRecord(record, null, updatedValue, updatedHeaders);
+    }
+
+    private Object getFieldValue(Struct value, Field field) {
+        if (replaceNullWithDefault) {
+            return value.get(field.name());
+        }
+        return value.getWithoutDefault(field.name());
     }
 
     protected abstract Object operatingValue(R record);
@@ -234,5 +252,6 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
                     FIELDS_FIELD, HEADERS_FIELD));
         }
         operation = Operation.fromName(config.getString(OPERATION_FIELD));
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_FIELD);
     }
 }

@@ -17,15 +17,18 @@
 
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.internals.RecordsIterator;
+import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.common.serialization.RecordSerde;
+
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalLong;
-
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.raft.internals.RecordsIterator;
 
 public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     private final OffsetAndEpoch snapshotId;
@@ -59,12 +62,17 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public long lastContainedLogTimestamp() {
-        if (!lastContainedLogTimestamp.isPresent()) {
+        if (lastContainedLogTimestamp.isEmpty()) {
             nextBatch.ifPresent(batch -> {
                 throw new IllegalStateException(
                     String.format(
-                        "nextBatch was present when last contained log timestamp was not present",
-                        batch
+                        "nextBatch was present when last contained log timestamp was not present: Batch(baseOffset=%d" +
+                        ", epoch=%d, appendTimestamp=%d, sizeInBytes=%d, lastOffset=%d)",
+                        batch.baseOffset(),
+                        batch.epoch(),
+                        batch.appendTimestamp(),
+                        batch.sizeInBytes(),
+                        batch.lastOffset()
                     )
                 );
             });
@@ -76,7 +84,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public boolean hasNext() {
-        if (!nextBatch.isPresent()) {
+        if (nextBatch.isEmpty()) {
             nextBatch = nextBatch();
         }
 
@@ -105,30 +113,44 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
         int maxBatchSize,
-        boolean doCrcValidation
+        boolean doCrcValidation,
+        LogContext logContext
     ) {
         return new RecordsSnapshotReader<>(
             snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation)
+            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation, logContext)
         );
     }
 
     /**
-     * Returns the next non-control Batch
+     * Returns the next batch
      */
     private Optional<Batch<T>> nextBatch() {
-        while (iterator.hasNext()) {
+        if (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
 
-            if (!lastContainedLogTimestamp.isPresent()) {
-                // The Batch type doesn't support returning control batches. For now lets just use
-                // the append time of the first batch
-                lastContainedLogTimestamp = OptionalLong.of(batch.appendTimestamp());
+            if (lastContainedLogTimestamp.isEmpty()) {
+                // This must be the first batch which is expected to be a control batch with at least one record for
+                // the snapshot header.
+                if (batch.controlRecords().isEmpty()) {
+                    throw new IllegalStateException(
+                        "First batch is not a control batch with at least one record"
+                    );
+                } else if (ControlRecordType.SNAPSHOT_HEADER != batch.controlRecords().get(0).type()) {
+                    throw new IllegalStateException(
+                        String.format(
+                            "First control record is not a snapshot header (%s)",
+                            batch.controlRecords().get(0).type()
+                        )
+                    );
+                }
+
+                lastContainedLogTimestamp = OptionalLong.of(
+                    ((SnapshotHeaderRecord) batch.controlRecords().get(0).message()).lastContainedLogTimestamp()
+                );
             }
 
-            if (!batch.records().isEmpty()) {
-                return Optional.of(batch);
-            }
+            return Optional.of(batch);
         }
 
         return Optional.empty();

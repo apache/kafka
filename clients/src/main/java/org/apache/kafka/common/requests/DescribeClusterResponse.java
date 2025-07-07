@@ -17,15 +17,15 @@
 
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
+
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class DescribeClusterResponse extends AbstractResponse {
 
@@ -38,7 +38,7 @@ public class DescribeClusterResponse extends AbstractResponse {
 
     public Map<Integer, Node> nodes() {
         return data.brokers().valuesList().stream()
-            .map(b -> new Node(b.brokerId(), b.host(), b.port(), b.rack()))
+            .map(b -> new Node(b.brokerId(), b.host(), b.port(), b.rack(), b.isFenced()))
             .collect(Collectors.toMap(Node::id, Function.identity()));
     }
 
@@ -62,7 +62,7 @@ public class DescribeClusterResponse extends AbstractResponse {
         return data;
     }
 
-    public static DescribeClusterResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeClusterResponse(new DescribeClusterResponseData(new ByteBufferAccessor(buffer), version));
+    public static DescribeClusterResponse parse(Readable readable, short version) {
+        return new DescribeClusterResponse(new DescribeClusterResponseData(readable, version));
     }
 }

@@ -16,17 +16,14 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.junit.Test;
-
-import java.time.Duration;
+import org.junit.jupiter.api.Test;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
-import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SessionWindowsTest {
 
@@ -68,30 +65,14 @@ public class SessionWindowsTest {
         assertEquals(ANY_GRACE, SessionWindows.ofInactivityGapAndGrace(ofMillis(ANY_OTHER_SIZE), ofMillis(ANY_GRACE)).gracePeriodMs());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
-    public void oldAPIShouldSetDefaultGracePeriod() {
-        assertEquals(Duration.ofDays(1).toMillis(), DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD);
-        assertEquals(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - 3L, SessionWindows.with(ofMillis(3L)).gracePeriodMs());
-        assertEquals(0L, SessionWindows.with(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD)).gracePeriodMs());
-        assertEquals(0L, SessionWindows.with(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
-    }
-
-    @Test
-    public void windowSizeMustNotBeNegative() {
+    public void sessionGapCannotBeNegative() {
         assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(-1)));
     }
 
     @Test
-    public void windowSizeMustNotBeZero() {
-        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(0)));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void graceShouldNotCalledAfterGraceSet() {
-        assertThrows(IllegalStateException.class, () -> SessionWindows.ofInactivityGapAndGrace(ofMillis(10), ofMillis(10)).grace(ofMillis(10)));
-        assertThrows(IllegalStateException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(10)).grace(ofMillis(10)));
+    public void sessionGapCanBeZero() {
+        SessionWindows.ofInactivityGapWithNoGrace(ofMillis(0));
     }
 
     @Test

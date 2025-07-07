@@ -16,13 +16,19 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.KafkaRaftClient;
+import org.apache.kafka.raft.internals.IdentitySerde;
+import org.apache.kafka.server.common.OffsetAndEpoch;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
@@ -39,6 +45,8 @@ public final class Snapshots {
 
     private static final int OFFSET_WIDTH = 20;
     private static final int EPOCH_WIDTH = 10;
+
+    public static final OffsetAndEpoch BOOTSTRAP_SNAPSHOT_ID = new OffsetAndEpoch(0, 0);
 
     static {
         OFFSET_FORMATTER.setMinimumIntegerDigits(OFFSET_WIDTH);
@@ -72,7 +80,7 @@ public final class Snapshots {
         Path dir = snapshotDir(logDir);
 
         try {
-            // Create the snapshot directory if it doesn't exists
+            // Create the snapshot directory if it doesn't exist
             Files.createDirectories(dir);
             String prefix = String.format("%s-", filenameFromSnapshotId(snapshotId));
             return Files.createTempFile(dir, prefix, PARTIAL_SUFFIX);
@@ -149,6 +157,28 @@ public final class Snapshots {
                 ),
                 e
             );
+        }
+    }
+
+    public static long lastContainedLogTimestamp(RawSnapshotReader reader, LogContext logContext) {
+        try (var bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
+             RecordsSnapshotReader<ByteBuffer> recordsSnapshotReader =
+                RecordsSnapshotReader.of(
+                    reader,
+                    IdentitySerde.INSTANCE,
+                    bufferSupplier,
+                    KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+                    true,
+                    logContext
+                )
+        ) {
+            return recordsSnapshotReader.lastContainedLogTimestamp();
+        }
+    }
+
+    public static long lastContainedLogTimestamp(Path logDir, OffsetAndEpoch snapshotId, LogContext logContext) {
+        try (FileRawSnapshotReader reader = FileRawSnapshotReader.open(logDir, snapshotId)) {
+            return lastContainedLogTimestamp(reader, logContext);
         }
     }
 }

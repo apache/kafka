@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -41,9 +40,7 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTEN
  * An in-memory LRU cache store based on HashSet and HashMap.
  */
 public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
-
-    protected StateStoreContext context;
-    private Position position = Position.emptyPosition();
+    private final Position position = Position.emptyPosition();
 
     public interface EldestEntryRemovalListener {
         void apply(Bytes key, byte[] value);
@@ -55,6 +52,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     private boolean restoring = false; // TODO: this is a sub-optimal solution to avoid logging during restoration.
                                        // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
     private volatile boolean open = true;
+    protected StateStoreContext context;
 
     private EldestEntryRemovalListener listener;
 
@@ -85,42 +83,32 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
         return this.name;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-
-        // register the store
-        context.register(root, (key, value) -> {
-            restoring = true;
-            put(Bytes.wrap(key), value);
-            restoring = false;
-        });
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            context.appConfigs(),
+            stateStoreContext.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false
         );
         // register the store
-        context.register(
+        stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) records -> {
                 restoring = true;
-                for (final ConsumerRecord<byte[], byte[]> record : records) {
-                    put(Bytes.wrap(record.key()), record.value());
-                    ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                        record,
-                        consistencyEnabled,
-                        position
-                    );
+                synchronized (position) {
+                    for (final ConsumerRecord<byte[], byte[]> record : records) {
+                        put(Bytes.wrap(record.key()), record.value());
+                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                            record,
+                            consistencyEnabled,
+                            position
+                        );
+                    }
                 }
                 restoring = false;
             }
         );
-        this.context = context;
+        this.context = stateStoreContext;
     }
 
     @Override
@@ -148,12 +136,14 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
         Objects.requireNonNull(key);
-        if (value == null) {
-            delete(key);
-        } else {
-            this.map.put(key, value);
+        synchronized (position) {
+            if (value == null) {
+                delete(key);
+            } else {
+                this.map.put(key, value);
+            }
+            StoreQueryUtils.updatePosition(position, context);
         }
-        StoreQueryUtils.updatePosition(position, context);
     }
 
     @Override
@@ -176,8 +166,10 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Override
     public synchronized byte[] delete(final Bytes key) {
         Objects.requireNonNull(key);
-        StoreQueryUtils.updatePosition(position, context);
-        return this.map.remove(key);
+        synchronized (position) {
+            StoreQueryUtils.updatePosition(position, context);
+            return this.map.remove(key);
+        }
     }
 
     /**

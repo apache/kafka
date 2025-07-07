@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -91,7 +92,7 @@ class StandbyTaskCreator {
                     partitions,
                     stateUpdaterEnabled);
 
-                final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
+                final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
                     taskId,
                     applicationConfig,
                     stateManager,
@@ -123,7 +124,7 @@ class StandbyTaskCreator {
         }
 
         streamTask.prepareRecycle();
-        streamTask.stateMgr.transitionTaskType(Task.TaskType.STANDBY);
+        streamTask.stateMgr.transitionTaskType(Task.TaskType.STANDBY, getLogContext(streamTask.id));
 
         final StandbyTask task = new StandbyTask(
             streamTask.id,
@@ -146,12 +147,12 @@ class StandbyTaskCreator {
                                   final Set<TopicPartition> inputPartitions,
                                   final ProcessorTopology topology,
                                   final ProcessorStateManager stateManager,
-                                  final InternalProcessorContext<Object, Object> context) {
+                                  final InternalProcessorContext<?, ?> context) {
         final StandbyTask task = new StandbyTask(
             taskId,
             inputPartitions,
             topology,
-            topologyMetadata.getTaskConfigFor(taskId),
+            topologyMetadata.taskConfig(taskId),
             streamsMetrics,
             stateManager,
             stateDirectory,

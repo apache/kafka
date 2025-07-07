@@ -18,6 +18,7 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -51,7 +52,7 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
     public boolean hasNext() {
         ensureOpen();
 
-        if (!nextBatch.isPresent()) {
+        if (nextBatch.isEmpty()) {
             nextBatch = nextBatch();
         }
 
@@ -76,6 +77,7 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
         return baseOffset;
     }
 
+    @Override
     public OptionalLong lastOffset() {
         if (isClosed) {
             return OptionalLong.of(lastReturnedOffset);
@@ -101,11 +103,12 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
         BufferSupplier bufferSupplier,
         int maxBatchSize,
         CloseListener<BatchReader<T>> closeListener,
-        boolean doCrcValidation
+        boolean doCrcValidation,
+        LogContext logContext
     ) {
         return new RecordsBatchReader<>(
             baseOffset,
-            new RecordsIterator<>(records, serde, bufferSupplier, maxBatchSize, doCrcValidation),
+            new RecordsIterator<>(records, serde, bufferSupplier, maxBatchSize, doCrcValidation, logContext),
             closeListener
         );
     }
@@ -117,14 +120,8 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
     }
 
     private Optional<Batch<T>> nextBatch() {
-        while (iterator.hasNext()) {
-            Batch<T> batch = iterator.next();
-
-            if (batch.records().isEmpty()) {
-                lastReturnedOffset = batch.lastOffset();
-            } else {
-                return Optional.of(batch);
-            }
+        if (iterator.hasNext()) {
+            return Optional.of(iterator.next());
         }
 
         return Optional.empty();

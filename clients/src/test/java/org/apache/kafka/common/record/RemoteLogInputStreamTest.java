@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -51,9 +53,9 @@ public class RemoteLogInputStreamTest {
 
     private static class Args {
         private final byte magic;
-        private final CompressionType compression;
+        private final Compression compression;
 
-        public Args(byte magic, CompressionType compression) {
+        public Args(byte magic, Compression compression) {
             this.magic = magic;
             this.compression = compression;
         }
@@ -71,7 +73,7 @@ public class RemoteLogInputStreamTest {
             List<Arguments> values = new ArrayList<>();
             for (byte magic : asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1, MAGIC_VALUE_V2)) {
                 for (CompressionType type : CompressionType.values()) {
-                    values.add(Arguments.of(new Args(magic, type)));
+                    values.add(Arguments.of(new Args(magic, Compression.of(type).build())));
                 }
             }
             return values.stream();
@@ -82,8 +84,8 @@ public class RemoteLogInputStreamTest {
     @ArgumentsSource(RemoteLogInputStreamArgsProvider.class)
     public void testSimpleBatchIteration(Args args) throws IOException {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+        Compression compression = args.compression;
+        if (compression.type() == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
             return;
 
         SimpleRecord firstBatchRecord = new SimpleRecord(3241324L, "a".getBytes(), "foo".getBytes());
@@ -115,11 +117,11 @@ public class RemoteLogInputStreamTest {
     @ArgumentsSource(RemoteLogInputStreamArgsProvider.class)
     public void testBatchIterationWithMultipleRecordsPerBatch(Args args) throws IOException {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
-        if (magic < MAGIC_VALUE_V2 && compression == CompressionType.NONE)
+        Compression compression = args.compression;
+        if (magic < MAGIC_VALUE_V2 && compression.type() == CompressionType.NONE)
             return;
 
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+        if (compression.type() == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
             return;
 
         SimpleRecord[] firstBatchRecords = new SimpleRecord[]{
@@ -159,7 +161,7 @@ public class RemoteLogInputStreamTest {
     @ArgumentsSource(RemoteLogInputStreamArgsProvider.class)
     public void testBatchIterationV2(Args args) throws IOException {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
         if (magic != MAGIC_VALUE_V2)
             return;
 
@@ -213,8 +215,8 @@ public class RemoteLogInputStreamTest {
     @ArgumentsSource(RemoteLogInputStreamArgsProvider.class)
     public void testBatchIterationIncompleteBatch(Args args) throws IOException {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+        Compression compression = args.compression;
+        if (compression.type() == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
             return;
 
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
@@ -259,9 +261,9 @@ public class RemoteLogInputStreamTest {
                                               long maxTimestamp,
                                               SimpleRecord... records) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
         assertEquals(magic, batch.magic());
-        assertEquals(compression, batch.compressionType());
+        assertEquals(compression.type(), batch.compressionType());
 
         if (magic == MAGIC_VALUE_V0) {
             assertEquals(NO_TIMESTAMP_TYPE, batch.timestampType());

@@ -17,8 +17,6 @@
 
 package org.apache.kafka.trogdor.common;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
 import org.apache.kafka.trogdor.fault.FilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.fault.Kibosh;
 import org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec;
@@ -33,13 +31,17 @@ import org.apache.kafka.trogdor.workload.ProduceBenchSpec;
 import org.apache.kafka.trogdor.workload.RoundTripWorkloadSpec;
 import org.apache.kafka.trogdor.workload.TopicsSpec;
 
+import org.junit.jupiter.api.Test;
+
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class JsonSerializationTest {
     @Test
@@ -60,7 +62,7 @@ public class JsonSerializationTest {
             0, null, null, 0));
         verify(new TopicsSpec());
         verify(new PartitionsSpec(0, (short) 0, null, null));
-        Map<Integer, List<Integer>> partitionAssignments = new HashMap<Integer, List<Integer>>();
+        Map<Integer, List<Integer>> partitionAssignments = new HashMap<>();
         partitionAssignments.put(0, Arrays.asList(1, 2, 3));
         partitionAssignments.put(1, Arrays.asList(1, 2, 3));
         verify(new PartitionsSpec(0, (short) 0, partitionAssignments, null));
@@ -73,7 +75,10 @@ public class JsonSerializationTest {
         Class<T> clazz = (Class<T>) val1.getClass();
         T val2 = JsonUtil.JSON_SERDE.readValue(bytes, clazz);
         for (Field field : clazz.getDeclaredFields()) {
-            boolean wasAccessible = field.isAccessible();
+            if (Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            boolean wasAccessible = field.canAccess(val2);
             field.setAccessible(true);
             assertNotNull(field.get(val2), "Field " + field + " was null.");
             field.setAccessible(wasAccessible);

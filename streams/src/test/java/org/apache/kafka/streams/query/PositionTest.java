@@ -17,23 +17,36 @@
 
 package org.apache.kafka.streams.query;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PositionTest {
+
+    private static final Random RANDOM = new Random();
 
     @Test
     public void shouldCreateFromMap() {
@@ -46,7 +59,7 @@ public class PositionTest {
         );
 
         final Position position = Position.fromMap(map);
-        assertThat(position.getTopics(), equalTo(mkSet("topic", "topic1")));
+        assertThat(position.getTopics(), equalTo(Set.of("topic", "topic1")));
         assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
 
         // Should be a copy of the constructor map
@@ -84,7 +97,7 @@ public class PositionTest {
 
         final Position merged = position.merge(position1);
 
-        assertThat(merged.getTopics(), equalTo(mkSet("topic", "topic1", "topic2")));
+        assertThat(merged.getTopics(), equalTo(Set.of("topic", "topic1", "topic2")));
         assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 7L))));
         assertThat(merged.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
@@ -122,7 +135,7 @@ public class PositionTest {
         position.withComponent("topic2", 2, 4L);
 
         // copy has not changed
-        assertThat(copy.getTopics(), equalTo(mkSet("topic", "topic1")));
+        assertThat(copy.getTopics(), equalTo(Set.of("topic", "topic1")));
         assertThat(copy.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
         assertThat(copy.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
@@ -130,7 +143,7 @@ public class PositionTest {
         )));
 
         // original has changed
-        assertThat(position.getTopics(), equalTo(mkSet("topic", "topic1", "topic2")));
+        assertThat(position.getTopics(), equalTo(Set.of("topic", "topic1", "topic2")));
         assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 6L))));
         assertThat(position.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
@@ -152,7 +165,7 @@ public class PositionTest {
 
         final Position merged = position.merge(null);
 
-        assertThat(merged.getTopics(), equalTo(mkSet("topic", "topic1")));
+        assertThat(merged.getTopics(), equalTo(Set.of("topic", "topic1")));
         assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
         assertThat(merged.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
@@ -220,5 +233,119 @@ public class PositionTest {
 
         final HashMap<Position, Integer> map = new HashMap<>();
         assertThrows(UnsupportedOperationException.class, () -> map.put(position, 5));
+    }
+
+    @Test
+    public void shouldMonotonicallyIncreasePartitionPosition() throws InterruptedException, ExecutionException, TimeoutException {
+        final int threadCount = 10;
+        final int maxTopics = 50;
+        final int maxPartitions = 50;
+        final int maxOffset = 1000;
+        final CountDownLatch startLatch = new CountDownLatch(threadCount);
+        final Position mergePosition = Position.emptyPosition();
+        final Position withComponentPosition = Position.emptyPosition();
+        final List<Future<?>> futures = new ArrayList<>();
+        ExecutorService executorService = null;
+
+        try {
+            executorService = Executors.newFixedThreadPool(threadCount);
+
+            for (int i = 0; i < threadCount; i++) {
+                futures.add(executorService.submit(() -> {
+                    final Position threadPosition = Position.emptyPosition();
+                    final int topicCount = RANDOM.nextInt(maxTopics) + 1;
+
+                    // build the thread's position
+                    for (int topicNum = 0; topicNum < topicCount; topicNum++) {
+                        final String topic = "topic-" + topicNum;
+                        final int partitionCount = RANDOM.nextInt(maxPartitions) + 1;
+                        for (int partitionNum = 0; partitionNum < partitionCount; partitionNum++) {
+                            final long offset = RANDOM.nextInt(maxOffset) + 1;
+                            threadPosition.withComponent(topic, partitionNum, offset);
+                        }
+                    }
+
+                    startLatch.countDown();
+                    try {
+                        startLatch.await();
+                    } catch (final InterruptedException e) {
+                        // convert to unchecked exception so the future completes exceptionally and fails the test
+                        throw new RuntimeException(e);
+                    }
+
+                    // merge with the shared position
+                    mergePosition.merge(threadPosition);
+                    // duplicate the shared position to get a snapshot of its state
+                    final Position threadMergePositionState = mergePosition.copy();
+
+                    // update the shared position using withComponent
+                    for (final String topic : threadPosition.getTopics()) {
+                        for (final Map.Entry<Integer, Long> partitionOffset : threadPosition
+                                .getPartitionPositions(topic)
+                                .entrySet()) {
+                            withComponentPosition.withComponent(topic, partitionOffset.getKey(), partitionOffset.getValue());
+                        }
+                    }
+                    // duplicate the shared position to get a snapshot of its state
+                    final Position threadWithComponentPositionState = withComponentPosition.copy();
+
+                    // validate that any offsets in the merged position and the withComponent position are >= the thread position
+                    for (final String topic : threadPosition.getTopics()) {
+                        final Map<Integer, Long> threadOffsets = threadPosition.getPartitionPositions(topic);
+                        final Map<Integer, Long> mergedOffsets = threadMergePositionState.getPartitionPositions(topic);
+                        final Map<Integer, Long> withComponentOffsets = threadWithComponentPositionState.getPartitionPositions(topic);
+
+                        for (final Map.Entry<Integer, Long> threadOffset : threadOffsets.entrySet()) {
+                            final int partition = threadOffset.getKey();
+                            final long offsetValue = threadOffset.getValue();
+
+                            // merge checks
+                            assertTrue(
+                                    mergedOffsets.containsKey(partition),
+                                    "merge method failure. Missing partition " + partition + " for topic " + topic
+                            );
+                            assertTrue(
+                                    mergedOffsets.get(partition) >= offsetValue,
+                                    "merge method failure. Offset for topic " +
+                                            topic +
+                                            " partition " +
+                                            partition +
+                                            " expected >= " +
+                                            offsetValue +
+                                            " but got " +
+                                            mergedOffsets.get(partition)
+                            );
+
+                            // withComponent checks
+                            assertTrue(
+                                    withComponentOffsets.containsKey(partition),
+                                    "withComponent method failure. Missing partition " + partition + " for topic " + topic
+                            );
+                            assertTrue(
+                                    withComponentOffsets.get(partition) >= offsetValue,
+                                    "withComponent method failure. Offset for topic " +
+                                            topic +
+                                            " partition " +
+                                            partition +
+                                            " expected >= " +
+                                            offsetValue +
+                                            " but got " +
+                                            withComponentOffsets.get(partition)
+                            );
+                        }
+                    }
+                }));
+            }
+
+            for (final Future<?> future : futures) {
+                // Wait for all threads to complete
+                future.get(1, TimeUnit.SECONDS); // Check for exceptions
+            }
+        } finally {
+            if (executorService != null) {
+                executorService.shutdown();
+                assertTrue(executorService.awaitTermination(10, TimeUnit.SECONDS));
+            }
+        }
     }
 }

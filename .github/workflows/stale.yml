@@ -1,0 +1,63 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Stale PRs
+on:
+  schedule:
+    - cron: '30 3 * * *'    # Run at 3:30 UTC nightly
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Dry Run'
+        required: true
+        default: true
+        type: boolean
+      operationsPerRun:
+        description: 'Max GitHub API operations'
+        required: true
+        default: 30
+        type: number
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          debug-only: ${{ inputs.dryRun || false }}
+          operations-per-run: ${{ inputs.operationsPerRun || 500 }}
+          ascending: true
+          days-before-stale: 90
+          days-before-close: 30  # Since adding 'stale' will update the PR, days-before-close is relative to that.
+          stale-pr-label: 'stale'
+          stale-pr-message: |
+            This PR is being marked as stale since it has not had any activity in 90 days. If you
+            would like to keep this PR alive, please leave a comment asking for a review. If the PR has 
+            merge conflicts, update it with the latest from the base branch.
+            <p>
+            If you are having difficulty finding a reviewer, please reach out on the 
+            [mailing list](https://kafka.apache.org/contact).
+            <p>
+            If this PR is no longer valid or desired, please feel free to close it. If no activity
+            occurs in the next 30 days, it will be automatically closed.
+          close-pr-label: 'closed-stale'
+          close-pr-message: |
+            This PR has been closed since it has not had any activity in 120 days. If you feel like this
+            was a mistake, or you would like to continue working on it, please feel free to re-open the 
+            PR and ask for a review.

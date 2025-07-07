@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentGroup;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
-import net.sourceforge.argparse4j.inf.Subparser;
-import net.sourceforge.argparse4j.inf.Subparsers;
 import org.apache.kafka.clients.admin.AbortTransactionSpec;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -41,6 +34,15 @@ import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentGroup;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.Subparser;
+import net.sourceforge.argparse4j.inf.Subparsers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +68,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
-import static org.apache.kafka.server.util.ToolsUtils.prettyPrintTable;
 
 public abstract class TransactionsCommand {
     private static final Logger log = LoggerFactory.getLogger(TransactionsCommand.class);
@@ -174,7 +175,7 @@ public abstract class TransactionsCommand {
                 })
                 .findFirst();
 
-            if (!foundProducerState.isPresent()) {
+            if (foundProducerState.isEmpty()) {
                 printErrorAndExit("Could not find any open transactions starting at offset " +
                     startOffset + " on partition " + topicPartition);
                 return null;
@@ -250,6 +251,42 @@ public abstract class TransactionsCommand {
             }
 
             abortTransaction(admin, abortSpec);
+        }
+    }
+
+    static class ForceTerminateTransactionsCommand extends TransactionsCommand {
+
+        ForceTerminateTransactionsCommand(Time time) {
+            super(time);
+        }
+
+        @Override
+        String name() {
+            return "forceTerminateTransaction";
+        }
+
+        @Override
+        void addSubparser(Subparsers subparsers) {
+            Subparser subparser = subparsers.addParser(name())
+                .description("Force abort an ongoing transaction on transactionalId")
+                .help("Force abort an ongoing transaction on transactionalId (requires administrative privileges)");
+
+            subparser.addArgument("--transactionalId")
+                .help("transactional id")
+                .action(store())
+                .type(String.class)
+                .required(true);
+        }
+
+        @Override
+        void execute(Admin admin, Namespace ns, PrintStream out) throws Exception {
+            String transactionalId = ns.getString("transactionalId");
+
+            try {
+                admin.forceTerminateTransaction(transactionalId).result().get();
+            } catch (ExecutionException e) {
+                printErrorAndExit("Failed to force terminate transactionalId `" + transactionalId + "`", e.getCause());
+            }
         }
     }
 
@@ -336,7 +373,7 @@ public abstract class TransactionsCommand {
                 );
             }).collect(Collectors.toList());
 
-            prettyPrintTable(HEADERS, rows, out);
+            ToolsUtils.prettyPrintTable(HEADERS, rows, out);
         }
     }
 
@@ -411,10 +448,10 @@ public abstract class TransactionsCommand {
                 String.valueOf(result.transactionTimeoutMs()),
                 transactionStartTimeMsColumnValue,
                 transactionDurationMsColumnValue,
-                Utils.join(result.topicPartitions(), ",")
+                result.topicPartitions().stream().map(TopicPartition::toString).collect(Collectors.joining(","))
             );
 
-            prettyPrintTable(HEADERS, singletonList(row), out);
+            ToolsUtils.prettyPrintTable(HEADERS, singletonList(row), out);
         }
     }
 
@@ -437,16 +474,32 @@ public abstract class TransactionsCommand {
 
         @Override
         public void addSubparser(Subparsers subparsers) {
-            subparsers.addParser(name())
+            Subparser subparser = subparsers.addParser(name())
                 .help("list transactions");
+
+            subparser.addArgument("--duration-filter")
+                    .help("Duration (in millis) to filter by: if < 0, all transactions will be returned; " +
+                            "otherwise, only transactions running longer than this duration will be returned")
+                    .action(store())
+                    .type(Long.class)
+                    .required(false);
+            subparser.addArgument("--transactional-id-pattern")
+                    .help("Transactional id regular expression pattern to filter by")
+                    .action(store())
+                    .type(String.class)
+                    .required(false);
         }
 
         @Override
         public void execute(Admin admin, Namespace ns, PrintStream out) throws Exception {
+            ListTransactionsOptions options = new ListTransactionsOptions();
+            Optional.ofNullable(ns.getLong("duration_filter")).ifPresent(options::filterOnDuration);
+            Optional.ofNullable(ns.getString("transactional_id_pattern")).ifPresent(options::filterOnTransactionalIdPattern);
+
             final Map<Integer, Collection<TransactionListing>> result;
 
             try {
-                result = admin.listTransactions(new ListTransactionsOptions())
+                result = admin.listTransactions(options)
                     .allByBrokerId()
                     .get();
             } catch (ExecutionException e) {
@@ -469,7 +522,7 @@ public abstract class TransactionsCommand {
                 }
             }
 
-            prettyPrintTable(HEADERS, rows, out);
+            ToolsUtils.prettyPrintTable(HEADERS, rows, out);
         }
     }
 
@@ -532,14 +585,14 @@ public abstract class TransactionsCommand {
             Optional<Integer> brokerId = Optional.ofNullable(ns.getInt("broker_id"));
             Optional<String> topic = Optional.ofNullable(ns.getString("topic"));
 
-            if (!topic.isPresent() && !brokerId.isPresent()) {
+            if (topic.isEmpty() && brokerId.isEmpty()) {
                 printErrorAndExit("The `find-hanging` command requires either --topic " +
                     "or --broker-id to limit the scope of the search");
                 return;
             }
 
             Optional<Integer> partition = Optional.ofNullable(ns.getInt("partition"));
-            if (partition.isPresent() && !topic.isPresent()) {
+            if (partition.isPresent() && topic.isEmpty()) {
                 printErrorAndExit("The --partition argument requires --topic to be provided");
                 return;
             }
@@ -671,7 +724,7 @@ public abstract class TransactionsCommand {
                 ));
             }
 
-            prettyPrintTable(HEADERS, rows, out);
+            ToolsUtils.prettyPrintTable(HEADERS, rows, out);
         }
 
         private Map<String, TransactionDescription> describeTransactions(
@@ -756,7 +809,7 @@ public abstract class TransactionsCommand {
                 Map<String, TopicDescription> topicDescriptions = admin.describeTopics(topics).allTopicNames().get();
                 topicDescriptions.forEach((topic, description) -> {
                     description.partitions().forEach(partitionInfo -> {
-                        if (!brokerId.isPresent() || hasReplica(brokerId.get(), partitionInfo)) {
+                        if (brokerId.isEmpty() || hasReplica(brokerId.get(), partitionInfo)) {
                             topicPartitions.add(new TopicPartition(topic, partitionInfo.partition()));
                         }
                     });
@@ -979,7 +1032,8 @@ public abstract class TransactionsCommand {
             new DescribeTransactionsCommand(time),
             new DescribeProducersCommand(time),
             new AbortTransactionCommand(time),
-            new FindHangingTransactionsCommand(time)
+            new FindHangingTransactionsCommand(time),
+            new ForceTerminateTransactionsCommand(time)
         );
 
         ArgumentParser parser = buildBaseParser();
@@ -1006,7 +1060,7 @@ public abstract class TransactionsCommand {
             .filter(cmd -> cmd.name().equals(commandName))
             .findFirst();
 
-        if (!commandOpt.isPresent()) {
+        if (commandOpt.isEmpty()) {
             printErrorAndExit("Unexpected command " + commandName);
         }
 
