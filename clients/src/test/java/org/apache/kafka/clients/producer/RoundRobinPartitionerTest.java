@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -31,10 +32,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RoundRobinPartitionerTest {
-    private final static Node[] NODES = new Node[] {
-            new Node(0, "localhost", 99),
-            new Node(1, "localhost", 100),
-            new Node(2, "localhost", 101)
+    private static final Node[] NODES = new Node[] {
+        new Node(0, "localhost", 99),
+        new Node(1, "localhost", 100),
+        new Node(2, "localhost", 101)
     };
 
     @Test
@@ -127,6 +128,7 @@ public class RoundRobinPartitionerTest {
         assertEquals(10, partitionCount.get(2).intValue());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testRoundRobinWithAbortForNewBatch() throws Exception {
         final String topicA = "topicA";

@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Utils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -23,12 +30,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The "Round-Robin" partitioner - MODIFIED TO WORK PROPERLY WITH STICKY PARTITIONING (KIP-480)
@@ -107,6 +108,7 @@ public class RoundRobinPartitioner implements Partitioner {
      * @param prevPartition The partition previously selected for the record that triggered a new
      *                      batch
      */
+    @SuppressWarnings("deprecation")
     @Override
     public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
         LOGGER.trace("New batch so enqueuing partition {} for topic {}", prevPartition, topic);
