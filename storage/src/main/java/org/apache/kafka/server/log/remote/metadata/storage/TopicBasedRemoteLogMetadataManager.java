@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
@@ -468,7 +469,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
-    boolean doesTopicExist(Admin adminClient, String topic) {
+    boolean doesTopicExist(Admin adminClient, String topic) throws ExecutionException, InterruptedException {
         try {
             TopicDescription description = adminClient.describeTopics(Set.of(topic))
                     .topicNameValues()
@@ -477,13 +478,14 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             if (description != null) {
                 log.info("Topic {} exists. TopicId: {}, numPartitions: {}, ", topic,
                         description.topicId(), description.partitions().size());
-            } else {
-                log.info("Topic {} does not exist.", topic);
             }
-            return description != null;
+            return true;
         } catch (ExecutionException | InterruptedException ex) {
-            log.info("Topic {} does not exist. Error: {}", topic, ex.getCause().getMessage());
-            return false;
+            if (ex.getCause() instanceof UnknownTopicOrPartitionException) {
+                log.info("Topic {} does not exist", topic);
+                return false;
+            }
+            throw ex;
         }
     }
 
@@ -544,7 +546,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 log.info("Topic [{}] already exists", topic);
                 doesTopicExist = true;
             } else {
-                log.error("Encountered error while creating {} topic.", topic, e);
+                log.error("Encountered error while querying or creating {} topic.", topic, e);
             }
         }
         return doesTopicExist;

@@ -20,9 +20,7 @@ package org.apache.kafka.jmh.metadata;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
-import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
@@ -64,6 +62,8 @@ import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.quota.ClientQuotaManager;
+import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
@@ -82,8 +82,6 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -141,7 +139,7 @@ public class KRaftMetadataRequestBenchmark {
         MetadataDelta buildupMetadataDelta = new MetadataDelta(MetadataImage.EMPTY);
         IntStream.range(0, 5).forEach(brokerId -> {
             RegisterBrokerRecord.BrokerEndpointCollection endpoints = new RegisterBrokerRecord.BrokerEndpointCollection();
-            endpoints(brokerId).forEach(endpoint -> endpoints.add(endpoint));
+            endpoints.addAll(endpoints(brokerId));
             buildupMetadataDelta.replay(new RegisterBrokerRecord().
                 setBrokerId(brokerId).
                 setBrokerEpoch(100L).
@@ -157,10 +155,10 @@ public class KRaftMetadataRequestBenchmark {
                 buildupMetadataDelta.replay(new PartitionRecord().
                     setPartitionId(partitionId).
                     setTopicId(topicId).
-                    setReplicas(Arrays.asList(0, 1, 3)).
-                    setIsr(Arrays.asList(0, 1, 3)).
-                    setRemovingReplicas(Collections.emptyList()).
-                    setAddingReplicas(Collections.emptyList()).
+                    setReplicas(List.of(0, 1, 3)).
+                    setIsr(List.of(0, 1, 3)).
+                    setRemovingReplicas(List.of()).
+                    setAddingReplicas(List.of()).
                     setLeader(partitionCount % 5).
                     setLeaderEpoch(0)));
         });
@@ -168,7 +166,7 @@ public class KRaftMetadataRequestBenchmark {
     }
 
     private List<RegisterBrokerRecord.BrokerEndpoint> endpoints(final int brokerId) {
-        return Collections.singletonList(
+        return List.of(
                 new RegisterBrokerRecord.BrokerEndpoint().
                         setHost("host_" + brokerId).
                         setPort(9092).
