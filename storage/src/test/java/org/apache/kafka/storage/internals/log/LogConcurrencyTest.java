@@ -86,7 +86,7 @@ public class LogConcurrencyTest {
         testUncommittedDataNotConsumed(createLog(logConfig));
     }
 
-    public void testUncommittedDataNotConsumed(UnifiedLog log) throws Exception {
+    private void testUncommittedDataNotConsumed(UnifiedLog log) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             final int maxOffset = 5000;
@@ -142,7 +142,6 @@ public class LogConcurrencyTest {
                     assertEquals(batch.baseOffset(),
                         consumedBatch.baseOffset(),
                         "Consumed batch " + consumedBatch + " does not match next expected batch in log " + batch);
-
                 }
             })
         );
