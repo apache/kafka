@@ -21,6 +21,8 @@ import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class LeaderAndIsr {
     public static final int INITIAL_LEADER_EPOCH = 0;
@@ -119,10 +121,10 @@ public class LeaderAndIsr {
         return leader == LeaderAndIsr.NO_LEADER ? Optional.empty() : Optional.of(leader);
     }
 
-    public List<Integer> isr() {
+    public Set<Integer> isr() {
         return isrWithBrokerEpoch.stream()
                 .map(BrokerState::brokerId)
-                .toList();
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override

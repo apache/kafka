@@ -883,7 +883,7 @@ class MetadataCacheTest {
     val leaderAndIsr = cache.getLeaderAndIsr(topic, partitionIndex)
     assertEquals(util.Optional.of(leader), leaderAndIsr.map(_.leader()))
     assertEquals(util.Optional.of(leaderEpoch), leaderAndIsr.map(_.leaderEpoch()))
-    assertEquals(util.Optional.of(isr), leaderAndIsr.map(_.isr()))
+    assertEquals(util.Optional.of(util.Set.copyOf(isr)), leaderAndIsr.map(_.isr()))
     assertEquals(util.Optional.of(-1), leaderAndIsr.map(_.partitionEpoch()))
     assertEquals(util.Optional.of(LeaderRecoveryState.RECOVERED), leaderAndIsr.map(_.leaderRecoveryState()))
   }
