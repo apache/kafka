@@ -42,6 +42,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -174,7 +175,7 @@ public class StreamsStickyAssignorBenchmark {
     @Benchmark
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
-    public void doAssignment() {
-        taskAssignor.assign(groupSpec, topologyDescriber);
+    public void doAssignment(Blackhole blackhole) {
+        blackhole.consume(taskAssignor.assign(groupSpec, topologyDescriber));
     }
 }
