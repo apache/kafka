@@ -41,15 +41,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 
 public class LogConcurrencyTest {
@@ -87,23 +85,77 @@ public class LogConcurrencyTest {
     }
 
     private void testUncommittedDataNotConsumed(UnifiedLog log) throws Exception {
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        try {
-            final int maxOffset = 5000;
-            final ConsumerTask consumer = new ConsumerTask(log, maxOffset);
-            final LogAppendTask appendTask = new LogAppendTask(log, maxOffset);
+        var maxOffset = 5000;
+        var consumerFuture = CompletableFuture.supplyAsync(consumerTask(log, maxOffset));
+        var fetcherTaskFuture = CompletableFuture.runAsync(logAppendTask(log, maxOffset));
 
-            final Future<List<FetchedBatch>> consumerFuture = executor.submit(consumer);
-            final Future<Void> fetcherTaskFuture = executor.submit(appendTask);
+        fetcherTaskFuture.join();
+        validateConsumedData(log, consumerFuture.join());
+    }
 
-            fetcherTaskFuture.get();
-            List<FetchedBatch> consumedBatches = consumerFuture.get();
+    /**
+     * Simple consumption task which reads the log in ascending order and collects
+     * consumed batches for validation
+     */
+    private Supplier<List<FetchedBatch>> consumerTask(UnifiedLog log, int lastOffset) {
+        return () -> assertDoesNotThrow(() -> {
+            final List<FetchedBatch> consumedBatches = new ArrayList<>();
+            long fetchOffset = 0L;
+            while (log.highWatermark() < lastOffset) {
+                final FetchDataInfo readInfo = log.read(fetchOffset, 1, FetchIsolation.HIGH_WATERMARK, true);
+                for (RecordBatch batch : readInfo.records.batches()) {
+                    consumedBatches.add(new FetchedBatch(batch.baseOffset(), batch.partitionLeaderEpoch()));
+                    fetchOffset = batch.lastOffset() + 1;
+                }
+            }
+            return consumedBatches;
+        });
+    }
 
-            validateConsumedData(log, consumedBatches);
-        } finally {
-            executor.shutdownNow();
-            assertTrue(executor.awaitTermination(5L, TimeUnit.SECONDS));
-        }
+    /**
+     * This class simulates basic leader/follower behavior.
+     */
+    private Runnable logAppendTask(UnifiedLog log, int lastOffset) {
+        return () -> assertDoesNotThrow(() -> {
+            int leaderEpoch = 1;
+            boolean isLeader = true;
+            while (log.highWatermark() < lastOffset) {
+                switch (TestUtils.RANDOM.nextInt(2)) {
+                    case 0 -> {
+                        final LogOffsetMetadata logEndOffsetMetadata = log.logEndOffsetMetadata();
+                        final long logEndOffset = logEndOffsetMetadata.messageOffset;
+                        final int batchSize = TestUtils.RANDOM.nextInt(9) + 1;
+                        final SimpleRecord[] records = IntStream.rangeClosed(0, batchSize)
+                            .mapToObj(i -> new SimpleRecord(String.valueOf(i).getBytes()))
+                            .toArray(SimpleRecord[]::new);
+
+                        if (isLeader) {
+                            log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records), leaderEpoch);
+                            log.maybeIncrementHighWatermark(logEndOffsetMetadata);
+                        } else {
+                            log.appendAsFollower(
+                                    MemoryRecords.withRecords(
+                                        logEndOffset,
+                                        Compression.NONE,
+                                        leaderEpoch,
+                                        records
+                                    ),
+                                    Integer.MAX_VALUE
+                            );
+                            log.updateHighWatermark(logEndOffset);
+                        }
+                    }
+                    case 1 -> {
+                        isLeader = !isLeader;
+                        leaderEpoch += 1;
+
+                        if (!isLeader) {
+                            log.truncateTo(log.highWatermark());
+                        }
+                    }
+                }
+            }
+        });
     }
 
     private UnifiedLog createLog() throws IOException {
@@ -145,76 +197,6 @@ public class LogConcurrencyTest {
                 }
             })
         );
-    }
-
-    /**
-     * Simple consumption task which reads the log in ascending order and collects
-     * consumed batches for validation
-     */
-    private record ConsumerTask(UnifiedLog log, int lastOffset) implements Callable<List<FetchedBatch>> {
-
-        @Override
-        public List<FetchedBatch> call() throws Exception {
-            final List<FetchedBatch> consumedBatches = new ArrayList<>(); // Now a local variable
-            long fetchOffset = 0L;
-            while (log.highWatermark() < lastOffset) {
-                final FetchDataInfo readInfo = log.read(fetchOffset, 1, FetchIsolation.HIGH_WATERMARK, true);
-                for (RecordBatch batch : readInfo.records.batches()) {
-                    consumedBatches.add(new FetchedBatch(batch.baseOffset(), batch.partitionLeaderEpoch()));
-                    fetchOffset = batch.lastOffset() + 1;
-                }
-            }
-            return consumedBatches;
-        }
-    }
-
-    /**
-     * This class simulates basic leader/follower behavior.
-     */
-    private record LogAppendTask(UnifiedLog log, long lastOffset) implements Callable<Void> {
-
-        @Override
-        public Void call() throws Exception {
-            int leaderEpoch = 1;
-            boolean isLeader = true;
-            while (log.highWatermark() < lastOffset) {
-                switch (TestUtils.RANDOM.nextInt(2)) {
-                    case 0 -> {
-                        final LogOffsetMetadata logEndOffsetMetadata = log.logEndOffsetMetadata();
-                        final long logEndOffset = logEndOffsetMetadata.messageOffset;
-                        final int batchSize = TestUtils.RANDOM.nextInt(9) + 1;
-                        final SimpleRecord[] records = IntStream.rangeClosed(0, batchSize)
-                            .mapToObj(i -> new SimpleRecord(String.valueOf(i).getBytes()))
-                            .toArray(SimpleRecord[]::new);
-
-                        if (isLeader) {
-                            log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records), leaderEpoch);
-                            log.maybeIncrementHighWatermark(logEndOffsetMetadata);
-                        } else {
-                            log.appendAsFollower(
-                                MemoryRecords.withRecords(
-                                    logEndOffset,
-                                    Compression.NONE,
-                                    leaderEpoch,
-                                    records
-                                ),
-                                Integer.MAX_VALUE
-                            );
-                            log.updateHighWatermark(logEndOffset);
-                        }
-                    }
-                    case 1 -> {
-                        isLeader = !isLeader;
-                        leaderEpoch += 1;
-
-                        if (!isLeader) {
-                            log.truncateTo(log.highWatermark());
-                        }
-                    }
-                }
-            }
-            return null;
-        }
     }
 
     private record FetchedBatch(long baseOffset, int epoch) {
