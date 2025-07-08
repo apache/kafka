@@ -2001,6 +2001,7 @@ project(':clients:clients-integration-tests') {
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':transaction-coordinator')
+    testImplementation project(':test-common:test-common-util')
 
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine

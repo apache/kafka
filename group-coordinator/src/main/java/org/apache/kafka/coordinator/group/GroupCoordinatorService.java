@@ -698,6 +698,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         InitializeShareGroupStateParameters request,
         AlterShareGroupOffsetsResponseData response
     ) {
+        if (request.groupTopicPartitionData().topicsData().isEmpty()) {
+            return CompletableFuture.completedFuture(response);
+        }
+
         return persister.initializeState(request)
             .handle((result, exp) -> {
                 if (exp == null) {
@@ -1233,16 +1237,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * See {@link GroupCoordinator#alterShareGroupOffsets(AuthorizableRequestContext, String, AlterShareGroupOffsetsRequestData)}.
      */
     @Override
-    public CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(AuthorizableRequestContext context, String groupId, AlterShareGroupOffsetsRequestData request) {
+    public CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(
+        AuthorizableRequestContext context,
+        String groupId,
+        AlterShareGroupOffsetsRequestData request
+    ) {
         if (!isActive.get() || metadataImage == null) {
-            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponse(Errors.COORDINATOR_NOT_AVAILABLE));
+            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
         }
         
         if (groupId == null || groupId.isEmpty()) {
-            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponse(Errors.INVALID_GROUP_ID));
+            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.INVALID_GROUP_ID));
         }
 
-        if (request.topics() == null || request.topics().isEmpty()) {
+        if (request.topics() == null) {
             return CompletableFuture.completedFuture(new AlterShareGroupOffsetsResponseData());
         }
 
@@ -1257,7 +1265,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "share-group-offsets-alter",
             request,
             exception,
-            (error, message) -> AlterShareGroupOffsetsRequest.getErrorResponse(error),
+            (error, message) -> AlterShareGroupOffsetsRequest.getErrorResponseData(error, message),
             log
         ));
     }
@@ -1822,26 +1830,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
         AuthorizableRequestContext context,
         DeleteShareGroupOffsetsRequestData requestData
     ) {
-        if (!isActive.get()) {
-            return CompletableFuture.completedFuture(
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
-        }
-
-        if (metadataImage == null) {
-            return CompletableFuture.completedFuture(
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
+        if (!isActive.get() || metadataImage == null) {
+            return CompletableFuture.completedFuture(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
         }
 
         String groupId = requestData.groupId();
 
         if (!isGroupIdNotEmpty(groupId)) {
-            return CompletableFuture.completedFuture(
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.INVALID_GROUP_ID));
+            return CompletableFuture.completedFuture(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.INVALID_GROUP_ID));
         }
 
-        if (requestData.topics() == null || requestData.topics().isEmpty()) {
-            return CompletableFuture.completedFuture(
-                new DeleteShareGroupOffsetsResponseData()
+        if (requestData.topics() == null) {
+            return CompletableFuture.completedFuture(new DeleteShareGroupOffsetsResponseData()
             );
         }
 
@@ -1850,15 +1850,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(groupId),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.initiateDeleteShareGroupOffsets(groupId, requestData)
-        )
-            .thenCompose(resultHolder -> deleteShareGroupOffsetsState(groupId, resultHolder))
-            .exceptionally(exception -> handleOperationException(
-                "initiate-delete-share-group-offsets",
-                groupId,
-                exception,
-                (error, __) -> DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(error),
-                log
-            ));
+        ).thenCompose(resultHolder -> deleteShareGroupOffsetsState(groupId, resultHolder)
+        ).exceptionally(exception -> handleOperationException(
+            "initiate-delete-share-group-offsets",
+            groupId,
+            exception,
+            (error, message) -> DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(error, message),
+            log
+        ));
     }
 
     private CompletableFuture<DeleteShareGroupOffsetsResponseData> deleteShareGroupOffsetsState(
@@ -2139,10 +2138,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ).get();
 
         // At this point the metadata will not have been updated
-        // with the deleted topics.
+        // with the deleted topics. However, we must guard against it.
+        if (metadataImage == null || metadataImage.equals(CoordinatorMetadataImage.EMPTY)) {
+            return;
+        }
+
         Set<Uuid> topicIds = topicPartitions.stream()
             .map(tp -> metadataImage.topicMetadata(tp.topic()).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null))
             .collect(Collectors.toSet());
+
+        if (topicIds.isEmpty()) {
+            return;
+        }
 
         CompletableFuture.allOf(
             FutureUtils.mapExceptionally(

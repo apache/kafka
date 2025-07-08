@@ -2668,19 +2668,27 @@ public class GroupMetadataManager {
         );
     }
 
-    private boolean initializedAssignmentPending(ShareGroup group) {
-        if (!shareGroupStatePartitionMetadata.containsKey(group.groupId())) {
+    // Visibility for testing
+    boolean initializedAssignmentPending(ShareGroup group) {
+        if (group.isEmpty()) {
+            // No members then no point in computing assignment.
+            return false;
+        }
+
+        String groupId = group.groupId();
+
+        if (!shareGroupStatePartitionMetadata.containsKey(groupId) ||
+            shareGroupStatePartitionMetadata.get(groupId).initializedTopics().isEmpty()) {
             // No initialized share partitions for the group so nothing can be assigned.
             return false;
         }
 
-        if (group.isEmpty()) {
-            // No members then no point of computing assignment.
+        Set<String> subscribedTopicNames = group.subscribedTopicNames().keySet();
+        // No subscription then no need to compute assignment.
+        if (subscribedTopicNames.isEmpty()) {
             return false;
         }
 
-        // We need to check if all the group initialized share partitions are part of the group assignment.
-        Map<Uuid, Set<Integer>> initializedTps = stripInitValue(shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics());
         Map<Uuid, Set<Integer>> currentAssigned = new HashMap<>();
         for (Assignment assignment : group.targetAssignment().values()) {
             for (Map.Entry<Uuid, Set<Integer>> tps : assignment.partitions().entrySet()) {
@@ -2689,7 +2697,20 @@ public class GroupMetadataManager {
             }
         }
 
-        return !initializedTps.equals(currentAssigned);
+        for (Map.Entry<Uuid, InitMapValue> entry : shareGroupStatePartitionMetadata.get(groupId).initializedTopics().entrySet()) {
+            if (subscribedTopicNames.contains(entry.getValue().name())) {
+                // This topic is currently subscribed, so investigate further.
+                Set<Integer> currentAssignedPartitions = currentAssigned.get(entry.getKey());
+                if (currentAssignedPartitions != null && currentAssignedPartitions.equals(entry.getValue().partitions())) {
+                    // The assigned and initialized partitions match, so assignment does not need to be recomputed.
+                    continue;
+                }
+                // The assigned and initialized partitions do not match, OR
+                // this topic is not currently assigned, so recompute the assignment.
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -8011,30 +8032,55 @@ public class GroupMetadataManager {
         // a retry for the same is possible. Since this is part of an admin operation
         // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
-        Map<Uuid, InitMapValue> deletingTopics = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics().stream()
-            .map(tid -> {
-                Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(tid);
-                if (topicMetadataOp.isEmpty()) {
-                    log.warn("Topic id {} not found in metadata image for share group {}. ", tid, shareGroupId);
-                    return Map.entry(tid, new InitMapValue("<UNKNOWN>", Set.of(), -1));
-                } else {
-                    CoordinatorMetadataImage.TopicMetadata topicMetadata = topicMetadataOp.get();
-                    return Map.entry(tid, new InitMapValue(topicMetadata.name(), IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toSet()), -1));
+        Set<Uuid> currentDeleting = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics();
+        Map<Uuid, InitMapValue> deleteRetryCandidates = new HashMap<>();
+        Set<Uuid> deletingToIgnore = new HashSet<>();
+        if (!currentDeleting.isEmpty()) {
+            if (metadataImage == null || metadataImage.equals(CoordinatorMetadataImage.EMPTY)) {
+                deletingToIgnore.addAll(currentDeleting);
+            } else {
+                for (Uuid deletingTopicId : currentDeleting) {
+                    Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(deletingTopicId);
+                    if (topicMetadataOp.isEmpty()) {
+                        deletingToIgnore.add(deletingTopicId);
+                    } else {
+                        deleteRetryCandidates.put(deletingTopicId,
+                            new InitMapValue(
+                                topicMetadataOp.get().name(),
+                                IntStream.range(0, topicMetadataOp.get().partitionCount()).boxed().collect(Collectors.toSet()),
+                                -1));
+                    }
                 }
-            })
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-        if (!deletingTopics.isEmpty()) {
-            log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deletingTopics);
-            deleteCandidates = combineInitMaps(deleteCandidates, deletingTopics);
+            }
         }
+
+        if (!deletingToIgnore.isEmpty()) {
+            log.warn("Some topics for share group id {} were not found in the metadata image - {}", shareGroupId, deletingToIgnore);
+        }
+
+        if (!deleteRetryCandidates.isEmpty()) {
+            log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deleteRetryCandidates);
+            deleteCandidates = combineInitMaps(deleteCandidates, deleteRetryCandidates);
+        }
+
+        // Remove all initializing and initialized topic info from record and add deleting. There
+        // could be previous deleting topics due to offsets delete, we need to account for them as well.
+        // If some older deleting topics could not be found in the metadata image, they will be ignored
+        // and logged.
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+            shareGroupId,
+            Map.of(),
+            Map.of(),
+            deleteCandidates.entrySet().stream()
+                .map(entry -> Map.entry(entry.getKey(), entry.getValue().name()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
+        ));
 
         if (deleteCandidates.isEmpty()) {
             return Optional.empty();
         }
 
         List<TopicData<PartitionIdData>> topicDataList = new ArrayList<>(deleteCandidates.size());
-
         for (Map.Entry<Uuid, InitMapValue> entry : deleteCandidates.entrySet()) {
             topicDataList.add(new TopicData<>(
                 entry.getKey(),
@@ -8043,15 +8089,6 @@ public class GroupMetadataManager {
                     .toList()
             ));
         }
-
-        // Remove all initializing and initialized topic info from record and add deleting. There
-        // could be previous deleting topics due to offsets delete, we need to account for them as well.
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
-            shareGroupId,
-            Map.of(),
-            Map.of(),
-            attachTopicName(deleteCandidates.keySet())
-        ));
 
         return Optional.of(new DeleteShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
@@ -8245,13 +8282,15 @@ public class GroupMetadataManager {
         shareGroupStatePartitionMetadata.forEach((groupId, metadata) -> {
             Set<Uuid> initializingDeletedCurrent = new HashSet<>(metadata.initializingTopics().keySet());
             Set<Uuid> initializedDeletedCurrent = new HashSet<>(metadata.initializedTopics().keySet());
+            Set<Uuid> deletingDeletedCurrent = new HashSet<>(metadata.deletingTopics());
 
             initializingDeletedCurrent.retainAll(deletedTopicIds);
             initializedDeletedCurrent.retainAll(deletedTopicIds);
+            deletingDeletedCurrent.retainAll(deletedTopicIds);
 
             // The deleted topic ids are neither present in initializing
-            // not initialized, so we have nothing to do.
-            if (initializingDeletedCurrent.isEmpty() && initializedDeletedCurrent.isEmpty()) {
+            // nor in initialized nor in deleting, so we have nothing to do.
+            if (initializingDeletedCurrent.isEmpty() && initializedDeletedCurrent.isEmpty() && deletingDeletedCurrent.isEmpty()) {
                 return;
             }
 
@@ -8266,14 +8305,14 @@ public class GroupMetadataManager {
             Map<Uuid, InitMapValue> finalInitialized = new HashMap<>(metadata.initializedTopics());
             initializedDeletedCurrent.forEach(finalInitialized::remove);
 
-            Set<Uuid> deletingTopics = new HashSet<>(metadata.deletingTopics());
-            deletingTopics.removeAll(deletedTopicIds);
+            Set<Uuid> finalDeleting = new HashSet<>(metadata.deletingTopics());
+            finalDeleting.removeAll(deletedTopicIds);
 
             records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
                 finalInitializing,
                 finalInitialized,
-                attachTopicName(deletingTopics)
+                attachTopicName(finalDeleting)
             ));
         });
 
