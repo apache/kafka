@@ -592,8 +592,7 @@ public class ConsumerGroupCommand {
                         getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty(), Optional.empty())
                 );
             } else {
-                List<TopicPartition> targetTopicPartitions = new ArrayList<>(topicPartitions);
-                return describePartitions(group, coordinator, targetTopicPartitions, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
+                return describePartitions(group, coordinator, topicPartitions, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
             }
         }
 
@@ -604,7 +603,7 @@ public class ConsumerGroupCommand {
         private Collection<PartitionAssignmentState> describePartitions(
             String group,
             Optional<Node> coordinator,
-            List<TopicPartition> topicPartitions,
+            Collection<TopicPartition> topicPartitions,
             Map<TopicPartition, OffsetAndMetadata> committedOffsets,
             Optional<String> consumerIdOpt,
             Optional<String> hostOpt,
@@ -619,11 +618,12 @@ public class ConsumerGroupCommand {
                     consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
-            Set<TopicPartition> nonLeaderTopicPartitions = filterNoneLeaderPartitions(topicPartitions);
+            List<TopicPartition> topicPartitionsWithLeader = new ArrayList<>(topicPartitions);
+            List<TopicPartition> topicPartitionsWithoutLeader = filterNoneLeaderPartitions(topicPartitions);
+            topicPartitionsWithLeader.removeAll(topicPartitionsWithoutLeader);
 
             // prepare data for partitions with leaders
-            topicPartitions.removeAll(nonLeaderTopicPartitions);
-            List<PartitionAssignmentState> existLeaderAssignments = offsetsUtils.getLogEndOffsets(topicPartitions).entrySet().stream().map(logEndOffsetResult -> {
+            List<PartitionAssignmentState> existLeaderAssignments = offsetsUtils.getLogEndOffsets(topicPartitionsWithLeader).entrySet().stream().map(logEndOffsetResult -> {
                 if (logEndOffsetResult.getValue() instanceof OffsetsUtils.LogOffset)
                     return getDescribePartitionResult.apply(
                         logEndOffsetResult.getKey(),
@@ -638,7 +638,7 @@ public class ConsumerGroupCommand {
             }).toList();
 
             // prepare data for partitions without leaders
-            List<PartitionAssignmentState> noneLeaderAssignments = nonLeaderTopicPartitions.stream()
+            List<PartitionAssignmentState> noneLeaderAssignments = topicPartitionsWithoutLeader.stream()
                     .map(tp -> getDescribePartitionResult.apply(tp, Optional.empty())).toList();
 
             // concat the data and then sort them
@@ -649,7 +649,7 @@ public class ConsumerGroupCommand {
                     .collect(Collectors.toList());
         }
 
-        private Set<TopicPartition> filterNoneLeaderPartitions(List<TopicPartition> topicPartitions) {
+        private List<TopicPartition> filterNoneLeaderPartitions(Collection<TopicPartition> topicPartitions) {
             // collect all topics
             Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
 
@@ -659,7 +659,7 @@ public class ConsumerGroupCommand {
                         .flatMap(entry -> entry.getValue().partitions().stream()
                                 .filter(partitionInfo -> partitionInfo.leader() == null)
                                 .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
-                        .collect(Collectors.toSet());
+                        .collect(Collectors.toList());
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
