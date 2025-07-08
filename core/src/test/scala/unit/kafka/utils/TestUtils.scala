@@ -1337,8 +1337,6 @@ object TestUtils extends Logging {
 
     assertTrue(isLeaderElected, s"Timed out waiting for leader to become $expectedLeaderOpt. " +
       s"Last metadata lookup returned leader = ${lastLeaderCheck.getOrElse("unknown")}")
-
-    isLeaderElected
   }
 
   def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
