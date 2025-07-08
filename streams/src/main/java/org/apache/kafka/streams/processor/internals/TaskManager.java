@@ -751,10 +751,10 @@ public class TaskManager {
                 .forEach(removedTaskResult -> {
                     if (removedTaskResult.exception().isPresent()) {
                         final RuntimeException runtimeException = removedTaskResult.exception().get();
-                        if (runtimeException instanceof TaskCorruptedException) {
-                            tasksToCloseDirtyFromStateUpdater.add(removedTaskResult.task());
-                        } else  {
+                        if (runtimeException instanceof TimeoutException) {
                             tasksToCloseCleanFromStateUpdater.add(removedTaskResult.task());
+                        } else  {
+                            tasksToCloseDirtyFromStateUpdater.add(removedTaskResult.task());
                         }
                     } else {
                         tasksToCloseCleanFromStateUpdater.add(removedTaskResult.task());
