@@ -28,7 +28,7 @@ public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState lead
     }
 
     @Override
-    public Boolean isInflight() {
+    public boolean isInflight() {
         return false;
     }
 

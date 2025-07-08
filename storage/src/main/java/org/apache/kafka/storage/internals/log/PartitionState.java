@@ -42,6 +42,6 @@ public interface PartitionState {
     /**
      * Indicates if we have an AlterPartition request inflight.
      */
-    Boolean isInflight();
+    boolean isInflight();
 
 }

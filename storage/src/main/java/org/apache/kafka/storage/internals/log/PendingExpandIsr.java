@@ -43,7 +43,7 @@ public record PendingExpandIsr(int newInSyncReplicaId,
     }
 
     @Override
-    public Boolean isInflight() {
+    public boolean isInflight() {
         return true;
     }
 

@@ -40,7 +40,7 @@ public record PendingShrinkIsr(Set<Integer> outOfSyncReplicaIds,
     }
 
     @Override
-    public Boolean isInflight() {
+    public boolean isInflight() {
         return true;
     }
 
