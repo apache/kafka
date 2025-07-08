@@ -26,7 +26,7 @@ public interface AssignmentState {
         return replicas().size();
     }
 
-    default Boolean isAddingReplica(int brokerId) {
+    default boolean isAddingReplica(int brokerId) {
         return false;
     }
 }

@@ -30,7 +30,7 @@ public record OngoingReassignmentState(
     }
 
     @Override
-    public Boolean isAddingReplica(int brokerId) {
+    public boolean isAddingReplica(int brokerId) {
         return addingReplicas.contains(brokerId);
     }
 }
