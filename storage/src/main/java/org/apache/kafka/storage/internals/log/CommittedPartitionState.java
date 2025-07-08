@@ -32,10 +32,4 @@ public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState lead
         return false;
     }
 
-    @Override
-    public String toString() {
-        return "CommittedPartitionState(isr=" + isr +
-                ", leaderRecoveryState=" + leaderRecoveryState +
-                ")";
-    }
 }
