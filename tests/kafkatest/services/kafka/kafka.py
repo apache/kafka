@@ -1340,7 +1340,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
-                (self.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection), topic, msg_format_version)
+               (self.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection), topic, msg_format_version)
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
