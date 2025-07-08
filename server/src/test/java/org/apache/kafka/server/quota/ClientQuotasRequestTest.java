@@ -34,8 +34,6 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.function.Executable;
-
 import java.net.InetAddress;
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,6 +43,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
@@ -53,7 +52,6 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientQuotasRequestTest {
@@ -64,7 +62,7 @@ public class ClientQuotasRequestTest {
     }
 
     @ClusterTest
-    public void testAlterClientQuotasRequest() throws Throwable {
+    public void testAlterClientQuotasRequest() throws InterruptedException {
         ClientQuotaEntity entity = new ClientQuotaEntity(
             Map.of(ClientQuotaEntity.USER, "user", ClientQuotaEntity.CLIENT_ID, "client-id"));
 
@@ -134,7 +132,7 @@ public class ClientQuotasRequestTest {
     }
 
     @ClusterTest
-    public void testAlterClientQuotasRequestValidateOnly() throws Throwable {
+    public void testAlterClientQuotasRequestValidateOnly() throws InterruptedException {
         ClientQuotaEntity entity = new ClientQuotaEntity(Map.of(ClientQuotaEntity.USER, "user"));
 
         // Set up a configuration.
@@ -192,7 +190,7 @@ public class ClientQuotasRequestTest {
     }
 
     @ClusterTest
-    public void testClientQuotasForScramUsers() throws Throwable {
+    public void testClientQuotasForScramUsers() throws InterruptedException, ExecutionException {
         final String userName = "user";
 
         try (Admin admin = cluster.admin()) {
@@ -217,7 +215,7 @@ public class ClientQuotasRequestTest {
     }
 
     @ClusterTest
-    public void testAlterIpQuotasRequest() throws Throwable {
+    public void testAlterIpQuotasRequest() throws InterruptedException {
         final String knownHost = "1.2.3.4";
         final String unknownHost = "2.3.4.5";
         ClientQuotaEntity entity = toIpEntity(Optional.of(knownHost));
@@ -258,7 +256,7 @@ public class ClientQuotasRequestTest {
 
         TestUtils.retryOnExceptionWithTimeout(5000L, () -> {
             Map<ClientQuotaEntity, Map<String, Double>> result = describeClientQuotas(
-                ClientQuotaFilter.containsOnly(List.of(entityFilter)));
+                ClientQuotaFilter.containsOnly(List.of(entityFilter))).get();
             assertEquals(expectedMatches.keySet(), result.keySet());
 
             for (Map.Entry<ClientQuotaEntity, Map<String, Double>> entry : result.entrySet()) {
@@ -287,32 +285,33 @@ public class ClientQuotasRequestTest {
     @ClusterTest
     public void testAlterClientQuotasInvalidRequests() {
         final ClientQuotaEntity entity1 = new ClientQuotaEntity(Map.of(ClientQuotaEntity.USER, ""));
-        assertThrows(InvalidRequestException.class,
-            () -> alterEntityQuotas(entity1, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true));
+        TestUtils.assertFutureThrows(InvalidRequestException.class,
+            alterEntityQuotas(entity1, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true));
 
         final ClientQuotaEntity entity2 = new ClientQuotaEntity(Map.of(ClientQuotaEntity.CLIENT_ID, ""));
-        assertThrows(InvalidRequestException.class,
-            () -> alterEntityQuotas(entity2, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true));
+        TestUtils.assertFutureThrows(InvalidRequestException.class,
+            alterEntityQuotas(entity2, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true));
 
         final ClientQuotaEntity entity3 = new ClientQuotaEntity(Map.of("", "name"));
-        assertThrows(InvalidRequestException.class,
-            () -> alterEntityQuotas(entity3, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true));
+        TestUtils.assertFutureThrows(InvalidRequestException.class,
+            alterEntityQuotas(entity3, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true));
 
         final ClientQuotaEntity entity4 = new ClientQuotaEntity(Map.of());
-        assertThrows(InvalidRequestException.class,
-            () -> alterEntityQuotas(entity4, Map.of(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Optional.of(10000.5)), true));
+        TestUtils.assertFutureThrows(InvalidRequestException.class,
+            alterEntityQuotas(entity4, Map.of(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Optional.of(10000.5)), true));
 
         final ClientQuotaEntity entity5 = new ClientQuotaEntity(Map.of(ClientQuotaEntity.USER, "user"));
-        assertThrows(InvalidRequestException.class,
-            () -> alterEntityQuotas(entity5, Map.of("bad", Optional.of(1.0)), true));
+        TestUtils.assertFutureThrows(InvalidRequestException.class,
+            alterEntityQuotas(entity5, Map.of("bad", Optional.of(1.0)), true));
 
         final ClientQuotaEntity entity6 = new ClientQuotaEntity(Map.of(ClientQuotaEntity.USER, "user"));
-        assertThrows(InvalidRequestException.class,
-            () -> alterEntityQuotas(entity6, Map.of(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Optional.of(10000.5)), true));
+        TestUtils.assertFutureThrows(InvalidRequestException.class,
+            alterEntityQuotas(entity6, Map.of(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Optional.of(10000.5)), true));
     }
 
-    private void expectInvalidRequestWithMessage(Executable runnable, String expectedMessage) {
-        InvalidRequestException exception = assertThrows(InvalidRequestException.class, runnable);
+    private void expectInvalidRequestWithMessage(Future<?> future, String expectedMessage) {
+        InvalidRequestException exception = TestUtils.assertFutureThrows(InvalidRequestException.class, future);
+        assertNotNull(exception);
         assertTrue(
             exception.getMessage().contains(expectedMessage),
             String.format("Expected message %s to contain %s", exception, expectedMessage)
@@ -330,18 +329,18 @@ public class ClientQuotasRequestTest {
         final String expectedExceptionMessage = "Invalid quota entity combination";
 
         expectInvalidRequestWithMessage(
-            () -> alterEntityQuotas(userAndIpEntity, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true),
+            alterEntityQuotas(userAndIpEntity, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true),
             expectedExceptionMessage
         );
 
         expectInvalidRequestWithMessage(
-            () -> alterEntityQuotas(clientAndIpEntity, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true),
+            alterEntityQuotas(clientAndIpEntity, Map.of(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Optional.of(12.34)), true),
             expectedExceptionMessage
         );
     }
 
     @ClusterTest
-    public void testAlterClientQuotasBadIp() {
+    public void testAlterClientQuotasBadIp() throws ExecutionException, InterruptedException {
         ClientQuotaEntity invalidHostPatternEntity = new ClientQuotaEntity(
             Map.of(ClientQuotaEntity.IP, "not a valid host because it has spaces")
         );
@@ -351,12 +350,12 @@ public class ClientQuotasRequestTest {
         final String expectedExceptionMessage = "not a valid IP";
 
         expectInvalidRequestWithMessage(
-            () -> alterEntityQuotas(invalidHostPatternEntity, Map.of(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, Optional.of(50.0)), true),
+            alterEntityQuotas(invalidHostPatternEntity, Map.of(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, Optional.of(50.0)), true),
             expectedExceptionMessage
         );
 
         expectInvalidRequestWithMessage(
-            () -> alterEntityQuotas(unresolvableHostEntity, Map.of(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, Optional.of(50.0)), true),
+            alterEntityQuotas(unresolvableHostEntity, Map.of(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, Optional.of(50.0)), true),
             expectedExceptionMessage
         );
     }
@@ -369,11 +368,11 @@ public class ClientQuotasRequestTest {
         final String expectedExceptionMessage = "Invalid entity filter component combination";
 
         expectInvalidRequestWithMessage(
-            () -> describeClientQuotas(ClientQuotaFilter.contains(List.of(ipFilterComponent, userFilterComponent))),
+            describeClientQuotas(ClientQuotaFilter.contains(List.of(ipFilterComponent, userFilterComponent))),
             expectedExceptionMessage
         );
         expectInvalidRequestWithMessage(
-            () -> describeClientQuotas(ClientQuotaFilter.contains(List.of(ipFilterComponent, clientIdFilterComponent))),
+            describeClientQuotas(ClientQuotaFilter.contains(List.of(ipFilterComponent, clientIdFilterComponent))),
             expectedExceptionMessage
         );
     }
@@ -432,7 +431,8 @@ public class ClientQuotasRequestTest {
         });
     }
 
-    private Map<ClientQuotaEntity, Map<String, Double>> matchEntity(ClientQuotaEntity entity) throws Throwable {
+    private Map<ClientQuotaEntity, Map<String, Double>> matchEntity(ClientQuotaEntity entity)
+        throws ExecutionException, InterruptedException {
         List<ClientQuotaFilterComponent> components = entity.entries().entrySet().stream().map(entry -> {
             if (entry.getValue() == null) {
                 return ClientQuotaFilterComponent.ofDefaultEntity(entry.getKey());
@@ -441,11 +441,11 @@ public class ClientQuotasRequestTest {
             }
         }).toList();
 
-        return describeClientQuotas(ClientQuotaFilter.containsOnly(components));
+        return describeClientQuotas(ClientQuotaFilter.containsOnly(components)).get();
     }
 
     @ClusterTest
-    public void testDescribeClientQuotasMatchExact() throws Throwable {
+    public void testDescribeClientQuotasMatchExact() throws ExecutionException, InterruptedException {
         setupDescribeClientQuotasMatchTest();
 
         // Test exact matches.
@@ -484,7 +484,7 @@ public class ClientQuotasRequestTest {
     private void testMatchEntities(ClientQuotaFilter filter, int expectedMatchSize, Predicate<ClientQuotaEntity> partition)
         throws InterruptedException {
         TestUtils.retryOnExceptionWithTimeout(5000L, () -> {
-            Map<ClientQuotaEntity, Map<String, Double>> result = describeClientQuotas(filter);
+            Map<ClientQuotaEntity, Map<String, Double>> result = describeClientQuotas(filter).get();
             List<Map.Entry<ClientQuotaEntity, Double>> expectedMatches = matchUserClientEntities.entrySet()
                 .stream()
                 .collect(Collectors.partitioningBy(entry -> partition.test(entry.getKey())))
@@ -615,11 +615,14 @@ public class ClientQuotasRequestTest {
     @ClusterTest
     public void testClientQuotasUnsupportedEntityTypes() {
         ClientQuotaEntity entity = new ClientQuotaEntity(Map.of("other", "name"));
-        assertThrows(UnsupportedVersionException.class, () -> verifyDescribeEntityQuotas(entity, Map.of()));
+        KafkaFuture<Map<ClientQuotaEntity, Map<String, Double>>> future = describeClientQuotas(
+            ClientQuotaFilter.containsOnly(getComponents(entity)));
+
+        TestUtils.assertFutureThrows(UnsupportedVersionException.class, future);
     }
 
     @ClusterTest
-    public void testClientQuotasSanitized() throws Throwable {
+    public void testClientQuotasSanitized() throws ExecutionException, InterruptedException, TimeoutException {
         // An entity with name that must be sanitized when writing to Zookeeper.
         ClientQuotaEntity entity = new ClientQuotaEntity(Map.of(ClientQuotaEntity.USER, "user with spaces"));
 
@@ -648,18 +651,11 @@ public class ClientQuotasRequestTest {
     }
 
     private void verifyDescribeEntityQuotas(ClientQuotaEntity entity, Map<String, Double> quotas)
-        throws Throwable {
+        throws InterruptedException {
         TestUtils.retryOnExceptionWithTimeout(5000L, () -> {
-            List<ClientQuotaFilterComponent> components = entity.entries().entrySet().stream().map(entry -> {
-                String entityType = entry.getKey();
-                String entityName = entry.getValue();
-                return Optional.ofNullable(entityName)
-                    .map(name -> ClientQuotaFilterComponent.ofEntity(entityType, name))
-                    .orElseGet(() -> ClientQuotaFilterComponent.ofDefaultEntity(entityType));
-            }).toList();
 
             Map<ClientQuotaEntity, Map<String, Double>> describe = describeClientQuotas(
-                ClientQuotaFilter.containsOnly(components));
+                ClientQuotaFilter.containsOnly(getComponents(entity))).get();
             if (quotas.isEmpty()) {
                 assertEquals(0, describe.size());
             } else {
@@ -677,21 +673,25 @@ public class ClientQuotasRequestTest {
         });
     }
 
-    private Map<ClientQuotaEntity, Map<String, Double>> describeClientQuotas(ClientQuotaFilter filter)
-        throws Throwable {
+    private List<ClientQuotaFilterComponent> getComponents(ClientQuotaEntity entity) {
+        return entity.entries().entrySet().stream().map(entry -> {
+            String entityType = entry.getKey();
+            String entityName = entry.getValue();
+            return Optional.ofNullable(entityName)
+                .map(name -> ClientQuotaFilterComponent.ofEntity(entityType, name))
+                .orElseGet(() -> ClientQuotaFilterComponent.ofDefaultEntity(entityType));
+        }).toList();
+    }
+
+    private KafkaFuture<Map<ClientQuotaEntity, Map<String, Double>>> describeClientQuotas(ClientQuotaFilter filter) {
         try (Admin admin = cluster.admin()) {
-            return admin.describeClientQuotas(filter).entities().get();
-        } catch (ExecutionException e) {
-            throw e.getCause();
+            return admin.describeClientQuotas(filter).entities();
         }
     }
 
-    private void alterEntityQuotas(ClientQuotaEntity entity, Map<String, Optional<Double>> alter, boolean validateOnly) throws Throwable {
-        try {
-            alterClientQuotas(Map.of(entity, alter), validateOnly).get(entity).get(10, TimeUnit.SECONDS);
-        } catch (ExecutionException e) {
-            throw e.getCause();
-        }
+    private KafkaFuture<Void> alterEntityQuotas(ClientQuotaEntity entity, Map<String, Optional<Double>> alter, boolean validateOnly) {
+
+        return alterClientQuotas(Map.of(entity, alter), validateOnly).get(entity);
     }
 
     private Map<ClientQuotaEntity, KafkaFuture<Void>> alterClientQuotas(Map<ClientQuotaEntity, Map<String,

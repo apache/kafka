@@ -23,7 +23,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -495,13 +494,13 @@ public class TestUtils {
             try {
                 runnable.call();
                 return;
-            } catch (final NoRetryException | UnsupportedVersionException e) {
+            } catch (final NoRetryException e) {
                 throw e;
             } catch (final AssertionError t) {
                 if (expectedEnd <= System.currentTimeMillis()) {
                     throw t;
                 }
-            } catch (final Throwable e) {
+            } catch (final Exception e) {
                 if (expectedEnd <= System.currentTimeMillis()) {
                     throw new AssertionError(String.format("Assertion failed with an exception after %s ms", timeoutMs), e);
                 }

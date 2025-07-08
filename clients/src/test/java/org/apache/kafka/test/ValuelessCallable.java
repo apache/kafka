@@ -21,5 +21,5 @@ package org.apache.kafka.test;
  * that does not return a value.
  */
 public interface ValuelessCallable {
-    void call() throws Throwable;
+    void call() throws Exception;
 }
