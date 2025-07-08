@@ -165,8 +165,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final Condition copyQuotaManagerLockCondition = copyQuotaManagerLock.newCondition();
     private final RLMQuotaManager rlmCopyQuotaManager;
     private final RLMQuotaManager rlmFetchQuotaManager;
-    private final Sensor fetchThrottleTimeSensor;
-    private final Sensor copyThrottleTimeSensor;
+    private final RLMQuotaMetrics fetchQuotaMetrics;
+    private final RLMQuotaMetrics copyQuotaMetrics;
 
     private final RemoteIndexCache indexCache;
     private final RemoteStorageThreadPool remoteStorageReaderThreadPool;
@@ -235,10 +235,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
         rlmFetchQuotaManager = createRLMFetchQuotaManager();
 
-        fetchThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-fetch-throttle-time", RemoteLogManager.class.getSimpleName(),
-            "The %s time in millis remote fetches was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
-        copyThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
-            "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
+        fetchQuotaMetrics = new RLMQuotaMetrics(metrics, "remote-fetch-throttle-time", RemoteLogManager.class.getSimpleName(),
+            "The %s time in millis remote fetches was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS);
+        copyQuotaMetrics = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
+            "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS);
 
         indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteStorageManagerPlugin.get(), logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
@@ -347,7 +347,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     public Sensor fetchThrottleTimeSensor() {
-        return fetchThrottleTimeSensor;
+        return fetchQuotaMetrics.sensor();
     }
 
     static RLMQuotaManagerConfig copyQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
@@ -952,7 +952,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                             try {
                                 long throttleTimeMs = rlmCopyQuotaManager.getThrottleTimeMs();
                                 while (throttleTimeMs > 0) {
-                                    copyThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
+                                    copyQuotaMetrics.sensor().record(throttleTimeMs, time.milliseconds());
                                     logger.debug("Quota exceeded for copying log segments, waiting for the quota to be available.");
                                     // If the thread gets interrupted while waiting, the InterruptedException is thrown
                                     // back to the caller. It's important to note that the task being executed is already
