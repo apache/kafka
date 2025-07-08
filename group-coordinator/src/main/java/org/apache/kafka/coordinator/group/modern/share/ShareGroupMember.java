@@ -220,9 +220,9 @@ public class ShareGroupMember extends ModernGroupMember {
     ) {
         List<ShareGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            image.topicName(topicId).ifPresent(topicName -> topicPartitions.add(new ShareGroupDescribeResponseData.TopicPartitions()
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ShareGroupDescribeResponseData.TopicPartitions()
                 .setTopicId(topicId)
-                .setTopicName(topicName)
+                .setTopicName(topicMetadata.name())
                 .setPartitions(new ArrayList<>(partitionSet))));
         });
         return topicPartitions;

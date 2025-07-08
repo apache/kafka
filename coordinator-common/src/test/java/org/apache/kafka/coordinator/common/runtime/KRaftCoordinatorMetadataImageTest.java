@@ -22,7 +22,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,18 +53,6 @@ class KRaftCoordinatorMetadataImageTest {
 
         KRaftCoordinatorMetadataImage image = new KRaftCoordinatorMetadataImage(metadataImage);
 
-        assertEquals(Optional.of(topicName), image.topicName(topicId));
-        assertEquals(Optional.of(topicName2), image.topicName(topicId2));
-        assertEquals(Optional.empty(), image.topicName(Uuid.randomUuid()));
-
-        assertEquals(Optional.of(topicId), image.topicId(topicName));
-        assertEquals(Optional.of(topicId2), image.topicId(topicName2));
-        assertEquals(Optional.empty(), image.topicId("unknown"));
-
-        assertEquals(Optional.of(partitionCount), image.partitionCount(topicName));
-        assertEquals(Optional.of(partitionCount2), image.partitionCount(topicName2));
-        assertEquals(Optional.empty(), image.partitionCount("unknown"));
-
         assertEquals(Set.of(topicName, topicName2, noPartitionTopic), image.topicNames());
         assertEquals(Set.of(topicId, topicId2, noPartitionTopicId), image.topicIds());
 
@@ -74,6 +61,23 @@ class KRaftCoordinatorMetadataImageTest {
                 assertEquals(topicName, topicMetadata.name());
                 assertEquals(topicId, topicMetadata.id());
                 assertEquals(partitionCount, topicMetadata.partitionCount());
+                List<String> racks0 = topicMetadata.partitionRacks(0);
+                List<String> racks1 = topicMetadata.partitionRacks(1);
+                assertEquals(2, racks0.size());
+                assertEquals(2, racks1.size());
+                assertEquals("rack0", racks0.get(0));
+                assertEquals("rack1", racks0.get(1));
+                assertEquals("rack1", racks1.get(0));
+                assertEquals("rack2", racks1.get(1));
+            },
+            () -> fail("Expected topic metadata for " + topicName)
+        );
+
+        image.topicMetadata(topicName2).ifPresentOrElse(
+            topicMetadata -> {
+                assertEquals(topicName2, topicMetadata.name());
+                assertEquals(topicId2, topicMetadata.id());
+                assertEquals(partitionCount2, topicMetadata.partitionCount());
                 List<String> racks0 = topicMetadata.partitionRacks(0);
                 List<String> racks1 = topicMetadata.partitionRacks(1);
                 assertEquals(2, racks0.size());

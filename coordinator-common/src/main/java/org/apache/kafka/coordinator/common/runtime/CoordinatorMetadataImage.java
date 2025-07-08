@@ -27,18 +27,7 @@ import java.util.Set;
  * Implementations should be thread-safe and immutable.
  */
 public interface CoordinatorMetadataImage {
-    CoordinatorMetadataImage EMPTY = emptyImage();
-
-    Optional<String> topicName(Uuid id);
-
-    Optional<Uuid> topicId(String topicName);
-
-    default Optional<Integer> partitionCount(Uuid topicId) {
-        var topicName = topicName(topicId);
-        return topicName.isEmpty() ? Optional.empty() : partitionCount(topicName.get());
-    }
-
-    Optional<Integer> partitionCount(String topicName);
+    static CoordinatorMetadataImage EMPTY = emptyImage();
 
     Set<Uuid> topicIds();
 
@@ -46,10 +35,7 @@ public interface CoordinatorMetadataImage {
 
     Optional<TopicMetadata> topicMetadata(String topicName);
 
-    default Optional<TopicMetadata> topicMetadata(Uuid topicId) {
-        var topicName = topicName(topicId);
-        return topicName.isEmpty() ? Optional.empty() : topicMetadata(topicName.get());
-    }
+    Optional<TopicMetadata> topicMetadata(Uuid topicId);
 
     CoordinatorMetadataDelta emptyDelta();
 
@@ -73,21 +59,6 @@ public interface CoordinatorMetadataImage {
     private static CoordinatorMetadataImage emptyImage() {
 
         return new CoordinatorMetadataImage() {
-            @Override
-            public Optional<String> topicName(Uuid id) {
-                return Optional.empty();
-            }
-
-            @Override
-            public Optional<Uuid> topicId(String topicName) {
-                return Optional.empty();
-            }
-
-            @Override
-            public Optional<Integer> partitionCount(String topicName) {
-                return Optional.empty();
-            }
-
             @Override
             public Set<Uuid> topicIds() {
                 return Set.of();

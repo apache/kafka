@@ -35,6 +35,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
@@ -368,13 +369,11 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         Map<String, Long> topicHashCache,
         CoordinatorMetadataImage metadataImage
     ) {
-        Map<String, Long> topicHash = new HashMap<>(subscribedTopicNames.size());
-        subscribedTopicNames.keySet().forEach(topicName ->
-            metadataImage.topicMetadata(topicName).ifPresent(__ ->
-                topicHash.put(
-                    topicName,
-                    topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
-                )));
+        Map<String, Long> topicHash = subscribedTopicNames.keySet().stream()
+            .filter(topicName -> metadataImage.topicMetadata(topicName).isPresent())
+            .collect(Collectors.toMap(
+                topicName -> topicName,
+                topicName -> topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(k, metadataImage))));
         return Utils.computeGroupHash(topicHash);
     }
 

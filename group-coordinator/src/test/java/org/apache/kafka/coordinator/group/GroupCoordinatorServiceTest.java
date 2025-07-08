@@ -5526,8 +5526,11 @@ public class GroupCoordinatorServiceTest {
                 service.onNewMetadataImage(metadataImage, null);
             }
             when(metadataImage.topicNames()).thenReturn(Set.of(TOPIC_NAME));
-            when(metadataImage.topicName(TOPIC_ID)).thenReturn(Optional.of(TOPIC_NAME));
-            when(metadataImage.topicId(TOPIC_NAME)).thenReturn(Optional.of(TOPIC_ID));
+            var topicMetadata = mock(CoordinatorMetadataImage.TopicMetadata.class);
+            when(topicMetadata.name()).thenReturn(TOPIC_NAME);
+            when(topicMetadata.id()).thenReturn(TOPIC_ID);
+            when(metadataImage.topicMetadata(TOPIC_ID)).thenReturn(Optional.of(topicMetadata));
+            when(metadataImage.topicMetadata(TOPIC_NAME)).thenReturn(Optional.of(topicMetadata));
 
             return service;
         }

@@ -84,12 +84,12 @@ public class TopicIds implements Set<Uuid> {
 
         @Override
         public String name(Uuid id) {
-            return image.topicName(id).orElse(null);
+            return image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
         }
 
         @Override
         public Uuid id(String name) {
-            return image.topicId(name).orElse(null);
+            return image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null);
         }
 
         @Override
@@ -126,12 +126,12 @@ public class TopicIds implements Set<Uuid> {
 
         @Override
         public String name(Uuid id) {
-            return topicNames.computeIfAbsent(id, __ -> image.topicName(id).orElse(null));
+            return topicNames.computeIfAbsent(id, __ -> image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse("<UNKNOWN>"));
         }
 
         @Override
         public Uuid id(String name) {
-            return topicIds.computeIfAbsent(name, __ -> image.topicId(name).orElse(null));
+            return topicIds.computeIfAbsent(name, __ -> image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null));
         }
 
         @Override

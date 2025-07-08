@@ -205,12 +205,12 @@ public class InternalTopicManager {
                 .forEach(x -> topicsToCreate.put(x.name(), toCreatableTopic(x)));
         }
         for (String topic : topology.requiredTopics()) {
-            metadataImage.partitionCount(topic).ifPresent(partitionCount -> {
+            metadataImage.topicMetadata(topic).ifPresent(topicMetadata -> {
                 final CreatableTopic expectedTopic = topicsToCreate.remove(topic);
                 if (expectedTopic != null) {
-                    if (partitionCount != expectedTopic.numPartitions()) {
+                    if (topicMetadata.partitionCount() != expectedTopic.numPartitions()) {
                         throw TopicConfigurationException.incorrectlyPartitionedTopics("Existing topic " + topic + " has different"
-                            + " number of partitions: expected " + expectedTopic.numPartitions() + ", found " + partitionCount);
+                            + " number of partitions: expected " + expectedTopic.numPartitions() + ", found " + topicMetadata.partitionCount());
                     }
                 }
             });
@@ -221,13 +221,16 @@ public class InternalTopicManager {
     private static OptionalInt getPartitionCount(CoordinatorMetadataImage metadataImage,
                                                  String topic,
                                                  Map<String, Integer> decidedPartitionCountsForInternalTopics) {
-        return metadataImage.partitionCount(topic).map(OptionalInt::of).orElseGet(() -> {
+        Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadata = metadataImage.topicMetadata(topic);
+        if (topicMetadata.isEmpty()) {
             if (decidedPartitionCountsForInternalTopics.containsKey(topic)) {
                 return OptionalInt.of(decidedPartitionCountsForInternalTopics.get(topic));
             } else {
                 return OptionalInt.empty();
             }
-        });
+        } else {
+            return OptionalInt.of(topicMetadata.get().partitionCount());
+        }
     }
 
     private static CreatableTopic toCreatableTopic(final ConfiguredInternalTopic config) {

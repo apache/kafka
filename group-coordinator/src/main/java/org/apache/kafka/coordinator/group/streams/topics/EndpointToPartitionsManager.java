@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public class EndpointToPartitionsManager {
@@ -71,10 +72,11 @@ public class EndpointToPartitionsManager {
                                                                                                     final Set<String> topicNames,
                                                                                                     final CoordinatorMetadataImage metadataImage) {
         return topicNames.stream().map(topic -> {
-            if (metadataImage.partitionCount(topic).isEmpty()) {
+            Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadata = metadataImage.topicMetadata(topic);
+            if (topicMetadata.isEmpty()) {
                 throw new IllegalStateException("Topic " + topic + " not found in metadata image");
             }
-            int numPartitionsForTopic = metadataImage.partitionCount(topic).get();
+            int numPartitionsForTopic = topicMetadata.get().partitionCount();
             StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
             tp.setTopic(topic);
             List<Integer> tpPartitions = new ArrayList<>(taskSet);

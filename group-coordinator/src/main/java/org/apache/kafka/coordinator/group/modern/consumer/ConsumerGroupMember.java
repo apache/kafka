@@ -416,9 +416,9 @@ public class ConsumerGroupMember extends ModernGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            image.topicName(topicId).ifPresent(topicName -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
                 .setTopicId(topicId)
-                .setTopicName(topicName)
+                .setTopicName(topicMetadata.name())
                 .setPartitions(new ArrayList<>(partitionSet))));
         });
         return topicPartitions;

@@ -27,7 +27,6 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -40,32 +39,6 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
 
     public KRaftCoordinatorMetadataImage(MetadataImage metadataImage) {
         this.metadataImage = metadataImage;
-    }
-
-    @Override
-    public Optional<String> topicName(Uuid id) {
-        TopicImage topicImage = metadataImage.topics().getTopic(id);
-        if (topicImage == null) return Optional.empty();
-        var name = topicImage.name();
-        return name == null ? Optional.empty() : Optional.of(name);
-    }
-
-    @Override
-    public Optional<Uuid> topicId(String topicName) {
-        TopicImage topicImage = metadataImage.topics().getTopic(topicName);
-        if (topicImage == null) return Optional.empty();
-        var id = topicImage.id();
-        return id == null || id == Uuid.ZERO_UUID ? Optional.empty() : Optional.of(id);
-    }
-
-    @Override
-    public Optional<Integer> partitionCount(String topicName) {
-        TopicImage topicImage = metadataImage.topics().getTopic(topicName);
-        if (topicImage == null) return Optional.empty();
-
-        Map<Integer, PartitionRegistration> partitions = topicImage.partitions();
-        if (partitions == null) return Optional.empty();
-        return Optional.of(partitions.size());
     }
 
     @Override

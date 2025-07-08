@@ -147,9 +147,9 @@ public class Utils {
         ConsumerProtocolAssignment.TopicPartitionCollection collection =
             new ConsumerProtocolAssignment.TopicPartitionCollection();
         assignment.forEach((topicId, partitions) -> {
-            image.topicName(topicId).ifPresent(topicName ->
+            image.topicMetadata(topicId).ifPresent(topicMetadata ->
                 collection.add(new ConsumerProtocolAssignment.TopicPartition()
-                    .setTopic(topicName)
+                    .setTopic(topicMetadata.name())
                     .setPartitions(new ArrayList<>(partitions))));
         });
         return new ConsumerProtocolAssignment()
@@ -169,8 +169,8 @@ public class Utils {
     ) {
         Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
         consumerProtocolAssignment.assignedPartitions().forEach(topicPartition -> {
-            metadataImage.topicId(topicPartition.topic()).ifPresent(topicId -> {
-                topicPartitionMap.put(topicId, new HashSet<>(topicPartition.partitions()));
+            metadataImage.topicMetadata(topicPartition.topic()).ifPresent(topicMetadata -> {
+                topicPartitionMap.put(topicMetadata.id(), new HashSet<>(topicPartition.partitions()));
             });
         });
         return topicPartitionMap;
@@ -189,10 +189,10 @@ public class Utils {
     ) {
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> res = new ArrayList<>();
         for (ConsumerProtocolSubscription.TopicPartition tp : topicPartitionCollection) {
-            metadataImage.topicId(tp.topic()).ifPresent(topicId -> {
+            metadataImage.topicMetadata(tp.topic()).ifPresent(topicMetadata -> {
                 res.add(
                     new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                        .setTopicId(topicId)
+                        .setTopicId(topicMetadata.id())
                         .setPartitions(tp.partitions())
                 );
             });
