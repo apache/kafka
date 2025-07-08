@@ -1,0 +1,43 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey":93,
+  "type": "response",
+  "name": "GetReplicaLogInfoResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
+      "about": "The epoch of the broker." },
+    { "name": "HasMoreData", "type": "bool", "versions": "0+",
+      "about": "True if response does not include all the topic partitions requested. Only the first 1000 topic partitions are returned."},
+    { "name": "TopicPartitionLogInfoList", "type": "[]TopicPartitionLogInfo", "versions": "0+",
+      "about": "The list of the partition log info.",
+      "fields": [
+        { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID."},
+        { "name": "PartitionLogInfo", "type": "[]PartitionLogInfo", "versions": "0+", "about": "The log info of a partition.",
+          "fields": [
+            { "name": "Partition", "type": "int32", "versions": "0+", "about": "The id for the partition." },
+            { "name": "LastWrittenLeaderEpoch", "type": "int32", "versions": "0+", "about": "The last written leader epoch in the log." },
+            { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "0+", "about": "The current leader epoch for the partition from the broker point of view." },
+            { "name": "LogEndOffset", "type": "int64", "versions": "0+", "about": "The log end offset for the partition." },
+            { "name": "ErrorCode", "type": "int16", "versions": "0+", "about": "The result error, or zero if there was no error."}
+        ]}
+      ]}
+    ]
+}
