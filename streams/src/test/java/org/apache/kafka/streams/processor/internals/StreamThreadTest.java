@@ -69,6 +69,7 @@ import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -3873,6 +3874,15 @@ public class StreamThreadTest {
         ));
         thread.runOnceWithoutProcessingThreads();
         verify(shutdownErrorHook).run();
+
+        // Test MISSING_SOURCE_TOPICS status
+        streamsRebalanceData.setStatuses(List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
+                .setStatusDetail("Missing source topics")
+        ));
+        final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class, () -> thread.runOnceWithoutProcessingThreads());
+        assertEquals("Missing source topics", exception.getMessage());
     }
 
     @Test
@@ -3932,6 +3942,15 @@ public class StreamThreadTest {
         ));
         thread.runOnceWithProcessingThreads();
         verify(shutdownErrorHook).run();
+
+        // Test MISSING_SOURCE_TOPICS status
+        streamsRebalanceData.setStatuses(List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
+                .setStatusDetail("Missing source topics")
+        ));
+        final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class, () -> thread.runOnceWithoutProcessingThreads());
+        assertEquals("Missing source topics", exception.getMessage());
     }
 
     @Test
