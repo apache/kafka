@@ -2869,20 +2869,20 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     var prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
 
     def sleepMillisToPropagateMetadata(durationMs: Long): Unit = {
-        TimeUnit.MILLISECONDS.sleep(100)
-        TestUtils.waitUntilTrue(
-          () => {
-            prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
-            val allSynced = brokers.forall {
-              broker => val leaderIdOpt = broker.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).map(_.id())
-              val leaderId = leaderIdOpt.toScala
-              leaderId.contains(prior2)
-            }
-            allSynced
-          },
-          s"Waited less than $durationMs ms",
-          durationMs
-        )
+      TimeUnit.MILLISECONDS.sleep(100)
+      TestUtils.waitUntilTrue(
+        () => {
+          prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
+          val allSynced = brokers.forall {
+            broker => val leaderIdOpt = broker.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).map(_.id())
+            val leaderId = leaderIdOpt.toScala
+            leaderId.contains(prior2)
+          }
+          allSynced
+        },
+        s"Waited less than $durationMs ms",
+        durationMs
+      )
     }
 
     def preferredLeader(topicPartition: TopicPartition): Int = {
