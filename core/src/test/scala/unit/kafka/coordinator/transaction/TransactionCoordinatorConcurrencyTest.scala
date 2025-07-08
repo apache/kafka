@@ -17,6 +17,7 @@
 package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
+import java.util
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -46,8 +47,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
 import org.mockito.Mockito.{mock, when}
-
-import java.util
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -469,7 +468,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
     txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TransactionVersion.TV_2))
 
-    txnMetadata.setState(TransactionState.PREPARE_COMMIT)
+    txnMetadata.state(TransactionState.PREPARE_COMMIT)
     txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TransactionVersion.TV_2))
 
     prepareTxnLog(partitionId)
@@ -515,7 +514,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       RecordBatch.NO_PRODUCER_EPOCH,
       60000,
       TransactionState.EMPTY,
-      util.Set.of,
+      new util.HashSet[TopicPartition](),
       -1,
       time.milliseconds(),
       TransactionVersion.TV_0)
@@ -631,7 +630,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     override def run(): Unit = {
       transactions.foreach { txn =>
         transactionMetadata(txn).foreach { txnMetadata =>
-          txnMetadata.setTxnLastUpdateTimestamp(time.milliseconds() - txnConfig.transactionalIdExpirationMs)
+          txnMetadata.txnLastUpdateTimestamp(time.milliseconds() - txnConfig.transactionalIdExpirationMs)
         }
       }
       txnStateManager.enableTransactionalIdExpiration()

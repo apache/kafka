@@ -132,7 +132,7 @@ public class TransactionMetadata {
     public TxnTransitMetadata prepareNoTransit() {
         // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
         return new TxnTransitMetadata(producerId, prevProducerId, nextProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs,
-            state, new HashSet<>(topicPartitions), txnStartTimestamp, txnLastUpdateTimestamp, clientTransactionVersion);
+            state, Set.copyOf(topicPartitions), txnStartTimestamp, txnLastUpdateTimestamp, clientTransactionVersion);
     }
 
     public TxnTransitMetadata prepareFenceProducerEpoch() {
@@ -155,42 +155,34 @@ public class TransactionMetadata {
         if (isProducerEpochExhausted())
             throw new IllegalStateException("Cannot allocate any more producer epochs for producerId " + producerId);
 
+        TransitionData data = new TransitionData(TransactionState.EMPTY);
         short bumpedEpoch = (short) (producerEpoch + 1);
-        short produceEpochResult;
-        short lastProducerEpochResult;
-
         if (expectedProducerEpoch.isEmpty()) {
             // If no expected epoch was provided by the producer, bump the current epoch and set the last epoch to -1
             // In the case of a new producer, producerEpoch will be -1 and bumpedEpoch will be 0
-            produceEpochResult = bumpedEpoch;
-            lastProducerEpochResult = RecordBatch.NO_PRODUCER_EPOCH;
+            data.producerEpoch = bumpedEpoch;
+            data.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
+        } else if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || expectedProducerEpoch.get() == producerEpoch) {
+            // If the expected epoch matches the current epoch, or if there is no current epoch, the producer is attempting
+            // to continue after an error and no other producer has been initialized. Bump the current and last epochs.
+            // The no current epoch case means this is a new producer; producerEpoch will be -1 and bumpedEpoch will be 0
+            data.producerEpoch = bumpedEpoch;
+            data.lastProducerEpoch = producerEpoch;
+        } else if (expectedProducerEpoch.get() == lastProducerEpoch) {
+            // If the expected epoch matches the previous epoch, it is a retry of a successful call, so just return the
+            // current epoch without bumping. There is no danger of this producer being fenced, because a new producer
+            // calling InitProducerId would have caused the last epoch to be set to -1.
+            // Note that if the IBP is prior to 2.4.IV1, the lastProducerId and lastProducerEpoch will not be written to
+            // the transaction log, so a retry that spans a coordinator change will fail. We expect this to be a rare case.
+            data.producerEpoch = producerEpoch;
+            data.lastProducerEpoch = lastProducerEpoch;
         } else {
-            short expectedEpoch = expectedProducerEpoch.get();
-            if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || expectedEpoch == producerEpoch) {
-                // If the expected epoch matches the current epoch, or if there is no current epoch, the producer is attempting
-                // to continue after an error and no other producer has been initialized. Bump the current and last epochs.
-                // The no current epoch case means this is a new producer; producerEpoch will be -1 and bumpedEpoch will be 0
-                produceEpochResult = bumpedEpoch;
-                lastProducerEpochResult = producerEpoch;
-            } else if (expectedEpoch == lastProducerEpoch) {
-                // If the expected epoch matches the previous epoch, it is a retry of a successful call, so just return the
-                // current epoch without bumping. There is no danger of this producer being fenced, because a new producer
-                // calling InitProducerId would have caused the last epoch to be set to -1.
-                // Note that if the IBP is prior to 2.4.IV1, the lastProducerId and lastProducerEpoch will not be written to
-                // the transaction log, so a retry that spans a coordinator change will fail. We expect this to be a rare case.
-                produceEpochResult = producerEpoch;
-                lastProducerEpochResult = lastProducerEpoch;
-            } else {
-                // Otherwise, the producer has a fenced epoch and should receive an PRODUCER_FENCED error
-                LOGGER.info("Expected producer epoch {} does not match current producer epoch {} or previous producer epoch {}",
-                    expectedEpoch, producerEpoch, lastProducerEpoch);
-                throw Errors.PRODUCER_FENCED.exception();
-            }
+            // Otherwise, the producer has a fenced epoch and should receive an PRODUCER_FENCED error
+            LOGGER.info("Expected producer epoch {} does not match current producer epoch {} or previous producer epoch {}",
+                expectedProducerEpoch.get(), producerEpoch, lastProducerEpoch);
+            throw Errors.PRODUCER_FENCED.exception();
         }
 
-        TransitionData data = new TransitionData(TransactionState.EMPTY);
-        data.producerEpoch = produceEpochResult;
-        data.lastProducerEpoch = lastProducerEpochResult;
         data.txnTimeoutMs = newTxnTimeoutMs;
         data.topicPartitions = Set.of();
         data.txnStartTimestamp = -1L;
@@ -242,42 +234,31 @@ public class TransactionMetadata {
                                                    long nextProducerId,
                                                    long updateTimestamp,
                                                    boolean noPartitionAdded) {
-        short updatedProducerEpoch;
-        short updatedLastProducerEpoch;
-
+        TransitionData data = new TransitionData(newState);
         if (clientTransactionVersion.supportsEpochBump()) {
             // We already ensured that we do not overflow here. MAX_SHORT is the highest possible value.
-            updatedProducerEpoch = (short) (producerEpoch + 1);
-            updatedLastProducerEpoch = producerEpoch;
+            data.producerEpoch = (short) (producerEpoch + 1);
+            data.lastProducerEpoch = producerEpoch;
         } else {
-            updatedProducerEpoch = producerEpoch;
-            updatedLastProducerEpoch = lastProducerEpoch;
+            data.producerEpoch = producerEpoch;
+            data.lastProducerEpoch = lastProducerEpoch;
         }
 
         // With transaction V2, it is allowed to abort the transaction without adding any partitions. Then, the transaction
         // start time is uncertain but it is still required. So we can use the update time as the transaction start time.
-        long newTxnStartTimestamp = noPartitionAdded ? updateTimestamp : txnStartTimestamp;
-
-        TransitionData data = new TransitionData(newState);
+        data.txnStartTimestamp = noPartitionAdded ? updateTimestamp : txnStartTimestamp;
         data.nextProducerId = nextProducerId;
-        data.producerEpoch = updatedProducerEpoch;
-        data.lastProducerEpoch = updatedLastProducerEpoch;
-        data.txnStartTimestamp = newTxnStartTimestamp;
         data.txnLastUpdateTimestamp = updateTimestamp;
         data.clientTransactionVersion = clientTransactionVersion;
         return prepareTransitionTo(data);
     }
 
     public TxnTransitMetadata prepareComplete(long updateTimestamp) {
-        TransactionState newState = state == TransactionState.PREPARE_COMMIT ?
-            TransactionState.COMPLETE_COMMIT : TransactionState.COMPLETE_ABORT;
-
         // Since the state change was successfully written to the log, unset the flag for a failed epoch fence
         hasFailedEpochFence = false;
 
-        long updatedProducerId;
-        short updatedProducerEpoch;
-
+        TransitionData data = new TransitionData(state == TransactionState.PREPARE_COMMIT ?
+            TransactionState.COMPLETE_COMMIT : TransactionState.COMPLETE_ABORT);
         // In the prepareComplete transition for the overflow case, the lastProducerEpoch is kept at MAX-1,
         // which is the last epoch visible to the client.
         // Internally, however, during the transition between prepareAbort/prepareCommit and prepareComplete, the producer epoch
@@ -285,17 +266,13 @@ public class TransactionMetadata {
         // When an epoch overflow occurs, we set the producerId to nextProducerId and reset the epoch to 0,
         // but lastProducerEpoch remains MAX-1 to maintain consistency with what the client last saw.
         if (clientTransactionVersion.supportsEpochBump() && nextProducerId != RecordBatch.NO_PRODUCER_ID) {
-            updatedProducerId = nextProducerId;
-            updatedProducerEpoch = 0;
+            data.producerId = nextProducerId;
+            data.producerEpoch = 0;
         } else {
-            updatedProducerId = producerId;
-            updatedProducerEpoch = producerEpoch;
+            data.producerId = producerId;
+            data.producerEpoch = producerEpoch;
         }
-
-        TransitionData data = new TransitionData(newState);
-        data.producerId = updatedProducerId;
         data.nextProducerId = RecordBatch.NO_PRODUCER_ID;
-        data.producerEpoch = updatedProducerEpoch;
         data.topicPartitions = Set.of();
         data.txnLastUpdateTimestamp = updateTimestamp;
         return prepareTransitionTo(data);
@@ -354,10 +331,9 @@ public class TransactionMetadata {
             LOGGER.debug("TransactionalId {} prepare transition from {} to {}", transactionalId, this.state, data.state);
             pendingState = Optional.of(data.state);
             return transitMetadata;
-        } else {
-            throw new IllegalStateException("Preparing transaction state transition to " + data.state + " failed since the target state " +
-                data.state + " is not a valid previous state of the current state " + this.state);
         }
+        throw new IllegalStateException("Preparing transaction state transition to " + data.state + " failed since the target state " +
+            data.state + " is not a valid previous state of the current state " + this.state);
     }
 
     @SuppressWarnings("CyclomaticComplexity")
@@ -493,16 +469,14 @@ public class TransactionMetadata {
         if (isAtLeastTransactionsV2 &&
             (txnState == TransactionState.COMPLETE_COMMIT || txnState == TransactionState.COMPLETE_ABORT) &&
             transitProducerEpoch == 0) {
-            return transitLastProducerEpoch == lastProducerEpoch &&
-                transitMetadata.prevProducerId() == producerId;
-        } else if (isAtLeastTransactionsV2 &&
-            (txnState == TransactionState.PREPARE_COMMIT || txnState == TransactionState.PREPARE_ABORT)) {
-            return transitLastProducerEpoch == producerEpoch &&
-                transitProducerId == producerId;
-        } else {
-            return transitProducerEpoch == producerEpoch &&
-                transitProducerId == producerId;
+            return transitLastProducerEpoch == lastProducerEpoch && transitMetadata.prevProducerId() == producerId;
         }
+
+        if (isAtLeastTransactionsV2 &&
+            (txnState == TransactionState.PREPARE_COMMIT || txnState == TransactionState.PREPARE_ABORT)) {
+            return transitLastProducerEpoch == producerEpoch && transitProducerId == producerId;
+        }
+        return transitProducerEpoch == producerEpoch && transitProducerId == producerId;
     }
 
     private boolean validProducerEpochBump(TxnTransitMetadata transitMetadata) {
@@ -565,7 +539,7 @@ public class TransactionMetadata {
         return txnTimeoutMs;
     }
 
-    public void setState(TransactionState state) {
+    public void state(TransactionState state) {
         this.state = state;
     }
 
@@ -581,7 +555,7 @@ public class TransactionMetadata {
         return txnStartTimestamp;
     }
 
-    public void setTxnLastUpdateTimestamp(long txnLastUpdateTimestamp) {
+    public void txnLastUpdateTimestamp(long txnLastUpdateTimestamp) {
         this.txnLastUpdateTimestamp = txnLastUpdateTimestamp;
     }
 
@@ -589,7 +563,7 @@ public class TransactionMetadata {
         return txnLastUpdateTimestamp;
     }
 
-    public void setClientTransactionVersion(TransactionVersion clientTransactionVersion) {
+    public void clientTransactionVersion(TransactionVersion clientTransactionVersion) {
         this.clientTransactionVersion = clientTransactionVersion;
     }
 
@@ -597,7 +571,7 @@ public class TransactionMetadata {
         return clientTransactionVersion;
     }
 
-    public void setPendingState(Optional<TransactionState> pendingState) {
+    public void pendingState(Optional<TransactionState> pendingState) {
         this.pendingState = pendingState;
     }
 
@@ -605,7 +579,7 @@ public class TransactionMetadata {
         return pendingState;
     }
 
-    public void setHasFailedEpochFence(boolean hasFailedEpochFence) {
+    public void hasFailedEpochFence(boolean hasFailedEpochFence) {
         this.hasFailedEpochFence = hasFailedEpochFence;
     }
 
@@ -677,7 +651,7 @@ public class TransactionMetadata {
         short producerEpoch = TransactionMetadata.this.producerEpoch;
         short lastProducerEpoch = TransactionMetadata.this.lastProducerEpoch;
         int txnTimeoutMs = TransactionMetadata.this.txnTimeoutMs;
-        Set<TopicPartition> topicPartitions = Set.copyOf(TransactionMetadata.this.topicPartitions);
+        Set<TopicPartition> topicPartitions = TransactionMetadata.this.topicPartitions;
         long txnStartTimestamp = TransactionMetadata.this.txnStartTimestamp;
         long txnLastUpdateTimestamp = TransactionMetadata.this.txnLastUpdateTimestamp;
         TransactionVersion clientTransactionVersion = TransactionMetadata.this.clientTransactionVersion;

@@ -278,7 +278,7 @@ class TransactionStateManager(brokerId: Int,
                     s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
                     s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
                     s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
-                  txnMetadata.setPendingState(Optional.empty())
+                  txnMetadata.pendingState(Optional.empty())
                 }
               })
             }
@@ -751,7 +751,7 @@ class TransactionStateManager(brokerId: Int,
                   info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
                     s"resetting pending state from ${metadata.pendingState}, aborting state transition and returning $responseError in the callback")
 
-                  metadata.setPendingState(Optional.empty())
+                  metadata.pendingState(Optional.empty())
                 }
               } else {
                 info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +

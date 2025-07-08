@@ -575,7 +575,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
                   isEpochFence = true
-                  txnMetadata.setPendingState(util.Optional.empty())
+                  txnMetadata.pendingState(util.Optional.empty())
                   txnMetadata.setProducerEpoch(producerEpoch)
                   txnMetadata.setLastProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
                 }
@@ -689,7 +689,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   case Some(epochAndMetadata) =>
                     if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                       // This was attempted epoch fence that failed, so mark this state on the metadata
-                      epochAndMetadata.transactionMetadata.setHasFailedEpochFence(true)
+                      epochAndMetadata.transactionMetadata.hasFailedEpochFence(true)
                       warn(s"The coordinator failed to write an epoch fence transition for producer $transactionalId to the transaction log " +
                         s"with error $error. The epoch was increased to ${newMetadata.producerEpoch} but not returned to the client")
                     }
@@ -827,7 +827,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
               if (nextState == TransactionState.PREPARE_ABORT && isEpochFence) {
                 // We should clear the pending state to make way for the transition to PrepareAbort
-                txnMetadata.setPendingState(util.Optional.empty())
+                txnMetadata.pendingState(util.Optional.empty())
                 // For TV2+, don't manually set the epoch - let prepareAbortOrCommit handle it naturally.
               }
 

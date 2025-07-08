@@ -377,7 +377,7 @@ class TransactionCoordinatorTest {
     // Pending state does not matter, we will just check if the partitions are in the txnMetadata.
     val ongoingTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
       0, RecordBatch.NO_PRODUCER_EPOCH, 0, TransactionState.ONGOING, util.Set.of, 0, 0, TV_0)
-    ongoingTxnMetadata.setPendingState(util.Optional.of(TransactionState.COMPLETE_COMMIT))
+    ongoingTxnMetadata.pendingState(util.Optional.of(TransactionState.COMPLETE_COMMIT))
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, ongoingTxnMetadata))))
 
@@ -1133,10 +1133,10 @@ class TransactionCoordinatorTest {
       any())
     ).thenAnswer(_ => {
       capturedErrorsCallback.getValue.apply(Errors.NOT_ENOUGH_REPLICAS)
-      txnMetadata.setPendingState(util.Optional.empty())
+      txnMetadata.pendingState(util.Optional.empty())
     }).thenAnswer(_ => {
       capturedErrorsCallback.getValue.apply(Errors.NOT_ENOUGH_REPLICAS)
-      txnMetadata.setPendingState(util.Optional.empty())
+      txnMetadata.pendingState(util.Optional.empty())
     }).thenAnswer(_ => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
 
@@ -1473,7 +1473,7 @@ class TransactionCoordinatorTest {
       any())
     ).thenAnswer(_ => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
-      txnMetadata.setPendingState(util.Optional.empty())
+      txnMetadata.pendingState(util.Optional.empty())
     })
 
     // Re-initialization should succeed and bump the producer epoch
@@ -1521,7 +1521,7 @@ class TransactionCoordinatorTest {
       any())
     ).thenAnswer(_ => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
-      txnMetadata.setPendingState(util.Optional.empty())
+      txnMetadata.pendingState(util.Optional.empty())
       txnMetadata.setProducerEpoch(capturedTxnTransitMetadata.getValue.producerEpoch)
       txnMetadata.setLastProducerEpoch(capturedTxnTransitMetadata.getValue.lastProducerEpoch)
     })
@@ -1572,7 +1572,7 @@ class TransactionCoordinatorTest {
       any())
     ).thenAnswer(_ => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
-      txnMetadata.setPendingState(util.Optional.empty())
+      txnMetadata.pendingState(util.Optional.empty())
       txnMetadata.setProducerId(capturedTxnTransitMetadata.getValue.producerId)
       txnMetadata.setPrevProducerId(capturedTxnTransitMetadata.getValue.prevProducerId)
       txnMetadata.setProducerEpoch(capturedTxnTransitMetadata.getValue.producerEpoch)
@@ -1625,7 +1625,7 @@ class TransactionCoordinatorTest {
       any())
     ).thenAnswer(_ => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
-      txnMetadata.setPendingState(util.Optional.empty())
+      txnMetadata.pendingState(util.Optional.empty())
       txnMetadata.setProducerId(capturedTxnTransitMetadata.getValue.producerId)
       txnMetadata.setPrevProducerId(capturedTxnTransitMetadata.getValue.prevProducerId)
       txnMetadata.setProducerEpoch(capturedTxnTransitMetadata.getValue.producerEpoch)
@@ -2010,7 +2010,7 @@ class TransactionCoordinatorTest {
 
       // Simulate the real TransactionStateManager behavior: reset pendingState on failure
       // since handleInitProducerId doesn't provide a custom retryOnError function
-      txnMetadata.setPendingState(util.Optional.empty())
+      txnMetadata.pendingState(util.Optional.empty())
 
       // For TV2, hasFailedEpochFence is NOT set to true, allowing epoch bumps on retry
       // The epoch remains at its original value (1) since completeTransitionTo was never called
@@ -2065,7 +2065,7 @@ class TransactionCoordinatorTest {
       // Simulate the completion of transaction markers and the second write
       // This would normally happen asynchronously after markers are sent
       txnMetadata.completeTransitionTo(newMetadata) // This transitions to COMPLETE_ABORT
-      txnMetadata.setPendingState(util.Optional.empty())
+      txnMetadata.pendingState(util.Optional.empty())
       
       null
     }).when(transactionMarkerChannelManager).addTxnMarkersToSend(

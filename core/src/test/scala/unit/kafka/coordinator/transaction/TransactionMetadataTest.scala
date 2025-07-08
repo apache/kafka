@@ -428,7 +428,7 @@ class TransactionMetadataTest {
     assertEquals(Optional.of(TransactionState.PREPARE_EPOCH_FENCE), txnMetadata.pendingState)
 
     // We should reset the pending state to make way for the abort transition.
-    txnMetadata.setPendingState(Optional.empty())
+    txnMetadata.pendingState(Optional.empty())
 
     val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds(), false)
     txnMetadata.completeTransitionTo(transitMetadata)

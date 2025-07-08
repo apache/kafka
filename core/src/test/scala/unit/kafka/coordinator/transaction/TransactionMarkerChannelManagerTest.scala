@@ -477,7 +477,7 @@ class TransactionMarkerChannelManagerTest {
 
     assertEquals(0, channelManager.numTxnsWithPendingMarkers)
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
-    assertTrue(txnMetadata2.pendingState.isEmpty)
+    assertEquals(Optional.empty(), txnMetadata2.pendingState)
     assertEquals(TransactionState.COMPLETE_COMMIT, txnMetadata2.state)
   }
 
@@ -506,7 +506,7 @@ class TransactionMarkerChannelManagerTest {
       any(),
       any()))
       .thenAnswer(_ => {
-        txnMetadata2.setPendingState(util.Optional.empty())
+        txnMetadata2.pendingState(util.Optional.empty())
         capturedErrorsCallback.getValue.apply(Errors.NOT_COORDINATOR)
       })
 
@@ -530,7 +530,7 @@ class TransactionMarkerChannelManagerTest {
 
     assertEquals(0, channelManager.numTxnsWithPendingMarkers)
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
-    assertTrue(txnMetadata2.pendingState.isEmpty)
+    assertEquals(Optional.empty(), txnMetadata2.pendingState)
     assertEquals(TransactionState.PREPARE_COMMIT, txnMetadata2.state)
   }
 
@@ -591,7 +591,7 @@ class TransactionMarkerChannelManagerTest {
 
     assertEquals(0, channelManager.numTxnsWithPendingMarkers)
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
-    assertTrue(txnMetadata2.pendingState.isEmpty)
+    assertEquals(Optional.empty(), txnMetadata2.pendingState)
     assertEquals(TransactionState.COMPLETE_COMMIT, txnMetadata2.state)
   }
 
@@ -631,11 +631,11 @@ class TransactionMarkerChannelManagerTest {
     txnMetadata: TransactionMetadata
   ): Unit = {
     if (isTransactionV2Enabled) {
-      txnMetadata.setClientTransactionVersion(TransactionVersion.TV_2)
+      txnMetadata.clientTransactionVersion(TransactionVersion.TV_2)
       txnMetadata.setProducerEpoch((producerEpoch + 1).toShort)
       txnMetadata.setLastProducerEpoch(producerEpoch)
     } else {
-      txnMetadata.setClientTransactionVersion(TransactionVersion.TV_1)
+      txnMetadata.clientTransactionVersion(TransactionVersion.TV_1)
     }
   }
 }
