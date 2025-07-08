@@ -112,7 +112,7 @@ public class ShareFetchCollector<K, V> {
                     fetch.add(tp, batch);
 
                     if (batch.getException() != null) {
-                        throw batch.getException();
+                        throw new ShareFetchException(batch.getException(), fetch);
                     } else if (batch.hasCachedException()) {
                         break;
                     }

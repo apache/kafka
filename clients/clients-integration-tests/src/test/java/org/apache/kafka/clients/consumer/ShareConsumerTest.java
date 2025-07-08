@@ -41,6 +41,8 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -67,6 +69,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -841,6 +844,75 @@ public class ShareConsumerTest {
             assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(consumedRecord));
             verifyShareGroupStateTopicRecordsProduced();
         }
+    }
+
+    @ClusterTest
+    public void testExplicitOverrideAcknowledgeCorruptedMessage() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT),
+                null,
+                mockErrorDeserializer(3))) {
+
+            ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            ProducerRecord<byte[], byte[]> record3 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            producer.send(record1);
+            producer.send(record2);
+            producer.send(record3);
+            producer.flush();
+
+            shareConsumer1.subscribe(Set.of(tp.topic()));
+
+            Map<TopicPartition, Set<Long>> partitionOffsetsMap1 = new HashMap<>();
+            Map<TopicPartition, Exception> partitionExceptionMap1 = new HashMap<>();
+            shareConsumer1.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
+
+            ConsumerRecords<byte[], byte[]> records = shareConsumer1.poll(Duration.ofSeconds(60));
+            assertEquals(2, records.count());
+            Iterator<ConsumerRecord<byte[], byte[]>> iterator = records.iterator();
+
+            ConsumerRecord<byte[], byte[]> firstRecord = iterator.next();
+            ConsumerRecord<byte[], byte[]> secondRecord = iterator.next();
+            assertEquals(0L, firstRecord.offset());
+            assertEquals(1L, secondRecord.offset());
+            shareConsumer1.acknowledge(firstRecord);
+            shareConsumer1.acknowledge(secondRecord);
+
+            RecordDeserializationException rde = assertThrows(RecordDeserializationException.class, () -> shareConsumer1.poll(Duration.ofSeconds(60)));
+            assertEquals(2, rde.offset());
+            shareConsumer1.commitSync();
+
+            // The corrupted record was automatically released, so we can still obtain it.
+            rde = assertThrows(RecordDeserializationException.class, () -> shareConsumer1.poll(Duration.ofSeconds(60)));
+            assertEquals(2, rde.offset());
+
+            // Reject this record
+            shareConsumer1.acknowledge(rde.topicPartition().topic(), rde.topicPartition().partition(), rde.offset(), AcknowledgeType.REJECT);
+            shareConsumer1.commitSync();
+
+            records = shareConsumer1.poll(Duration.ZERO);
+            assertEquals(0, records.count());
+        }
+    }
+
+    private ByteArrayDeserializer mockErrorDeserializer(int recordNumber) {
+        int recordIndex = recordNumber - 1;
+        return new ByteArrayDeserializer() {
+            int i = 0;
+
+            @Override
+            public byte[] deserialize(String topic, Headers headers, ByteBuffer data) {
+                if (i == recordIndex) {
+                    throw new SerializationException();
+                } else {
+                    i++;
+                    return super.deserialize(topic, headers, data);
+                }
+            }
+        };
     }
 
     @ClusterTest
@@ -2795,12 +2867,21 @@ public class ShareConsumerTest {
         String groupId,
         Map<?, ?> additionalProperties
     ) {
+        return createShareConsumer(groupId, additionalProperties, null, null);
+    }
+
+    private <K, V> ShareConsumer<K, V> createShareConsumer(
+        String groupId,
+        Map<?, ?> additionalProperties,
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer
+    ) {
         Properties props = new Properties();
         props.putAll(additionalProperties);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         Map<String, Object> conf = new HashMap<>();
         props.forEach((k, v) -> conf.put((String) k, v));
-        return cluster.shareConsumer(conf);
+        return cluster.shareConsumer(conf, keyDeserializer, valueDeserializer);
     }
 
     private void warmup() throws InterruptedException {

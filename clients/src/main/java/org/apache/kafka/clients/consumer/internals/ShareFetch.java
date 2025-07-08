@@ -110,13 +110,32 @@ public class ShareFetch<K, V> {
      * Acknowledge a single record in the current batch.
      *
      * @param record The record to acknowledge
-     * @param type The acknowledge type which indicates whether it was processed successfully
+     * @param type The acknowledgment type which indicates whether it was processed successfully
      */
     public void acknowledge(final ConsumerRecord<K, V> record, AcknowledgeType type) {
         for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> tipBatch : batches.entrySet()) {
             TopicIdPartition tip = tipBatch.getKey();
             if (tip.topic().equals(record.topic()) && (tip.partition() == record.partition())) {
                 tipBatch.getValue().acknowledge(record, type);
+                return;
+            }
+        }
+        throw new IllegalStateException("The record cannot be acknowledged.");
+    }
+
+    /**
+     * Acknowledge a single record by its topic, partition and offset in the current batch.
+     *
+     * @param topic     The topic of the record to acknowledge
+     * @param partition The partition of the record
+     * @param offset    The offset of the record
+     * @param type      The acknowledgment type which indicates whether it was processed successfully
+     */
+    public void acknowledge(final String topic, final int partition, final long offset, final AcknowledgeType type) {
+        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> tipBatch : batches.entrySet()) {
+            TopicIdPartition tip = tipBatch.getKey();
+            if (tip.topic().equals(topic) && (tip.partition() == partition)) {
+                tipBatch.getValue().addAcknowledgement(offset, type);
                 return;
             }
         }
