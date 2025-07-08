@@ -1538,7 +1538,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                 if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
                     shutdownErrorHook.run();
                 } else if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code()) {
-                    final String errorMsg = "Missing source topics";
+                    final String errorMsg = String.format("Missing source topics: %s", status.statusDetail());
                     log.error(errorMsg);
                     throw new MissingSourceTopicException(errorMsg);
                 }

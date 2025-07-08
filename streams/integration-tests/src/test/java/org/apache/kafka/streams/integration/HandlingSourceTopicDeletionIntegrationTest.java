@@ -96,7 +96,6 @@ public class HandlingSourceTopicDeletionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
         streamsConfiguration.put(StreamsConfig.METADATA_MAX_AGE_CONFIG, 2000);
         
-        // set group protocol according to parameter
         if (useNewProtocol) {
             streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         }
