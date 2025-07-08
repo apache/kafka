@@ -19,7 +19,9 @@ package org.apache.kafka.image.loader.metrics;
 
 import org.apache.kafka.controller.metrics.ControllerMetricsTestUtils;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
@@ -183,7 +185,7 @@ public class MetadataLoaderMetricsTest {
                 );
 
                 // Record metadata version and verify its metric
-                fakeMetrics.metrics.recordFinalizedFeatureLevel("metadata.version", (short) 5);
+                fakeMetrics.metrics.recordFinalizedFeatureLevel(MetadataVersion.FEATURE_NAME, (short) 5);
                 @SuppressWarnings("unchecked")
                 Gauge<Short> finalizedMetadataVersion = (Gauge<Short>) registry
                     .allMetrics()
@@ -191,50 +193,60 @@ public class MetadataLoaderMetricsTest {
                 assertEquals((short) 5, finalizedMetadataVersion.value());
 
                 // Record KRaft version and verify its metric
-                fakeMetrics.metrics.recordFinalizedFeatureLevel("kraft.version", (short) 1);
+                fakeMetrics.metrics.recordFinalizedFeatureLevel(KRaftVersion.FEATURE_NAME, (short) 1);
                 @SuppressWarnings("unchecked")
-                Gauge<Short> finalizedKRaftVersion1 = (Gauge<Short>) registry
+                Gauge<Short> finalizedKRaftVersion = (Gauge<Short>) registry
                     .allMetrics()
                     .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=kraftVersion"));
-                assertEquals((short) 1, finalizedKRaftVersion1.value());
+                assertEquals((short) 1, finalizedKRaftVersion.value());
 
-                // Verify both metrics are registered
+                // Record transaction version and verify its metric
+                fakeMetrics.metrics.recordFinalizedFeatureLevel(TransactionVersion.FEATURE_NAME, (short) 1);
+                @SuppressWarnings("unchecked")
+                Gauge<Short> finalizedTransactionVersion = (Gauge<Short>) registry
+                    .allMetrics()
+                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=transactionVersion"));
+                assertEquals((short) 1, finalizedTransactionVersion.value());
+
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
                     Set.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion"
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=transactionVersion"
                     )
                 );
 
                 // When a feature's finalized level is not present in the new image, its metric should be removed
-                // This does not apply to metadataVersion since it is always present
+                // This does not apply to metadataVersion and kraftVersion
                 fakeMetrics.metrics.maybeRemoveFinalizedFeatureLevelMetrics(Map.of());
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
                     Set.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion"
                     )
                 );
 
                 // Set the finalized feature level and check the metric is added back with its correct value
-                fakeMetrics.metrics.recordFinalizedFeatureLevel("kraft.version", (short) 2);
+                fakeMetrics.metrics.recordFinalizedFeatureLevel(TransactionVersion.FEATURE_NAME, (short) 2);
                 @SuppressWarnings("unchecked")
-                Gauge<Short> finalizedKraftVersion2 = (Gauge<Short>) registry
+                Gauge<Short> finalizedTransactionVersion2 = (Gauge<Short>) registry
                     .allMetrics()
-                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=kraftVersion"));
-                assertEquals((short) 2, finalizedKraftVersion2.value());
+                    .get(metricName("MetadataLoader", "FinalizedLevel", "featureName=transactionVersion"));
+                assertEquals((short) 2, finalizedTransactionVersion2.value());
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
                     Set.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
-                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion"
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion",
+                        "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=transactionVersion"
                     )
                 );
             }

@@ -18,6 +18,7 @@
 package org.apache.kafka.image.loader.metrics;
 
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
@@ -178,16 +179,20 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
     /**
      * Remove the FinalizedLevel metric for features who are no longer part of the
      * current features image.
+     * Note that metadata.version and kraft.version are not included in
+     * the features image, so they are not removed.
      * @param newFinalizedLevels The new finalized feature levels from the features image
      */
     public void maybeRemoveFinalizedFeatureLevelMetrics(Map<String, Short> newFinalizedLevels) {
         finalizedFeatureLevels.keySet().stream().filter(
             featureName -> !newFinalizedLevels.containsKey(featureName) &&
-                !featureName.equals(MetadataVersion.FEATURE_NAME)
+                !featureName.equals(MetadataVersion.FEATURE_NAME) &&
+                !featureName.equals(KRaftVersion.FEATURE_NAME)
         ).forEach(this::removeFinalizedFeatureLevelMetric);
         finalizedFeatureLevels.keySet().removeIf(
             featureName -> !newFinalizedLevels.containsKey(featureName) &&
-                !featureName.equals(MetadataVersion.FEATURE_NAME)
+                !featureName.equals(MetadataVersion.FEATURE_NAME) &&
+                !featureName.equals(KRaftVersion.FEATURE_NAME)
         );
     }
 
