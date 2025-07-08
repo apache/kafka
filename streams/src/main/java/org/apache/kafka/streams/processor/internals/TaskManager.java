@@ -751,7 +751,8 @@ public class TaskManager {
                 .forEach(removedTaskResult -> {
                     if (removedTaskResult.exception().isPresent()) {
                         final RuntimeException runtimeException = removedTaskResult.exception().get();
-                        if (runtimeException instanceof TimeoutException) {
+                        final boolean isTaskTimeout = (runtimeException.getCause() != null && runtimeException.getCause() instanceof TimeoutException);
+                        if (runtimeException instanceof StreamsException && isTaskTimeout) {
                             tasksToCloseCleanFromStateUpdater.add(removedTaskResult.task());
                         } else  {
                             tasksToCloseDirtyFromStateUpdater.add(removedTaskResult.task());
