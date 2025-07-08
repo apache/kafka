@@ -1148,7 +1148,7 @@ class Partition(val topicPartition: TopicPartition,
   def getOutOfSyncReplicas(maxLagMs: Long): Set[Int] = {
     val current = partitionState
     if (!current.isInflight) {
-      val candidateReplicaIds = current.isr.asScala.map(_.toInt).toSet - localBrokerId
+      val candidateReplicaIds = (current.isr.asScala.map(_.toInt) - localBrokerId).toSet
       val currentTimeMs = time.milliseconds()
       val leaderEndOffset = localLogOrException.logEndOffset
       candidateReplicaIds.filter(replicaId => isFollowerOutOfSync(replicaId, leaderEndOffset, currentTimeMs, maxLagMs))
@@ -1604,7 +1604,7 @@ class Partition(val topicPartition: TopicPartition,
     // reflect the updated ISR even if there is a delay before we receive the confirmation.
     // Alternatively, if the update fails, no harm is done since the expanded ISR puts
     // a stricter requirement for advancement of the HW.
-    val isrToSend = partitionState.isr.asScala.map(_.toInt).toSet + newInSyncReplicaId
+    val isrToSend = (partitionState.isr.asScala.map(_.toInt) + newInSyncReplicaId).toSet
     val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList).asJava
     val newLeaderAndIsr = new LeaderAndIsr(
       localBrokerId,
@@ -1629,7 +1629,7 @@ class Partition(val topicPartition: TopicPartition,
     // When shrinking the ISR, we cannot assume that the update will succeed as this could
     // erroneously advance the HW if the `AlterPartition` were to fail. Hence the "maximal ISR"
     // for `PendingShrinkIsr` is the current ISR.
-    val isrToSend = partitionState.isr.asScala.map(_.toInt).toSet -- outOfSyncReplicaIds
+    val isrToSend = partitionState.isr.asScala.map(_.toInt).diff(outOfSyncReplicaIds)
     val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList).asJava
     val newLeaderAndIsr = new LeaderAndIsr(
       localBrokerId,

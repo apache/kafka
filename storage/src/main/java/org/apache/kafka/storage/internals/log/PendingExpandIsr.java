@@ -17,7 +17,9 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.metadata.LeaderAndIsr;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -39,7 +41,12 @@ public record PendingExpandIsr(int newInSyncReplicaId,
     public Set<Integer> maximalIsr() {
         Set<Integer> newIsr = new HashSet<>(lastCommittedState.isr());
         newIsr.add(newInSyncReplicaId);
-        return Set.copyOf(newIsr);
+        return Collections.unmodifiableSet(newIsr);
+    }
+
+    @Override
+    public LeaderRecoveryState leaderRecoveryState() {
+        return LeaderRecoveryState.RECOVERED;
     }
 
     @Override

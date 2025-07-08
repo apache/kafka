@@ -17,6 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.metadata.LeaderAndIsr;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 
 import java.util.Set;
 
@@ -37,6 +38,11 @@ public record PendingShrinkIsr(Set<Integer> outOfSyncReplicaIds,
     @Override
     public Set<Integer> maximalIsr() {
         return isr();
+    }
+
+    @Override
+    public LeaderRecoveryState leaderRecoveryState() {
+        return LeaderRecoveryState.RECOVERED;
     }
 
     @Override
