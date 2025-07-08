@@ -47,6 +47,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -380,17 +381,17 @@ public class ClientQuotasRequestTest {
     // Entities to be matched against.
     private final Map<ClientQuotaEntity, Double> matchUserClientEntities = new HashMap<>() {
         {
-            put(toClientEntity(Optional.of("user-1"), Optional.of("client-id-1")), 50.50);
-            put(toClientEntity(Optional.of("user-2"), Optional.of("client-id-1")), 51.51);
-            put(toClientEntity(Optional.of("user-3"), Optional.of("client-id-2")), 52.52);
-            put(toClientEntity(Optional.empty(), Optional.of("client-id-1")), 53.53);
-            put(toClientEntity(Optional.of("user-1"), Optional.empty()), 54.54);
-            put(toClientEntity(Optional.of("user-3"), Optional.empty()), 55.55);
-            put(toClientEntity(Optional.of("user-1"), null), 56.56);
-            put(toClientEntity(Optional.of("user-2"), null), 57.57);
-            put(toClientEntity(Optional.of("user-3"), null), 58.58);
-            put(toClientEntity(Optional.empty(), null), 59.59);
-            put(toClientEntity(null, Optional.of("client-id-2")), 60.60);
+            put(toClientEntity(() -> toUserMap("user-1"), () -> toClientIdMap("client-id-1")), 50.50);
+            put(toClientEntity(() -> toUserMap("user-2"), () -> toClientIdMap("client-id-1")), 51.51);
+            put(toClientEntity(() -> toUserMap("user-3"), () -> toClientIdMap("client-id-2")), 52.52);
+            put(toClientEntity(() -> toUserMap(null), () -> toClientIdMap("client-id-1")), 53.53);
+            put(toClientEntity(() -> toUserMap("user-1"), () -> toClientIdMap(null)), 54.54);
+            put(toClientEntity(() -> toUserMap("user-3"), () -> toClientIdMap(null)), 55.55);
+            put(toClientEntity(() -> toUserMap("user-1")), 56.56);
+            put(toClientEntity(() -> toUserMap("user-2")), 57.57);
+            put(toClientEntity(() -> toUserMap("user-3")), 58.58);
+            put(toClientEntity(() -> toUserMap(null)), 59.59);
+            put(toClientEntity(() -> toClientIdMap("client-id-2")), 60.60);
         }
     };
 
@@ -465,13 +466,13 @@ public class ClientQuotasRequestTest {
 
         // Entities not contained in `matchEntityList`.
         List<ClientQuotaEntity> notMatchEntities = List.of(
-            toClientEntity(Optional.of("user-1"), Optional.of("client-id-2")),
-            toClientEntity(Optional.of("user-3"), Optional.of("client-id-1")),
-            toClientEntity(Optional.of("user-2"), Optional.empty()),
-            toClientEntity(Optional.of("user-4"), null),
-            toClientEntity(Optional.empty(), Optional.of("client-id-2")),
-            toClientEntity(null, Optional.of("client-id-1")),
-            toClientEntity(null, Optional.of("client-id-3"))
+            toClientEntity(() -> toUserMap("user-1"), () -> toClientIdMap("client-id-2")),
+            toClientEntity(() -> toUserMap("user-3"), () -> toClientIdMap("client-id-1")),
+            toClientEntity(() -> toUserMap("user-2"), () -> toClientIdMap(null)),
+            toClientEntity(() -> toUserMap("user-4")),
+            toClientEntity(() -> toUserMap(null), () -> toClientIdMap("client-id-2")),
+            toClientEntity(() -> toClientIdMap("client-id-1")),
+            toClientEntity(() -> toClientIdMap("client-id-3"))
         );
 
         // Verify exact matches of the non-matches returns empty.
@@ -635,13 +636,19 @@ public class ClientQuotasRequestTest {
         ));
     }
 
-    private ClientQuotaEntity toClientEntity(Optional<String> user, Optional<String> clientId) {
+    private Map<String, String> toUserMap(String user) {
+        return Collections.singletonMap(ClientQuotaEntity.USER, user);
+    }
+
+    private Map<String, String> toClientIdMap(String clientId) {
+        return Collections.singletonMap(ClientQuotaEntity.CLIENT_ID, clientId);
+    }
+
+    @SafeVarargs
+    private ClientQuotaEntity toClientEntity(Supplier<Map<String, String>>... suppliers) {
         Map<String, String> entityMap = new HashMap<>();
-        if (user != null) {
-            entityMap.put(ClientQuotaEntity.USER, user.orElse(null));
-        }
-        if (clientId != null) {
-            entityMap.put(ClientQuotaEntity.CLIENT_ID, clientId.orElse(null));
+        for (Supplier<Map<String, String>> supplier : suppliers) {
+            entityMap.putAll(supplier.get());
         }
         return new ClientQuotaEntity(entityMap);
     }
