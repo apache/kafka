@@ -25,13 +25,4 @@ package org.apache.kafka.server.log.remote.quota;
  */
 public record RLMQuotaManagerConfig(long quotaBytesPerSecond, int numQuotaSamples, int quotaWindowSizeSeconds) {
     public static final int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
-
-    @Override
-    public String toString() {
-        return "RLMQuotaManagerConfig{" +
-            "quotaBytesPerSecond=" + quotaBytesPerSecond +
-            ", numQuotaSamples=" + numQuotaSamples +
-            ", quotaWindowSizeSeconds=" + quotaWindowSizeSeconds +
-            '}';
-    }
 }

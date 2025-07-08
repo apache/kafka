@@ -27,13 +27,4 @@ package org.apache.kafka.storage.internals.log;
  * @param isAborted   Whether the transaction was aborted
  */
 public record CompletedTxn(long producerId, long firstOffset, long lastOffset, boolean isAborted) {
-
-    @Override
-    public String toString() {
-        return "CompletedTxn(producerId=" + producerId +
-            ", firstOffset=" + firstOffset +
-            ", lastOffset=" + lastOffset +
-            ", isAborted=" + isAborted +
-            ')';
-    }
 }

@@ -100,7 +100,13 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
 
     }
 
-    private record IndexValue<T extends AbstractIndex>(T index) implements IndexWrapper {
+    private static class IndexValue<T extends AbstractIndex> implements IndexWrapper {
+
+        private final T index;
+
+        IndexValue(T index) {
+            this.index = index;
+        }
 
         @Override
         public File file() {
