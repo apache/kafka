@@ -116,8 +116,10 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
             UnifiedLog log = logOpt.get();
 
+            // Use a mutable BufferHolder to ensure that a newly allocated buffer is visible to the caller.
+            // This allows us to reuse the buffer across multiple log reads and grow it if needed.
             // Buffer may not be needed if records are read from memory.
-            ByteBuffer buffer = ByteBuffer.allocate(0);
+            BufferHolder bufferHolder = new BufferHolder();
             long currentOffset = log.logStartOffset();
             LoadStats stats = new LoadStats();
 
@@ -127,14 +129,24 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
                 stats.readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes() > 0;
 
-                MemoryRecords memoryRecords = toReadableMemoryRecords(tp, fetchDataInfo.records, buffer);
+                MemoryRecords memoryRecords = toReadableMemoryRecords(tp, fetchDataInfo.records, bufferHolder);
 
                 ReplayResult replayResult = processMemoryRecords(tp, log, memoryRecords, coordinator, stats, currentOffset, previousHighWatermark);
                 currentOffset = replayResult.nextOffset;
                 previousHighWatermark = replayResult.highWatermark;
             }
 
-            completeLoadFuture(tp, future, startTimeMs, schedulerQueueTimeMs, stats);
+            long endTimeMs = time.milliseconds();
+
+            if (logEndOffset(tp) == -1L) {
+                future.completeExceptionally(new NotLeaderOrFollowerException(
+                        String.format("Stopped loading records from %s because the partition is not online or is no longer the leader.", tp)
+                ));
+            } else if (isRunning.get()) {
+                future.complete(new LoadSummary(startTimeMs, endTimeMs, schedulerQueueTimeMs, stats.numRecords, stats.numBytes));
+            } else {
+                future.completeExceptionally(new RuntimeException("Coordinator loader is closed."));
+            }
         } catch (Throwable ex) {
             future.completeExceptionally(ex);
         }
@@ -160,7 +172,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
         return currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get();
     }
 
-    private MemoryRecords toReadableMemoryRecords(TopicPartition tp, Records records, ByteBuffer buffer) throws IOException {
+    private MemoryRecords toReadableMemoryRecords(TopicPartition tp, Records records, BufferHolder bufferHolder) throws IOException {
         if (records instanceof MemoryRecords memoryRecords) {
             return memoryRecords;
         } else if (records instanceof FileRecords fileRecords) {
@@ -169,19 +181,19 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
             // "minOneMessage = true in the above log.read() means that the buffer may need to
             // be grown to ensure progress can be made.
-            if (buffer.capacity() < bytesNeeded) {
+            if (!bufferHolder.isInitialized() || bufferHolder.buffer.capacity() < bytesNeeded) {
                 if (loadBufferSize < bytesNeeded) {
                     LOG.warn("Loaded metadata from {} with buffer larger ({} bytes) than" +
                             " configured buffer size ({} bytes).", tp, bytesNeeded, loadBufferSize);
                 }
 
-                buffer = ByteBuffer.allocate(bytesNeeded);
+                bufferHolder.buffer = ByteBuffer.allocate(bytesNeeded);
             } else {
-                buffer.clear();
+                bufferHolder.buffer.clear();
             }
 
-            fileRecords.readInto(buffer, 0);
-            return MemoryRecords.readableRecords(buffer);
+            fileRecords.readInto(bufferHolder.buffer, 0);
+            return MemoryRecords.readableRecords(bufferHolder.buffer);
         } else {
             throw new IllegalArgumentException("Unsupported record type: " + records.getClass());
         }
@@ -241,8 +253,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                         throw new RuntimeException(msg, ex);
                     }
 
-                    if (coordinatorRecordOpt.isPresent()) {
-                        T coordinatorRecord = coordinatorRecordOpt.get();
+                    coordinatorRecordOpt.ifPresent(coordinatorRecord -> {
                         try {
                             if (LOG.isTraceEnabled()) {
                                 LOG.trace("Replaying record {} from {} at offset {} with producer id {}" +
@@ -261,7 +272,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                             LOG.error(msg);
                             throw new RuntimeException(msg, ex);
                         }
-                    }
+                    });
                 }
             }
 
@@ -283,26 +294,6 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
         return new ReplayResult(currentOffset, previousHighWatermark);
     }
 
-    private void completeLoadFuture(
-            TopicPartition tp,
-            CompletableFuture<LoadSummary> future,
-            long startTimeMs,
-            long schedulerQueueTimeMs,
-            LoadStats loadStats) {
-
-        long endTimeMs = time.milliseconds();
-
-        if (logEndOffset(tp) == -1L) {
-            future.completeExceptionally(new NotLeaderOrFollowerException(
-                    String.format("Stopped loading records from %s because the partition is not online or is no longer the leader.", tp)
-            ));
-        } else if (isRunning.get()) {
-            future.complete(new LoadSummary(startTimeMs, endTimeMs, schedulerQueueTimeMs, loadStats.numRecords, loadStats.numBytes));
-        } else {
-            future.completeExceptionally(new RuntimeException("Coordinator loader is closed."));
-        }
-    }
-
     /**
      * Closes the loader.
      */
@@ -313,6 +304,17 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
             return;
         }
         scheduler.shutdown();
+    }
+
+    /**
+     * A helper class to reuse the buffer.
+     */
+    private static class BufferHolder {
+        private ByteBuffer buffer;
+
+        boolean isInitialized() {
+            return buffer != null;
+        }
     }
 
     /**
