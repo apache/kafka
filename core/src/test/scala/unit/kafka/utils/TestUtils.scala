@@ -1298,11 +1298,11 @@ object TestUtils extends Logging {
     adminClient.incrementalAlterConfigs(configs)
   }
 
-  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Boolean = {
+  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
     waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
   }
 
-  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Boolean = {
+  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Unit = {
     waitForLeaderToBecome(client, topicPartition, None)
   }
 
@@ -1317,7 +1317,7 @@ object TestUtils extends Logging {
     client: Admin,
     topicPartition: TopicPartition,
     expectedLeaderOpt: Option[Int]
-  ): Boolean = {
+  ): Unit = {
     val topic = topicPartition.topic
     val partitionId = topicPartition.partition
 
