@@ -158,7 +158,7 @@ public class ShareConsumerPerformance {
             Thread.currentThread().interrupt();
         }
         for (Future<?> future : futures) {
-            future.get(1, TimeUnit.MILLISECONDS);
+            future.get();
         }
 
         if (options.showShareConsumerStats()) {
