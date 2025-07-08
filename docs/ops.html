@@ -3948,40 +3948,6 @@ customized state stores; for built-in state stores, currently we have:
 
   <h3 class="anchor-heading"><a id="kraft" class="anchor-link"></a><a href="#kraft">6.8 KRaft</a></h3>
 
-  <h4 class="anchor-heading"><a id="kraft_upgrade" class="anchor-link"></a><a href="#kraft_upgrade">Upgrade</a></h4>
-
-  Apache Kafka 4.1 added support for upgrading cluster from a static controller configuration to a dynamic controller configuration. This feature upgrade is done by upgrading the kraft feature version and updating the nodes configuration.
-
-  <h5 class="anchor-heading"><a id="kraft_upgrade_describe" class="anchor-link"></a><a href="#kraft_upgrade_describe">Describe KRaft Version</a></h5>
-
-  <p>Dynamic controller cluster was added in <code>kraft.version=1</code> or <code>release-version 4.1</code>. To determine which kraft feature version the cluster is using you can execute the following CLI command:</p>
-
-  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
-...
-Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0        Epoch: 7
-Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 4.0-IV3    FinalizedVersionLevel: 4.0-IV3  Epoch: 7</code></pre>
-
-  <p>If the <code>FinalizedVersionLevel</code> for <code>Feature: kraft.version</code> is <code>0</code>, the version need to be upgraded to at least <code>1</code> to support a dynamic controller cluster.</p>
-
-  <h5 class="anchor-heading"><a id="kraft_upgrade_version" class="anchor-link"></a><a href="#kraft_upgrade_version">Upgrade KRaft Version</a></h5>
-
-  <p>The kraft feature version can be upgraded to support dynamic controller clusters by using the <code>kafka-feature</code> CLI command. To upgrade all of the feature versions to the latest version:</p>
-
-  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.1</code></pre>
-
-  <p>To upgrade just the kraft feature version:</p>
-
-  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature kraft.version=1</code></pre>
-
-  <h5 class="anchor-heading"><a id="kraft_upgrade_config" class="anchor-link"></a><a href="#kraft_upgrade_config">Update KRaft Config</a></h5>
-
-  <p>KRaft version 1 deprecated the <code>controller.quorum.voters</code> property and added the <code>controller.quorum.bootstrap.servers</code> property. After checking that the kraft version has been successfully upgrade to at least version <code>1</code>. Remove the <code>controller.quorum.voters</code> property and add the <code>controller.quorum.bootstrap.servers</code> to all of the nodes (controllers and brokers) in the cluster.</p>
-
-  <pre><code class="language-bash">process.roles=...
-node.id=...
-controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.example.com:9093,controller3.example.com:9093
-controller.listener.names=CONTROLLER</code></pre>
-
   <h4 class="anchor-heading"><a id="kraft_config" class="anchor-link"></a><a href="#kraft_config">Configuration</a></h4>
 
   <h5 class="anchor-heading"><a id="kraft_role" class="anchor-link"></a><a href="#kraft_role">Process Roles</a></h5>
@@ -4016,6 +3982,42 @@ controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.exa
 controller.listener.names=CONTROLLER</code></pre>
 
   <p>Every broker and controller must set the <code>controller.quorum.bootstrap.servers</code> property.
+
+  <h4 class="anchor-heading"><a id="kraft_upgrade" class="anchor-link"></a><a href="#kraft_upgrade">Upgrade</a></h4>
+
+  <p>Apache Kafka 4.1 added support for upgrading a cluster from a static controller configuration to a dynamic controller configuration. Dynamic controller configuration allows users to add controller to and remove controller from the cluster. See the <a href="#kraft_reconfig">Controller membership changes</a> section for more details.</p>
+
+  <p>This feature upgrade is done by upgrading the KRaft feature version and updating the nodes' configuration.</p>
+
+  <h5 class="anchor-heading"><a id="kraft_upgrade_describe" class="anchor-link"></a><a href="#kraft_upgrade_describe">Describe KRaft Version</a></h5>
+
+  <p>Dynamic controller cluster was added in <code>kraft.version=1</code> or <code>release-version 4.1</code>. To determine which kraft feature version the cluster is using you can execute the following CLI command:</p>
+
+  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
+...
+Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0        Epoch: 7
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 4.0-IV3    FinalizedVersionLevel: 4.0-IV3  Epoch: 7</code></pre>
+
+  <p>If the <code>FinalizedVersionLevel</code> for <code>Feature: kraft.version</code> is <code>0</code>, the version needs to be upgraded to at least <code>1</code> to support a dynamic controller cluster.</p>
+
+  <h5 class="anchor-heading"><a id="kraft_upgrade_version" class="anchor-link"></a><a href="#kraft_upgrade_version">Upgrade KRaft Version</a></h5>
+
+  <p>The KRaft feature version can be upgraded to support dynamic controller clusters by using the <code>kafka-feature</code> CLI command. To upgrade all of the feature versions to the latest version:</p>
+
+  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.1</code></pre>
+
+  <p>To upgrade just the KRaft feature version:</p>
+
+  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature kraft.version=1</code></pre>
+
+  <h5 class="anchor-heading"><a id="kraft_upgrade_config" class="anchor-link"></a><a href="#kraft_upgrade_config">Update KRaft Config</a></h5>
+
+  <p>KRaft version 1 deprecated the <code>controller.quorum.voters</code> property and added the <code>controller.quorum.bootstrap.servers</code> property. After checking that the KRaft version has been successfully upgraded to at least version <code>1</code>, remove the <code>controller.quorum.voters</code> property and add the <code>controller.quorum.bootstrap.servers</code> to all of the nodes (controllers and brokers) in the cluster.</p>
+
+  <pre><code class="language-bash">process.roles=...
+node.id=...
+controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.example.com:9093,controller3.example.com:9093
+controller.listener.names=CONTROLLER</code></pre>
 
   <h4 class="anchor-heading"><a id="kraft_nodes" class="anchor-link"></a><a href="#kraft_nodes">Provisioning Nodes</a></h4>
   <p></p>
