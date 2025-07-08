@@ -1,3 +1,4 @@
+
 /**
   * Licensed to the Apache Software Foundation (ASF) under one or more
   * contributor license agreements.  See the NOTICE file distributed with
@@ -34,6 +35,7 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBat
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.ReplicaState
@@ -450,6 +452,72 @@ class ReplicaFetcherThreadTest {
     assertEquals(1, mockNetwork.fetchCount)
     verify(partition, times(1)).truncateTo(140, false)
     verify(log, times(0)).maybeUpdateHighWatermark(anyLong())
+  }
+
+
+  @Test
+  def shouldFailToWarnWhenTruncatingBelowHighWatermarkWhenHwmChanges(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
+
+    val logEndOffset = 150
+    val highWatermark = 130
+    val truncationOffset = 120
+
+    when(log.highWatermark).thenReturn(highWatermark)
+    when(log.latestEpoch).thenReturn(Optional.of(5))
+    when(log.endOffsetForEpoch(4)).thenReturn(Optional.of(new OffsetAndEpoch(149, 4)))
+    when(log.logEndOffset).thenReturn(logEndOffset)
+
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
+
+    when(replicaManager.localLogOrException(t1p0)).thenReturn(log)
+    when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
+
+    when(partition.localLogOrException).thenReturn(log)
+    when(partition.truncateTo(truncationOffset, isFuture = false)).thenAnswer(_ => {
+      when(log.highWatermark).thenReturn(truncationOffset)
+    })
+
+    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
+
+    val mockNetwork = new MockBlockingSender(
+      Collections.emptyMap(),
+      brokerEndPoint,
+      Time.SYSTEM
+    )
+
+    val leader = new RemoteLeaderEndPoint(
+      logContext.logPrefix,
+      mockNetwork,
+      new FetchSessionHandler(logContext, brokerEndPoint.id),
+      config,
+      replicaManager,
+      quota,
+      () => MetadataVersion.MINIMUM_VERSION,
+      () => 1
+    )
+
+    val thread = new ReplicaFetcherThread(
+      "fetcher-thread",
+      leader,
+      config,
+      failedPartitions,
+      replicaManager,
+      quota,
+      logContext.logPrefix
+    )
+
+    val appender = LogCaptureAppender.createAndRegister(thread.getClass)
+    thread.truncate(t1p0, new OffsetTruncationState(truncationOffset, true))
+    assertTrue(appender.getMessages.asScala.exists(_.contains(s"Truncating $t1p0 to offset $truncationOffset below high watermark $highWatermark")))
   }
 
   @Test
