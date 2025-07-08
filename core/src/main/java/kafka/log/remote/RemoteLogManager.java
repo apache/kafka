@@ -1647,6 +1647,7 @@ public class RemoteLogManager implements Closeable {
             int remainingBytes = bufferSize;
 
             firstBatch.writeTo(buffer);
+            
 
             if (bufferSize > updatedFetchSize) {
                 buffer.position(updatedFetchSize);
