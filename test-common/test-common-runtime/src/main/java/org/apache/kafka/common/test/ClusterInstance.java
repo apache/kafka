@@ -340,7 +340,7 @@ public interface ClusterInstance {
 
     default void waitForTopic(String topic, int partitions) throws InterruptedException {
         if (partitions <= 0) {
-            throw new IllegalArgumentException("Partition count must be >= 0, but was " + partitions);
+            throw new IllegalArgumentException("Partition count must be > 0, but was " + partitions);
         }
 
         // wait for metadata
