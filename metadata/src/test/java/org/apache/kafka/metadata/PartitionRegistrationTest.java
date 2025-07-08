@@ -18,11 +18,11 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.DirectoryId;
+import org.apache.kafka.common.PartitionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
-import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -55,18 +55,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(40)
 public class PartitionRegistrationTest {
     @Test
-    public void testElectionWasClean() {
-        assertTrue(PartitionRegistration.electionWasClean(1, new int[]{1, 2}, new int[]{}));
-        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{0, 2}, new int[]{}));
-        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{}, new int[]{3, 4}));
-        assertTrue(PartitionRegistration.electionWasClean(3, new int[]{1, 2, 3, 4, 5, 6}, new int[]{}));
-        assertTrue(PartitionRegistration.electionWasClean(3, new int[]{}, new int[]{1, 2, 3}));
-    }
-
-    @Test
-    public void testEligibleLeaderReplicasElection() {
-        assertTrue(PartitionRegistration.electionFromElr(1, new int[]{1, 2}));
-        assertFalse(PartitionRegistration.electionFromElr(1, new int[]{0, 2}));
+    public void testElectionWasUnclean() {
+        assertFalse(PartitionRegistration.electionWasUnclean(LeaderRecoveryState.RECOVERED.value()));
+        assertTrue(PartitionRegistration.electionWasUnclean(LeaderRecoveryState.RECOVERING.value()));
     }
 
     @Test
@@ -121,10 +112,9 @@ public class PartitionRegistrationTest {
                     Uuid.fromString("bAAlGAz1TN2doZjtWlvhRQ")
                 }).
             setIsr(new int[]{2, 3, 4}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(234).setPartitionEpoch(567).build();
-        assertEquals(new LeaderAndIsrRequest.PartitionState().
+        assertEquals(new PartitionState().
                 setTopicName("foo").
                 setPartitionIndex(1).
-                setControllerEpoch(-1).
                 setLeader(1).
                 setLeaderEpoch(123).
                 setIsr(List.of(1, 2)).
@@ -134,10 +124,9 @@ public class PartitionRegistrationTest {
                 setRemovingReplicas(List.of()).
                 setIsNew(true).toString(),
             a.toLeaderAndIsrPartitionState(new TopicPartition("foo", 1), true).toString());
-        assertEquals(new LeaderAndIsrRequest.PartitionState().
+        assertEquals(new PartitionState().
                 setTopicName("bar").
                 setPartitionIndex(0).
-                setControllerEpoch(-1).
                 setLeader(2).
                 setLeaderEpoch(234).
                 setIsr(List.of(2, 3, 4)).

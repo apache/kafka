@@ -80,6 +80,8 @@ public class ProcessorNodeTest {
     private static final String NAME = "name";
     private static final String KEY = "key";
     private static final String VALUE = "value";
+    private static final byte[] RAW_KEY = KEY.getBytes();
+    private static final byte[] RAW_VALUE = VALUE.getBytes();
 
     @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
@@ -106,7 +108,7 @@ public class ProcessorNodeTest {
         final FailedProcessingException failedProcessingException = assertThrows(FailedProcessingException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
 
-        assertTrue(failedProcessingException.getCause() instanceof RuntimeException);
+        assertInstanceOf(RuntimeException.class, failedProcessingException.getCause());
         assertEquals("Processing exception should be caught and handled by the processing exception handler.",
             failedProcessingException.getCause().getMessage());
         assertEquals(NAME, failedProcessingException.failedProcessorNodeName());
@@ -200,7 +202,7 @@ public class ProcessorNodeTest {
                 throw new TaskCorruptedException(tasksIds, new InvalidOffsetException("Invalid offset") {
                     @Override
                     public Set<TopicPartition> partitions() {
-                        return new HashSet<>(Collections.singletonList(new TopicPartition("topic", 0)));
+                        return Set.of(new TopicPartition("topic", 0));
                     }
                 });
             }
@@ -310,7 +312,7 @@ public class ProcessorNodeTest {
             StreamsException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP))
         );
-        assertTrue(se.getCause() instanceof ClassCastException);
+        assertInstanceOf(ClassCastException.class, se.getCause());
         assertTrue(se.getMessage().contains("default Serdes"));
         assertTrue(se.getMessage().contains("input types"));
         assertTrue(se.getMessage().contains("pname"));
@@ -331,7 +333,9 @@ public class ProcessorNodeTest {
                 OFFSET,
                 PARTITION,
                 TOPIC,
-                new RecordHeaders()));
+                new RecordHeaders(),
+                RAW_KEY,
+                RAW_VALUE));
         when(internalProcessorContext.currentNode()).thenReturn(new ProcessorNode<>(NAME));
 
         return internalProcessorContext;
@@ -359,6 +363,9 @@ public class ProcessorNodeTest {
             assertEquals(internalProcessorContext.currentNode().name(), context.processorNodeId());
             assertEquals(internalProcessorContext.taskId(), context.taskId());
             assertEquals(internalProcessorContext.recordContext().timestamp(), context.timestamp());
+            assertEquals(internalProcessorContext.recordContext().sourceRawKey(), context.sourceRawKey());
+            assertEquals(internalProcessorContext.recordContext().sourceRawValue(), context.sourceRawValue());
+
             assertEquals(KEY, record.key());
             assertEquals(VALUE, record.value());
             assertInstanceOf(RuntimeException.class, exception);

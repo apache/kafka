@@ -52,7 +52,7 @@ public enum KRaftVersion implements FeatureVersion {
             case 1:
                 return KRAFT_VERSION_1;
             default:
-                throw new RuntimeException("Unknown KRaft feature level: " + (int) version);
+                throw new IllegalArgumentException("Unknown KRaft feature level: " + (int) version);
         }
     }
 
@@ -80,29 +80,40 @@ public enum KRaftVersion implements FeatureVersion {
         }
     }
 
+    public boolean isAtLeast(KRaftVersion otherVersion) {
+        return this.compareTo(otherVersion) >= 0;
+    }
+
+    public boolean isMoreThan(KRaftVersion otherVersion) {
+        return this.compareTo(otherVersion) > 0;
+    }
+
     public short quorumStateVersion() {
         switch (this) {
             case KRAFT_VERSION_0:
                 return (short) 0;
             case KRAFT_VERSION_1:
                 return (short) 1;
+            default:
+                throw new IllegalStateException("Unsupported KRaft feature level: " + this);
         }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 
     public short kraftVersionRecordVersion() {
         switch (this) {
             case KRAFT_VERSION_1:
                 return (short) 0;
+            default:
+                throw new IllegalStateException("Unsupported KRaft feature level: " + this);
         }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 
     public short votersRecordVersion() {
         switch (this) {
             case KRAFT_VERSION_1:
                 return (short) 0;
+            default:
+                throw new IllegalStateException("Unsupported KRaft feature level: " + this);
         }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 }

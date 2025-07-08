@@ -33,11 +33,7 @@ public class InitializeShareGroupStateRequest extends AbstractRequest {
         private final InitializeShareGroupStateRequestData data;
 
         public Builder(InitializeShareGroupStateRequestData data) {
-            this(data, true);
-        }
-
-        public Builder(InitializeShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.INITIALIZE_SHARE_GROUP_STATE, enableUnstableLastVersion);
+            super(ApiKeys.INITIALIZE_SHARE_GROUP_STATE);
             this.data = data;
         }
 

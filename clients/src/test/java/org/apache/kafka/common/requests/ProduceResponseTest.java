@@ -17,7 +17,8 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -40,8 +41,10 @@ public class ProduceResponseTest {
     @SuppressWarnings("deprecation")
     @Test
     public void produceResponseVersionTest() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE, 10000, RecordBatch.NO_TIMESTAMP, 100));
+        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
+        Uuid topicId = Uuid.fromString("5JkYABorYD4w0AQXe9TvBG");
+        TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, 0, "test");
+        responseData.put(topicIdPartition, new ProduceResponse.PartitionResponse(Errors.NONE, 10000, RecordBatch.NO_TIMESTAMP, 100));
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10);
         ProduceResponse v2Response = new ProduceResponse(responseData, 10);
@@ -61,14 +64,16 @@ public class ProduceResponseTest {
             assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode()));
             assertNull(partitionProduceResponse.errorMessage());
             assertTrue(partitionProduceResponse.recordErrors().isEmpty());
+            assertEquals(topicIdPartition.topicId(), topicProduceResponse.topicId());
         }
     }
 
     @SuppressWarnings("deprecation")
     @Test
     public void produceResponseRecordErrorsTest() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        TopicPartition tp = new TopicPartition("test", 0);
+        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
+        Uuid topicId = Uuid.fromString("4w0AQXe9TvBG5JkYABorYD");
+        TopicIdPartition tp = new TopicIdPartition(topicId, 0, "test");
         ProduceResponse.PartitionResponse partResponse = new ProduceResponse.PartitionResponse(Errors.NONE,
                 10000, RecordBatch.NO_TIMESTAMP, 100,
                 Collections.singletonList(new ProduceResponse.RecordError(3, "Record error")),

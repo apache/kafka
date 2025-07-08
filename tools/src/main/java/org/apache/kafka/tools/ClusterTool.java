@@ -167,7 +167,7 @@ public class ClusterTool {
             if (listControllerEndpoints) {
                 String format = "%-10s %-" + maxHostLength + "s %-10s %-" + maxRackLength + "s %-15s%n";
                 stream.printf(format, "ID", "HOST", "PORT", "RACK", "ENDPOINT_TYPE");
-                nodes.stream().forEach(node -> stream.printf(format,
+                nodes.forEach(node -> stream.printf(format,
                         node.idString(),
                         node.host(),
                         node.port(),
@@ -177,7 +177,7 @@ public class ClusterTool {
             } else {
                 String format = "%-10s %-" + maxHostLength + "s %-10s %-" + maxRackLength + "s %-10s %-15s%n";
                 stream.printf(format, "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE");
-                nodes.stream().forEach(node -> stream.printf(format,
+                nodes.forEach(node -> stream.printf(format,
                         node.idString(),
                         node.host(),
                         node.port(),

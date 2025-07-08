@@ -18,8 +18,8 @@ package kafka.server
 
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.message.OffsetFetchRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.test.ClusterInstance
@@ -28,7 +28,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 
-import scala.jdk.CollectionConverters.IterableHasAsScala
+import scala.jdk.CollectionConverters._
 
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
@@ -219,12 +219,17 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
      partition: Int,
      groupId: String
   ): Long = {
-    val fetchOffsetsResp = fetchOffsets(
-      groups = Map(groupId -> List(new TopicPartition(topic, partition))),
+    val groupIdRecord = fetchOffsets(
+      group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId(groupId)
+        .setTopics(List(
+          new OffsetFetchRequestData.OffsetFetchRequestTopics()
+            .setName(topic)
+            .setPartitionIndexes(List[Integer](partition).asJava)
+        ).asJava),
       requireStable = true,
-      version = ApiKeys.OFFSET_FETCH.latestVersion
+      version = 9
     )
-    val groupIdRecord = fetchOffsetsResp.find(_.groupId == groupId).head
     val topicRecord = groupIdRecord.topics.asScala.find(_.name == topic).head
     val partitionRecord = topicRecord.partitions.asScala.find(_.partitionIndex == partition).head
     partitionRecord.committedOffset

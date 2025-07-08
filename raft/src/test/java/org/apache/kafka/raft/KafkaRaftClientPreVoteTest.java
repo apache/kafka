@@ -29,8 +29,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.stream.Stream;
@@ -67,7 +65,7 @@ public class KafkaRaftClientPreVoteTest {
         if (hasFetchedFromLeader) {
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -95,7 +93,7 @@ public class KafkaRaftClientPreVoteTest {
         context.pollUntilResponse();
 
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.of(-1), true);
-        assertEquals(context.currentEpoch(), epoch + 1);
+        assertEquals(epoch + 1, context.currentEpoch());
         assertTrue(context.client.quorum().isUnattachedNotVoted());
     }
 
@@ -352,7 +350,7 @@ public class KafkaRaftClientPreVoteTest {
         if (hasFetchedFromLeader) {
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -552,7 +550,7 @@ public class KafkaRaftClientPreVoteTest {
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
         context.unattachedToLeader();
-        context.client.quorum().transitionToResigned(Collections.emptyList());
+        context.client.quorum().transitionToResigned(List.of());
         assertTrue(context.client.quorum().isResigned());
 
         // resigned should grant pre-vote requests with the same epoch if log is up-to-date
@@ -656,7 +654,7 @@ public class KafkaRaftClientPreVoteTest {
         // After fetching successfully from the leader once, follower will no longer grant PreVotes
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -688,7 +686,7 @@ public class KafkaRaftClientPreVoteTest {
             .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, replica1, replica2)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
-            .appendToLog(epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(epoch, List.of("a", "b", "c"))
             .build();
         assertTrue(context.client.quorum().isUnattached());
         assertEquals(3, context.log.endOffset().offset());

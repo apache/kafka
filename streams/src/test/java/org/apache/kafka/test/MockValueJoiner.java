@@ -23,11 +23,6 @@ public class MockValueJoiner {
     public static final ValueJoiner<Object, Object, String> TOSTRING_JOINER = instance("+");
 
     public static <V1, V2> ValueJoiner<V1, V2, String> instance(final String separator) {
-        return new ValueJoiner<V1, V2, String>() {
-            @Override
-            public String apply(final V1 value1, final V2 value2) {
-                return value1 + separator + value2;
-            }
-        };
+        return (value1, value2) -> value1 + separator + value2;
     }
 }

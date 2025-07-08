@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetadataTransform<RemoteLogSegmentMetadataSnapshot> {
 
@@ -52,7 +51,7 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                            .map(entry -> new RemoteLogSegmentMetadataSnapshotRecord.SegmentLeaderEpochEntry()
                            .setLeaderEpoch(entry.getKey())
                            .setOffset(entry.getValue()))
-                           .collect(Collectors.toList());
+                           .toList();
     }
 
     @Override

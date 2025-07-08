@@ -21,6 +21,13 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "Epoch", "versions": "0+", "type": "int32",
-      "about": "The group epoch." }
+      "about": "The group epoch." },
+    // The MetadataHash is added in 4.1 (KIP-1101). It's used to track
+    // subscribed topics in the group. When subscribed topics change,
+    // like partition count or rack change, the hash will be different.
+    // It indicates that the group should be rebalanced.
+    { "name": "MetadataHash", "versions": "0+", "type": "int64",
+      "default": 0, "taggedVersions": "0+", "tag": 0,
+      "about": "The hash of all topics in the group." }
   ]
 }

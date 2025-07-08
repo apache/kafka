@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,20 +54,20 @@ public class ClusterConfigTest {
         trustStoreFile.deleteOnExit();
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
-                .setTypes(Collections.singleton(Type.KRAFT))
+                .setTypes(Set.of(Type.KRAFT))
                 .setBrokers(3)
                 .setControllers(2)
                 .setDisksPerBroker(1)
                 .setAutoStart(true)
-                .setTags(Arrays.asList("name", "Generated Test"))
+                .setTags(List.of("name", "Generated Test"))
                 .setBrokerSecurityProtocol(SecurityProtocol.PLAINTEXT)
                 .setBrokerListenerName(ListenerName.normalised("EXTERNAL"))
                 .setControllerSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)
                 .setControllerListenerName(ListenerName.normalised("CONTROLLER"))
                 .setTrustStoreFile(trustStoreFile)
                 .setMetadataVersion(MetadataVersion.MINIMUM_VERSION)
-                .setServerProperties(Collections.singletonMap("broker", "broker_value"))
-                .setPerServerProperties(Collections.singletonMap(0, Collections.singletonMap("broker_0", "broker_0_value")))
+                .setServerProperties(Map.of("broker", "broker_value"))
+                .setPerServerProperties(Map.of(0, Map.of("broker_0", "broker_0_value")))
                 .build();
 
         Map<String, Object> clusterConfigFields = fields(clusterConfig);
@@ -105,7 +104,7 @@ public class ClusterConfigTest {
 
     @Test
     public void testDisplayTags() {
-        List<String> tags = Arrays.asList("tag 1", "tag 2", "tag 3");
+        List<String> tags = List.of("tag 1", "tag 2", "tag 3");
         ClusterConfig clusterConfig = ClusterConfig.defaultBuilder().setTags(tags).build();
 
         Set<String> expectedDisplayTags = clusterConfig.displayTags();

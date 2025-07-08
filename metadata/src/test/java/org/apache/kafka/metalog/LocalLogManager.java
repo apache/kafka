@@ -27,13 +27,13 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -395,6 +395,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
     }
 
+    private final LogContext logContext;
+
     private final Logger log;
 
     /**
@@ -415,7 +417,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     /**
      * The latest kraft version used by this local log manager.
      */
-    private final KRaftVersion lastKRaftVersion;
+    private KRaftVersion lastKRaftVersion;
 
     /**
      * Whether this LocalLogManager has been shut down.
@@ -448,6 +450,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                            SharedLogData shared,
                            String threadNamePrefix,
                            KRaftVersion lastKRaftVersion) {
+        this.logContext = logContext;
         this.log = logContext.logger(LocalLogManager.class);
         this.nodeId = nodeId;
         this.shared = shared;
@@ -477,7 +480,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                         new  MetadataRecordSerde(),
                                         BufferSupplier.create(),
                                         Integer.MAX_VALUE,
-                                        true
+                                        true,
+                                        logContext
                                     )
                                 );
                             }
@@ -788,5 +792,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     @Override
     public KRaftVersion kraftVersion() {
         return lastKRaftVersion;
+    }
+
+    @Override
+    public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
+        if (!validateOnly) {
+            lastKRaftVersion = version;
+        }
     }
 }

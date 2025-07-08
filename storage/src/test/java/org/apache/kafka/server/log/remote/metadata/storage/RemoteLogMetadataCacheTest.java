@@ -32,8 +32,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,7 +60,7 @@ public class RemoteLogMetadataCacheTest {
             if (state != RemoteLogSegmentState.COPY_SEGMENT_STARTED) {
                 RemoteLogSegmentId segmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
                 RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0, 100L,
-                        -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
+                        -1L, brokerId0, time.milliseconds(), segmentSize, Map.of(0, 0L));
                 RemoteLogSegmentMetadata updatedMetadata = segmentMetadata.createWithUpdates(
                         new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(), Optional.empty(),
                                 state, brokerId1));
@@ -102,7 +102,7 @@ public class RemoteLogMetadataCacheTest {
         long offset = 10L;
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
         RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, offset, 100L,
-                -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(leaderEpoch, offset));
+                -1L, brokerId0, time.milliseconds(), segmentSize, Map.of(leaderEpoch, offset));
         cache.addCopyInProgressSegment(segmentMetadata);
 
         // invalid-transition-1. COPY_SEGMENT_STARTED -> DELETE_SEGMENT_FINISHED

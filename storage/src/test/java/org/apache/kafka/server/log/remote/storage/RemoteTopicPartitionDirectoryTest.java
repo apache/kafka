@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDirectory.GROUP_PARTITION;
@@ -33,7 +32,7 @@ public class RemoteTopicPartitionDirectoryTest {
 
     @Test
     public void testSubStr() {
-        List<String> topics = Arrays.asList("abcd", "-abcd-10-", "abcd-0-xyz", "abcd.ef-gh-0", "abcd_10_xyz_0");
+        List<String> topics = List.of("abcd", "-abcd-10-", "abcd-0-xyz", "abcd.ef-gh-0", "abcd_10_xyz_0");
         for (String topic : topics) {
             for (int i = 0; i < 100; i++) {
                 Uuid uuid = Uuid.randomUuid();

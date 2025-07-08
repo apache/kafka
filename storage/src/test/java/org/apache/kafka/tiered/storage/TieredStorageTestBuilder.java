@@ -62,7 +62,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -366,7 +365,7 @@ public final class TieredStorageTestBuilder {
                         .map(spec ->
                                 new OffloadedSegmentSpec(spec.getSourceBrokerId(), topicPartition, spec.getBaseOffset(),
                                         spec.getRecords()))
-                        .collect(Collectors.toList());
+                        .toList();
                 ProduceAction action = new ProduceAction(topicPartition, offloadedSegmentSpecs, recordsToProduce,
                         producableSpec.getBatchSize(), producableSpec.getEarliestLocalLogOffset());
                 actions.add(action);
@@ -416,7 +415,7 @@ public final class TieredStorageTestBuilder {
                             .map(spec -> new RemoteDeleteSegmentSpec(spec.getSourceBrokerId(), partition,
                                     spec.getEventType(), spec.getEventCount()));
                 })
-                .collect(Collectors.toList());
+                .toList();
         deleteSegmentSpecList.forEach(spec -> deletables.remove(spec.getTopicPartition()));
         return deleteSegmentSpecList;
     }

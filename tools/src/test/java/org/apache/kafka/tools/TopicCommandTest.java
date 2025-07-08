@@ -20,6 +20,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreatePartitionsResult;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
@@ -56,8 +57,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.metadata.LeaderAndIsr;
-import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.apache.kafka.server.common.AdminOperationException;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
@@ -73,6 +73,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -84,6 +85,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -258,7 +260,7 @@ public class TopicCommandTest {
                 .configs(Collections.emptyMap());
 
         verify(adminClient, times(1)).createTopics(
-                eq(new HashSet<>(Arrays.asList(expectedNewTopic))),
+                eq(Set.of(expectedNewTopic)),
                 argThat(exception -> !exception.shouldRetryOnQuotaViolation())
         );
     }
@@ -1402,14 +1404,35 @@ public class TopicCommandTest {
         }
     }
 
+    @ClusterTest
+    public void testCreateWithInternalConfig(ClusterInstance cluster) throws InterruptedException, ExecutionException {
+        String internalConfigTopicName = TestUtils.randomString(10);
+        String testTopicName = TestUtils.randomString(10);
+
+        try (Admin adminClient = cluster.admin()) {
+            CreateTopicsResult internalResult = adminClient.createTopics(List.of(new NewTopic(internalConfigTopicName, defaultNumPartitions, defaultReplicationFactor).configs(
+                Map.of(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1000")
+            )));
+
+            ConfigEntry internalConfigEntry = internalResult.config(internalConfigTopicName).get().get(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
+            assertNotNull(internalConfigEntry, "Internal config entry should not be null");
+            assertEquals("1000", internalConfigEntry.value());
+
+            CreateTopicsResult nonInternalResult = adminClient.createTopics(List.of(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
+            
+            ConfigEntry nonInternalConfigEntry = nonInternalResult.config(testTopicName).get().get(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
+            assertNull(nonInternalConfigEntry, "Non-internal config entry should be null");
+        }
+    }
+
     private void checkReplicaDistribution(Map<Integer, List<Integer>> assignment,
                                           Map<Integer, String> brokerRackMapping,
-                                          Integer numBrokers,
-                                          Integer numPartitions,
-                                          Integer replicationFactor,
-                                          Boolean verifyRackAware,
-                                          Boolean verifyLeaderDistribution,
-                                          Boolean verifyReplicasDistribution) {
+                                          int numBrokers,
+                                          int numPartitions,
+                                          int replicationFactor,
+                                          boolean verifyRackAware,
+                                          boolean verifyLeaderDistribution,
+                                          boolean verifyReplicasDistribution) {
         // always verify that no broker will be assigned for more than one replica
         assignment.forEach((partition, assignedNodes) -> assertEquals(new HashSet<>(assignedNodes).size(), assignedNodes.size(),
                 "More than one replica is assigned to same broker for the same partition"));

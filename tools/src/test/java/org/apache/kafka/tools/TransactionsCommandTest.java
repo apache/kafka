@@ -29,6 +29,7 @@ import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.ListTransactionsResult;
 import org.apache.kafka.clients.admin.ProducerState;
+import org.apache.kafka.clients.admin.TerminateTransactionResult;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionListing;
@@ -207,11 +208,11 @@ public class TransactionsCommandTest {
         }
 
         Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
-        transactions.put(0, asList(
+        transactions.put(0, List.of(
             new TransactionListing("foo", 12345L, TransactionState.ONGOING),
             new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT)
         ));
-        transactions.put(1, singletonList(
+        transactions.put(1, List.of(
             new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
         ));
 
@@ -237,6 +238,35 @@ public class TransactionsCommandTest {
             asList("baz", "1", "13579", "CompleteCommit")
         );
         assertEquals(expectedRows, new HashSet<>(table.subList(1, table.size())));
+    }
+
+    @Test
+    public void testForceTerminateTransaction() throws Exception {
+        String transactionalId = "foo";
+        String[] args = new String[] {
+            "--bootstrap-server",
+            "localhost:9092",
+            "forceTerminateTransaction",
+            "--transactionalId",
+            transactionalId
+        };
+
+        TerminateTransactionResult terminateTransactionResult = Mockito.mock(TerminateTransactionResult.class);
+        KafkaFuture<Void> future = KafkaFuture.completedFuture(null);
+        Mockito.when(terminateTransactionResult.result()).thenReturn(future);
+        Mockito.when(admin.forceTerminateTransaction(transactionalId)).thenReturn(terminateTransactionResult);
+
+        execute(args);
+        assertNormalExit();
+    }
+
+    @Test
+    public void testForceTerminateTransactionTransactionalIdRequired() throws Exception {
+        assertCommandFailure(new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "forceTerminateTransaction"
+        });
     }
 
     @Test
@@ -302,6 +332,42 @@ public class TransactionsCommandTest {
             "bar-0"
         );
         assertEquals(expectedRow, table.get(1));
+    }
+
+    @Test
+    public void testListTransactionsWithTransactionalIdPattern() throws Exception {
+        String[] args = new String[] {
+            "--bootstrap-server",
+            "localhost:9092",
+            "list",
+            "--transactional-id-pattern",
+            "ba.*"
+        };
+
+        Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
+        transactions.put(0, List.of(
+            new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT)
+        ));
+        transactions.put(1, List.of(
+            new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
+        ));
+
+        expectListTransactions(new ListTransactionsOptions().filterOnTransactionalIdPattern("ba.*"), transactions);
+
+        execute(args);
+        assertNormalExit();
+
+        List<List<String>> table = readOutputAsTable();
+        assertEquals(3, table.size());
+
+        // Assert expected headers
+        List<String> expectedHeaders = TransactionsCommand.ListTransactionsCommand.HEADERS;
+        assertEquals(expectedHeaders, table.get(0));
+        Set<List<String>> expectedRows = Set.of(
+            List.of("bar", "0", "98765", "PrepareAbort"),
+            List.of("baz", "1", "13579", "CompleteCommit")
+        );
+        assertEquals(expectedRows, new HashSet<>(table.subList(1, table.size())));
     }
 
     @Test
@@ -1066,5 +1132,4 @@ public class TransactionsCommandTest {
         assertTrue(exitProcedure.hasExited());
         assertEquals(1, exitProcedure.statusCode());
     }
-
 }

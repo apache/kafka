@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,14 +17,11 @@
 
 package kafka.admin
 
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.{ExecutionException, TimeUnit}
-import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.server.DynamicConfig
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListConfigResourcesOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
@@ -32,13 +29,18 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{Exit, Utils}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.{ConfigType, QuotaConfig}
+import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import java.net.{InetAddress, UnknownHostException}
-import scala.jdk.CollectionConverters._
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.{Collections, Properties}
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 /**
  * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups dynamically
@@ -84,13 +86,13 @@ object ConfigCommand extends Logging {
       opts.checkArgs()
       processCommand(opts)
     } catch {
-      case e @ (_: IllegalArgumentException | _: InvalidConfigurationException | _: OptionException) =>
-        logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)
+      case e: UnsupportedVersionException =>
+        logger.debug(s"Unsupported API encountered in server when executing config command with args '${args.mkString(" ")}'")
         System.err.println(e.getMessage)
         Exit.exit(1)
 
-      case e: UnsupportedVersionException =>
-        logger.debug(s"Unsupported API encountered in server when executing config command with args '${args.mkString(" ")}'")
+      case e @ (_: IllegalArgumentException | _: InvalidConfigurationException | _: OptionException) =>
+        logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)
         System.err.println(e.getMessage)
         Exit.exit(1)
 
@@ -250,7 +252,7 @@ object ConfigCommand extends Logging {
         }
 
       case IpType =>
-        val unknownConfigs = (configsToBeAdded.keys ++ configsToBeDeleted).filterNot(key => DynamicConfig.Ip.names.contains(key))
+        val unknownConfigs = (configsToBeAdded.keys ++ configsToBeDeleted).filterNot(key => QuotaConfig.ipConfigs.names.contains(key))
         if (unknownConfigs.nonEmpty)
           throw new IllegalArgumentException(s"Only connection quota configs can be added for '$IpType' using --bootstrap-server. Unexpected config names: ${unknownConfigs.mkString(",")}")
         alterQuotaConfigs(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeDeleted)
@@ -340,6 +342,42 @@ object ConfigCommand extends Logging {
   }
 
   private def describeResourceConfig(adminClient: Admin, entityType: String, entityName: Option[String], describeAll: Boolean): Unit = {
+    if (!describeAll) {
+      entityName.foreach { name =>
+        entityType match {
+          case TopicType =>
+            Topic.validate(name)
+            if (!adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names.get.contains(name)) {
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
+              return
+            }
+          case BrokerType | BrokerLoggerConfigType =>
+            if (adminClient.describeCluster.nodes.get.stream.anyMatch(_.idString == name)) {
+              // valid broker id
+            } else if (name == BrokerDefaultEntityName) {
+              // default broker configs
+            } else {
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
+              return
+            }
+          case ClientMetricsType =>
+            if (adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions).all.get
+              .stream.noneMatch(_.name == name)) {
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
+              return
+            }
+          case GroupType =>
+            if (adminClient.listGroups().all.get.stream.noneMatch(_.groupId() == name) &&
+              adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all.get
+                .stream.noneMatch(_.name == name)) {
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
+              return
+            }
+          case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
+        }
+      }
+    }
+
     val entities = entityName
       .map(name => List(name))
       .getOrElse(entityType match {
@@ -348,9 +386,10 @@ object ConfigCommand extends Logging {
         case BrokerType | BrokerLoggerConfigType =>
           adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ BrokerDefaultEntityName
         case ClientMetricsType =>
-          adminClient.listClientMetricsResources().all().get().asScala.map(_.name).toSeq
+          adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions).all().get().asScala.map(_.name).toSeq
         case GroupType =>
-          adminClient.listConsumerGroups().all.get.asScala.map(_.groupId).toSeq
+          adminClient.listGroups().all.get.asScala.map(_.groupId).toSet ++
+            adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all().get().asScala.map(_.name).toSet
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 
@@ -527,13 +566,13 @@ object ConfigCommand extends Logging {
 
     private val nl: String = System.lineSeparator()
     val addConfig: OptionSpec[String] = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
-      "For entity-type '" + TopicType + "': " + LogConfig.configNames.asScala.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + TopicType + "': " + LogConfig.nonInternalConfigNames.asScala.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + BrokerType + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + UserType + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + ClientType + "': " + DynamicConfig.Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + IpType + "': " + DynamicConfig.Ip.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + ClientMetricsType + "': " + DynamicConfig.ClientMetrics.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + GroupType + "': " + DynamicConfig.Group.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + UserType + "': " + QuotaConfig.scramMechanismsPlusUserAndClientQuotaConfigs().names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ClientType + "': " + QuotaConfig.userAndClientQuotaConfigs().names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + IpType + "': " + QuotaConfig.ipConfigs.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ClientMetricsType + "': " + ClientMetricsConfigs.configDef().names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + GroupType + "': " + GroupConfig.configDef().names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       s"Entity types '$UserType' and '$ClientType' may be specified together to update config for clients of a specific user.")
       .withRequiredArg
       .ofType(classOf[String])

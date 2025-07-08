@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
@@ -58,7 +59,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 /**
  * This is the {@link RemoteLogMetadataManager} implementation with storage as an internal topic with name {@link TopicBasedRemoteLogMetadataManagerConfig#REMOTE_LOG_METADATA_TOPIC_NAME}.
@@ -469,29 +469,30 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
-    boolean doesTopicExist(Admin adminClient, String topic) {
+    boolean doesTopicExist(Admin adminClient, String topic) throws ExecutionException, InterruptedException {
         try {
-            TopicDescription description = adminClient.describeTopics(Collections.singleton(topic))
+            TopicDescription description = adminClient.describeTopics(Set.of(topic))
                     .topicNameValues()
                     .get(topic)
                     .get();
             if (description != null) {
                 log.info("Topic {} exists. TopicId: {}, numPartitions: {}, ", topic,
                         description.topicId(), description.partitions().size());
-            } else {
-                log.info("Topic {} does not exist.", topic);
             }
-            return description != null;
+            return true;
         } catch (ExecutionException | InterruptedException ex) {
-            log.info("Topic {} does not exist. Error: {}", topic, ex.getCause().getMessage());
-            return false;
+            if (ex.getCause() instanceof UnknownTopicOrPartitionException) {
+                log.info("Topic {} does not exist", topic);
+                return false;
+            }
+            throw ex;
         }
     }
 
     private boolean isPartitionsCountSameAsConfigured(Admin adminClient,
                                                       String topicName) throws InterruptedException, ExecutionException {
         log.debug("Getting topic details to check for partition count and replication factor.");
-        TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topicName))
+        TopicDescription topicDescription = adminClient.describeTopics(Set.of(topicName))
                                                        .topicNameValues().get(topicName).get();
         int expectedPartitions = rlmmConfig.metadataTopicPartitionsCount();
         int topicPartitionsSize = topicDescription.partitions().size();
@@ -525,14 +526,14 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         try {
             doesTopicExist = doesTopicExist(adminClient, topic);
             if (!doesTopicExist) {
-                CreateTopicsResult result = adminClient.createTopics(Collections.singleton(newTopic));
+                CreateTopicsResult result = adminClient.createTopics(Set.of(newTopic));
                 result.all().get();
                 List<String> overriddenConfigs = result.config(topic).get()
                         .entries()
                         .stream()
                         .filter(entry -> !entry.isDefault())
                         .map(entry -> entry.name() + "=" + entry.value())
-                        .collect(Collectors.toList());
+                        .toList();
                 log.info("Topic {} created. TopicId: {}, numPartitions: {}, replicationFactor: {}, config: {}",
                         topic, result.topicId(topic).get(), result.numPartitions(topic).get(),
                         result.replicationFactor(topic).get(), overriddenConfigs);
@@ -545,7 +546,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 log.info("Topic [{}] already exists", topic);
                 doesTopicExist = true;
             } else {
-                log.error("Encountered error while creating {} topic.", topic, e);
+                log.error("Encountered error while querying or creating {} topic.", topic, e);
             }
         }
         return doesTopicExist;
