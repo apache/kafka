@@ -27,37 +27,57 @@ import org.apache.kafka.common.requests.CreateTopicsRequest
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
+  override def brokerCount: Int = 4
+
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+    properties.put(KafkaConfig.ControlledShutdownSafetyCheckEnableProp, true.toString)
+  }
+
   @Test
   def testValidCreateTopicsRequests(): Unit = {
     // Generated assignments
-    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1"))))
-    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic2", replicationFactor = 3))))
+    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1"))), Option(3))
+    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic2", replicationFactor = 3))), Option(3))
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic3",
-      numPartitions = 5, replicationFactor = 2, config = Map("min.insync.replicas" -> "2")))))
+      numPartitions = 5, replicationFactor = 2, config = Map("min.insync.replicas" -> "2")))), Option(4))
     // Manual assignments
-    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic4", assignment = Map(0 -> List(0))))))
+    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic4", assignment = Map(0 -> List(0, 1, 2))))))
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic5",
-      assignment = Map(0 -> List(0, 1), 1 -> List(1, 0), 2 -> List(1, 2)),
+      assignment = Map(0 -> List(0, 1, 2, 3), 1 -> List(1, 0, 2, 3), 2 -> List(1, 2, 0, 3)),
       config = Map("min.insync.replicas" -> "2")))))
     // Mixed
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic6"),
       topicReq("topic7", numPartitions = 5, replicationFactor = 2),
-      topicReq("topic8", assignment = Map(0 -> List(0, 1), 1 -> List(1, 0), 2 -> List(1, 2))))))
+      topicReq("topic8", assignment = Map(0 -> List(0, 1, 2), 1 -> List(1, 0, 2), 2 -> List(1, 2, 0))))), Option(3))
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic9"),
       topicReq("topic10", numPartitions = 5, replicationFactor = 2),
-      topicReq("topic11", assignment = Map(0 -> List(0, 1), 1 -> List(1, 0), 2 -> List(1, 2)))),
-      validateOnly = true))
+      topicReq("topic11", assignment = Map(0 -> List(0, 1, 2), 1 -> List(1, 0, 2), 2 -> List(1, 2, 0)))),
+      validateOnly = true), Option(3))
     // Defaults
     validateValidCreateTopicsRequests(topicsReq(Seq(
-      topicReq("topic12", replicationFactor = -1, numPartitions = -1))))
+      topicReq("topic12", replicationFactor = -1, numPartitions = -1))), Option(3))
     validateValidCreateTopicsRequests(topicsReq(Seq(
-      topicReq("topic13", replicationFactor = 2, numPartitions = -1))))
+      topicReq("topic13", replicationFactor = 2, numPartitions = -1))), Option(3))
     validateValidCreateTopicsRequests(topicsReq(Seq(
-      topicReq("topic14", replicationFactor = -1, numPartitions = 2))))
+      topicReq("topic14", replicationFactor = -1, numPartitions = 2))), Option(3))
+    validateValidCreateTopicsRequests(topicsReq(Seq(
+      topicReq("topic15", replicationFactor = 3, numPartitions = 2))), Option(3))
+    validateValidCreateTopicsRequests(topicsReq(Seq(
+      topicReq("topic16", replicationFactor = 1, numPartitions = 2))), Option(3))
+    validateValidCreateTopicsRequests(topicsReq(Seq(
+      topicReq("topic17", replicationFactor = 4, numPartitions = 2))), Option(4))
+    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic18",
+      numPartitions = 5, replicationFactor = 2, config = Map("min.insync.replicas" -> "2")))), Option(4))
+    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic19",
+      numPartitions = 5, replicationFactor = 4, config = Map("min.insync.replicas" -> "1")))), Option(4))
+    validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic20",
+      numPartitions = 5, replicationFactor = 3, config = Map("min.insync.replicas" -> "1")))), Option(3))
   }
 
   @Test
@@ -79,15 +99,17 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       config=Map("message.format.version" -> "invalid-value")))),
       Map("error-config-value" -> error(Errors.INVALID_CONFIG)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-assignment",
-      assignment=Map(0 -> List(0, 1), 1 -> List(0))))),
+      assignment=Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2, 3))))),
       Map("error-assignment" -> error(Errors.INVALID_REPLICA_ASSIGNMENT)), checkErrorMessage = false)
+    validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("not_enough_replica_assignment", assignment = Map(0 -> List(0, 1))))),
+      Map("not_enough_replica_assignment" -> error(Errors.INVALID_REPLICA_ASSIGNMENT)), checkErrorMessage = false)
 
     // Partial
     validateErrorCreateTopicsRequests(topicsReq(Seq(
       topicReq(existingTopic),
       topicReq("partial-partitions", numPartitions = -2),
       topicReq("partial-replication", replicationFactor=brokerCount + 1),
-      topicReq("partial-assignment", assignment=Map(0 -> List(0, 1), 1 -> List(0))),
+      topicReq("partial-assignment", assignment=Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2, 3))),
       topicReq("partial-none"))),
       Map(
         existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS),
@@ -162,7 +184,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       assertEquals(Errors.NONE.code, topicResponse.errorCode)
       if (version >= 5) {
         assertEquals(1, topicResponse.numPartitions)
-        assertEquals(1, topicResponse.replicationFactor)
+        assertEquals(4, topicResponse.replicationFactor)
         val config = topicResponse.configs().asScala.find(_.name == "min.insync.replicas")
         assertTrue(config.isDefined)
         assertEquals("2", config.get.value)

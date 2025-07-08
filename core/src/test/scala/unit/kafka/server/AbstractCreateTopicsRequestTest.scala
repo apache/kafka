@@ -91,7 +91,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     topic
   }
 
-  protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
+  protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest, expectedReplicationFactor: Option[Short] = None): Unit = {
     val response = sendCreateTopicRequest(request)
 
     assertFalse(response.errorCounts().keySet().asScala.exists(_.code() > 0),
@@ -108,10 +108,12 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
         else
           topic.numPartitions
 
-        val replication = if (!topic.assignments().isEmpty)
-          topic.assignments().iterator().next().brokerIds().size()
-        else
-          topic.replicationFactor
+        val replication = if (expectedReplicationFactor.isDefined)
+                            expectedReplicationFactor.get
+                          else if (!topic.assignments().isEmpty)
+                            topic.assignments().iterator().next().brokerIds().size()
+                          else
+                            topic.replicationFactor
 
         if (request.data.validateOnly) {
           assertNotNull(metadataForTopic, s"Topic $topic should be created")
