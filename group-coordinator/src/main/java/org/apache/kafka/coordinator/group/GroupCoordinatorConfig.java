@@ -293,7 +293,7 @@ public class GroupCoordinatorConfig {
     public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG = "group.share.initialize.retry.interval.ms";
     // Because persister retries with exp backoff 5 times and upper cap of 30 secs.
     public static final int SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT = 30_000;
-    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request.";
+    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request. If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         // Group coordinator configs
