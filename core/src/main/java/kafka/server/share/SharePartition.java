@@ -3145,11 +3145,7 @@ public class SharePartition {
         void completeStateTransition(boolean commit) {
             stateTransitionLock.writeLock().lock();
             try {
-                if (commit) {
-                    rollbackState = null;
-                    return;
-                }
-                if (isMarkedArchived) {
+                if (commit || isMarkedArchived) {
                     rollbackState = null;
                     return;
                 }
