@@ -2869,7 +2869,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     var prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
 
     def sleepMillisToPropagateMetadata(durationMs: Long): Unit = {
-      TimeUnit.MILLISECONDS.sleep(100)
       TestUtils.waitUntilTrue(
         () => {
           prior2 = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id()
