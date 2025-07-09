@@ -125,8 +125,7 @@ resulting in faster processing and lower costs. 🚀
 ## Testing skipRepartition
 
 To ensure `skipRepartition()` works correctly, we can write a test to validate the topology structure and confirm that
-no
-repartition topic is created:
+no repartition topic is created:
 
 ```java
 
@@ -167,9 +166,9 @@ signals to Kafka Streams that the key has not changed and that repartitioning is
 ### Key Implementation Details
 
 ```java
-public class SkipRepartitionNode<K, V> extends ProcessorGraphNode<K, V> {
+public class SkipRepartitioningNode<K, V> extends ProcessorGraphNode<K, V> {
 
-    public SkipRepartitionNode(final String nodeName, final ProcessorParameters<K, V, ?, ?> processorParameters) {
+    public SkipRepartitioningNode(final String nodeName, final ProcessorParameters<K, V, ?, ?> processorParameters) {
         super(nodeName, processorParameters);
         super.keyChangingOperation(false);
     }
@@ -180,7 +179,7 @@ public class SkipRepartitionNode<K, V> extends ProcessorGraphNode<K, V> {
     }
 
     @Override
-    public void keyChangingOperation(final boolean keyChangingOperation) {
+    public void setKeyChangingOperation(final boolean keyChangingOperation) {
         if (keyChangingOperation) {
             throw new IllegalArgumentException("SkipRepartitionNode cannot be key-changing as it preserves partitioning.");
         }
