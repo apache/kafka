@@ -17,7 +17,10 @@
 
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.AlterShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -36,6 +39,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -116,13 +121,12 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
                 ));
         } else {
             response.data().responses().forEach(topic -> topic.partitions().forEach(partition -> {
-                if (partition.errorCode() != Errors.NONE.code()) {
-                    final Errors partitionError = Errors.forCode(partition.errorCode());
-                    final String partitionErrorMessage = partition.errorMessage();
-                    log.debug("AlterShareGroupOffsets request for group id {} and topic-partition {}-{} failed and returned error {}." + partitionErrorMessage,
-                        groupId.idValue, topic.topicName(), partition.partitionIndex(), partitionError);
+                final Errors partitionError = Errors.forCode(partition.errorCode());
+                if (partitionError.code() != Errors.NONE.code()) {
+                    log.debug("AlterShareGroupOffsets request for group id {} and topic-partition {}-{} failed and returned error {}: {}",
+                        groupId.idValue, topic.topicName(), partition.partitionIndex(), partitionError.name(), partition.errorMessage());
                 }
-                partitionResults.put(new TopicPartition(topic.topicName(), partition.partitionIndex()), Errors.forCode(partition.errorCode()).exception(partition.errorMessage()));
+                partitionResults.put(new TopicPartition(topic.topicName(), partition.partitionIndex()), partitionError.exception(partition.errorMessage()));
             }));
         }
 
