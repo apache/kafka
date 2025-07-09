@@ -95,7 +95,7 @@ public class FeaturesTest {
         Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
 
         assertEquals(
-            "Features{(feature_1 -> SupportedVersionRange[min_version:1, max_version:2]), (feature_2 -> SupportedVersionRange[min_version:3, max_version:4])}",
+            "Features{(feature_1 -> BrokerSupportedVersionRange[min_version:1, max_version:2]), (feature_2 -> BrokerSupportedVersionRange[min_version:3, max_version:4])}",
             features.toString());
     }
 

@@ -116,7 +116,7 @@ public class BrokerFeatures {
      * feature:
      * 1) Does not exist in the Broker (i.e. it is unknown to the Broker).
      * [OR]
-     * 2) Exists but the FinalizedVersionRange does not match with the SupportedVersionRange
+     * 2) Exists but the BrokerFinalizedVersionRange does not match with the BrokerSupportedVersionRange
      * of the supported feature.
      *
      * @param finalized The finalized features against which incompatibilities need to be checked for.

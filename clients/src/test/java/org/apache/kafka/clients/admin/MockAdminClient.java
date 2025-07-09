@@ -1266,12 +1266,12 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options) {
-        Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
-        Map<String, SupportedVersionRange> supportedFeatures = new HashMap<>();
+        Map<String, BrokerFinalizedVersionRange> finalizedFeatures = new HashMap<>();
+        Map<String, BrokerSupportedVersionRange> supportedFeatures = new HashMap<>();
         for (Map.Entry<String, Short> entry : featureLevels.entrySet()) {
-            finalizedFeatures.put(entry.getKey(), new FinalizedVersionRange(
+            finalizedFeatures.put(entry.getKey(), new BrokerFinalizedVersionRange(
                     entry.getValue(), entry.getValue()));
-            supportedFeatures.put(entry.getKey(), new SupportedVersionRange(
+            supportedFeatures.put(entry.getKey(), new BrokerSupportedVersionRange(
                     minSupportedFeatureLevels.get(entry.getKey()),
                     maxSupportedFeatureLevels.get(entry.getKey())));
         }

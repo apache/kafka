@@ -48,7 +48,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
     }
 
     /**
-     * @param features   Map of feature name to SupportedVersionRange.
+     * @param features   Map of feature name to BrokerSupportedVersionRange.
      *
      * @return           Returns a new Features object representing supported features.
      */
@@ -124,12 +124,12 @@ public class Features<VersionRangeType extends BaseVersionRange> {
     }
 
     /**
-     * Converts from a map to Features<SupportedVersionRange>.
+     * Converts from a map to Features<BrokerSupportedVersionRange>.
      *
-     * @param featuresMap  the map representation of a Features<SupportedVersionRange> object,
+     * @param featuresMap  the map representation of a Features<BrokerSupportedVersionRange> object,
      *                     generated using the toMap() API.
      *
-     * @return             the Features<SupportedVersionRange> object
+     * @return             the Features<BrokerSupportedVersionRange> object
      */
     public static Features<SupportedVersionRange> fromSupportedFeaturesMap(
         Map<String, Map<String, Short>> featuresMap) {

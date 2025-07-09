@@ -16,12 +16,8 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.FeatureMetadata;
-import org.apache.kafka.clients.admin.FeatureUpdate;
-import org.apache.kafka.clients.admin.SupportedVersionRange;
-import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
-import org.apache.kafka.clients.admin.UpdateFeaturesResult;
+import org.apache.kafka.clients.admin.*;
+import org.apache.kafka.clients.admin.BrokerSupportedVersionRange;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.Feature;
@@ -229,7 +225,7 @@ public class FeatureCommand {
         FeatureMetadata featureMetadata = adminClient.describeFeatures().featureMetadata().get();
         featureMetadata.supportedFeatures().keySet().stream().sorted().forEach(feature -> {
             short finalizedLevel = (featureMetadata.finalizedFeatures().get(feature) == null) ? 0 : featureMetadata.finalizedFeatures().get(feature).maxVersionLevel();
-            SupportedVersionRange range = featureMetadata.supportedFeatures().get(feature);
+            BrokerSupportedVersionRange range = featureMetadata.supportedFeatures().get(feature);
             System.out.printf("Feature: %s\tSupportedMinVersion: %s\tSupportedMaxVersion: %s\tFinalizedVersionLevel: %s\tEpoch: %s%n",
                     feature,
                     levelToString(feature, range.minVersion()),
