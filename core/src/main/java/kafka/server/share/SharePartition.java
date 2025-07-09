@@ -199,9 +199,9 @@ public class SharePartition {
 
     /**
      * The DeliveryCountOps is used to specify the behavior on the delivery count: increase, decrease,
-     * or do nothing.
+     * or do nothing. Visible for testing.
      */
-    private enum DeliveryCountOps {
+    enum DeliveryCountOps {
         INCREASE,
         DECREASE,
         NO_OP
@@ -3116,7 +3116,8 @@ public class SharePartition {
             };
         }
 
-        private void archive(String newMemberId) {
+        // Visible for testing.
+        void archive(String newMemberId) {
             stateTransitionLock.writeLock().lock();
             try {
                 if (rollbackState != null) {
@@ -3129,7 +3130,8 @@ public class SharePartition {
             }
         }
 
-        private InFlightState startStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
+        // Visible for testing
+        InFlightState startStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
             stateTransitionLock.writeLock().lock();
             try {
                 rollbackState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
@@ -3139,7 +3141,8 @@ public class SharePartition {
             }
         }
 
-        private void completeStateTransition(boolean commit) {
+        // Visible for testing
+        void completeStateTransition(boolean commit) {
             stateTransitionLock.writeLock().lock();
             try {
                 if (commit) {

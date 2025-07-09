@@ -87,6 +87,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -7532,6 +7533,37 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(7L).offsetState().get(9L).state());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(7L).offsetState().get(10L).state());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(7L).offsetState().get(11L).state());
+    }
+
+    @Test
+    public void inFlightStateRollbackAndArchiveStateTransition() throws InterruptedException {
+        InFlightState inFlightState = new InFlightState(RecordState.ACQUIRED, 1, MEMBER_ID);
+
+        inFlightState.startStateTransition(RecordState.ACKNOWLEDGED, SharePartition.DeliveryCountOps.INCREASE, MAX_DELIVERY_COUNT, MEMBER_ID);
+        assertTrue(inFlightState.hasOngoingStateTransition());
+
+        // We have an ongoing state transition from ACQUIRED to ACKNOWLEDGED which is not committed yet. At the same
+        // time when we have a call to completeStateTransition with false commit value, we get a call to ARCHIVE the record.
+        // No matter the order of the 2 calls, we should always be getting the final state as ARCHIVED.
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        try {
+            List<Callable<Void>> callables = List.of(
+                () -> {
+                    inFlightState.archive("member-2");
+                    return null;
+                },
+                () -> {
+                    inFlightState.completeStateTransition(false);
+                    return null;
+                }
+            );
+            executorService.invokeAll(callables);
+        } finally {
+            if (!executorService.awaitTermination(30, TimeUnit.MILLISECONDS))
+                executorService.shutdown();
+        }
+        assertEquals(RecordState.ARCHIVED, inFlightState.state());
+        assertEquals("member-2", inFlightState.memberId());
     }
 
     /**
