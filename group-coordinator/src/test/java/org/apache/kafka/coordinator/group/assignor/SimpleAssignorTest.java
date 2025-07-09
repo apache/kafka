@@ -777,11 +777,11 @@ public class SimpleAssignorTest {
         final int numPartitions = 24;
         final int numMembers = 101;
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, numPartitions / 2)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, numPartitions / 3)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, numPartitions / 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -845,11 +845,11 @@ public class SimpleAssignorTest {
         final int numPartitions = 24;
         final int numMembers = 101;
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, numPartitions / 2)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, numPartitions / 3)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, numPartitions / 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage

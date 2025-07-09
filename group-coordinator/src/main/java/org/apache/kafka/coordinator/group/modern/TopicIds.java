@@ -126,7 +126,7 @@ public class TopicIds implements Set<Uuid> {
 
         @Override
         public String name(Uuid id) {
-            return topicNames.computeIfAbsent(id, __ -> image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse("<UNKNOWN>"));
+            return topicNames.computeIfAbsent(id, __ -> image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null));
         }
 
         @Override

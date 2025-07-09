@@ -2144,7 +2144,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         Set<Uuid> topicIds = topicPartitions.stream()
-            .map(tp -> metadataImage.topicMetadata(tp.topic()).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null))
+            .filter(tp -> metadataImage.topicMetadata(tp.topic()).isPresent())
+            .map(tp -> metadataImage.topicMetadata(tp.topic()).get().id())
             .collect(Collectors.toSet());
 
         if (topicIds.isEmpty()) {

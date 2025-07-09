@@ -3260,10 +3260,10 @@ public class GroupCoordinatorServiceTest {
             .build();
         service.startup(() -> 3);
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "bar", 1)
-            .build();
-        service.onNewMetadataImage(image, new MetadataDelta(image));
+            .buildCoordinatorMetadataImage();
+        service.onNewMetadataImage(image, image.emptyDelta());
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(
@@ -3310,8 +3310,8 @@ public class GroupCoordinatorServiceTest {
             .build();
         service.startup(() -> 3);
 
-        MetadataImage image = MetadataImage.EMPTY;
-        service.onNewMetadataImage(image, new MetadataDelta(image));
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
+        service.onNewMetadataImage(image, image.emptyDelta());
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(
