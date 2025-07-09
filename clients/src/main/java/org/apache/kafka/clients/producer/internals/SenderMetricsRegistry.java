@@ -66,7 +66,9 @@ public class SenderMetricsRegistry {
     private final MetricNameTemplate topicRecordRetryTotal;
     private final MetricNameTemplate topicRecordErrorRate;
     private final MetricNameTemplate topicRecordErrorTotal;
-    
+    private final MetricNameTemplate topicTopicNameInconsistencyRate;
+    private final MetricNameTemplate topicTopicNameInconsistencyTotal;
+
     private final Metrics metrics;
     private final Set<String> tags;
     private final LinkedHashSet<String> topicTags;
@@ -149,7 +151,10 @@ public class SenderMetricsRegistry {
                 "The average per-second number of record sends that resulted in errors for a topic");
         this.topicRecordErrorTotal = createTopicTemplate("record-error-total",
                 "The total number of record sends that resulted in errors for a topic");
-
+        this.topicTopicNameInconsistencyRate = createTopicTemplate("topic-name-inconsistency-rate",
+            "The average per-second number of records sent that contained inconsistent topic names");
+        this.topicTopicNameInconsistencyTotal = createTopicTemplate("topic-name-inconsistency-total",
+            "The total number of record records sent that contained inconsistent topic names");
     }
 
     private MetricName createMetricName(String name, String description) {
@@ -195,6 +200,14 @@ public class SenderMetricsRegistry {
 
     public MetricName topicRecordErrorTotal(Map<String, String> tags) {
         return this.metrics.metricInstance(this.topicRecordErrorTotal, tags);
+    }
+
+    public MetricName topicTopicNameInconsistencyRate(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicTopicNameInconsistencyRate, tags);
+    }
+
+    public MetricName topicTopicNameInconsistencyTotal(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicTopicNameInconsistencyTotal, tags);
     }
 
     public List<MetricNameTemplate> allTemplates() {

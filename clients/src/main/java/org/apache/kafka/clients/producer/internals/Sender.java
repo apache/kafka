@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -47,18 +48,23 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -78,6 +84,8 @@ import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
  */
 public class Sender implements Runnable {
+
+    public static final String TOPIC_NAME_HEADER_NAME = "KAFKA-19012_topic";
 
     private final Logger log;
 
@@ -126,6 +134,8 @@ public class Sender implements Runnable {
     /* all the state related to transactions, in particular the producer id, producer epoch, and sequence numbers */
     private final TransactionManager transactionManager;
 
+    private final BufferSupplier bufferSupplier;
+
     // A per-partition queue of batches ordered by creation time for tracking the in-flight batches
     private final Map<TopicPartition, List<ProducerBatch>> inFlightBatches;
 
@@ -153,11 +163,12 @@ public class Sender implements Runnable {
         this.acks = acks;
         this.retries = retries;
         this.time = time;
-        this.sensors = new SenderMetrics(metricsRegistry, metadata, client, time);
+        this.sensors = new SenderMetrics(logContext, metricsRegistry, metadata, client, time);
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
+        this.bufferSupplier = BufferSupplier.create();
         this.inFlightBatches = new HashMap<>();
     }
 
@@ -303,6 +314,8 @@ public class Sender implements Runnable {
         } catch (Exception e) {
             log.error("Failed to close network client", e);
         }
+
+        Utils.closeQuietly(bufferSupplier, "bufferSupplier");
 
         log.debug("Shutdown of Kafka producer I/O thread has completed.");
     }
@@ -884,6 +897,8 @@ public class Sender implements Runnable {
                     .setIndex(tp.partition())
                     .setRecords(records));
             recordsByPartition.put(tp, batch);
+
+            sensors.updateInconsistentTopics(batch, bufferSupplier);
         }
 
         String transactionalId = null;
@@ -928,6 +943,7 @@ public class Sender implements Runnable {
      * A collection of sensors for the sender
      */
     private static class SenderMetrics {
+        private final Logger log;
         public final Sensor retrySensor;
         public final Sensor errorSensor;
         public final Sensor queueTimeSensor;
@@ -940,7 +956,8 @@ public class Sender implements Runnable {
         private final SenderMetricsRegistry metrics;
         private final Time time;
 
-        public SenderMetrics(SenderMetricsRegistry metrics, Metadata metadata, KafkaClient client, Time time) {
+        public SenderMetrics(LogContext logContext, SenderMetricsRegistry metrics, Metadata metadata, KafkaClient client, Time time) {
+            this.log = logContext.logger(SenderMetrics.class);
             this.metrics = metrics;
             this.time = time;
 
@@ -1016,6 +1033,12 @@ public class Sender implements Runnable {
                 rateMetricName = this.metrics.topicRecordErrorRate(metricTags);
                 totalMetricName = this.metrics.topicRecordErrorTotal(metricTags);
                 topicErrorSensor.add(new Meter(rateMetricName, totalMetricName));
+
+                String topicTopicNameInconsistencyName = "topic." + topic + ".topic-name-inconsistency";
+                Sensor topicTopicNameInconsistencySensor = this.metrics.sensor(topicTopicNameInconsistencyName);
+                rateMetricName = this.metrics.topicTopicNameInconsistencyRate(metricTags);
+                totalMetricName = this.metrics.topicTopicNameInconsistencyTotal(metricTags);
+                topicTopicNameInconsistencySensor.add(new Meter(rateMetricName, totalMetricName));
             }
         }
 
@@ -1051,6 +1074,54 @@ public class Sender implements Runnable {
                     records += batch.recordCount;
                 }
                 this.recordsPerRequestSensor.record(records, now);
+            }
+        }
+
+        /**
+         * Iterate over all the {@link Record}s in the batch and checks the {@link Header}s for
+         * {@link #TOPIC_NAME_HEADER_NAME}. If the header is present, check its topic name against the
+         * {@link ProducerBatch#topicPartition}'s topic name. If it doesn't match, increment the metrics to
+         * track the inconsistency.
+         */
+        public void updateInconsistentTopics(ProducerBatch producerBatch, BufferSupplier bufferSupplier) {
+            for (RecordBatch recordBatch : producerBatch.records().batches()) {
+                if (recordBatch.isControlBatch())
+                    continue;
+
+                try (CloseableIterator<Record> recordIterator = recordBatch.streamingIterator(bufferSupplier)) {
+                    while (recordIterator.hasNext()) {
+                        Record record = recordIterator.next();
+                        Header[] headers = record.headers();
+
+                        if (headers == null)
+                            continue;
+
+                        for (Header header : headers) {
+                            if (!header.key().equals(TOPIC_NAME_HEADER_NAME))
+                                continue;
+
+                            String headerTopicName = new String(header.value(), StandardCharsets.UTF_8);
+
+                            if (headerTopicName.equals(producerBatch.topicPartition.topic()))
+                                continue;
+
+                            log.warn(
+                                "A topic mismatch was detected! ProducerBatch topic: {}, Record header {} topic: {}",
+                                producerBatch.topicPartition.topic(),
+                                TOPIC_NAME_HEADER_NAME,
+                                headerTopicName
+                            );
+
+                            // per-topic inconsistency rate
+                            maybeRegisterTopicMetrics(headerTopicName);
+                            String topicTopicNameInconsistencyName = "topic." + headerTopicName + ".topic-name-inconsistency";
+                            Sensor topicTopicNameInconsistencySensor = Objects.requireNonNull(metrics.getSensor(topicTopicNameInconsistencyName));
+                            topicTopicNameInconsistencySensor.record(1);
+                        }
+                    }
+                } catch (Throwable t) {
+                    log.warn("An unexpected error occurred during record batch deserialization prevented inconsistency checks and metrics collection: {}", t.getMessage(), t);
+                }
             }
         }
 

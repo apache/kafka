@@ -83,6 +83,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -951,9 +952,52 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Adds the well-known {@link Sender#TOPIC_NAME_HEADER_NAME} header to the record with the name of the
+     * topic from the record.
+     */
+    private void addTopicNameHeader(ProducerRecord<K, V> record) {
+        try {
+            RecordHeaders headers = (RecordHeaders) record.headers();
+
+            // This is the happy path: the header can be added to the record.
+            headers.add(Sender.TOPIC_NAME_HEADER_NAME, record.topic().getBytes(StandardCharsets.UTF_8));
+
+            Header header = headers.lastHeader(Sender.TOPIC_NAME_HEADER_NAME);
+
+            if (header == null) {
+                log.warn("The {} header was added to the record but it was not returned via lastHeader", Sender.TOPIC_NAME_HEADER_NAME);
+                return;
+            }
+
+            byte[] existingTopicNameBytes = header.value();
+
+            if (existingTopicNameBytes == null) {
+                log.warn("The {} header was present for the record, but its value was null", Sender.TOPIC_NAME_HEADER_NAME);
+                return;
+            }
+
+            String existingTopicName = new String(header.value(), StandardCharsets.UTF_8);
+
+            if (!record.topic().equals(existingTopicName)) {
+                log.warn(
+                    "The {} header had a value of {}, which differs from the record's topic: {}",
+                    Sender.TOPIC_NAME_HEADER_NAME,
+                    existingTopicName,
+                    record.topic()
+                );
+            }
+        } catch (IllegalStateException t) {
+            log.warn("The {} header could not be added to the record as the headers are read only", Sender.TOPIC_NAME_HEADER_NAME);
+            log.warn("An error occurred adding the {} header to the record; this likely means that the headers are read only", Sender.TOPIC_NAME_HEADER_NAME, t);
+        }
+    }
+
+    /**
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
+        addTopicNameHeader(record);
+
         // Append callback takes care of the following:
         //  - call interceptors and user callback on completion
         //  - remember partition that is calculated in RecordAccumulator.append
