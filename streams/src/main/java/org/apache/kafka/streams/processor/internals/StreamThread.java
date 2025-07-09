@@ -55,6 +55,7 @@ import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TaskTimeoutException;
 import org.apache.kafka.streams.internals.ConsumerWrapper;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
@@ -964,6 +965,9 @@ public class StreamThread extends Thread implements ProcessingThread {
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(new StreamsException(e), false);
                 return false;
+            } catch (final TaskTimeoutException e) {
+                log.info("Tasks didn't make progress. Clean shutdown on StreamThread");
+                return true;
             } catch (final StreamsException e) {
                 throw e;
             } catch (final Exception e) {

@@ -36,6 +36,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TaskTimeoutException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
@@ -437,6 +438,7 @@ public class TaskManager {
             final Set<TaskId> aggregatedCorruptedTaskIds = new HashSet<>();
             StreamsException lastFatal = null;
             TaskMigratedException lastTaskMigrated = null;
+            TaskTimeoutException lastTaskTimeoutException = null;
             for (final Map.Entry<TaskId, RuntimeException> entry : taskExceptions.entrySet()) {
                 final TaskId taskId = entry.getKey();
                 final RuntimeException exception = entry.getValue();
@@ -448,6 +450,8 @@ public class TaskManager {
                         log.warn("Encounter corrupted task " + taskId + ", will group it with other corrupted tasks " +
                             "and handle together", exception);
                         aggregatedCorruptedTaskIds.add(taskId);
+                    } else if (exception instanceof TaskTimeoutException) {
+                        lastTaskTimeoutException = (TaskTimeoutException) exception;
                     } else {
                         ((StreamsException) exception).setTaskId(taskId);
                         lastFatal = (StreamsException) exception;
@@ -463,6 +467,8 @@ public class TaskManager {
                 throw lastFatal;
             } else if (lastTaskMigrated != null) {
                 throw lastTaskMigrated;
+            } else if (aggregatedCorruptedTaskIds.isEmpty() && lastTaskTimeoutException != null) {
+                throw lastTaskTimeoutException;
             } else {
                 throw new TaskCorruptedException(aggregatedCorruptedTaskIds);
             }
@@ -751,8 +757,7 @@ public class TaskManager {
                 .forEach(removedTaskResult -> {
                     if (removedTaskResult.exception().isPresent()) {
                         final RuntimeException runtimeException = removedTaskResult.exception().get();
-                        final boolean isTaskTimeout = (runtimeException.getCause() != null && runtimeException.getCause() instanceof TimeoutException);
-                        if (runtimeException instanceof StreamsException && isTaskTimeout) {
+                        if (runtimeException instanceof TaskTimeoutException) {
                             tasksToCloseCleanFromStateUpdater.add(removedTaskResult.task());
                         } else  {
                             tasksToCloseDirtyFromStateUpdater.add(removedTaskResult.task());

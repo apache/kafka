@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TaskTimeoutException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -179,9 +179,9 @@ public abstract class AbstractTask implements Task {
             );
 
             if (cause != null) {
-                throw new StreamsException(new TimeoutException(errorMessage, cause), id);
+                throw new TaskTimeoutException(errorMessage, cause, id);
             } else {
-                throw new StreamsException(new TimeoutException(errorMessage), id);
+                throw new TaskTimeoutException(errorMessage, id);
             }
         }
 

@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.errors.TaskTimeoutException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -210,7 +211,7 @@ public interface Task {
     }
 
     /**
-     * @throws StreamsException if {@code currentWallClockMs > task-timeout-deadline}
+     * @throws TaskTimeoutException if {@code currentWallClockMs > task-timeout-deadline}
      */
     void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
                                      final Exception cause);
