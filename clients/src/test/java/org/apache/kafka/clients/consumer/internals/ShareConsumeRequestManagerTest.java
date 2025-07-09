@@ -1434,13 +1434,10 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.SHARE_SESSION_NOT_FOUND));
         networkClientDelegate.poll(time.timer(0));
 
-        // Simulate a subscription change to t2p0.
-        subscriptions.subscribeToShareGroup(Collections.singleton(topicName2));
-        subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
-
+        // Simulate a metadata update with no topics in the response.
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName2, 1),
-                        tp -> validLeaderEpoch, topicIds, false));
+                RequestTestUtils.metadataUpdateWithIds(1, Collections.emptyMap(),
+                        tp -> validLeaderEpoch, null, false));
 
         // The acknowledgements for the initial fetch from tip0 are processed now and sent to the background thread.
         Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
@@ -1448,13 +1445,9 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(0, completedAcknowledgements.size());
 
-        // Next fetch would be sent to updated subscription. We would not include any acknowledgements as part of this fetch.
+        // Next fetch would not include any acknowledgements.
         NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
-        assertEquals(1, pollResult.unsentRequests.size());
-        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
-        assertEquals(1, builder.data().topics().size());
-        assertEquals(t2ip0.topicId(), builder.data().topics().find(t2ip0.topicId()).topicId());
-        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+        assertEquals(0, pollResult.unsentRequests.size());
 
         // We should fail any waiting acknowledgements for tip-0 as it would have a share session epoch equal to 0.
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
