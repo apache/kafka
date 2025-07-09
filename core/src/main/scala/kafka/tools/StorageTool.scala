@@ -135,6 +135,15 @@ object StorageTool extends Logging {
       featureNamesAndLevels(_).foreachEntry {
         (k, v) => formatter.setFeatureLevel(k, v)
       })
+    if (!config.quorumConfig.voters().isEmpty &&
+      (namespace.getString("initial_controllers") != null || namespace.getBoolean("standalone"))) {
+      throw new TerseFailure("You cannot specify " +
+        QuorumConfig.QUORUM_VOTERS_CONFIG + " and format the node " +
+        "with --initial-controllers or --standalone. " +
+        "If you want to use dynamic quorum, please remove " +
+        QuorumConfig.QUORUM_VOTERS_CONFIG + " and specify " +
+        QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG + " instead.")
+    }
     Option(namespace.getString("initial_controllers")).
       foreach(v => formatter.setInitialControllers(DynamicVoters.parse(v)))
     if (namespace.getBoolean("standalone")) {
