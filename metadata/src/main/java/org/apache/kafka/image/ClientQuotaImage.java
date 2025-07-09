@@ -49,7 +49,7 @@ public final class ClientQuotaImage {
     }
 
     public Map<String, Double> quotas() {
-        return this.quotas;;
+        return this.quotas;
     }
 
     public void write(
