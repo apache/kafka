@@ -210,8 +210,7 @@ public class MirrorClientTest {
 
     private ReplicationPolicy identityReplicationPolicy(String source) {
         IdentityReplicationPolicy policy = new IdentityReplicationPolicy();
-        policy.configure(Map.of(
-            IdentityReplicationPolicy.SOURCE_CLUSTER_ALIAS_CONFIG, source));
+        policy.configure(Map.of(IdentityReplicationPolicy.SOURCE_CLUSTER_ALIAS_CONFIG, source));
         return policy;
     }
 }

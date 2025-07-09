@@ -65,10 +65,10 @@ public class ConnectSchema implements Schema {
     /**
      * Maps the Java classes to the corresponding {@link Schema.Type}.
      */
-    private static final Map<Class<?>, Type> JAVA_CLASS_SCHEMA_TYPES = new HashMap<>(SCHEMA_TYPE_CLASSES.entrySet()
+    private static final Map<Class<?>, Type> JAVA_CLASS_SCHEMA_TYPES = SCHEMA_TYPE_CLASSES.entrySet()
         .stream()
         .flatMap(entry -> entry.getValue().stream().map(klass -> Map.entry(klass, entry.getKey())))
-        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     // The type of the field
     private final Type type;

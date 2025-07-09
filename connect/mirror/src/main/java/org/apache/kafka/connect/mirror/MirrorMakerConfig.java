@@ -213,14 +213,9 @@ public final class MirrorMakerConfig extends AbstractConfig {
 
     Set<String> allConfigNames() {
         Set<String> allNames = new HashSet<>();
-        List<ConfigDef> connectorConfigDefs = List.of(
-                MirrorCheckpointConfig.CONNECTOR_CONFIG_DEF,
-                MirrorSourceConfig.CONNECTOR_CONFIG_DEF,
-                MirrorHeartbeatConfig.CONNECTOR_CONFIG_DEF
-        );
-        for (ConfigDef cd : connectorConfigDefs) {
-            allNames.addAll(cd.names());
-        }
+        allNames.addAll(MirrorCheckpointConfig.CONNECTOR_CONFIG_DEF.names());
+        allNames.addAll(MirrorSourceConfig.CONNECTOR_CONFIG_DEF.names());
+        allNames.addAll(MirrorHeartbeatConfig.CONNECTOR_CONFIG_DEF.names());
         return allNames;
     }
 

@@ -48,9 +48,7 @@ public class MirrorRestServer extends RestServer {
 
     @Override
     protected Collection<Class<?>> regularResources() {
-        return List.of(
-                InternalMirrorResource.class
-        );
+        return List.of(InternalMirrorResource.class);
     }
 
     @Override
@@ -70,5 +68,4 @@ public class MirrorRestServer extends RestServer {
             bind(restClient).to(RestClient.class);
         }
     }
-
 }
