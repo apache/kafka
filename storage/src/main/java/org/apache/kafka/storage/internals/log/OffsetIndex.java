@@ -56,7 +56,7 @@ public final class OffsetIndex extends AbstractIndex {
     private static final int ENTRY_SIZE = 8;
 
     /* the last offset in the index */
-    private long lastOffset;
+    private volatile long lastOffset;
 
     public OffsetIndex(File file, long baseOffset) throws IOException {
         this(file, baseOffset, -1);
@@ -95,7 +95,7 @@ public final class OffsetIndex extends AbstractIndex {
      *         the pair (baseOffset, 0) is returned.
      */
     public OffsetPosition lookup(long targetOffset) {
-        return maybeLock(lock, () -> {
+        return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, targetOffset, IndexSearchType.KEY);
             if (slot == -1)
@@ -111,7 +111,7 @@ public final class OffsetIndex extends AbstractIndex {
      * @return The offset/position pair at that entry
      */
     public OffsetPosition entry(int n) {
-        return maybeLock(lock, () -> {
+        return inRemapReadLock(() -> {
             if (n >= entries())
                 throw new IllegalArgumentException("Attempt to fetch the " + n + "th entry from index " +
                     file().getAbsolutePath() + ", which has size " + entries());
@@ -125,7 +125,7 @@ public final class OffsetIndex extends AbstractIndex {
      * such offset.
      */
     public Optional<OffsetPosition> fetchUpperBoundOffset(OffsetPosition fetchOffset, int fetchSize) {
-        return maybeLock(lock, () -> {
+        return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = smallestUpperBoundSlotFor(idx, fetchOffset.position + fetchSize, IndexSearchType.VALUE);
             if (slot == -1)
@@ -141,8 +141,7 @@ public final class OffsetIndex extends AbstractIndex {
      * @throws InvalidOffsetException if provided offset is not larger than the last offset
      */
     public void append(long offset, int position) {
-        lock.lock();
-        try {
+        inLock(() -> {
             if (isFull())
                 throw new IllegalArgumentException("Attempt to append to a full index (size = " + entries() + ").");
 
@@ -157,15 +156,12 @@ public final class OffsetIndex extends AbstractIndex {
             } else
                 throw new InvalidOffsetException("Attempt to append an offset " + offset + " to position " + entries() +
                     " no larger than the last offset appended (" + lastOffset + ") to " + file().getAbsolutePath());
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     @Override
     public void truncateTo(long offset) {
-        lock.lock();
-        try {
+        inLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, offset, IndexSearchType.KEY);
 
@@ -182,9 +178,7 @@ public final class OffsetIndex extends AbstractIndex {
             else
                 newEntries = slot + 1;
             truncateToEntries(newEntries);
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     public long lastOffset() {
@@ -218,30 +212,24 @@ public final class OffsetIndex extends AbstractIndex {
      * Truncates index to a known number of entries.
      */
     private void truncateToEntries(int entries) {
-        lock.lock();
-        try {
+        inLock(() -> {
             super.truncateToEntries0(entries);
             this.lastOffset = lastEntry().offset;
             log.debug("Truncated index {} to {} entries; position is now {} and last offset is now {}",
-                    file().getAbsolutePath(), entries, mmap().position(), lastOffset);
-        } finally {
-            lock.unlock();
-        }
+                file().getAbsolutePath(), entries, mmap().position(), lastOffset);
+        });
     }
 
     /**
      * The last entry in the index
      */
     private OffsetPosition lastEntry() {
-        lock.lock();
-        try {
+        return inRemapReadLock(() -> {
             int entries = entries();
             if (entries == 0)
                 return new OffsetPosition(baseOffset(), 0);
             else
                 return parseEntry(mmap(), entries - 1);
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 }
