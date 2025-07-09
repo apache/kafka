@@ -896,6 +896,27 @@ public class UtilsTest {
         assertValue(Collections.emptyMap());
     }
 
+    @Test
+    public void testPropsToMapWithDefaults() {
+        Properties defaultProperties = new Properties();
+        defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
+        defaultProperties.setProperty("DefaultKey2", "DefaultValue2");
+
+        Properties actualProperties = new Properties(defaultProperties);
+        actualProperties.setProperty("ActualKey1", "ActualValue1");
+        actualProperties.setProperty("ActualKey2", "ActualValue2");
+
+        final Map<String, Object> mapProperties = Utils.propsToMap(actualProperties);
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("DefaultKey1", "DefaultValue1");
+        expectedMap.put("DefaultKey2", "DefaultValue2");
+        expectedMap.put("ActualKey1", "ActualValue1");
+        expectedMap.put("ActualKey2", "ActualValue2");
+
+        assertEquals(expectedMap, mapProperties);
+    }
+
     private static void assertValue(Object value) {
         Properties props = new Properties();
         props.put("key", value);

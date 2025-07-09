@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.Enumeration;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1469,7 +1470,19 @@ public final class Utils {
      * @return a map including all elements in properties
      */
     public static Map<String, Object> propsToMap(Properties properties) {
-        return castToStringObjectMap(properties);
+        try {
+            final Enumeration<?> enumeration = properties.propertyNames();
+            Map<String, Object> props = new HashMap<>();
+            while (enumeration.hasMoreElements()) {
+                Object key = enumeration.nextElement();
+                String keyString = (String) key;
+                Object value = (properties.get(keyString) != null) ? properties.get(keyString) : properties.getProperty(keyString);
+                props.put(keyString, value);
+            }
+            return props;
+        } catch (Exception e) {
+            throw new ConfigException("Key must be a string.");
+        }
     }
 
     /**
