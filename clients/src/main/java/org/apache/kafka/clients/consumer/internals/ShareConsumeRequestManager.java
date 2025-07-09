@@ -179,14 +179,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (nodeAcksFromFetchMap != null) {
                     acknowledgementsToSend = nodeAcksFromFetchMap.remove(tip);
                     if (acknowledgementsToSend != null) {
-                        if (handler.isNewSession()) {
-                            // Failing the acknowledgements as we cannot have piggybacked acknowledgements in the initial ShareFetchRequest.
-                            acknowledgementsToSend.complete(Errors.INVALID_SHARE_SESSION_EPOCH.exception());
-                            maybeSendShareAcknowledgeCommitCallbackEvent(Map.of(tip, acknowledgementsToSend));
-                        } else {
-                            metricsManager.recordAcknowledgementSent(acknowledgementsToSend.size());
-                            fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acknowledgementsToSend);
-                        }
+                        maybeAddAcknowledgements(handler, node, tip, acknowledgementsToSend);
                     }
                 }
 
@@ -212,8 +205,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     if (nodeAcksFromFetchMap != null) {
                         nodeAcksFromFetchMap.forEach((tip, acks) -> {
                             if (!isLeaderKnownToHaveChanged(nodeId, tip)) {
-                                metricsManager.recordAcknowledgementSent(acks.size());
-                                fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acks);
+
+                                maybeAddAcknowledgements(sessionHandler, node, tip, acks);
 
                                 sessionHandler.addPartitionToAcknowledgeOnly(tip, acks);
                                 handlerMap.put(node, sessionHandler);
@@ -254,6 +247,19 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }).collect(Collectors.toList());
 
         return new PollResult(requests);
+    }
+
+    private void maybeAddAcknowledgements(ShareSessionHandler handler,
+                                                        Node node,
+                                                        TopicIdPartition tip,
+                                                        Acknowledgements acknowledgements) {
+        if (handler.isNewSession()) {
+            // Failing the acknowledgements as we cannot have piggybacked acknowledgements in the initial ShareFetchRequest.
+            acknowledgements.complete(Errors.INVALID_SHARE_SESSION_EPOCH.exception());
+            maybeSendShareAcknowledgeCommitCallbackEvent(Map.of(tip, acknowledgements));
+        } else {
+            metricsManager.recordAcknowledgementSent(acknowledgements.size());
+            fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acknowledgements);}
     }
 
     public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
