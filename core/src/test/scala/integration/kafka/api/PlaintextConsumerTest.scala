@@ -24,8 +24,8 @@ import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.concurrent.ExecutionException
 
-@Timeout(600)
-class PlaintextConsumerTest extends BaseConsumerTest {
+@Timeout(60)
+class PlaintextConsumerTest extends AbstractConsumerTest {
 
   @Flaky("KAFKA-18031")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
