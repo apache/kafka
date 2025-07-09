@@ -17,16 +17,10 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
-import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
-import org.apache.kafka.server.common.TopicIdPartition;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -56,38 +50,6 @@ public final class AssignorHelpers {
             copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
         }
         return copy;
-    }
-
-    /**
-     * Computes the list of target partitions which can be assigned to members. This list includes all partitions
-     * for the subscribed topic IDs, with the additional check that they must be assignable.
-     * @param groupSpec                 The assignment spec which includes member metadata.
-     * @param subscribedTopicIds        The set of subscribed topic IDs.
-     * @param subscribedTopicDescriber  The topic and partition metadata describer.
-     * @return The list of target partitions.
-     */
-    static List<TopicIdPartition> computeTargetPartitions(
-        GroupSpec groupSpec,
-        Set<Uuid> subscribedTopicIds,
-        SubscribedTopicDescriber subscribedTopicDescriber
-    ) {
-        List<TopicIdPartition> targetPartitions = new ArrayList<>();
-        subscribedTopicIds.forEach(topicId -> {
-            int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
-            if (numPartitions == -1) {
-                throw new PartitionAssignorException(
-                    "Members are subscribed to topic " + topicId + " which doesn't exist in the topic metadata."
-                );
-            }
-
-            for (int partition = 0; partition < numPartitions; partition++) {
-                if (groupSpec.isPartitionAssignable(topicId, partition)) {
-                    targetPartitions.add(new TopicIdPartition(topicId, partition));
-                }
-            }
-        });
-
-        return targetPartitions;
     }
 
     /**

@@ -35,6 +35,7 @@ import org.apache.kafka.server.IntegrationTestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.net.Socket
+import java.util
 import java.util.{Comparator, Properties}
 import java.util.stream.Collectors
 import scala.collection.Seq
@@ -132,7 +133,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         replicationFactor = replicationFactor,
         topicConfig = topicConfig
       )
-      partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds(topic), new TopicPartition(topic, partition)) -> leader }
+      partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds.get(topic), new TopicPartition(topic, partition)) -> leader }
     } finally {
       admin.close()
     }
@@ -142,8 +143,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     cluster.brokers.values.stream.allMatch(b => b.config.unstableApiVersionsEnabled)
   }
 
-  protected def getTopicIds: Map[String, Uuid] = {
-    cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
+  protected def getTopicIds: util.Map[String, Uuid] = {
+    cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get()
   }
 
   protected def getBrokers: Seq[KafkaBroker] = {

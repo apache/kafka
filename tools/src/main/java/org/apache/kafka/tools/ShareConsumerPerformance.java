@@ -43,9 +43,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import joptsimple.OptionException;
@@ -108,7 +111,7 @@ public class ShareConsumerPerformance {
                                 ShareConsumerPerfOptions options,
                                 AtomicLong totalMessagesRead,
                                 AtomicLong totalBytesRead,
-                                long startMs) {
+                                long startMs) throws ExecutionException, InterruptedException, TimeoutException {
         long numMessages = options.numMessages();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         shareConsumers.forEach(shareConsumer -> shareConsumer.subscribe(options.topic()));
@@ -120,17 +123,18 @@ public class ShareConsumerPerformance {
 
 
         ExecutorService executorService = Executors.newFixedThreadPool(shareConsumers.size());
+        List<Future<?>> futures = new ArrayList<>();
         for (int i = 0; i < shareConsumers.size(); i++) {
             final int index = i;
             ShareConsumerConsumption shareConsumerConsumption = new ShareConsumerConsumption(0, 0);
-            executorService.submit(() -> {
+            futures.add(executorService.submit(() -> {
                 try {
                     consumeMessagesForSingleShareConsumer(shareConsumers.get(index), messagesRead, bytesRead, options,
                         shareConsumerConsumption, index + 1);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-            });
+            }));
             shareConsumersConsumptionDetails.add(shareConsumerConsumption);
         }
         LOG.debug("Shutting down of thread pool is started");
@@ -152,6 +156,9 @@ public class ShareConsumerPerformance {
             executorService.shutdownNow();
             // Preserve interrupt status
             Thread.currentThread().interrupt();
+        }
+        for (Future<?> future : futures) {
+            future.get();
         }
 
         if (options.showShareConsumerStats()) {
