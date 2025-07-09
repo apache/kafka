@@ -1102,7 +1102,7 @@ class Partition(val topicPartition: TopicPartition,
                   .getOrElse("unknown")
                 s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage, lastCaughtUpTimeMs: $lastCaughtUpTimeMessage)"
               }.mkString(" ")
-              val newIsrLog = (partitionState.isr.asScala.map(_.toInt) -- outOfSyncReplicaIds).mkString(",")
+              val newIsrLog = partitionState.isr.asScala.map(_.toInt).diff(outOfSyncReplicaIds).mkString(",")
               info(s"Shrinking ISR from ${partitionState.isr.asScala.mkString(",")} to $newIsrLog. " +
                 s"Leader: (highWatermark: ${leaderLog.highWatermark}, " +
                 s"endOffset: ${leaderLog.logEndOffset}). " +
@@ -1604,7 +1604,7 @@ class Partition(val topicPartition: TopicPartition,
     // reflect the updated ISR even if there is a delay before we receive the confirmation.
     // Alternatively, if the update fails, no harm is done since the expanded ISR puts
     // a stricter requirement for advancement of the HW.
-    val isrToSend = (partitionState.isr.asScala.map(_.toInt) + newInSyncReplicaId).toSet
+    val isrToSend = partitionState.isr.asScala.map(_.toInt) + newInSyncReplicaId
     val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList).asJava
     val newLeaderAndIsr = new LeaderAndIsr(
       localBrokerId,
