@@ -44,13 +44,13 @@ public enum FieldSyntaxVersion {
     public static final String FIELD_SYNTAX_VERSION_CONFIG = "field.syntax.version";
     public static final String FIELD_SYNTAX_VERSION_DOC =
             "Defines the version of the syntax to access fields. "
-                    + "If set to `V1`, then the field paths are limited to access the elements at the root level of the struct or map. "
-                    + "If set to `V2`, the syntax will support accessing nested elements. "
+                    + "If set to <code>V1</code>, then the field paths are limited to access the elements at the root level of the struct or map. "
+                    + "If set to <code>V2</code>, the syntax will support accessing nested elements. "
                     + "To access nested elements, dotted notation is used. "
                     + "If dots are already included in the field name, "
                     + "then backtick pairs can be used to wrap field names containing dots. "
-                    + "E.g. to access the subfield `baz` from a field named \"foo.bar\" in a struct/map "
-                    + "the following format can be used to access its elements: \"`foo.bar`.baz\".";
+                    + "E.g. to access the subfield <code>baz</code> from a field named \"foo.bar\" in a struct/map "
+                    + "the following format can be used to access its elements: \"<code>foo.bar</code>.baz\".";
 
     public static final String FIELD_SYNTAX_VERSION_DEFAULT_VALUE = V1.name();
 
