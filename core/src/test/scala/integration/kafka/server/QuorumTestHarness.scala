@@ -284,12 +284,6 @@ abstract class QuorumTestHarness extends Logging {
       } else TransactionVersion.TV_1.featureLevel()
     formatter.setFeatureLevel(TransactionVersion.FEATURE_NAME, transactionVersion)
 
-    val elrVersion =
-      if (TestInfoUtils.isEligibleLeaderReplicasV1Enabled(testInfo)) {
-        EligibleLeaderReplicasVersion.ELRV_1.featureLevel()
-      } else EligibleLeaderReplicasVersion.ELRV_0.featureLevel()
-    formatter.setFeatureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME, elrVersion)
-
     addFormatterSettings(formatter)
     formatter.run()
     val bootstrapMetadata = formatter.bootstrapMetadata()
