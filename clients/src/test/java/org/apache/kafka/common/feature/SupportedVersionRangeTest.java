@@ -30,10 +30,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Unit tests for the BrokerSupportedVersionRange class.
+ * Unit tests for the SupportedVersionRange class.
  * Along the way, this suite also includes extensive tests for the base class BaseVersionRange.
  */
-public class BrokerSupportedVersionRangeTest {
+public class SupportedVersionRangeTest {
     @Test
     public void testFailDueToInvalidParams() {
         // min and max can't be < 0.
