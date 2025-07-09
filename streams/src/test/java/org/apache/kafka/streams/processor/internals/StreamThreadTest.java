@@ -69,6 +69,7 @@ import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TaskTimeoutException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -2909,6 +2910,57 @@ public class StreamThreadTest {
         thread.runLoop();
 
         verify(consumer).subscribe((Collection<String>) any(), any());
+    }
+
+    @Test
+    public void shouldCloseCleanWhenTaskTimeoutExceptionIsThrownForTask() {
+        final TaskManager taskManager = mock(TaskManager.class);
+        final InternalTopologyBuilder internalTopologyBuilder = mock(InternalTopologyBuilder.class);
+        when(internalTopologyBuilder.fullSourceTopicNames()).thenReturn(Collections.singletonList(topic1));
+
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.LATEST.name());
+        final MockConsumer<byte[], byte[]> restoreConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
+
+        consumer.subscribe(Collections.singletonList(topic1), new MockRebalanceListener());
+        consumer.rebalance(Collections.singletonList(t1p1));
+        consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
+        consumer.seekToEnd(Collections.singletonList(t1p1));
+
+        final ChangelogReader changelogReader = this.changelogReader;
+        when(taskManager.checkStateUpdater(anyLong(), any())).thenThrow(new TaskTimeoutException(mock()));
+
+        final StreamsMetricsImpl streamsMetrics =
+                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+
+        final Properties props = configProps(false, true, true);
+        final StreamsConfig config = new StreamsConfig(props);
+        thread = new StreamThread(
+                new MockTime(1),
+                config,
+                null,
+                consumer,
+                restoreConsumer,
+                changelogReader,
+                null,
+                taskManager,
+                null,
+                streamsMetrics,
+                new TopologyMetadata(internalTopologyBuilder, config),
+                PROCESS_ID,
+                CLIENT_ID,
+                new LogContext(""),
+                new AtomicInteger(),
+                new AtomicLong(Long.MAX_VALUE),
+                new LinkedList<>(),
+                null,
+                HANDLER,
+                null,
+                Optional.empty(),
+                null
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.run();
+        verify(taskManager).shutdown(true);
     }
 
     @ParameterizedTest
