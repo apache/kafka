@@ -48,12 +48,8 @@ public final class ClientQuotaImage {
         this.quotas = Collections.unmodifiableMap(quotas);
     }
 
-    Map<String, Double> quotas() {
-        return quotas;
-    }
-
-    public Map<String, Double> quotaMap() {
-        return this.quotas;
+    public Map<String, Double> quotas() {
+        return this.quotas;;
     }
 
     public void write(
