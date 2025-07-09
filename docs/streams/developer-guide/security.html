@@ -70,9 +70,8 @@
                 the ACL set so that the application has the permissions to create, read and write
                 <a class="reference internal" href="manage-topics.html#streams-developer-guide-topics-internal"><span class="std std-ref">internal topics</span></a>.</p>
 
-            <div class="admonition note">
-                <p class="first admonition-title">Note</p>
-                <p class="last">Starting with <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">KIP-1071</a>, additional ACLs are required for the new Streams rebalance protocol:</p>
+            <div class="admonition">
+                <p>Starting with <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">KIP-1071</a>(Currently, it's in the Early Access phase), additional ACLs are required for the new Streams rebalance protocol. You can enable this protocol by using the <code>group.protocol=streams</code> configuration:</p>
             </div>
 
             <table border="1" class="docutils">
@@ -83,8 +82,8 @@
                     <col width="40%">
                 </colgroup>
                 <thead valign="bottom">
-                <tr class="row-odd"><th class="head">Operation (API)</th>
-                    <th class="head">Permission</th>
+                <tr class="row-odd"><th class="head">API PROTOCOL</th>
+                    <th class="head">OPERATION</th>
                     <th class="head">Resource</th>
                     <th class="head">Notes</th>
                 </tr>
@@ -94,35 +93,42 @@
                     <td>STREAMS_GROUP_HEARTBEAT</td>
                     <td>Read</td>
                     <td>Group</td>
-                    <td>Required for the application's consumer group (<code>${application.id}</code>)</td>
+                    <td>Required for the application's streams groups</td>
                 </tr>
                 <tr class="row-odd">
-                    <td>STREAMS_GROUP_HEARTBEAT</td>
-                    <td>DescribeConfigs</td>
-                    <td>Topic</td>
-                    <td>Required for all source topics and internal topics</td>
-                </tr>
-                <tr class="row-even">
                     <td>STREAMS_GROUP_HEARTBEAT</td>
                     <td>Create</td>
                     <td>Cluster <i>or</i> Topic</td>
                     <td>
                         Required only if auto-creating internal topics.<br>
-                        • <code>CREATE on CLUSTER</code> resource<br>
-                        • <i>OR</i> <code>CREATE</code> on all internal topics<br>
-                        Not required if topics are pre-created
+                        • <code>Create</code> on Cluster resource<br>
+                        • or <code>Create</code> on all topics in StateChangelogTopics and RepartitionSourceTopics<br>
+                        Not required if internal topics are pre-created
                     </td>
+                </tr>
+                <tr class="row-even">
+                    <td>STREAMS_GROUP_HEARTBEAT</td>
+                    <td>Describe</td>
+                    <td>Topic</td>
+                    <td>Required for all topics included in the message</td>
                 </tr>
                 <tr class="row-odd">
                     <td>STREAMS_GROUP_DESCRIBE</td>
-                    <td>Read</td>
+                    <td>Describe</td>
                     <td>Group</td>
-                    <td>Required for the application's consumer group (<code>${application.id}</code>)</td>
+                    <td>Required for the application's streams groups</td>
+                </tr>
+                <tr class="row-even">
+                    <td>STREAMS_GROUP_DESCRIBE</td>
+                    <td>Describe</td>
+                    <td>Topic</td>
+                    <td>Required for all topics used in the group's topology</td>
                 </tr>
                 </tbody>
             </table>
 
-                <p>To avoid providing this permission to your application, you can create the required internal topics manually.
+                <p>As mentioned earlier, Kafka Streams applications need appropriate ACLs to create internal topics when running against a secured Kafka cluster.
+                    To avoid providing this permission to your application, you can create the required internal topics manually.
                     If the internal topics exist, Kafka Streams will not try to recreate them.
                     Note, that the internal repartition and changelog topics must be created with the correct number of partitions&mdash;otherwise, Kafka Streams will fail on startup.
                 The topics must be created with the same number of partitions as your input topic, or if there are multiple topics, the maximum number of partitions across all input topics.
@@ -140,22 +146,6 @@
                 (see <a class="reference external" href="https://cwiki.apache.org/confluence/x/zlOHB">KIP-277</a>
                 and <a class="reference external" href="https://cwiki.apache.org/confluence/x/QpvLB">KIP-290</a> for details).
             </p>
-            <div class="admonition best-practice">
-                <p class="first admonition-title">Best Practice</p>
-                <p class="last">For secure Streams deployments:
-                <ul class="simple">
-                    <li><strong>Pre-create internal topics</strong> to avoid requiring <code>CREATE</code> permissions</li>
-                    <li>Grant <strong>minimal required permissions</strong>:
-                        <ul>
-                            <li><code>READ</code> on group <code>${application.id}</code></li>
-                            <li><code>DESCRIBE_CONFIGS</code> on topics</li>
-                            <li>Avoid <code>CREATE on CLUSTER</code> when possible</li>
-                        </ul>
-                    </li>
-                    <li>Use <strong>topic name prefixes</strong> for granular ACL control</li>
-                </ul>
-                </p>
-            </div>
         </div>
         </div>
         <div class="section" id="security-example">
