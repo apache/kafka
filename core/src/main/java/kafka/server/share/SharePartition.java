@@ -3019,8 +3019,6 @@ public class SharePartition {
         // The boolean determines if the record has achieved a final state of ARCHIVED from which it cannot transition
         // to any other state. This could happen because of LSO movement etc.
         private boolean isMarkedArchived = false;
-        // The lock prevents concurrent state transitions possibly during acknowledgements etc.
-        private final ReadWriteLock stateTransitionLock = new ReentrantReadWriteLock();
 
 
         InFlightState(RecordState state, int deliveryCount, String memberId) {
@@ -3035,7 +3033,7 @@ public class SharePartition {
         }
 
         // Visible for testing.
-        RecordState state() {
+        synchronized RecordState state() {
             return state;
         }
 
@@ -3061,18 +3059,13 @@ public class SharePartition {
         }
 
         // Visible for testing.
-        boolean hasOngoingStateTransition() {
-            stateTransitionLock.readLock().lock();
-            try {
-                if (rollbackState == null) {
-                    // This case could occur when the batch/offset hasn't transitioned even once or the state transitions have
-                    // been committed.
-                    return false;
-                }
-                return rollbackState.state != null;
-            } finally {
-                stateTransitionLock.readLock().unlock();
+        synchronized boolean hasOngoingStateTransition() {
+            if (rollbackState == null) {
+                // This case could occur when the batch/offset hasn't transitioned even once or the state transitions have
+                // been committed.
+                return false;
             }
+            return rollbackState.state != null;
         }
 
         /**
@@ -3086,8 +3079,7 @@ public class SharePartition {
          * @return {@code InFlightState} if update succeeds, null otherwise. Returning state
          *         helps update chaining.
          */
-        private InFlightState tryUpdateState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
-            stateTransitionLock.writeLock().lock();
+        private synchronized InFlightState tryUpdateState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
             try {
                 if (newState == RecordState.AVAILABLE && ops != DeliveryCountOps.DECREASE && deliveryCount >= maxDeliveryCount) {
                     newState = RecordState.ARCHIVED;
@@ -3100,10 +3092,7 @@ public class SharePartition {
                 return this;
             } catch (IllegalStateException e) {
                 log.error("Failed to update state of the records", e);
-                rollbackState = null;
                 return null;
-            } finally {
-                stateTransitionLock.writeLock().unlock();
             }
         }
 
@@ -3117,45 +3106,34 @@ public class SharePartition {
         }
 
         // Visible for testing.
-        void archive(String newMemberId) {
-            stateTransitionLock.writeLock().lock();
-            try {
-                if (rollbackState != null) {
-                    isMarkedArchived = true;
-                }
-                state = RecordState.ARCHIVED;
-                memberId = newMemberId;
-            } finally {
-                stateTransitionLock.writeLock().unlock();
+        synchronized void archive(String newMemberId) {
+            if (rollbackState != null) {
+                isMarkedArchived = true;
             }
+            state = RecordState.ARCHIVED;
+            memberId = newMemberId;
         }
 
         // Visible for testing
-        InFlightState startStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
-            stateTransitionLock.writeLock().lock();
-            try {
-                rollbackState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
-                return tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
-            } finally {
-                stateTransitionLock.writeLock().unlock();
+        synchronized InFlightState startStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
+            InFlightState currentState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
+            InFlightState updatedState = tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
+            if (updatedState != null) {
+                rollbackState = currentState;
             }
+            return updatedState;
         }
 
         // Visible for testing
-        void completeStateTransition(boolean commit) {
-            stateTransitionLock.writeLock().lock();
-            try {
-                if (commit || isMarkedArchived) {
-                    rollbackState = null;
-                    return;
-                }
-                state = rollbackState.state;
-                deliveryCount = rollbackState.deliveryCount;
-                memberId = rollbackState.memberId;
+        synchronized void completeStateTransition(boolean commit) {
+            if (commit || isMarkedArchived) {
                 rollbackState = null;
-            } finally {
-                stateTransitionLock.writeLock().unlock();
+                return;
             }
+            state = rollbackState.state;
+            deliveryCount = rollbackState.deliveryCount;
+            memberId = rollbackState.memberId;
+            rollbackState = null;
         }
 
         @Override
