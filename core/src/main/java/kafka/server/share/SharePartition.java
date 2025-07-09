@@ -2834,6 +2834,7 @@ public class SharePartition {
         private final String memberId;
         private final long firstOffset;
         private final long lastOffset;
+        private boolean hasExpired;
 
         AcquisitionLockTimerTask(long delayMs, String memberId, long firstOffset, long lastOffset) {
             super(delayMs);
@@ -2841,10 +2842,15 @@ public class SharePartition {
             this.memberId = memberId;
             this.firstOffset = firstOffset;
             this.lastOffset = lastOffset;
+            this.hasExpired = false;
         }
 
         long expirationMs() {
             return expirationMs;
+        }
+
+        boolean hasExpired() {
+            return hasExpired;
         }
 
         /**
@@ -2854,6 +2860,7 @@ public class SharePartition {
         public void run() {
             sharePartitionMetrics.recordAcquisitionLockTimeoutPerSec(lastOffset - firstOffset + 1);
             releaseAcquisitionLockOnTimeout(memberId, firstOffset, lastOffset);
+            hasExpired = true;
         }
     }
 
@@ -3134,6 +3141,8 @@ public class SharePartition {
             deliveryCount = rollbackState.deliveryCount;
             memberId = rollbackState.memberId;
             rollbackState = null;
+            if (acquisitionLockTimeoutTask.hasExpired())
+                acquisitionLockTimeoutTask.run();
         }
 
         @Override

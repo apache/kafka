@@ -7566,6 +7566,66 @@ public class SharePartitionTest {
         assertEquals("member-2", inFlightState.memberId());
     }
 
+    @Test
+    public void testAcquisitionLockTimeoutWithWriteStateRPCFailure() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withPersister(persister)
+            .build();
+
+        fetchAcquiredRecords(
+            sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 0,
+                fetchPartitionData(memoryRecords(2, 0)), FETCH_ISOLATION_HWM
+            ), 2
+        );
+
+        assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
+        assertEquals(1, sharePartition.timer().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+
+        // Return a future which will be completed later, so the batch state has ongoing transition.
+        CompletableFuture<WriteShareGroupStateResult> future = new CompletableFuture<>();
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(future);
+
+        // Acknowledge batch to create ongoing transition.
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 1, List.of(AcknowledgeType.RELEASE.id))));
+        // Assert the start offset has not moved and batch has ongoing transition.
+        assertEquals(0L, sharePartition.startOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertTrue(sharePartition.cachedState().get(0L).batchHasOngoingStateTransition());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
+
+        // Allowing acquisition lock to expire. This will not cause any change because the record is not in ACQUIRED state.
+        // This will remove the entry of the timer task from timer.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(0L).batchDeliveryCount() == 1 &&
+                sharePartition.timer().size() == 0,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of())));
+
+        // Acquisition lock timeout task has run already and is not null.
+        assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
+
+        // Complete future exceptionally so acknowledgement for 0-1 offsets will be completed.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
+        future.complete(writeShareGroupStateResult);
+
+        // Even though write state RPC has failed, we won't be letting the record stuck in ACQUIRED state with no acquisition
+        // lock timeout task.
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
+        assertNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
+    }
+
     /**
      * This function produces transactional data of a given no. of records followed by a transactional marker (COMMIT/ABORT).
      */
