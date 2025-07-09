@@ -35,9 +35,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -97,14 +96,14 @@ public class LogConcurrencyTest {
      * Simple consumption task which reads the log in ascending order and collects
      * consumed batches for validation
      */
-    private Supplier<List<FetchedBatch>> consumerTask(UnifiedLog log, int lastOffset) {
+    private Supplier<Map<Long, Integer>> consumerTask(UnifiedLog log, int lastOffset) {
         return () -> assertDoesNotThrow(() -> {
-            final List<FetchedBatch> consumedBatches = new ArrayList<>();
+            final Map<Long, Integer> consumedBatches = new LinkedHashMap<>();
             long fetchOffset = 0L;
             while (log.highWatermark() < lastOffset) {
                 final FetchDataInfo readInfo = log.read(fetchOffset, 1, FetchIsolation.HIGH_WATERMARK, true);
                 for (RecordBatch batch : readInfo.records.batches()) {
-                    consumedBatches.add(new FetchedBatch(batch.baseOffset(), batch.partitionLeaderEpoch()));
+                    consumedBatches.put(batch.baseOffset(), batch.partitionLeaderEpoch());
                     fetchOffset = batch.lastOffset() + 1;
                 }
             }
@@ -182,23 +181,28 @@ public class LogConcurrencyTest {
         return log;
     }
 
-    private void validateConsumedData(UnifiedLog log, List<FetchedBatch> consumedBatches) {
-        final Iterator<FetchedBatch> iter = consumedBatches.iterator();
+    private void validateConsumedData(UnifiedLog log, Map<Long, Integer> consumedBatches) {
+        Iterator<Map.Entry<Long, Integer>> iter = consumedBatches.entrySet().iterator();
         log.logSegments().forEach(segment ->
-            segment.log().batches().forEach(batch -> {
-                if (iter.hasNext()) {
-                    final FetchedBatch consumedBatch = iter.next();
-                    assertEquals(batch.partitionLeaderEpoch(),
-                        consumedBatch.epoch(),
-                        "Consumed batch " + consumedBatch + " does not match next expected batch in log " + batch);
-                    assertEquals(batch.baseOffset(),
-                        consumedBatch.baseOffset(),
-                        "Consumed batch " + consumedBatch + " does not match next expected batch in log " + batch);
-                }
-            })
+                segment.log().batches().forEach(batch -> {
+                    if (iter.hasNext()) {
+                        final Map.Entry<Long, Integer> consumedBatch = iter.next();
+                        final long consumedBatchBaseOffset = consumedBatch.getKey();
+                        final int consumedBatchEpoch = consumedBatch.getValue();
+                        final long logBatchBaseOffset = batch.baseOffset();
+                        final int logBatchEpoch = batch.partitionLeaderEpoch();
+                        assertEquals(logBatchBaseOffset,
+                                consumedBatchBaseOffset,
+                                "Consumed batch (offset=" + consumedBatchBaseOffset + ", epoch=" + consumedBatchEpoch + ") " +
+                                "does not match next expected batch in log (offset=" + logBatchBaseOffset + ", epoch=" + logBatchEpoch + ")"
+                        );
+                        assertEquals(logBatchEpoch,
+                                consumedBatchEpoch,
+                                "Consumed batch (offset=" + consumedBatchBaseOffset + ", epoch=" + consumedBatchEpoch + ") " +
+                                "does not match next expected batch in log (offset=" + logBatchBaseOffset + ", epoch=" + logBatchEpoch + ")"
+                        );
+                    }
+                })
         );
-    }
-
-    private record FetchedBatch(long baseOffset, int epoch) {
     }
 }
