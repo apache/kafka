@@ -70,7 +70,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -1205,7 +1204,7 @@ public class SharePartition {
 
             // Though such batches can be removed from the cache, but it is better to archive them so
             // that they are never acquired again.
-            boolean anyRecordArchived = archiveRecords(fetchOffset, baseOffset, subMap, RecordState.AVAILABLE, true);
+            boolean anyRecordArchived = archiveRecords(fetchOffset, baseOffset, subMap, RecordState.AVAILABLE);
 
             // If we have transitioned the state of any batch/offset from AVAILABLE to ARCHIVED,
             // then there is a chance that the next fetch offset can change.
@@ -1226,7 +1225,7 @@ public class SharePartition {
     private boolean archiveAvailableRecordsOnLsoMovement(long logStartOffset) {
         lock.writeLock().lock();
         try {
-            return archiveRecords(startOffset, logStartOffset, cachedState, RecordState.AVAILABLE, true);
+            return archiveRecords(startOffset, logStartOffset, cachedState, RecordState.AVAILABLE);
         } finally {
             lock.writeLock().unlock();
         }
@@ -1241,7 +1240,7 @@ public class SharePartition {
      * @param initialState The initial state of the records to be archived.
      * @return A boolean which indicates whether any record is archived or not.
      */
-    private boolean archiveRecords(long startOffset, long endOffset, NavigableMap<Long, InFlightBatch> map, RecordState initialState, boolean clearStateTransitionsList) {
+    private boolean archiveRecords(long startOffset, long endOffset, NavigableMap<Long, InFlightBatch> map, RecordState initialState) {
         lock.writeLock().lock();
         try {
             boolean isAnyOffsetArchived = false, isAnyBatchArchived = false;
@@ -1267,11 +1266,11 @@ public class SharePartition {
                         }
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, initialState, clearStateTransitionsList);
+                    isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, initialState);
                     continue;
                 }
                 // The in-flight batch is a full match hence change the state of the complete batch.
-                isAnyBatchArchived = isAnyBatchArchived || archiveCompleteBatch(inFlightBatch, initialState, clearStateTransitionsList);
+                isAnyBatchArchived = isAnyBatchArchived || archiveCompleteBatch(inFlightBatch, initialState);
             }
             return isAnyOffsetArchived || isAnyBatchArchived;
         } finally {
@@ -1282,8 +1281,7 @@ public class SharePartition {
     private boolean archivePerOffsetBatchRecords(InFlightBatch inFlightBatch,
                                                  long startOffsetToArchive,
                                                  long endOffsetToArchive,
-                                                 RecordState initialState,
-                                                 boolean clearStateTransitionsList
+                                                 RecordState initialState
     ) {
         lock.writeLock().lock();
         try {
@@ -1302,9 +1300,6 @@ public class SharePartition {
                 }
 
                 offsetState.getValue().archive(EMPTY_MEMBER_ID);
-                if (clearStateTransitionsList) {
-                    offsetState.getValue().clearStateTransitions();
-                }
                 if (initialState == RecordState.ACQUIRED) {
                     offsetState.getValue().cancelAndClearAcquisitionLockTimeoutTask();
                 }
@@ -1316,16 +1311,13 @@ public class SharePartition {
         }
     }
 
-    private boolean archiveCompleteBatch(InFlightBatch inFlightBatch, RecordState initialState, boolean clearStateTransitionsList) {
+    private boolean archiveCompleteBatch(InFlightBatch inFlightBatch, RecordState initialState) {
         lock.writeLock().lock();
         try {
             log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
             if (inFlightBatch.batchState() == initialState) {
                 // Change the state of complete batch since the same state exists for the entire inFlight batch.
                 inFlightBatch.archiveBatch(EMPTY_MEMBER_ID);
-                if (clearStateTransitionsList) {
-                    inFlightBatch.batchState.clearStateTransitions();
-                }
                 if (initialState == RecordState.ACQUIRED) {
                     inFlightBatch.batchState.cancelAndClearAcquisitionLockTimeoutTask();
                 }
@@ -2587,7 +2579,7 @@ public class SharePartition {
         for (RecordBatch recordBatch : recordsToArchive) {
             // Archive the offsets/batches in the cached state.
             NavigableMap<Long, InFlightBatch> subMap = fetchSubMap(recordBatch);
-            archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED, false);
+            archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
         }
         return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
     }
@@ -3019,13 +3011,17 @@ public class SharePartition {
         private int deliveryCount;
         // The member id of the client that is fetching/acknowledging the record.
         private String memberId;
-        // The states of the records before the latest transition. In case we need to revert an in-flight state, we use the above
+        // The state of the records before the transition. In case we need to revert an in-flight state, we revert the above
         // attributes of InFlightState to this state, namely - state, deliveryCount and memberId.
-        private LinkedList<InFlightState> stateTransitions = new LinkedList<>();
+        private InFlightState rollbackState;
         // The timer task for the acquisition lock timeout.
         private AcquisitionLockTimerTask acquisitionLockTimeoutTask;
+        // The boolean determines if the record has achieved a final state of ARCHIVED from which it cannot transition
+        // to any other state. This could happen because of LSO movement etc.
+        private boolean isMarkedArchived = false;
         // The lock prevents concurrent state transitions possibly during acknowledgements etc.
         private final ReadWriteLock stateTransitionLock = new ReentrantReadWriteLock();
+
 
         InFlightState(RecordState state, int deliveryCount, String memberId) {
             this(state, deliveryCount, memberId, null);
@@ -3068,12 +3064,12 @@ public class SharePartition {
         boolean hasOngoingStateTransition() {
             stateTransitionLock.readLock().lock();
             try {
-                if (stateTransitions.isEmpty()) {
+                if (rollbackState == null) {
                     // This case could occur when the batch/offset hasn't transitioned even once or the state transitions have
                     // been committed.
                     return false;
                 }
-                return stateTransitions.peekLast().state != null;
+                return rollbackState.state != null;
             } finally {
                 stateTransitionLock.readLock().unlock();
             }
@@ -3091,6 +3087,7 @@ public class SharePartition {
          *         helps update chaining.
          */
         private InFlightState tryUpdateState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
+            stateTransitionLock.writeLock().lock();
             try {
                 if (newState == RecordState.AVAILABLE && ops != DeliveryCountOps.DECREASE && deliveryCount >= maxDeliveryCount) {
                     newState = RecordState.ARCHIVED;
@@ -3103,7 +3100,10 @@ public class SharePartition {
                 return this;
             } catch (IllegalStateException e) {
                 log.error("Failed to update state of the records", e);
+                rollbackState = null;
                 return null;
+            } finally {
+                stateTransitionLock.writeLock().unlock();
             }
         }
 
@@ -3117,19 +3117,23 @@ public class SharePartition {
         }
 
         private void archive(String newMemberId) {
-            state = RecordState.ARCHIVED;
-            memberId = newMemberId;
+            stateTransitionLock.writeLock().lock();
+            try {
+                if (rollbackState != null) {
+                    isMarkedArchived = true;
+                }
+                state = RecordState.ARCHIVED;
+                memberId = newMemberId;
+            } finally {
+                stateTransitionLock.writeLock().unlock();
+            }
         }
 
         private InFlightState startStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
             stateTransitionLock.writeLock().lock();
             try {
-                stateTransitions.add(new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask));
-                InFlightState res = tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
-                if (res == null) {
-                    stateTransitions.pollLast();
-                }
-                return res;
+                rollbackState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
+                return tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
             } finally {
                 stateTransitionLock.writeLock().unlock();
             }
@@ -3139,37 +3143,17 @@ public class SharePartition {
             stateTransitionLock.writeLock().lock();
             try {
                 if (commit) {
-                    stateTransitions = new LinkedList<>();
+                    rollbackState = null;
                     return;
                 }
-                if (stateTransitions.isEmpty()) {
-                    // There could be a scenario where an acknowledgement of Release/Accept came for an offset and the persister
-                    // is taking time in returning write state RPC response. Meanwhile, LSO moves forward which causes the
-                    // records to be archived. Now if the write state RPC fails, we would ideally not like to rollback the state
-                    // and keep it archived. In that scenario, we will hit the condition of stateTransitions.isEmpty().
-                    if (state == RecordState.ARCHIVED) {
-                        return;
-                    } else {
-                        throw new IllegalStateException("The state transitions list is empty, nothing to rever to.");
-                    }
+                if (isMarkedArchived) {
+                    rollbackState = null;
+                    return;
                 }
-                InFlightState rollbackState = stateTransitions.pollLast();
                 state = rollbackState.state;
                 deliveryCount = rollbackState.deliveryCount;
                 memberId = rollbackState.memberId;
-            } finally {
-                stateTransitionLock.writeLock().unlock();
-            }
-        }
-
-        /**
-         * This function should be called to remove the history of state transitions list in order to make
-         * the current state as the final state of the InflightState.
-         */
-        private void clearStateTransitions() {
-            stateTransitionLock.writeLock().lock();
-            try {
-                stateTransitions = new LinkedList<>();
+                rollbackState = null;
             } finally {
                 stateTransitionLock.writeLock().unlock();
             }
