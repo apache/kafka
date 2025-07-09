@@ -282,10 +282,7 @@ public abstract class AbstractIndex implements Closeable {
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-        inLockThrows(() ->
-                inRemapWriteLockThrows(() -> {
-                    safeForceUnmap();
-                }));
+        inLockThrows(() -> inRemapWriteLockThrows(this::safeForceUnmap));
     }
 
     /**
