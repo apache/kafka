@@ -3057,7 +3057,7 @@ public class CoordinatorRuntimeTest {
         var mockWriter = new InMemoryPartitionWriter(false) {
             private LogConfig config = new LogConfig(Map.of(
                 TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024) // 1MB
-            ));;
+            ));
 
             @Override
             public LogConfig config(TopicPartition tp) {
