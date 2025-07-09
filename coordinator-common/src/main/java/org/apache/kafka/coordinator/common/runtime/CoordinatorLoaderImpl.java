@@ -116,10 +116,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
             UnifiedLog log = logOpt.get();
 
-            // Use a mutable BufferHolder to ensure that a newly allocated buffer is visible to the caller.
-            // This allows us to reuse the buffer across multiple log reads and grow it if needed.
             // Buffer may not be needed if records are read from memory.
-            BufferHolder bufferHolder = new BufferHolder();
+            ByteBuffer buffer = ByteBuffer.allocate(0);
             long currentOffset = log.logStartOffset();
             LoadStats stats = new LoadStats();
 
@@ -129,7 +127,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
                 stats.readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes() > 0;
 
-                MemoryRecords memoryRecords = toReadableMemoryRecords(tp, fetchDataInfo.records, bufferHolder);
+                MemoryRecords memoryRecords = toReadableMemoryRecords(tp, fetchDataInfo.records, buffer);
+                buffer = memoryRecords.buffer();
 
                 ReplayResult replayResult = processMemoryRecords(tp, log, memoryRecords, coordinator, stats, currentOffset, previousHighWatermark);
                 currentOffset = replayResult.nextOffset;
@@ -172,7 +171,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
         return currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get();
     }
 
-    private MemoryRecords toReadableMemoryRecords(TopicPartition tp, Records records, BufferHolder bufferHolder) throws IOException {
+    private MemoryRecords toReadableMemoryRecords(TopicPartition tp, Records records, ByteBuffer buffer) throws IOException {
         if (records instanceof MemoryRecords memoryRecords) {
             return memoryRecords;
         } else if (records instanceof FileRecords fileRecords) {
@@ -181,19 +180,19 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
             // "minOneMessage = true in the above log.read() means that the buffer may need to
             // be grown to ensure progress can be made.
-            if (!bufferHolder.isInitialized() || bufferHolder.buffer.capacity() < bytesNeeded) {
+            if (buffer.capacity() < bytesNeeded) {
                 if (loadBufferSize < bytesNeeded) {
                     LOG.warn("Loaded metadata from {} with buffer larger ({} bytes) than" +
                             " configured buffer size ({} bytes).", tp, bytesNeeded, loadBufferSize);
                 }
 
-                bufferHolder.buffer = ByteBuffer.allocate(bytesNeeded);
+                buffer = ByteBuffer.allocate(bytesNeeded);
             } else {
-                bufferHolder.buffer.clear();
+                buffer.clear();
             }
 
-            fileRecords.readInto(bufferHolder.buffer, 0);
-            return MemoryRecords.readableRecords(bufferHolder.buffer);
+            fileRecords.readInto(buffer, 0);
+            return MemoryRecords.readableRecords(buffer);
         } else {
             throw new IllegalArgumentException("Unsupported record type: " + records.getClass());
         }
@@ -304,17 +303,6 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
             return;
         }
         scheduler.shutdown();
-    }
-
-    /**
-     * A helper class to reuse the buffer.
-     */
-    private static class BufferHolder {
-        private ByteBuffer buffer;
-
-        boolean isInitialized() {
-            return buffer != null;
-        }
     }
 
     /**
