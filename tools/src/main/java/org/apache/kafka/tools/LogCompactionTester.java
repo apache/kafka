@@ -32,23 +32,12 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
@@ -56,6 +45,7 @@ import java.util.stream.Stream;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
 
 
 /**
@@ -76,12 +66,171 @@ import joptsimple.OptionSet;
  * print an error and exit with exit code 1, otherwise we print the size reduction and exit with exit code 0.
  */
 public class LogCompactionTester {
+
+    public static class Options {
+        public final OptionSpec<Long> numMessagesOpt;
+        public final OptionSpec<String>  messageCompressionOpt;
+        public final OptionSpec<Integer> numDupsOpt;
+        public final OptionSpec<String>  brokerOpt;
+        public final OptionSpec<Integer> topicsOpt;
+        public final OptionSpec<Integer> percentDeletesOpt;
+        public final OptionSpec<Integer> sleepSecsOpt;
+        public final OptionSpec<Void>    helpOpt;
+
+        public Options(OptionParser parser) {
+            numMessagesOpt = parser
+                    .accepts("messages", "The number of messages to send or consume.")
+                    .withRequiredArg()
+                    .describedAs("count")
+                    .ofType(Long.class)
+                    .defaultsTo(Long.MAX_VALUE);
+            messageCompressionOpt = parser
+                    .accepts("compression-type", "message compression type")
+                    .withOptionalArg()
+                    .describedAs("compressionType")
+                    .ofType(String.class)
+                    .defaultsTo("none");
+
+            numDupsOpt = parser
+                    .accepts("duplicates", "The number of duplicates for each key.")
+                    .withRequiredArg()
+                    .describedAs("count")
+                    .ofType(Integer.class)
+                    .defaultsTo(5);
+
+            brokerOpt = parser
+                    .accepts("bootstrap-server", "The server(s) to connect to.")
+                    .withRequiredArg()
+                    .describedAs("url")
+                    .ofType(String.class);
+
+            topicsOpt = parser
+                    .accepts("topics", "The number of topics to test.")
+                    .withRequiredArg()
+                    .describedAs("count")
+                    .ofType(Integer.class)
+                    .defaultsTo(1);
+
+            percentDeletesOpt = parser
+                    .accepts("percent-deletes", "The percentage of updates that are deletes.")
+                    .withRequiredArg()
+                    .describedAs("percent")
+                    .ofType(Integer.class)
+                    .defaultsTo(0);
+
+            sleepSecsOpt = parser
+                    .accepts("sleep", "Time in milliseconds to sleep between production and consumption.")
+                    .withRequiredArg()
+                    .describedAs("ms")
+                    .ofType(Integer.class)
+                    .defaultsTo(0);
+
+            helpOpt = parser
+                    .acceptsAll(java.util.Arrays.asList("h", "help"), "Display help information");
+        }
+    }
+
+    public record TestRecord(String topic, int key, long value, boolean delete) {
+        @Override
+        public String toString() {
+            return topic + "\t" + key + "\t" + value + "\t" + (delete ? "d" : "u");
+        }
+
+        public String getTopicAndKey() {
+            return topic + key;
+        }
+
+        public static TestRecord parse(String line) {
+            String[] components = line.split("\t");
+            if (components.length != 4) {
+                throw new IllegalArgumentException("Invalid TestRecord format: " + line);
+            }
+
+            return new TestRecord(
+                    components[0],
+                    Integer.parseInt(components[1]),
+                    Long.parseLong(components[2]),
+                    "d".equals(components[3])
+            );
+        }
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            TestRecord that = (TestRecord) o;
+            return key == that.key &&
+                    value == that.value &&
+                    delete == that.delete &&
+                    topic.equals(that.topic);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = topic.hashCode();
+            result = 31 * result + key;
+            result = 31 * result + Long.hashCode(value);
+            result = 31 * result + Boolean.hashCode(delete);
+            return result;
+        }
+    }
+
+    public static class TestRecordUtils {
+        private static final int READ_AHEAD_LIMIT = 4906;
+
+        public static TestRecord readNext(BufferedReader reader) throws IOException {
+            String line = reader.readLine();
+            if (line == null) {
+                return null;
+            }
+            TestRecord curr = TestRecord.parse(line);
+            while (true) {
+                String peekedLine = peekLine(reader);
+                if (peekedLine == null) {
+                    return curr;
+                }
+                TestRecord next = TestRecord.parse(peekedLine);
+                if (!next.getTopicAndKey().equals(curr.getTopicAndKey())) {
+                    return curr;
+                }
+                curr = next;
+                reader.readLine();
+            }
+        }
+
+        public static Iterator<TestRecord> valuesIterator(BufferedReader reader) {
+            return Spliterators.iterator(new Spliterators.AbstractSpliterator<>(
+                    Long.MAX_VALUE, Spliterator.ORDERED) {
+                @Override
+                public boolean tryAdvance(java.util.function.Consumer<? super TestRecord> action) {
+                    try {
+                        TestRecord rec;
+                        do {
+                            rec = readNext(reader);
+                        } while (rec != null && rec.delete);
+                        if (rec == null) return false;
+                        action.accept(rec);
+                        return true;
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                }
+            });
+        }
+
+        public static String peekLine(BufferedReader reader) throws IOException {
+            reader.mark(READ_AHEAD_LIMIT);
+            String line = reader.readLine();
+            reader.reset();
+            return line;
+        }
+    }
+
     private static final Random RANDOM = new Random();
 
     public static void main(String[] args) throws Exception {
 
         OptionParser parser = new OptionParser(false);
-        LogCompactionTesterOptions options = new LogCompactionTesterOptions(parser);
+        Options options = new Options(parser);
 
         OptionSet optionSet = parser.parse(args);
         if (args.length == 0) {
