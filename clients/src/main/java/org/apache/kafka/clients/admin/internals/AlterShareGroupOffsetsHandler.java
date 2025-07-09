@@ -117,7 +117,7 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
         } else {
             response.data().responses().forEach(topic -> topic.partitions().forEach(partition -> {
                 final Errors partitionError = Errors.forCode(partition.errorCode());
-                if (partitionError.code() != Errors.NONE.code()) {
+                if (partitionError != Errors.NONE) {
                     String errorMessageToLog = partition.errorMessage() == null ? "" : partition.errorMessage();
                     log.debug("AlterShareGroupOffsets request for group id {} and topic-partition {}-{} failed and returned error {}. {}",
                         groupId.idValue, topic.topicName(), partition.partitionIndex(), partitionError.name(), errorMessageToLog);
