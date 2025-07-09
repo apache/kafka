@@ -647,9 +647,9 @@ public class StreamsConfig extends AbstractConfig {
                                                               " the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker " +
                                                               " traffic and cluster state can be used for high availability. Must be at least 1." +
                                                               "Note that one warmup replica corresponds to one Stream Task. Furthermore, note that each warmup replica can only be promoted to an active task " +
-                                                              "during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the `probing.rebalance.interval.ms` config). This means " +
+                                                              "during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the <code>probing.rebalance.interval.ms</code> config). This means " +
                                                               "that the maximum rate at which active tasks can be migrated from one Kafka Streams Instance to another instance can be determined by " +
-                                                              "(`max.warmup.replicas` / `probing.rebalance.interval.ms`).";
+                                                              "(<code>max.warmup.replicas</code> / <code>probing.rebalance.interval.ms</code>).";
 
     /** {@code metadata.max.age.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -821,7 +821,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
-    private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading in some cases -- see upgrade guide) in a backward compatible way. Default is `null`. " +
+    private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading in some cases -- see upgrade guide) in a backward compatible way. Default is <code>null</code>. " +
         "Please refer to the Kafka Streams upgrade guide for instructions on how and when to use this config. " +
         "Note that when upgrading from 3.5 to a newer version it is never required to specify this config, " +
         "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config. " +
