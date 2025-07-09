@@ -1407,14 +1407,19 @@ public class ShareConsumeRequestManagerTest {
 
         shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), Collections.emptyMap());
 
-        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(1, builder.data().topics().size());
+        // We should not add the acknowledgements as part of the request.
+        assertEquals(0, builder.data().topics().find(tip0.topicId()).partitions().find(0).acknowledgementBatches().size());
 
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
         assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }
 
     @Test
-    public void testPiggybackAcknowledgementsOnInvalidShareSessionError() {
+    public void testPiggybackAcknowledgementsOnInitialShareSessionErrorSubscriptionChange() {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
@@ -1443,8 +1448,12 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(0, completedAcknowledgements.size());
 
-        // Next fetch would be sent to updated subscription.
-        assertEquals(1, sendFetches());
+        // Next fetch would be sent to updated subscription. We would not include any acknowledgements as part of this fetch.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(1, builder.data().topics().size());
+        assertEquals(t2ip0.topicId(), builder.data().topics().find(t2ip0.topicId()).topicId());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         // We should fail any waiting acknowledgements for tip-0 as it would have a share session epoch equal to 0.
