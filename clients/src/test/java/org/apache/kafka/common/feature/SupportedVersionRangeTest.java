@@ -119,10 +119,10 @@ public class SupportedVersionRangeTest {
     @Test
     public void testToString() {
         assertEquals(
-            "BrokerSupportedVersionRange[min_version:1, max_version:1]",
+            "SupportedVersionRange[min_version:1, max_version:1]",
             new SupportedVersionRange((short) 1, (short) 1).toString());
         assertEquals(
-            "BrokerSupportedVersionRange[min_version:1, max_version:2]",
+            "SupportedVersionRange[min_version:1, max_version:2]",
             new SupportedVersionRange((short) 1, (short) 2).toString());
     }
 

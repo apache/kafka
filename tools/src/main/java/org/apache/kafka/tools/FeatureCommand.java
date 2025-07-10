@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.clients.admin.*;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.BrokerSupportedVersionRange;
+import org.apache.kafka.clients.admin.FeatureMetadata;
+import org.apache.kafka.clients.admin.FeatureUpdate;
+import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
+import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.Feature;

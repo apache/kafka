@@ -43,7 +43,7 @@ public class SupportedVersionRange extends BaseVersionRange {
     }
 
     /**
-     * Checks if the version level does *NOT* fall within the [min, max] range of this BrokerSupportedVersionRange.
+     * Checks if the version level does *NOT* fall within the [min, max] range of this SupportedVersionRange.
      *
      * @param version   the version to be checked
      *
