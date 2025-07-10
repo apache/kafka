@@ -147,7 +147,7 @@ public class TransactionManager {
     private volatile long latestFinalizedFeaturesEpoch = -1;
     private volatile boolean isTransactionV2Enabled = false;
     private final boolean enable2PC;
-    private volatile PreparedTxnState preparedTxnState;
+    private volatile ProducerIdAndEpoch preparedTxnState = ProducerIdAndEpoch.NONE;
 
     private enum State {
         UNINITIALIZED,
@@ -230,7 +230,6 @@ public class TransactionManager {
         this.txnPartitionMap = new TxnPartitionMap(logContext);
         this.apiVersions = apiVersions;
         this.enable2PC = enable2PC;
-        this.preparedTxnState = new PreparedTxnState();
     }
 
     /**
@@ -348,8 +347,8 @@ public class TransactionManager {
         throwIfPendingState("prepareTransaction");
         maybeFailWithError();
         transitionTo(State.PREPARED_TRANSACTION);
-        this.preparedTxnState = new PreparedTxnState(
-            this.producerIdAndEpoch.producerId + ":" +
+        this.preparedTxnState = new ProducerIdAndEpoch(
+            this.producerIdAndEpoch.producerId,
             this.producerIdAndEpoch.epoch
         );
     }
@@ -1343,7 +1342,7 @@ public class TransactionManager {
         newPartitionsInTransaction.clear();
         pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
-        preparedTxnState = new PreparedTxnState();
+        preparedTxnState = ProducerIdAndEpoch.NONE;
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
@@ -1508,9 +1507,10 @@ public class TransactionManager {
                     transitionTo(State.PREPARED_TRANSACTION);
                     // Update the preparedTxnState with the ongoing pid and epoch from the response.
                     // This will be used to complete the transaction later.
-                    String serializedState = initProducerIdResponse.data().ongoingTxnProducerId() + 
-                            ":" + initProducerIdResponse.data().ongoingTxnProducerEpoch();
-                    TransactionManager.this.preparedTxnState = new PreparedTxnState(serializedState);
+                    TransactionManager.this.preparedTxnState = new ProducerIdAndEpoch(
+                        initProducerIdResponse.data().ongoingTxnProducerId(),
+                        initProducerIdResponse.data().ongoingTxnProducerEpoch()
+                    );
                 } else {
                     transitionTo(State.READY);
                 }
@@ -1977,6 +1977,9 @@ public class TransactionManager {
      * @return a PreparedTxnState with the current producer ID and epoch
      */
     public PreparedTxnState preparedTransactionState() {
-        return this.preparedTxnState;
+        if (this.preparedTxnState == ProducerIdAndEpoch.NONE) {
+            return new PreparedTxnState("");
+        }
+        return new PreparedTxnState(this.preparedTxnState.producerId + ":" + this.preparedTxnState.epoch);
     }
 }
