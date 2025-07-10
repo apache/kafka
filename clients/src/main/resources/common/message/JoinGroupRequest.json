@@ -35,7 +35,6 @@
   //
   // Version 9 is the same as version 8.
   "validVersions": "0-9",
-  "deprecatedVersions": "0-1",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
