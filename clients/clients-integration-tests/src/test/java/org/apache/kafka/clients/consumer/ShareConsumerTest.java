@@ -2420,23 +2420,17 @@ public class ShareConsumerTest {
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap2 = new HashMap<>();
                 shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, Map.of()));
 
-                records = waitedPoll(shareConsumer, 5000L, 1);
-                // Message 3 would be returned by this poll.
-                assertEquals(1, records.count());
-                record = records.iterator().next();
-                assertEquals("Message 3", new String(record.value()));
-                // We will make Message 3 available for re-consumption.
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
-                shareConsumer.commitSync();
-
+                AtomicBoolean isLatestMessageReceived = new AtomicBoolean(false);
                 // Wait for the aborted marker offset for Message 4 (7L) to be fetched and acknowledged by the consumer.
                 TestUtils.waitForCondition(() -> {
-                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(500));
-                    if (pollRecords.count() > 0) {
-                        // We will release Message 3 again if it was received in this poll().
+                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(2000));
+                    if (pollRecords.count() == 1 && new String(pollRecords.iterator().next().value()).equals("Message 3")) {
+                        isLatestMessageReceived.set(true);
+                        // We will release Message 3 if it was received in this poll().
                         pollRecords.forEach(consumerRecord -> shareConsumer.acknowledge(consumerRecord, AcknowledgeType.RELEASE));
+                        shareConsumer.commitSync();
                     }
-                    return partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
+                    return isLatestMessageReceived.get() && partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
                 }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction marker offset for Message 4");
 
                 // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
@@ -2521,19 +2515,17 @@ public class ShareConsumerTest {
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap2 = new HashMap<>();
                 shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, Map.of()));
 
-                records = waitedPoll(shareConsumer, 5000L, 1);
-                // Message 3 would be returned by this poll.
-                assertEquals(1, records.count());
-                record = records.iterator().next();
-                assertEquals("Message 3", new String(record.value()));
-                // We will make Message 3 available for re-consumption.
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.REJECT));
-                shareConsumer.commitSync();
-
+                AtomicBoolean isLatestMessageReceived = new AtomicBoolean(false);
                 // Wait for the aborted marker offset for Message 4 (7L) to be fetched and acknowledged by the consumer.
                 TestUtils.waitForCondition(() -> {
-                    shareConsumer.poll(Duration.ofMillis(500));
-                    return partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
+                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(2000));
+                    if (pollRecords.count() == 1 && new String(pollRecords.iterator().next().value()).equals("Message 3")) {
+                        isLatestMessageReceived.set(true);
+                        // We will reject Message 3 if it was received in this poll().
+                        pollRecords.forEach(consumerRecord -> shareConsumer.acknowledge(consumerRecord, AcknowledgeType.REJECT));
+                        shareConsumer.commitSync();
+                    }
+                    return isLatestMessageReceived.get() && partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
                 }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction marker offset for Message 4");
 
                 // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
