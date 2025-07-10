@@ -31,7 +31,7 @@ import org.apache.kafka.common.errors.{InvalidConfigurationException, TimeoutExc
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry, FeatureUpdate, UpdateFeaturesOptions}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -42,6 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.metadata.LeaderConstants
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.logging.log4j.core.config.Configurator
 
 class UncleanLeaderElectionTest extends QuorumTestHarness {
@@ -119,6 +120,14 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     admin = TestUtils.createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), adminConfigs)
   }
 
+  private def disableEligibleLeaderReplicas(): Unit = {
+    if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_1_IV0)) {
+      admin.updateFeatures(
+        util.Map.of("eligible.leader.replicas.version", new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
+        new UpdateFeaturesOptions()).all().get()
+    }
+  }
+
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testUncleanLeaderElectionEnabled(groupProtocol: String): Unit = {
@@ -126,6 +135,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
     startBrokers(Seq(configProps1, configProps2))
+    disableEligibleLeaderReplicas()
 
     // create topic with 1 partition, 2 replicas, one on each broker
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, replicaAssignment =  Map(partitionId -> Seq(brokerId1, brokerId2)))
@@ -137,6 +147,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   def testUncleanLeaderElectionDisabled(groupProtocol: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
+    disableEligibleLeaderReplicas()
 
     // create topic with 1 partition, 2 replicas, one on each broker
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, replicaAssignment =  Map(partitionId -> Seq(brokerId1, brokerId2)))
@@ -151,6 +162,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     configProps1.put("unclean.leader.election.enable", "false")
     configProps2.put("unclean.leader.election.enable", "false")
     startBrokers(Seq(configProps1, configProps2))
+    disableEligibleLeaderReplicas()
 
     // create topic with 1 partition, 2 replicas, one on each broker, and unclean leader election enabled
     val topicProps = new Properties()
@@ -167,6 +179,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
     startBrokers(Seq(configProps1, configProps2))
+    disableEligibleLeaderReplicas()
 
     // create topic with 1 partition, 2 replicas, one on each broker, and unclean leader election disabled
     val topicProps = new Properties()
@@ -180,6 +193,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testUncleanLeaderElectionInvalidTopicOverride(groupProtocol: String): Unit = {
     startBrokers(Seq(configProps1))
+    disableEligibleLeaderReplicas()
 
     // create topic with an invalid value for unclean leader election
     val topicProps = new Properties()
@@ -328,6 +342,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(groupProtocol: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
+    disableEligibleLeaderReplicas()
 
     // create topic with 1 partition, 2 replicas, one on each broker
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, replicaAssignment = Map(partitionId -> Seq(brokerId1, brokerId2)))
