@@ -2054,7 +2054,15 @@ public class SharePartition {
                 // Log in DEBUG to avoid flooding of logs for a faulty client.
                 log.debug("Request failed for updating state, rollback any changed state"
                     + " for the share partition: {}-{}", groupId, topicIdPartition);
-                updatedStates.forEach(state -> state.completeStateTransition(false));
+                updatedStates.forEach(state -> {
+                    state.completeStateTransition(false);
+                    // If state transition fails in write state RPC, we will rollback to the original state if record
+                    // hasn't reached a terminal state. If acquisition lock has expired by that time, the record can
+                    // be stuck in ACQUIRED state unless we run the acquisition lock task again.
+                    if (!state.isTerminalState() && state.acquisitionLockTimeoutTask.hasExpired()) {
+                        state.acquisitionLockTimeoutTask.run();
+                    }
+                });
                 future.completeExceptionally(throwable);
                 return;
             }
@@ -2077,7 +2085,15 @@ public class SharePartition {
                 if (exception != null) {
                     log.debug("Failed to write state to persister for the share partition: {}-{}",
                         groupId, topicIdPartition, exception);
-                    updatedStates.forEach(state -> state.completeStateTransition(false));
+                    updatedStates.forEach(state -> {
+                        state.completeStateTransition(false);
+                        // If state transition fails in write state RPC, we will rollback to the original state if record
+                        // hasn't reached a terminal state. If acquisition lock has expired by that time, the record can
+                        // be stuck in ACQUIRED state unless we run the acquisition lock task again.
+                        if (!state.isTerminalState() && state.acquisitionLockTimeoutTask.hasExpired()) {
+                            state.acquisitionLockTimeoutTask.run();
+                        }
+                    });
                     future.completeExceptionally(exception);
                     return;
                 }
@@ -3023,9 +3039,9 @@ public class SharePartition {
         private InFlightState rollbackState;
         // The timer task for the acquisition lock timeout.
         private AcquisitionLockTimerTask acquisitionLockTimeoutTask;
-        // The boolean determines if the record has achieved a final state of ARCHIVED from which it cannot transition
+        // The boolean determines if the record has achieved a terminal state of ARCHIVED from which it cannot transition
         // to any other state. This could happen because of LSO movement etc.
-        private boolean isMarkedArchived = false;
+        private boolean isTerminalState = false;
 
 
         InFlightState(RecordState state, int deliveryCount, String memberId) {
@@ -3042,6 +3058,10 @@ public class SharePartition {
         // Visible for testing.
         synchronized RecordState state() {
             return state;
+        }
+
+        synchronized boolean isTerminalState() {
+            return isTerminalState;
         }
 
         String memberId() {
@@ -3114,9 +3134,7 @@ public class SharePartition {
 
         // Visible for testing.
         synchronized void archive(String newMemberId) {
-            if (rollbackState != null) {
-                isMarkedArchived = true;
-            }
+            isTerminalState = true;
             state = RecordState.ARCHIVED;
             memberId = newMemberId;
         }
@@ -3133,7 +3151,7 @@ public class SharePartition {
 
         // Visible for testing
         synchronized void completeStateTransition(boolean commit) {
-            if (commit || isMarkedArchived) {
+            if (commit || isTerminalState()) {
                 rollbackState = null;
                 return;
             }
@@ -3141,8 +3159,6 @@ public class SharePartition {
             deliveryCount = rollbackState.deliveryCount;
             memberId = rollbackState.memberId;
             rollbackState = null;
-            if (acquisitionLockTimeoutTask.hasExpired())
-                acquisitionLockTimeoutTask.run();
         }
 
         @Override
