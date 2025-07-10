@@ -2734,7 +2734,7 @@ public class GroupMetadataManager {
         // Any initializing topics which are older than delta and are part of the subscribed topics
         // must be returned so that they can be retried.
         long curTimestamp = time.milliseconds();
-        long delta = config.offsetCommitTimeoutMs() * 2L;
+        long delta = config.shareGroupInitializeRetryIntervalMs();
         Map<Uuid, InitMapValue> alreadyInitialized = info == null ? new HashMap<>() :
             combineInitMaps(
                 info.initializedTopics(),
@@ -2752,8 +2752,8 @@ public class GroupMetadataManager {
                     // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
                     // are also updating the timestamp here which means, old initializing will not be included repeatedly.
                     topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> {
-                        Set<Integer> partitionSet = IntStream.range(0, topicMetadata.partitionCount()).boxed()
-                            .filter(p -> !alreadyInitializedPartSet.contains(p)).collect(Collectors.toSet());
+                        Set<Integer> partitionSet = IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toCollection(HashSet::new));
+                        partitionSet.removeAll(alreadyInitializedPartSet);
                         return new InitMapValue(topicMetadata.name(), partitionSet, curTimestamp);
                     });
                 }

@@ -329,7 +329,7 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         if (isActive) {
             // update task per process
-            maybeUpdateTasksPerMember(localState.processIdToState.get(member.processId).assignedActiveTasks().size());
+            maybeUpdateTasksPerMember(localState.processIdToState.get(member.processId).activeTaskCount());
         }
     }
 
