@@ -4027,8 +4027,8 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
   When using a static quorum, the configuration file for each broker and controller must specify
   the IDs, hostnames, and ports of all controllers in <code>controller.quorum.voters</code>.<p>
 
-  In contrast, when using a dynamic quorum, you should set
-  <code>controller.quorum.bootstrap.servers</code> instead. This configuration key need not
+  In contrast, when using a dynamic quorum, <code>controller.quorum.bootstrap.servers</code>
+  is set instead and <code>controller.quorum.voters</code> must not be set. This configuration key need not
   contain all the controllers, but it should contain as many as possible so that all the servers
   can locate the quorum. In other words, its function is much like the
   <code>bootstrap.servers</code> configuration used by Kafka clients.<p>
