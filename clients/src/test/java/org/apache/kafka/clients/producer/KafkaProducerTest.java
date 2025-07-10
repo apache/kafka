@@ -579,7 +579,7 @@ public class KafkaProducerTest {
         ConfigException ce = assertThrows(
             ConfigException.class,
             () -> new KafkaProducer<>(props, new StringSerializer(), new StringSerializer()));
-        assertTrue(ce.getMessage().contains("must be a string"), "Unexpected exception message: " + ce.getMessage());
+        assertTrue(ce.getMessage().contains("not a string"), "Unexpected exception message: " + ce.getMessage());
     }
 
     @Test
