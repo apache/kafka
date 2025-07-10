@@ -73,7 +73,7 @@ import joptsimple.OptionSpec;
  * <p>
  * The broker will clean its log as the test runs.
  * <p>
- * When the specified number of messages have been produced we create a consumer and consume all the messages in the topic
+ * When the specified number of messages has been produced we create a consumer and consume all the messages in the topic
  * and write that out to another text file.
  * <p>
  * Using a stable unix sort we sort both the producer log of what was sent and the consumer log of what was retrieved by the message key.
@@ -99,6 +99,7 @@ public class LogCompactionTester {
                     .describedAs("count")
                     .ofType(Long.class)
                     .defaultsTo(Long.MAX_VALUE);
+
             messageCompressionOpt = parser
                     .accepts("compression-type", "message compression type")
                     .withOptionalArg()
@@ -141,7 +142,7 @@ public class LogCompactionTester {
                     .defaultsTo(0);
 
             helpOpt = parser
-                    .acceptsAll(java.util.Arrays.asList("h", "help"), "Display help information");
+                    .acceptsAll(List.of("h", "help"), "Display help information");
         }
     }
 
@@ -168,28 +169,10 @@ public class LogCompactionTester {
                     "d".equals(components[3])
             );
         }
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            TestRecord that = (TestRecord) o;
-            return key == that.key &&
-                    value == that.value &&
-                    delete == that.delete &&
-                    topic.equals(that.topic);
-        }
-
-        @Override
-        public int hashCode() {
-            int result = topic.hashCode();
-            result = 31 * result + key;
-            result = 31 * result + Long.hashCode(value);
-            result = 31 * result + Boolean.hashCode(delete);
-            return result;
-        }
     }
 
     public static class TestRecordUtils {
+        // maximum line size while reading produced/consumed record text file
         private static final int READ_AHEAD_LIMIT = 4906;
 
         public static TestRecord readNext(BufferedReader reader) throws IOException {
@@ -424,10 +407,11 @@ public class LogCompactionTester {
 
     private static Path produceMessages(String brokerUrl, String[] topics, long messages,
                                         String compressionType, int dups, int percentDeletes) throws IOException {
-        Properties producerProps = new Properties();
-        producerProps.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, String.valueOf(Long.MAX_VALUE));
-        producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
-        producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType);
+        Map<String, Object> producerProps = Map.of(
+                ProducerConfig.MAX_BLOCK_MS_CONFIG, String.valueOf(Long.MAX_VALUE),
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl,
+                ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType
+        );
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
                 producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
@@ -513,7 +497,7 @@ public class LogCompactionTester {
             } catch (Exception e) {
                 // Continue trying until timeout
             }
-            TimeUnit.MILLISECONDS.sleep(Math.min(defaultPollIntervalMs, defaultMaxWaitMs));
+            TimeUnit.MILLISECONDS.sleep(defaultPollIntervalMs);
         }
 
         throw new RuntimeException(timeoutMessage.get());
