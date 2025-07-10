@@ -85,11 +85,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_GROUP_PROTOCOL;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -279,17 +281,27 @@ public class KafkaStreamsTelemetryIntegrationTest {
         // Streams metrics should get passed to Admin and Consumer
         streamsApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
-       
+
+        final AtomicInteger runningStateCount = new AtomicInteger(0);
+        final int expectedRunningStateCount = DEFAULT_GROUP_PROTOCOL.equals(groupProtocol) || "simple".equals(topologyType) ? 1 : 2;
+
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+            streams.setStateListener((newState, oldState) -> {
+                if (newState == KafkaStreams.State.RUNNING) {
+                    runningStateCount.incrementAndGet();
+                }
+            });
+            streams.start();
+            waitForCondition(
+                () -> runningStateCount.get() == expectedRunningStateCount,
+                "Application did not get into RUNNING state as expected."
+            );
 
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("thread-id")).toList();
 
             final List<MetricName> streamsClientMetrics = streams.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.group().equals("stream-metrics")).toList();
-
-
 
             final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).passedMetrics().stream().map(KafkaMetric::metricName).toList();
             final List<MetricName> adminPassedStreamClientMetricNames = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CLIENT).passedMetrics.stream().map(KafkaMetric::metricName).toList();
@@ -315,11 +327,22 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsSecondApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
         streamsSecondApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
         streamsSecondApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
-        
+
+        final AtomicInteger runningStateCount = new AtomicInteger(0);
+        final int expectedRunningStateCount = DEFAULT_GROUP_PROTOCOL.equals(groupProtocol) ? 1 : 2;
 
         final Topology topology = complexTopology();
         try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
+            streamsOne.setStateListener((newState, oldState) -> {
+                if (newState == KafkaStreams.State.RUNNING) {
+                    runningStateCount.incrementAndGet();
+                }
+            });
+            streamsOne.start();
+            waitForCondition(
+                () -> runningStateCount.get() == expectedRunningStateCount,
+                "Application did not get into RUNNING state as expected."
+            );
 
             final List<MetricName> streamsTaskMetricNames = streamsOne.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
