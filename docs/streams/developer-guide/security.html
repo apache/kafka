@@ -71,7 +71,7 @@
                 <a class="reference internal" href="manage-topics.html#streams-developer-guide-topics-internal"><span class="std std-ref">internal topics</span></a>.</p>
 
             <div class="admonition">
-                <p>Starting with <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">KIP-1071</a>(Currently, it's in the Early Access phase), additional ACLs are required for the new Streams rebalance protocol. You can enable this protocol by using the <code>group.protocol=streams</code> configuration:</p>
+                <p>If the <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">streams rebalance protocol</a> is enabled by setting <code>group.protocol=streams</code>, the following ACLs are required on the topic and group resources:</p>
             </div>
 
             <table border="1" class="docutils">
@@ -93,7 +93,7 @@
                     <td>STREAMS_GROUP_HEARTBEAT</td>
                     <td>Read</td>
                     <td>Group</td>
-                    <td>Required for the application's streams groups</td>
+                    <td>Required for the application's streams group</td>
                 </tr>
                 <tr class="row-odd">
                     <td>STREAMS_GROUP_HEARTBEAT</td>
@@ -110,13 +110,13 @@
                     <td>STREAMS_GROUP_HEARTBEAT</td>
                     <td>Describe</td>
                     <td>Topic</td>
-                    <td>Required for all topics included in the message</td>
+                    <td>Required for all topics used in the application's topology, when first joining.</td>
                 </tr>
                 <tr class="row-odd">
                     <td>STREAMS_GROUP_DESCRIBE</td>
                     <td>Describe</td>
                     <td>Group</td>
-                    <td>Required for the application's streams groups</td>
+                    <td>Required for the application's streams group</td>
                 </tr>
                 <tr class="row-even">
                     <td>STREAMS_GROUP_DESCRIBE</td>
