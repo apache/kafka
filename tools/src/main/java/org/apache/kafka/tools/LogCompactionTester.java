@@ -53,6 +53,7 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -422,7 +423,7 @@ public class LogCompactionTester {
     }
 
     private static Path produceMessages(String brokerUrl, String[] topics, long messages,
-                                        String compressionType, int dups, int percentDeletes) {
+                                        String compressionType, int dups, int percentDeletes) throws IOException {
         Properties producerProps = new Properties();
         producerProps.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, String.valueOf(Long.MAX_VALUE));
         producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
@@ -455,53 +456,44 @@ public class LogCompactionTester {
                 }
             }
             return producedFilePath;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
+
     private static Path consumeMessages(String brokerUrl, String[] topics) throws IOException {
-        Consumer<String, String> consumer = createConsumer(brokerUrl);
-        consumer.subscribe(Arrays.asList(topics));
+
         Path consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt");
         System.out.println("Logging consumed messages to " + consumedFilePath);
 
-        try (BufferedWriter consumedWriter = Files.newBufferedWriter(
-                consumedFilePath, StandardCharsets.UTF_8)) {
-            boolean done = false;
-            while (!done) {
+        try (Consumer<String, String> consumer = createConsumer(brokerUrl);
+             BufferedWriter consumedWriter = Files.newBufferedWriter(consumedFilePath, StandardCharsets.UTF_8)) {
+            consumer.subscribe(Arrays.asList(topics));
+            while (true) {
                 ConsumerRecords<String, String> consumerRecords = consumer.poll(Duration.ofSeconds(20));
-                if (!consumerRecords.isEmpty()) {
-                    consumerRecords.forEach(
-                        record -> {
-                            try {
-                                boolean delete = record.value() == null;
-                                long value = delete ? -1L : Long.parseLong(record.value());
-                                TestRecord testRecord = new TestRecord(
-                                        record.topic(), Integer.parseInt(record.key()), value, delete);
-                                consumedWriter.write(testRecord.toString());
-                                consumedWriter.newLine();
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
+                if (consumerRecords.isEmpty()) return consumedFilePath;
+                consumerRecords.forEach(
+                    record -> {
+                        try {
+                            boolean delete = record.value() == null;
+                            long value = delete ? -1L : Long.parseLong(record.value());
+                            TestRecord testRecord = new TestRecord(
+                                    record.topic(), Integer.parseInt(record.key()), value, delete);
+                            consumedWriter.write(testRecord.toString());
+                            consumedWriter.newLine();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
                         }
-                    );
-                } else {
-                    done = true;
-                }
-
+                    }
+                );
             }
-        } finally {
-            consumer.close();
         }
-        return consumedFilePath;
     }
 
     private static Consumer<String, String> createConsumer(String brokerUrl) {
-        Properties consumerProps = new Properties();
-        consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG,
-                "log-cleaner-test-" + RANDOM.nextInt(Integer.MAX_VALUE));
-        consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
-        consumerProps.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        Map<String, Object> consumerProps = Map.of(
+                ConsumerConfig.GROUP_ID_CONFIG, "log-cleaner-test-" + RANDOM.nextInt(Integer.MAX_VALUE),
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl,
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"
+        );
         return new KafkaConsumer<>(consumerProps, new StringDeserializer(), new StringDeserializer());
     }
 
@@ -521,7 +513,7 @@ public class LogCompactionTester {
             } catch (Exception e) {
                 // Continue trying until timeout
             }
-            Thread.sleep(Math.min(defaultPollIntervalMs, defaultMaxWaitMs));
+            TimeUnit.MILLISECONDS.sleep(Math.min(defaultPollIntervalMs, defaultMaxWaitMs));
         }
 
         throw new RuntimeException(timeoutMessage.get());
