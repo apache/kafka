@@ -2852,6 +2852,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   def sleepMillisToPropagateMetadata(durationMs: Long, partition: TopicPartition): Unit = {
+    // Sleep 1000ms to ensure the first broker's metadata has been updated
     TimeUnit.MILLISECONDS.sleep(1000)
     val prior = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).get.id()
     TestUtils.waitUntilTrue(
@@ -2862,7 +2863,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           leaderId.contains(prior)
         }
         allSynced
-      }, s"Waited less than $durationMs ms", durationMs)
+      }, s"Waited more than $durationMs ms, but not all brokers' metadata had updated the leader for partition $partition", durationMs)
   }
 
   @Test
