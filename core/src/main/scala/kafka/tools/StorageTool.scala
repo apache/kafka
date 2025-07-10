@@ -135,8 +135,10 @@ object StorageTool extends Logging {
       featureNamesAndLevels(_).foreachEntry {
         (k, v) => formatter.setFeatureLevel(k, v)
       })
+    val initialControllers = namespace.getString("initial_controllers")
+    val isStandalone = namespace.getBoolean("standalone")
     if (!config.quorumConfig.voters().isEmpty &&
-      (namespace.getString("initial_controllers") != null || namespace.getBoolean("standalone"))) {
+      (Option(initialControllers).isDefined || isStandalone)) {
       throw new TerseFailure("You cannot specify " +
         QuorumConfig.QUORUM_VOTERS_CONFIG + " and format the node " +
         "with --initial-controllers or --standalone. " +
@@ -144,9 +146,9 @@ object StorageTool extends Logging {
         QuorumConfig.QUORUM_VOTERS_CONFIG + " and specify " +
         QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG + " instead.")
     }
-    Option(namespace.getString("initial_controllers")).
+    Option(initialControllers).
       foreach(v => formatter.setInitialControllers(DynamicVoters.parse(v)))
-    if (namespace.getBoolean("standalone")) {
+    if (isStandalone) {
       formatter.setInitialControllers(createStandaloneDynamicVoters(config))
     }
     if (namespace.getBoolean("no_initial_controllers")) {

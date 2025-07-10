@@ -387,22 +387,32 @@ Found problem:
   }
 
   @Test
-  def testFormatWithStandaloneAndInitialControllersFailsWithVotersConfig(): Unit = {
+  def testFormatWithStandaloneFailsWithVotersConfig(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
-    val args1 = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
     assertEquals("You cannot specify controller.quorum.voters and " +
       "format the node with --initial-controllers or --standalone. If you " +
       "want to use dynamic quorum, please remove controller.quorum.voters and " +
       "specify controller.quorum.bootstrap.servers instead.",
       assertThrows(classOf[TerseFailure],
-        () => runFormatCommand(stream, properties, args1.toSeq)).getMessage
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
     )
-    val args2 = ListBuffer[String](
+  }
+
+  @Test
+  def testFormatWithInitialControllersFailsWithVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String](
       "--release-version", "3.9-IV0",
       "--initial-controllers",
       "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ,"
@@ -412,7 +422,7 @@ Found problem:
       "want to use dynamic quorum, please remove controller.quorum.voters and " +
       "specify controller.quorum.bootstrap.servers instead.",
       assertThrows(classOf[TerseFailure],
-        () => runFormatCommand(stream, properties, args2.toSeq)).getMessage
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
     )
   }
 
