@@ -1903,7 +1903,7 @@ class ReplicaManager(val config: KafkaConfig,
           )
         } else {
           // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
-          // For the first topic-partition that needs remote data, we will use this information to read the data in another thread.
+          // For the topic-partitions that need remote data, we will use this information to read the data in another thread.
           new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(),
             Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp,
               fetchInfo, params.isolation)))

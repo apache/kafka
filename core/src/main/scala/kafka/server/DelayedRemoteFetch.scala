@@ -93,7 +93,7 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
     // cancel the remote storage read task, if it has not been executed yet and
     // avoid interrupting the task if it is already running as it may force closing opened/cached resources as transaction index.
     remoteFetchTasks.forEach { (topicIdPartition, task) =>
-      if (!task.isDone) {
+      if (task != null && !task.isDone) {
          if (!task.cancel(false)) {
            debug(s"Remote fetch task for remoteFetchInfo: ${remoteFetchInfos.get(topicIdPartition)} could not be cancelled.")
          }
