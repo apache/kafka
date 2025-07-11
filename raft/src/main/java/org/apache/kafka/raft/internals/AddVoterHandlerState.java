@@ -28,8 +28,8 @@ import java.util.concurrent.CompletableFuture;
 public final class AddVoterHandlerState {
     private final ReplicaKey voterKey;
     private final Endpoints voterEndpoints;
-    private final Timer timeout;
     private final boolean ackWhenCommitted;
+    private final Timer timeout;
     private final CompletableFuture<AddRaftVoterResponseData> future = new CompletableFuture<>();
 
     private OptionalLong lastOffset = OptionalLong.empty();
@@ -37,13 +37,13 @@ public final class AddVoterHandlerState {
     AddVoterHandlerState(
         ReplicaKey voterKey,
         Endpoints voterEndpoints,
-        Timer timeout,
-        boolean ackWhenCommitted
+        boolean ackWhenCommitted,
+        Timer timeout
     ) {
         this.voterKey = voterKey;
         this.voterEndpoints = voterEndpoints;
-        this.timeout = timeout;
         this.ackWhenCommitted = ackWhenCommitted;
+        this.timeout = timeout;
     }
 
     public long timeUntilOperationExpiration(long currentTimeMs) {

@@ -87,8 +87,8 @@ public final class AddVoterHandler {
         LeaderState<?> leaderState,
         ReplicaKey voterKey,
         Endpoints voterEndpoints,
-        long currentTimeMs,
-        boolean ackWhenCommitted
+        boolean ackWhenCommitted,
+        long currentTimeMs
     ) {
         // Check if there are any pending voter change requests
         if (leaderState.isOperationPending(currentTimeMs)) {
@@ -185,8 +185,8 @@ public final class AddVoterHandler {
         AddVoterHandlerState state = new AddVoterHandlerState(
             voterKey,
             voterEndpoints,
-            time.timer(timeout.getAsLong()),
-            ackWhenCommitted
+            ackWhenCommitted,
+            time.timer(timeout.getAsLong())
         );
         leaderState.resetAddVoterHandlerState(
             Errors.UNKNOWN_SERVER_ERROR,
@@ -326,12 +326,7 @@ public final class AddVoterHandler {
         if (!current.ackWhenCommitted()) {
             // complete the future to send response, but do not reset the state,
             // since the new voter set is not yet committed
-            current.future().complete(
-                RaftUtil.addVoterResponse(
-                    Errors.NONE,
-                    null
-                )
-            );
+            current.future().complete(RaftUtil.addVoterResponse(Errors.NONE, null));
         }
         return true;
     }

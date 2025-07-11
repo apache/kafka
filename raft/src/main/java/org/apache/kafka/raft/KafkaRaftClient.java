@@ -2263,8 +2263,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             quorum.leaderStateOrThrow(),
             newVoter.get(),
             newVoterEndpoints,
-            currentTimeMs,
-            data.ackWhenCommitted()
+            data.ackWhenCommitted(),
+            currentTimeMs
         );
     }
 
