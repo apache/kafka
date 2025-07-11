@@ -206,6 +206,7 @@ public class DescribeStreamsGroupTest {
 
     @Test
     public void testDescribeMultipleStreamsGroupWithMembersAndVerboseOptions() throws Exception {
+        cluster.createTopic(INPUT_TOPIC_2, 1, 1);
         KafkaStreams streams2 = new KafkaStreams(topology(INPUT_TOPIC_2, OUTPUT_TOPIC_2), streamsProp(APP_ID_2));
         startApplicationAndWaitUntilRunning(streams2);
 
@@ -214,8 +215,8 @@ public class DescribeStreamsGroupTest {
             List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "0:[0,1];", "TARGET-ACTIVE:", "0:[0,1];"),
             List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "1:[0,1];", "TARGET-ACTIVE:", "1:[0,1];"));
         final Set<List<String>> expectedRows2 = Set.of(
-            List.of(APP_ID_2, "2", "0", "dont-care", "streams", "2", "", ""),
-            List.of(APP_ID_2, "2", "0", "", "streams", "2", "", ""));
+            List.of(APP_ID_2, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "1:[0];", "TARGET-ACTIVE:", "1:[0];"),
+            List.of(APP_ID_2, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "0:[0];", "TARGET-ACTIVE:", "0:[0];"));
         final Map<String, Set<List<String>>> expectedRowsMap = new HashMap<>();
         expectedRowsMap.put(APP_ID, expectedRows1);
         expectedRowsMap.put(APP_ID_2, expectedRows2);
