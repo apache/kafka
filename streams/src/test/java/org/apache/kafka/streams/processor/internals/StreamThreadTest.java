@@ -2024,35 +2024,6 @@ public class StreamThreadTest {
         assertTrue(threadMetadata.activeTasks().isEmpty());
     }
 
-    private void addActiveRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
-        for (long i = 0L; i < 10L; i++) {
-            restoreConsumer.addRecord(new ConsumerRecord<>(
-                STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
-                2,
-                i,
-                ("K" + i).getBytes(),
-                ("V" + i).getBytes()));
-        }
-    }
-
-    private void addStandbyRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
-        // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
-        for (long i = 0L; i < 10L; i++) {
-            restoreConsumer.addRecord(new ConsumerRecord<>(
-                STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
-                1,
-                i,
-                ("K" + i).getBytes(),
-                ("V" + i).getBytes()));
-            restoreConsumer.addRecord(new ConsumerRecord<>(
-                STREAM_THREAD_TEST_TABLE_TWO_CHANGELOG,
-                1,
-                i,
-                ("K" + i).getBytes(),
-                ("V" + i).getBytes()));
-        }
-    }
-
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldCreateStandbyTask(final boolean processingThreadsEnabled) {

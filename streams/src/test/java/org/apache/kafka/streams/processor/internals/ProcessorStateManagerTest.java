@@ -88,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -298,6 +299,44 @@ public class ProcessorStateManagerTest {
         } finally {
             stateMgr.close();
         }
+    }
+
+    @Test
+    public void shouldCloseStateStoresOnStateManagerClose() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        final StateStore store = mock(StateStore.class);
+        when(store.name()).thenReturn(persistentStoreName);
+
+        stateMgr.registerStateStores(singletonList(store), context);
+
+        verify(context).uninitialize();
+        verify(store).init(context, store);
+
+        stateMgr.registerStore(store, noopStateRestoreCallback, null);
+
+        stateMgr.close();
+        verify(store).close();
+    }
+
+    @Test
+    public void shouldRecycleAndReinitializeStore() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        final StateStore store = mock(StateStore.class);
+        when(store.name()).thenReturn(persistentStoreName);
+
+        stateMgr.registerStateStores(singletonList(store), context);
+        verify(context).uninitialize();
+        verify(store).init(context, store);
+
+        stateMgr.registerStore(store, noopStateRestoreCallback, null);
+
+        stateMgr.recycle();
+        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
+
+        stateMgr.registerStateStores(singletonList(store), context);
+        verify(store).init(context, store);
+
+        verify(context, times(2)).uninitialize();
     }
 
     @Test
