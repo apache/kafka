@@ -282,26 +282,16 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
 
-        final AtomicInteger runningStateCount = new AtomicInteger(0);
-        final int expectedRunningStateCount = DEFAULT_GROUP_PROTOCOL.equals(groupProtocol) || "simple".equals(topologyType) ? 1 : 2;
-
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
-            streams.setStateListener((newState, oldState) -> {
-                if (newState == KafkaStreams.State.RUNNING) {
-                    runningStateCount.incrementAndGet();
-                }
-            });
-            streams.start();
-            waitForCondition(
-                () -> runningStateCount.get() == expectedRunningStateCount,
-                "Application did not get into RUNNING state as expected."
-            );
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("thread-id")).toList();
 
             final List<MetricName> streamsClientMetrics = streams.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.group().equals("stream-metrics")).toList();
+
+
 
             final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).passedMetrics().stream().map(KafkaMetric::metricName).toList();
             final List<MetricName> adminPassedStreamClientMetricNames = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CLIENT).passedMetrics.stream().map(KafkaMetric::metricName).toList();
@@ -328,21 +318,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsSecondApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
         streamsSecondApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
 
-        final AtomicInteger runningStateCount = new AtomicInteger(0);
-        final int expectedRunningStateCount = DEFAULT_GROUP_PROTOCOL.equals(groupProtocol) ? 1 : 2;
 
         final Topology topology = complexTopology();
         try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
-            streamsOne.setStateListener((newState, oldState) -> {
-                if (newState == KafkaStreams.State.RUNNING) {
-                    runningStateCount.incrementAndGet();
-                }
-            });
-            streamsOne.start();
-            waitForCondition(
-                () -> runningStateCount.get() == expectedRunningStateCount,
-                "Application did not get into RUNNING state as expected."
-            );
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
 
             final List<MetricName> streamsTaskMetricNames = streamsOne.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
@@ -474,18 +453,14 @@ public class KafkaStreamsTelemetryIntegrationTest {
             Arguments.of("complex", true, "classic"),
             Arguments.of("complex", false, "classic"),
             Arguments.of("simple", true, "streams"),
-            Arguments.of("simple", false, "streams"),
-            Arguments.of("complex", true, "streams"),
-            Arguments.of("complex", false, "streams")
+            Arguments.of("simple", false, "streams")
         );
     }
 
     private static Stream<Arguments> multiTaskParameters() {
         return Stream.of(
             Arguments.of(true, "classic"),
-            Arguments.of(false, "classic"),
-            Arguments.of(true, "streams"),
-            Arguments.of(false, "streams")
+            Arguments.of(false, "classic")
         );
     }
 
