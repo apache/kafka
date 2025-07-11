@@ -1596,10 +1596,10 @@ public class TaskManager {
             }
             for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
                 final Task failedTask = exceptionAndTask.task();
-                if (exceptionAndTask.exception() instanceof TaskCorruptedException) {
-                    closeTaskDirty(failedTask, false);
-                } else {
+                if (exceptionAndTask.exception() instanceof TaskTimeoutException) {
                     tasks.addTask(failedTask);
+                } else {
+                    closeTaskDirty(failedTask, false);
                 }
             }
         }
