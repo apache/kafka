@@ -55,7 +55,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -645,7 +644,7 @@ public class PluginsTest {
         assertEquals(expectedVersions[0],
                 new String(converter.fromConnectData(null, null, null)));
         // When requesting multiple resources, they should be listed in the correct order
-        assertEquals(Arrays.asList(expectedVersions),
+        assertEquals(List.of(expectedVersions),
                 converter.toConnectData(null, null).value());
     }
 
