@@ -958,14 +958,12 @@ public class SharePartition {
                     break;
                 }
             }
-
-            // If the acknowledgement is successful then persist state, complete the state transition
-            // and update the cached state for start offset. Else rollback the state transition.
-            rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
         } finally {
             lock.writeLock().unlock();
         }
-
+        // If the acknowledgement is successful then persist state, complete the state transition
+        // and update the cached state for start offset. Else rollback the state transition.
+        rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
         return future;
     }
 
@@ -1014,13 +1012,12 @@ public class SharePartition {
                     break;
                 }
             }
-
-            // If the release acquired records is successful then persist state, complete the state transition
-            // and update the cached state for start offset. Else rollback the state transition.
-            rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
         } finally {
             lock.writeLock().unlock();
         }
+        // If the release acquired records is successful then persist state, complete the state transition
+        // and update the cached state for start offset. Else rollback the state transition.
+        rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
         return future;
     }
 
