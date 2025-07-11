@@ -184,16 +184,17 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
      * @param newFinalizedLevels The new finalized feature levels from the features image
      */
     public void maybeRemoveFinalizedFeatureLevelMetrics(Map<String, Short> newFinalizedLevels) {
-        finalizedFeatureLevels.keySet().stream().filter(
-            featureName -> !newFinalizedLevels.containsKey(featureName) &&
-                !featureName.equals(MetadataVersion.FEATURE_NAME) &&
-                !featureName.equals(KRaftVersion.FEATURE_NAME)
-        ).forEach(this::removeFinalizedFeatureLevelMetric);
-        finalizedFeatureLevels.keySet().removeIf(
-            featureName -> !newFinalizedLevels.containsKey(featureName) &&
-                !featureName.equals(MetadataVersion.FEATURE_NAME) &&
-                !featureName.equals(KRaftVersion.FEATURE_NAME)
-        );
+        final var iter = finalizedFeatureLevels.keySet().iterator();
+        while (iter.hasNext()) {
+            final var featureName = iter.next();
+            if (newFinalizedLevels.containsKey(featureName) ||
+                featureName.equals(MetadataVersion.FEATURE_NAME) ||
+                featureName.equals(KRaftVersion.FEATURE_NAME)) {
+                continue;
+            }
+            removeFinalizedFeatureLevelMetric(featureName);
+            iter.remove();
+        }
     }
 
     /**
