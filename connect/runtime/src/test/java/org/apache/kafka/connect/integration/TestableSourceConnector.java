@@ -33,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -190,7 +189,7 @@ public class TestableSourceConnector extends SampleSourceConnector {
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
             Map<String, Object> offset = Optional.ofNullable(
                     context.offsetStorageReader().offset(sourcePartition(taskId)))
-                    .orElse(Collections.emptyMap());
+                    .orElse(Map.of());
             startingSeqno = Optional.ofNullable((Long) offset.get("saved")).orElse(0L);
             seqno = startingSeqno;
             log.info("Started {} task {} with properties {}", this.getClass().getSimpleName(), taskId, props);
@@ -295,10 +294,10 @@ public class TestableSourceConnector extends SampleSourceConnector {
     }
 
     public static Map<String, Object> sourcePartition(String taskId) {
-        return Collections.singletonMap("task.id", taskId);
+        return Map.of("task.id", taskId);
     }
 
     public static Map<String, Object> sourceOffset(long seqno) {
-        return Collections.singletonMap("saved", seqno);
+        return Map.of("saved", seqno);
     }
 }
