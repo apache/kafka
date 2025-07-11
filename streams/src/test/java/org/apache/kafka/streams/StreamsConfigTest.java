@@ -286,6 +286,66 @@ public class StreamsConfigTest {
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
     }
 
+    @Test
+    public void shouldResetToDefaultIfMainConsumerAllowAutoCreateTopicsIsOverridden() {
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            
+            // Verify the controlled value is enforced
+            assertEquals("false", consumerConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG));
+            
+            // Verify warning is logged when user tries to override controlled config
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Unexpected consumer config `allow.auto.create.topics` found") && 
+                            msg.contains("User setting (true) will be ignored")));
+        }
+    }
+
+    @Test
+    public void shouldResetToDefaultIfRestoreConsumerAllowAutoCreateTopicsIsOverridden() {
+        props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
+            
+            // Verify the controlled value is enforced
+            assertEquals("false", consumerConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG));
+            
+            // Verify warning is logged when user tries to override controlled config
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Unexpected consumer config `allow.auto.create.topics` found") && 
+                            msg.contains("User setting (true) will be ignored")));
+        }
+    }
+
+    @Test
+    public void shouldResetToDefaultIfGlobalConsumerAllowAutoCreateTopicsIsOverridden() {
+        props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            final Map<String, Object> consumerConfigs = streamsConfig.getGlobalConsumerConfigs(clientId);
+            
+            // Verify the controlled value is enforced
+            assertEquals("false", consumerConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG));
+            
+            // Verify warning is logged when user tries to override controlled config
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Unexpected consumer config `allow.auto.create.topics` found") && 
+                            msg.contains("User setting (true) will be ignored")));
+        }
+    }
+
     @SuppressWarnings("resource")
     @Test
     public void defaultSerdeShouldBeConfigured() {
