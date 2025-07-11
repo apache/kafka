@@ -76,10 +76,12 @@ public class TimeIndex extends AbstractIndex {
         TimestampOffset entry = lastEntry();
         long lastTimestamp = entry.timestamp;
         long lastOffset = entry.offset;
-        if (entries() != 0 && lastTimestamp < timestamp(mmap(), 0))
-            throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
-                + "non-zero size but the last timestamp is " + lastTimestamp + " which is less than the first timestamp "
-                + timestamp(mmap(), 0));
+        inRemapReadLock(() -> {
+            if (entries() != 0 && lastTimestamp < timestamp(mmap(), 0))
+                throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
+                    + "non-zero size but the last timestamp is " + lastTimestamp + " which is less than the first timestamp "
+                    + timestamp(mmap(), 0));
+        });
         if (entries() != 0 && lastOffset < baseOffset())
             throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
                 + "non-zero size but the last offset is " + lastOffset + " which is less than the first offset " + baseOffset());
@@ -94,8 +96,7 @@ public class TimeIndex extends AbstractIndex {
      */
     @Override
     public void truncateTo(long offset) {
-        lock.lock();
-        try {
+        inLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, offset, IndexSearchType.VALUE);
 
@@ -113,9 +114,7 @@ public class TimeIndex extends AbstractIndex {
                 newEntries = slot + 1;
 
             truncateToEntries(newEntries);
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     // We override the full check to reserve the last time index entry slot for the on roll call.
@@ -134,7 +133,7 @@ public class TimeIndex extends AbstractIndex {
      * @return The timestamp/offset pair at that entry
      */
     public TimestampOffset entry(int n) {
-        return maybeLock(lock, () -> {
+        return inRemapReadLock(() -> {
             if (n >= entries())
                 throw new IllegalArgumentException("Attempt to fetch the " + n + "th entry from time index "
                     + file().getAbsolutePath() + " which has size " + entries());
@@ -151,7 +150,7 @@ public class TimeIndex extends AbstractIndex {
      * @return The time index entry found.
      */
     public TimestampOffset lookup(long targetTimestamp) {
-        return maybeLock(lock, () -> {
+        return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, targetTimestamp, IndexSearchType.KEY);
             if (slot == -1)
@@ -181,8 +180,7 @@ public class TimeIndex extends AbstractIndex {
      *                      gets rolled or the segment is closed.
      */
     public void maybeAppend(long timestamp, long offset, boolean skipFullCheck) {
-        lock.lock();
-        try {
+        inLock(() -> {
             if (!skipFullCheck && isFull())
                 throw new IllegalArgumentException("Attempt to append to a full time index (size = " + entries() + ").");
 
@@ -212,23 +210,18 @@ public class TimeIndex extends AbstractIndex {
                 if (entries() * ENTRY_SIZE != mmap.position())
                     throw new IllegalStateException(entries() + " entries but file position in index is " + mmap.position());
             }
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     @Override
     public boolean resize(int newSize) throws IOException {
-        lock.lock();
-        try {
+        return inLockThrows(() -> {
             if (super.resize(newSize)) {
                 this.lastEntry = lastEntryFromIndexFile();
                 return true;
             } else
                 return false;
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     // Visible for testing, we can make this protected once TimeIndexTest is in the same package as this class
@@ -259,30 +252,24 @@ public class TimeIndex extends AbstractIndex {
      * Read the last entry from the index file. This operation involves disk access.
      */
     private TimestampOffset lastEntryFromIndexFile() {
-        lock.lock();
-        try {
+        return inRemapReadLock(() -> {
             int entries = entries();
             if (entries == 0)
                 return new TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset());
             else
                 return parseEntry(mmap(), entries - 1);
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
      * Truncates index to a known number of entries.
      */
     private void truncateToEntries(int entries) {
-        lock.lock();
-        try {
+        inLock(() -> {
             super.truncateToEntries0(entries);
             this.lastEntry = lastEntryFromIndexFile();
             log.debug("Truncated index {} to {} entries; position is now {} and last entry is now {}",
                 file().getAbsolutePath(), entries, mmap().position(), lastEntry.offset);
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 }
