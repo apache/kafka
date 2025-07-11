@@ -48,11 +48,9 @@ public abstract class AbstractIndex implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(AbstractIndex.class);
 
     // Serializes all index operations that mutate internal state.
-    // Readers do not need to acquire this lock because:
-    //  1) They only access published entries and are not affected by concurrent writes.
-    //  2) MappedByteBuffer provides direct access to the OS-level buffer cache,
-    //     which allows concurrent reads in practice.
-    //  3) Read and remap operations are coordinated via remapLock to ensure visibility.
+    // Clients only read committed data and are not affected by concurrent appends/truncates.
+    // In the rare case, when the data is truncated, the follower could read inconsistent data.
+    // The follower has the logic to ignore the inconsistent data through crc and leader epoch.
     private final ReentrantLock lock = new ReentrantLock();
     // Allows concurrent read operations while ensuring exclusive access if the underlying mmap is changed
     private final ReentrantReadWriteLock remapLock = new ReentrantReadWriteLock();
