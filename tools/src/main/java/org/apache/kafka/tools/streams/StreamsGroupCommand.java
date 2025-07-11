@@ -1027,7 +1027,6 @@ public class StreamsGroupCommand {
         }
     }
 
-    public record OffsetsInfo(Optional<Long> currentOffset, Optional<Integer> leaderEpoch, Long logEndOffset,
-                              Long lag) {
+    public record OffsetsInfo(Optional<Long> currentOffset, Optional<Integer> leaderEpoch, Long logEndOffset, Long lag) {
     }
 }
