@@ -80,6 +80,7 @@ settings.put(... , ...);</code></pre>
               <li><a class="reference internal" href="#deserialization-exception-handler" id="id7">deserialization.exception.handler</a></li>
               <li><a class="reference internal" href="#enable-metrics-push" id="id43">enable.metrics.push</a></li>
               <li><a class="reference internal" href="#ensure-explicit-internal-resource-naming" id="id46">ensure.explicit.internal.resource.naming</a></li>
+              <li><a class="reference internal" href="#group-protocol" id="id47">group.protocol</a></li>
               <li><a class="reference internal" href="#log-summary-interval-ms" id="id40">log.summary.interval.ms</a></li>
               <li><a class="reference internal" href="#max-task-idle-ms" id="id28">max.task.idle.ms</a></li>
               <li><a class="reference internal" href="#max-warmup-replicas" id="id29">max.warmup.replicas</a></li>
@@ -771,6 +772,20 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                 Whether to enforce explicit naming for all internal resources of the topology, including internal
                 topics (e.g., changelog and repartition topics) and their associated state stores.
                 When enabled, the application will refuse to start if any internal resource has an auto-generated name.
+              </p>
+            </div>
+          </blockquote>
+        </div>
+        <div class="section" id="group-protocol">
+          <h4><a class="toc-backref" href="#id47">group.protocol</a><a class="headerlink" href="#group-protocol" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              <p>
+                The group protocol used by the Kafka Streams client used for coordination.
+                It determines how the client will communicate with the Kafka brokers and other clients in the same group.
+                The default value is <code class="docutils literal"><span class="pre">"classic"</span></code>, which is the classic consumer group protocol.
+                Can be set to <code class="docutils literal"><span class="pre">"streams"</span></code> (requires broker-side enablement) to enable the new Kafka Streams group protocol.
+                Note that the "streams" rebalance protocol is an Early Access feature and should not be used in production.
               </p>
             </div>
           </blockquote>

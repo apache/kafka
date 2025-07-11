@@ -28,7 +28,6 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
                             protected val replicaManager: ReplicaManager,
                             metrics: Metrics,
                             time: Time,
-                            threadNamePrefix: Option[String] = None,
                             quotaManager: ReplicationQuotaManager,
                             metadataVersionSupplier: () => MetadataVersion,
                             brokerEpochSupplier: () => Long)
@@ -38,8 +37,7 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
         numFetchers = brokerConfig.numReplicaFetchers) {
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
-    val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
-    val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
+    val threadName = s"ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${sourceBroker.id}, " +
       s"fetcherId=$fetcherId] ")
     val endpoint = new BrokerBlockingSender(sourceBroker, brokerConfig, metrics, time, fetcherId,

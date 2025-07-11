@@ -458,7 +458,7 @@ public class FeatureCommandTest {
 
         assertEquals("Unknown release version '2.9-IV2'." +
             " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-            " to " + MetadataVersion.LATEST_PRODUCTION, exception1.getMessage());
+            " to " + MetadataVersion.latestTesting().version(), exception1.getMessage());
 
         namespace.put("release_version", "invalid");
 
@@ -468,7 +468,7 @@ public class FeatureCommandTest {
 
         assertEquals("Unknown release version 'invalid'." +
             " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-            " to " + MetadataVersion.LATEST_PRODUCTION, exception2.getMessage());
+            " to " + MetadataVersion.latestTesting().version(), exception2.getMessage());
     }
 
     @Test

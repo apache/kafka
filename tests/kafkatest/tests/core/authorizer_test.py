@@ -98,8 +98,9 @@ class AuthorizerTest(Test):
 
         # add ACLs
         self.logger.info("Adding ACLs with broker credentials so that alter client quotas command will succeed")
-        self.acls.add_cluster_acl(self.kafka, client_principal, force_use_zk_connection=False,
-                                  additional_cluster_operations_to_grant=['AlterConfigs'], security_protocol=broker_security_protocol)
+        self.acls.add_cluster_acl(self.kafka, client_principal,
+                                  additional_cluster_operations_to_grant=['AlterConfigs'],
+                                  security_protocol=broker_security_protocol)
 
         # the alter client quotas command should now succeed again
         self.logger.info(alter_client_quotas_cmd_log_msg)

@@ -40,7 +40,7 @@ public final class RemoteLogManagerConfig {
      */
     public static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP = "remote.log.storage.manager.impl.prefix";
     public static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_DOC = "Prefix used for properties to be passed to RemoteStorageManager " +
-            "implementation. For example this value can be `rsm.config.`.";
+            "implementation. For example this value can be <code>rsm.config.</code>.";
     public static final String DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "rsm.config.";
 
     /**
@@ -49,7 +49,7 @@ public final class RemoteLogManagerConfig {
      */
     public static final String REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP = "remote.log.metadata.manager.impl.prefix";
     public static final String REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_DOC = "Prefix used for properties to be passed to RemoteLogMetadataManager " +
-            "implementation. For example this value can be `rlmm.config.`.";
+            "implementation. For example this value can be <code>rlmm.config.</code>.";
     public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX = "rlmm.config.";
 
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP = "remote.log.storage.system.enable";
@@ -58,20 +58,20 @@ public final class RemoteLogManagerConfig {
     public static final boolean DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE = false;
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP = "remote.log.storage.manager.class.name";
-    public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteStorageManager` implementation.";
+    public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of <code>RemoteStorageManager</code> implementation.";
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP = "remote.log.storage.manager.class.path";
-    public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteStorageManager` implementation. " +
+    public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC = "Class path of the <code>RemoteStorageManager</code> implementation. " +
             "If specified, the RemoteStorageManager implementation and its dependent libraries will be loaded by a dedicated " +
             "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same " +
             "as the standard Java class path string.";
 
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP = "remote.log.metadata.manager.class.name";
-    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteLogMetadataManager` implementation.";
+    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of <code>RemoteLogMetadataManager</code> implementation.";
     public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME = "org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager";
 
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP = "remote.log.metadata.manager.class.path";
-    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteLogMetadataManager` implementation. " +
+    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC = "Class path of the <code>RemoteLogMetadataManager</code> implementation. " +
             "If specified, the RemoteLogMetadataManager implementation and its dependent libraries will be loaded by a dedicated " +
             "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same " +
             "as the standard Java class path string.";
@@ -149,14 +149,14 @@ public final class RemoteLogManagerConfig {
 
     public static final String LOG_LOCAL_RETENTION_MS_PROP = "log.local.retention.ms";
     public static final String LOG_LOCAL_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segments before it gets eligible for deletion. " +
-            "Default value is -2, it represents `log.retention.ms` value is to be used. The effective value should always be less than or equal " +
-            "to `log.retention.ms` value.";
+            "Default value is -2, it represents <code>log.retention.ms</code> value is to be used. The effective value should always be less than or equal " +
+            "to <code>log.retention.ms</code> value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_MS = -2L;
 
     public static final String LOG_LOCAL_RETENTION_BYTES_PROP = "log.local.retention.bytes";
     public static final String LOG_LOCAL_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it gets eligible for deletion. " +
-            "Default value is -2, it represents `log.retention.bytes` value to be used. The effective value should always be " +
-            "less than or equal to `log.retention.bytes` value.";
+            "Default value is -2, it represents <code>log.retention.bytes</code> value to be used. The effective value should always be " +
+            "less than or equal to <code>log.retention.bytes</code> value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";

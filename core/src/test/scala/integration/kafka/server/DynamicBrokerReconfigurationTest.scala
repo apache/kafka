@@ -62,6 +62,7 @@ import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.quota.{ClientQuotaEntity, ClientQuotaManager}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions._
@@ -964,9 +965,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val clientId = "test-client-1"
     servers.foreach { server =>
       server.quotaManagers.produce.updateQuota(
-        None,
-        Some(ClientQuotaManager.ClientIdEntity(clientId)),
-        Some(Quota.upperBound(10000000))
+        Optional.empty,
+        Optional.of(new ClientQuotaManager.ClientIdEntity(clientId): ClientQuotaEntity.ConfigEntity),
+        Optional.of(Quota.upperBound(10000000))
       )
     }
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol, clientId)
