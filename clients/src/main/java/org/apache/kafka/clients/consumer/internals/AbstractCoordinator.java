@@ -42,6 +42,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -1407,7 +1408,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     this.metricGrpName,
                     "The number of successful rebalance events per hour, each event is composed of " +
                         "several failed re-trials until it succeeded"),
-                new Rate(TimeUnit.HOURS, new WindowedCount())
+                new Rate(TimeUnit.HOURS, new WindowedCount()),
+                new MetricConfig().timeWindow(1, TimeUnit.HOURS)
             );
 
             this.failedRebalanceSensor = metrics.sensor("failed-rebalance");
@@ -1422,7 +1424,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     "failed-rebalance-rate-per-hour",
                     this.metricGrpName,
                     "The number of failed rebalance events per hour"),
-                new Rate(TimeUnit.HOURS, new WindowedCount())
+                new Rate(TimeUnit.HOURS, new WindowedCount()),
+                new MetricConfig().timeWindow(1, TimeUnit.HOURS)
             );
 
             Measurable lastRebalance = (config, now) -> {

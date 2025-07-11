@@ -2385,7 +2385,7 @@ public class ConsumerMembershipManagerTest {
         assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyAvg));
         assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyMax));
         assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
-        assertEquals(120d, 1d, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
+        assertEquals(1d, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));

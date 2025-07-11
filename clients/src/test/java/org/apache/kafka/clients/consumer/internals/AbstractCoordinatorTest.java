@@ -252,14 +252,14 @@ public class AbstractCoordinatorTest {
         assertEquals(3.0d, getMetric("rebalance-latency-avg").metricValue());
         assertEquals(6.0d, getMetric("rebalance-latency-max").metricValue());
         assertEquals(9.0d, getMetric("rebalance-latency-total").metricValue());
-        assertEquals(360.0d, getMetric("rebalance-rate-per-hour").metricValue());
+        assertEquals(3.0d, getMetric("rebalance-rate-per-hour").metricValue());
         assertEquals(3.0d, getMetric("rebalance-total").metricValue());
 
         metrics.sensor("failed-rebalance").record(1.0d);
         metrics.sensor("failed-rebalance").record(6.0d);
         metrics.sensor("failed-rebalance").record(2.0d);
 
-        assertEquals(360.0d, getMetric("failed-rebalance-rate-per-hour").metricValue());
+        assertEquals(3.0d, getMetric("failed-rebalance-rate-per-hour").metricValue());
         assertEquals(3.0d, getMetric("failed-rebalance-total").metricValue());
 
         assertEquals(-1.0d, getMetric("last-rebalance-seconds-ago").metricValue());

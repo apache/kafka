@@ -1348,7 +1348,7 @@ public class ShareMembershipManagerTest {
         commitResult.complete(null);
 
         assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
-        assertEquals(120d, 1d, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
+        assertEquals(1d, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
     }
 
     @Test
@@ -1620,7 +1620,7 @@ public class ShareMembershipManagerTest {
                 .setMemberEpoch(MEMBER_EPOCH)
                 .setAssignment(assignment));
     }
-    
+
     private ShareGroupHeartbeatResponse createShareGroupLeaveResponse(String memberId) {
         return new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
             .setErrorCode(Errors.NONE.code())
