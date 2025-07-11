@@ -414,6 +414,36 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
+    public void testCreateRequestPushCompressionNoClassDefFoundError() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+        ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
+            uuid, 1234, 20000, Collections.singletonList(CompressionType.ZSTD), true, null);
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), any())).thenThrow(new NoClassDefFoundError("Compression library not found"));
+
+            Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
+            assertNotNull(requestOptional);
+            assertTrue(requestOptional.isPresent());
+            assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+            PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
+
+            assertEquals(subscription.clientInstanceId(), request.data().clientInstanceId());
+            assertEquals(subscription.subscriptionId(), request.data().subscriptionId());
+            // CompressionType.NONE is used when compression fails due to NoClassDefFoundError
+            assertEquals(CompressionType.NONE.id, request.data().compressionType());
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+        }
+    }
+
+    @Test
     public void testHandleResponseGetSubscriptions() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
