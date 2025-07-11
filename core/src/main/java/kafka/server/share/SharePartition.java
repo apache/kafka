@@ -2865,7 +2865,7 @@ public class SharePartition {
             return expirationMs;
         }
 
-        boolean hasExpired() {
+        synchronized boolean hasExpired() {
             return hasExpired;
         }
 
@@ -2874,11 +2874,13 @@ public class SharePartition {
          */
         @Override
         public void run() {
-            if (!hasExpired) {
-                sharePartitionMetrics.recordAcquisitionLockTimeoutPerSec(lastOffset - firstOffset + 1);
+            synchronized (this) {
+                if (!hasExpired()) {
+                    sharePartitionMetrics.recordAcquisitionLockTimeoutPerSec(lastOffset - firstOffset + 1);
+                }
+                releaseAcquisitionLockOnTimeout(memberId, firstOffset, lastOffset);
+                hasExpired = true;
             }
-            releaseAcquisitionLockOnTimeout(memberId, firstOffset, lastOffset);
-            hasExpired = true;
         }
     }
 
