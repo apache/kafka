@@ -2874,7 +2874,9 @@ public class SharePartition {
          */
         @Override
         public void run() {
-            sharePartitionMetrics.recordAcquisitionLockTimeoutPerSec(lastOffset - firstOffset + 1);
+            if (!hasExpired) {
+                sharePartitionMetrics.recordAcquisitionLockTimeoutPerSec(lastOffset - firstOffset + 1);
+            }
             releaseAcquisitionLockOnTimeout(memberId, firstOffset, lastOffset);
             hasExpired = true;
         }
