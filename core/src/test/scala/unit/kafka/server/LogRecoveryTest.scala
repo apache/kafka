@@ -64,7 +64,7 @@ class LogRecoveryTest extends QuorumTestHarness {
   def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.get(0), ReplicaManager.HighWatermarkFilename), null)
   var servers = Seq.empty[KafkaBroker]
 
-  // This test simulates broker failures that can leave the only available replica out of the
+  // testHWCheckpointWithFailuresMultipleLogSegments simulates broker failures that can leave the only available replica out of the
   // ISR. By enabling unclean leader election, we ensure that the test can proceed and elect
   // the out-of-sync replica as the new leader, which is necessary to validate the log
   // recovery and high-watermark checkpointing logic under these specific failure conditions.
