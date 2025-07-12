@@ -57,6 +57,10 @@ public class KRaftCoordinatorMetadataDelta implements CoordinatorMetadataDelta {
         return metadataDelta.topicsDelta().deletedTopicIds();
     }
 
+    @Override
+    public CoordinatorMetadataImage image() {
+        return new KRaftCoordinatorMetadataImage(metadataDelta.image());
+    }
 
     @Override
     public String toString() {
@@ -73,10 +77,5 @@ public class KRaftCoordinatorMetadataDelta implements CoordinatorMetadataDelta {
     @Override
     public int hashCode() {
         return metadataDelta.hashCode();
-    }
-
-    @Override
-    public CoordinatorMetadataImage image() {
-        return new KRaftCoordinatorMetadataImage(metadataDelta.image());
     }
 }

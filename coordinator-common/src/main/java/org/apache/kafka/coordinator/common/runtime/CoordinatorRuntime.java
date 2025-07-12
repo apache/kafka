@@ -2476,14 +2476,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorMetadataDelta delta
     ) {
         throwIfNotRunning();
-        log.debug("Scheduling applying of a new metadata image with offset {}.", newImage.version());
+        log.debug("Scheduling applying of a new metadata image with version {}.", newImage.version());
 
         // Update global image.
         metadataImage = newImage;
 
         // Push an event for each coordinator.
         coordinators.keySet().forEach(tp -> {
-            scheduleInternalOperation("UpdateImage(tp=" + tp + ", offset=" + newImage.version() + ")", tp, () -> {
+            scheduleInternalOperation("UpdateImage(tp=" + tp + ", version=" + newImage.version() + ")", tp, () -> {
                 CoordinatorContext context = coordinators.get(tp);
                 if (context != null) {
                     context.lock.lock();
@@ -2491,17 +2491,17 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         if (context.state == CoordinatorState.ACTIVE) {
                             // The new image can be applied to the coordinator only if the coordinator
                             // exists and is in the active state.
-                            log.debug("Applying new metadata image with offset {} to {}.", newImage.version(), tp);
+                            log.debug("Applying new metadata image with version {} to {}.", newImage.version(), tp);
                             context.coordinator.onNewMetadataImage(newImage, delta);
                         } else {
-                            log.debug("Ignored new metadata image with offset {} for {} because the coordinator is not active.",
+                            log.debug("Ignored new metadata image with version {} for {} because the coordinator is not active.",
                                 newImage.version(), tp);
                         }
                     } finally {
                         context.lock.unlock();
                     }
                 } else {
-                    log.debug("Ignored new metadata image with offset {} for {} because the coordinator does not exist.",
+                    log.debug("Ignored new metadata image with version {} for {} because the coordinator does not exist.",
                         newImage.version(), tp);
                 }
             });

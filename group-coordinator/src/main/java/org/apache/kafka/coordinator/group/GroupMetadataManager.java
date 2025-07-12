@@ -492,7 +492,7 @@ public class GroupMetadataManager {
     private final Map<String, Long> topicHashCache;
 
     /**
-     * This tracks the version (or the offset) of the last metadata image
+     * This tracks the version of the last metadata image
      * with newly created topics.
      */
     private long lastMetadataImageWithNewTopics = -1L;
@@ -5772,12 +5772,12 @@ public class GroupMetadataManager {
     public void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
         metadataImage = newImage;
 
-        // Initialize the last offset if it was not yet.
+        // Initialize the last version if it was not yet.
         if (lastMetadataImageWithNewTopics == -1L) {
             lastMetadataImageWithNewTopics = metadataImage.version();
         }
 
-        // Updated the last offset of the image with newly created topics. This is used to
+        // Updated the last version of the image with newly created topics. This is used to
         // trigger a refresh of all the regular expressions when topics are created. Note
         // that we don't trigger a refresh when topics are deleted. Those are removed from
         // the subscription metadata (and the assignment) via the above mechanism. The
