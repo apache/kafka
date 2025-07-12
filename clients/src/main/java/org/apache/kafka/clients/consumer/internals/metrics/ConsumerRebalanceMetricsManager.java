@@ -74,7 +74,7 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
         successfulRebalanceSensor.add(
             rebalanceRatePerHour,
             new Rate(TimeUnit.HOURS, new WindowedCount()),
-            new MetricConfig().timeWindow(1, TimeUnit.HOURS)
+            new MetricConfig(successfulRebalanceSensor.metricConfig()).timeWindow(1, TimeUnit.HOURS)
         );
 
         failedRebalanceSensor = metrics.sensor("failed-rebalance");
@@ -82,7 +82,7 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
         failedRebalanceSensor.add(
             failedRebalanceRate,
             new Rate(TimeUnit.HOURS, new WindowedCount()),
-            new MetricConfig().timeWindow(1, TimeUnit.HOURS)
+            new MetricConfig(failedRebalanceSensor.metricConfig()).timeWindow(1, TimeUnit.HOURS)
         );
 
         Measurable lastRebalance = (config, now) -> {

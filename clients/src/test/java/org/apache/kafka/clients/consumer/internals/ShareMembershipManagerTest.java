@@ -1349,6 +1349,14 @@ public class ShareMembershipManagerTest {
 
         assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
         assertEquals(1d, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
+
+        long windowLength = metrics.config().samples() * 3600_000L;
+        time.sleep(windowLength - reconciliationDurationMs - 1);
+        assertEquals(1d / metrics.config().samples(), (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour), 0.1d);
+
+        // WindowLength have passed, triggering metric reset
+        time.sleep(windowLength);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
     }
 
     @Test

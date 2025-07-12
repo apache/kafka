@@ -43,6 +43,15 @@ public class MetricConfig {
         this.recordingLevel = Sensor.RecordingLevel.INFO;
     }
 
+    public MetricConfig(MetricConfig config) {
+        this.quota = config.quota;
+        this.samples = config.samples;
+        this.eventWindow = config.eventWindow;
+        this.timeWindowMs = config.timeWindowMs;
+        this.tags = config.tags;
+        this.recordingLevel = config.recordingLevel;
+    }
+
     public Quota quota() {
         return this.quota;
     }

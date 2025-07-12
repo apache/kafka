@@ -49,7 +49,7 @@ public final class ShareRebalanceMetricsManager extends RebalanceMetricsManager 
         rebalanceSensor.add(
             rebalanceRatePerHour,
             new Rate(TimeUnit.HOURS, new WindowedCount()),
-            new MetricConfig().timeWindow(1, TimeUnit.HOURS)
+            new MetricConfig(rebalanceSensor.metricConfig()).timeWindow(1, TimeUnit.HOURS)
         );
     }
 
