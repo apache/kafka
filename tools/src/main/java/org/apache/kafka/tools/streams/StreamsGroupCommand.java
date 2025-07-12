@@ -496,7 +496,7 @@ public class StreamsGroupCommand {
                                             if (e.getCause() instanceof UnknownTopicOrPartitionException) {
                                                 printError("Deleting internal topics for group '" + groupId + "' failed because the topics do not exist.", Optional.empty());
                                             } else if (e.getCause() instanceof UnsupportedVersionException) {
-                                                printError("Deleting internal topics is not supported by the broker version. \n" +
+                                                printError("Deleting internal topics is not supported by the broker version.\n" +
                                                     "Topics: (" + String.join(",", internalTopics) + ").\n" +
                                                     "Use 'kafka-topics.sh' to delete the group's internal topics.", Optional.of(e.getCause()));
                                             } else {
@@ -831,23 +831,19 @@ public class StreamsGroupCommand {
                 }
             } catch (InterruptedException | ExecutionException e) {
                 if (e.getCause() instanceof UnsupportedVersionException) {
-                    List<String> internalTopics = new ArrayList<>();
                     try {
+                        // Retrieve internal topic list if possible, and add the list of topic names to error message
                         Set<String> allTopics = adminClient.listTopics().names().get();
-                        for (String topic : allTopics) {
-                            for (String groupId : groupIds) {
-                                if (isInferredInternalTopic(topic, groupId)) {
-                                    internalTopics.add(topic);
-                                    break;
-                                }
-                            }
-                        }
-                        System.out.println("Internal Topics: (" + String.join(",", internalTopics) + ").");
+                        List<String> internalTopics = allTopics.stream()
+                            .filter(topic -> groupIds.stream().anyMatch(groupId -> isInferredInternalTopic(topic, groupId)))
+                            .collect(Collectors.toList());
+                        printError("Retrieving internal topics is not supported by the broker version.\n" +
+                            "Internal Topics: (" + String.join(",", internalTopics) + ").\n" +
+                            "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
                     } catch (InterruptedException | ExecutionException ex) {
-                        printError("Retrieving internal topics failed due to " + ex.getMessage(), Optional.of(ex));
+                        printError("Retrieving internal topics is not supported by the broker version. " +
+                            "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
                     }
-                    printError("Retrieving internal topics is not supported by the broker version. " +
-                        "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
                 } else {
                     printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
                 }
