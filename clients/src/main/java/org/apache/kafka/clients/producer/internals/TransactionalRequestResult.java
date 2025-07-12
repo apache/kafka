@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.PotentialCauseException;
 import org.apache.kafka.common.errors.TimeoutException;
 
 import java.util.concurrent.CountDownLatch;
@@ -48,15 +49,24 @@ public final class TransactionalRequestResult {
     }
 
     public void await() {
-        this.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+        this.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, null);
     }
 
     public void await(long timeout, TimeUnit unit) {
+        this.await(timeout, unit, null);
+    }
+
+    public void await(long timeout, TimeUnit unit, PotentialCauseException potentialCauseException) {
         try {
             boolean success = latch.await(timeout, unit);
             if (!success) {
-                throw new TimeoutException("Timeout expired after " + unit.toMillis(timeout) +
-                    "ms while awaiting " + operation);
+                if (potentialCauseException == null) {
+                    throw new TimeoutException("Timeout expired after " + unit.toMillis(timeout) +
+                                               "ms while awaiting " + operation);
+                } else {
+                    throw new TimeoutException("Timeout expired after " + unit.toMillis(timeout) +
+                                               "ms while awaiting " + operation, potentialCauseException);
+                }
             }
 
             isAcked = true;

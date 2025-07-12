@@ -27,6 +27,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.PotentialCauseException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -424,7 +425,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
             if (injectTimeoutExceptionCounter > 0) {
                 --injectTimeoutExceptionCounter;
             }
-            throw new TimeoutException();
+            throw new TimeoutException(new PotentialCauseException("TimeoutExceptions are successfully injected for test."));
         }
 
         return clientInstanceId;

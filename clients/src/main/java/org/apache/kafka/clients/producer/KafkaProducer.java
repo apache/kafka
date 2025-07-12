@@ -51,6 +51,7 @@ import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
+import org.apache.kafka.common.errors.PotentialCauseException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -672,7 +673,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long now = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.initializeTransactions(keepPreparedTxn);
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS,
+                     new PotentialCauseException("InitTransactions timed out – could not discover the transaction coordinator or receive the InitProducerId response within max.block.ms (broker unavailable, network lag, or ACL denial)."));
         producerMetrics.recordInit(time.nanoseconds() - now);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
     }
@@ -761,7 +763,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long start = time.nanoseconds();
             TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
             sender.wakeup();
-            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS,
+                         new PotentialCauseException("SendOffsetsToTransaction timed out – unable to reach the consumer-group or transaction coordinator or to receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms (coordinator unavailable, rebalance in progress, network/ACL issue)."));
             producerMetrics.recordSendOffsets(time.nanoseconds() - start);
         }
     }
@@ -847,7 +850,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long commitStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS,
+                     new PotentialCauseException("CommitTransaction timed out – failed to complete EndTxn with the transaction coordinator within max.block.ms (coordinator unavailable, network lag, ACL/rebalance)."));
         producerMetrics.recordCommitTxn(time.nanoseconds() - commitStart);
     }
 
@@ -882,7 +886,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long abortStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS,
+                     new PotentialCauseException("AbortTransaction timed out – could not complete EndTxn(abort) with the transaction coordinator within max.block.ms (coordinator unavailable/rebalancing, network lag, or ACL denial)."));
         producerMetrics.recordAbortTxn(time.nanoseconds() - abortStart);
     }
 
@@ -1235,7 +1240,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 if (metadata.getError(topic) != null) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
-                throw new TimeoutException(errorMessage);
+                if (ex.getCause() != null)
+                    throw new TimeoutException(errorMessage, ex.getCause());
+                throw new TimeoutException(errorMessage, new PotentialCauseException("Metadata update timed out ― topic missing, auth denied, broker/partition unavailable, or client sender/buffer stalled."));
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
@@ -1244,7 +1251,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 if (metadata.getError(topic) != null && metadata.getError(topic).exception() instanceof RetriableException) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
-                throw new TimeoutException(errorMessage);
+                throw new TimeoutException(errorMessage, new PotentialCauseException("Metadata update timed out ― topic missing, auth denied, broker/partition unavailable, or client sender/buffer stalled."));
             }
             metadata.maybeThrowExceptionForTopic(topic);
             remainingWaitMs = maxWaitMs - elapsed;
