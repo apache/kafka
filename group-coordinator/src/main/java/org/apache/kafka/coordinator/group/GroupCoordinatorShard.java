@@ -272,6 +272,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withAuthorizerPlugin(authorizerPlugin)
                 .build();
 
+            groupConfigManager.registerListener(groupMetadataManager);
+
             OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()
                 .withLogContext(logContext)
                 .withSnapshotRegistry(snapshotRegistry)

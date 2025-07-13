@@ -1913,6 +1913,11 @@ public class GroupMetadataManager {
         // to persist the change, and bump the group epoch later.
         boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(groupId, member, updatedMember, records);
 
+        // todo comment
+        if (group.rebalanceRequired()) {
+            bumpGroupEpoch = true;
+        }
+
         // 2. Initialize/Update the group topology.
         // If the topology is new or has changed, a StreamsGroupTopologyValue record is written to the __consumer_offsets partition to persist
         // the change. The group epoch is bumped if the topology has changed.
@@ -8364,6 +8369,13 @@ public class GroupMetadataManager {
                 .setErrorCode(Errors.NONE.code())
                 .setErrorMessage(null)
         ).toList();
+    }
+
+    /**
+     * TODO docs
+     */
+    public void onGroupConfigUpdate(String groupId) {
+        Optional.ofNullable(groups.get(groupId)).ifPresent(Group::onGroupConfigChanged);
     }
 
     /**

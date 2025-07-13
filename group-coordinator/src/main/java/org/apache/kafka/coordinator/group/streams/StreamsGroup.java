@@ -53,6 +53,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
@@ -196,6 +197,11 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
 
     /**
+     * TODO docs
+     */
+    private final AtomicBoolean rebalanceRequired;
+
+    /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
      * The metadata refresh time is considered as a soft state (read that it is not stored in a timeline data structure). It is like this
      * because it is not persisted to the log. The group epoch is here to ensure that the metadata refresh deadline is invalidated if the
@@ -242,6 +248,7 @@ public class StreamsGroup implements Group {
         this.metrics = Objects.requireNonNull(metrics);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
+        this.rebalanceRequired = new AtomicBoolean(false);
     }
 
     /**
@@ -825,6 +832,19 @@ public class StreamsGroup implements Group {
     @Override
     public boolean isInStates(Set<String> statesFilter, long committedOffset) {
         return statesFilter.contains(state.get(committedOffset).toLowerCaseString());
+    }
+
+    @Override
+    public void onGroupConfigChanged() {
+        rebalanceRequired.set(true); // FIXME check config
+    }
+
+    /**
+     * TODO docs
+     * @return
+     */
+    public boolean rebalanceRequired() {
+        return rebalanceRequired.getAndSet(false);
     }
 
     /**

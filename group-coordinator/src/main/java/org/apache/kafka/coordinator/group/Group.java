@@ -209,4 +209,9 @@ public interface Group {
     default boolean shouldExpire() {
         return true;
     }
+
+    /**
+     * TODO Add docs
+     */
+    default void onGroupConfigChanged() {}
 }
