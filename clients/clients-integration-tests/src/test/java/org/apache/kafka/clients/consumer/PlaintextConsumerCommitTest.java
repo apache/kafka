@@ -453,12 +453,11 @@ public class PlaintextConsumerCommitTest {
     }
 
     @ClusterTest
-    public void testClearBrokerBeforeConsumerCloses() throws InterruptedException {
-        // This is testing when closing the consumer but commit request has already been sent.
-        // During the closing, the consumer won't find the coordinator anymore.
-
-        // Create offsets topic to ensure coordinator is available during close
-        cluster.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), Short.parseShort(OFFSETS_TOPIC_REPLICATION));
+    public void testCommitAsyncFailsWhenCoordinatorUnavailableDuringClose() throws InterruptedException {
+        /**
+         * This is testing when closing the consumer but commit request has already been sent.
+         * During the closing, the consumer won't find the coordinator anymore.
+         */
 
         try (Producer<byte[], byte[]> producer = cluster.producer(Map.of(ProducerConfig.ACKS_CONFIG, "all"));
              var consumer = createConsumer(GroupProtocol.CONSUMER, false)
@@ -468,18 +467,19 @@ public class PlaintextConsumerCommitTest {
             consumer.assign(List.of(tp, tp1));
 
             // Try without looking up the coordinator first
-            var cb = new CountConsumerCommitCallback();
+            var callback = new CountConsumerCommitCallback();
 
             // Close the coordinator before committing because otherwise the commit will fail to find the coordinator.
-            Set<Integer> brokerIds = cluster.brokerIds();
-            brokerIds.forEach(cluster::shutdownBroker);
+            cluster.brokerIds().forEach(cluster::shutdownBroker);
 
-            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(1L)), cb);
-            consumer.commitAsync(Map.of(tp1, new OffsetAndMetadata(1L)), cb);
+            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(1L)), callback);
+            consumer.commitAsync(Map.of(tp1, new OffsetAndMetadata(1L)), callback);
 
-            consumer.close();
-            assertTrue(cb.lastError.get() instanceof CommitFailedException);
-            assertEquals(0, cb.successCount);
+            consumer.close(Duration.ofMillis(500));
+            assertTrue(callback.lastError.isPresent());
+            assertEquals(CommitFailedException.class, callback.lastError.get().getClass());
+            assertEquals("Failed to commit offsets: Coordinator unknown and consumer is closing", callback.lastError.get().getMessage());
+            assertEquals(0, callback.successCount);
         }
     }
 
@@ -491,7 +491,7 @@ public class PlaintextConsumerCommitTest {
         // disabled, or simply because there are no consumed offsets).
 
         // Create offsets topic to ensure coordinator is available during close
-        cluster.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), Short.parseShort(OFFSETS_TOPIC_REPLICATION));
+//        cluster.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), Short.parseShort(OFFSETS_TOPIC_REPLICATION));
 
         try (Producer<byte[], byte[]> producer = cluster.producer(Map.of(ProducerConfig.ACKS_CONFIG, "all"));
              var consumer = createConsumer(GroupProtocol.CONSUMER, false)

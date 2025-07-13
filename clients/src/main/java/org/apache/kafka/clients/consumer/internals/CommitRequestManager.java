@@ -182,13 +182,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             CommitFailedException exception = new CommitFailedException(
                     "Failed to commit offsets: Coordinator unknown and consumer is closing");
 
-            List<NetworkClientDelegate.UnsentRequest> pendingCommits = pendingRequests.drainPendingCommits();
-
             // Complete each commit request exceptionally
-            pendingCommits.forEach(request -> {
-                if (request.future() != null) {
-                    request.future().completeExceptionally(exception);
-                }
+            pendingRequests.drainPendingCommits().forEach(request -> {
+                request.future().completeExceptionally(exception);
             });
 
             pendingRequests.clearAll();
