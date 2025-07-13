@@ -160,9 +160,9 @@ public class WorkerConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
         "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
-        + "overridden by the connector. The default implementation is `All`, meaning connector configurations can override all client properties. "
-        + "The other possible policies in the framework include `None` to disallow connectors from overriding client properties, "
-        + "and `Principal` to allow connectors to override only client principals.";
+        + "overridden by the connector. The default implementation is <code>All</code>, meaning connector configurations can override all client properties. "
+        + "The other possible policies in the framework include <code>None</code> to disallow connectors from overriding client properties, "
+        + "and <code>Principal</code> to allow connectors to override only client principals.";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "All";
 
 
@@ -187,7 +187,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
     protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
             + "automatic creation of topics used by source connectors, when source connectors "
-            + "are configured with `" + TOPIC_CREATION_PREFIX + "` properties. Each task will use an "
+            + "are configured with <code>" + TOPIC_CREATION_PREFIX + "</code> properties. Each task will use an "
             + "admin client to create its topics and will not depend on the Kafka brokers "
             + "to create topics automatically.";
     protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;

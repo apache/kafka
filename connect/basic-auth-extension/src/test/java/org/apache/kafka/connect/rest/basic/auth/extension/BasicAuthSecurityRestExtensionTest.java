@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -107,7 +107,7 @@ public class BasicAuthSecurityRestExtensionTest {
 
         BasicAuthSecurityRestExtension extension = new BasicAuthSecurityRestExtension(configuration);
 
-        Exception thrownException = assertThrows(Exception.class, () -> extension.configure(Collections.emptyMap()));
+        Exception thrownException = assertThrows(Exception.class, () -> extension.configure(Map.of()));
         assertEquals(jaasConfigurationException, thrownException);
 
         thrownException = assertThrows(Exception.class, () -> extension.register(mock(ConnectRestExtensionContext.class)));
