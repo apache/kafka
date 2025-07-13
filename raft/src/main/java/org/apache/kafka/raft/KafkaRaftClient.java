@@ -133,7 +133,7 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  *
  * Like Zookeeper, this protocol distinguishes between voters and observers. Voters are
  * the only ones who are eligible to handle protocol requests and they are the only ones
- * who take part in elections. The protocol does not yet support dynamic quorum changes.
+ * who take part in elections.
  *
  * These are the APIs in this protocol:
  *
