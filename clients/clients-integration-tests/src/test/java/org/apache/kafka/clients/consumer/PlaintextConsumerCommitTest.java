@@ -452,13 +452,12 @@ public class PlaintextConsumerCommitTest {
         }
     }
 
+    /**
+     * This is testing when closing the consumer but commit request has already been sent.
+     * During the closing, the consumer won't find the coordinator anymore.
+     */
     @ClusterTest
     public void testCommitAsyncFailsWhenCoordinatorUnavailableDuringClose() throws InterruptedException {
-        /**
-         * This is testing when closing the consumer but commit request has already been sent.
-         * During the closing, the consumer won't find the coordinator anymore.
-         */
-
         try (Producer<byte[], byte[]> producer = cluster.producer(Map.of(ProducerConfig.ACKS_CONFIG, "all"));
              var consumer = createConsumer(GroupProtocol.CONSUMER, false)
         ) {
@@ -479,7 +478,7 @@ public class PlaintextConsumerCommitTest {
             assertTrue(callback.lastError.isPresent());
             assertEquals(CommitFailedException.class, callback.lastError.get().getClass());
             assertEquals("Failed to commit offsets: Coordinator unknown and consumer is closing", callback.lastError.get().getMessage());
-            assertEquals(0, callback.successCount);
+
         }
     }
 

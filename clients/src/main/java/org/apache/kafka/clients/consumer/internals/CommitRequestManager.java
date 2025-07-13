@@ -185,7 +185,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             // Complete each commit request exceptionally
             pendingRequests.drainPendingCommits().forEach(request -> request.future().completeExceptionally(exception));
 
-            pendingRequests.clearAll();
             return EMPTY;
         }
 
