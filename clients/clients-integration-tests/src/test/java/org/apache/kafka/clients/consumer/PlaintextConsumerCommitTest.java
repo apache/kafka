@@ -452,6 +452,37 @@ public class PlaintextConsumerCommitTest {
         }
     }
 
+    @ClusterTest
+    public void testClearBrokerBeforeConsumerCloses() throws InterruptedException {
+        // This is testing when closing the consumer but commit request has already been sent.
+        // During the closing, the consumer won't find the coordinator anymore.
+
+        // Create offsets topic to ensure coordinator is available during close
+        cluster.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), Short.parseShort(OFFSETS_TOPIC_REPLICATION));
+
+        try (Producer<byte[], byte[]> producer = cluster.producer(Map.of(ProducerConfig.ACKS_CONFIG, "all"));
+             var consumer = createConsumer(GroupProtocol.CONSUMER, false)
+        ) {
+            sendRecords(producer, tp, 3, System.currentTimeMillis());
+            sendRecords(producer, tp1, 3, System.currentTimeMillis());
+            consumer.assign(List.of(tp, tp1));
+
+            // Try without looking up the coordinator first
+            var cb = new CountConsumerCommitCallback();
+
+            // Close the coordinator before committing because otherwise the commit will fail to find the coordinator.
+            Set<Integer> brokerIds = cluster.brokerIds();
+            brokerIds.forEach(cluster::shutdownBroker);
+
+            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(1L)), cb);
+            consumer.commitAsync(Map.of(tp1, new OffsetAndMetadata(1L)), cb);
+
+            consumer.close();
+            assertTrue(cb.lastError.get() instanceof CommitFailedException);
+            assertEquals(0, cb.successCount);
+        }
+    }
+
     // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
     @ClusterTest
     public void testCommitAsyncCompletedBeforeConsumerCloses() throws InterruptedException {
