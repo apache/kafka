@@ -133,7 +133,7 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  *
  * Like Zookeeper, this protocol distinguishes between voters and observers. Voters are
  * the only ones who are eligible to handle protocol requests and they are the only ones
- * who take part in elections. The protocol does not yet support dynamic quorum changes.
+ * who take part in elections.
  *
  * These are the APIs in this protocol:
  *
@@ -167,10 +167,9 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  */
 @SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity", "ParameterNumber", "NPathComplexity", "JavaNCSS" })
 public final class KafkaRaftClient<T> implements RaftClient<T> {
-    // visible for testing
-    static final int RETRY_BACKOFF_BASE_MS = 50;
     private static final int MAX_NUMBER_OF_BATCHES = 10;
-    public static final int MAX_FETCH_WAIT_MS = 500;
+    private static final int MAX_FETCH_WAIT_MS = 500;
+    // visible for testing
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
@@ -3788,23 +3787,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private static final class Registration<T> {
-        private final Ops ops;
-        private final Listener<T> listener;
-
-        private Registration(Ops ops, Listener<T> listener) {
-            this.ops = ops;
-            this.listener = listener;
-        }
-
-        private Ops ops() {
-            return ops;
-        }
-
-        private Listener<T> listener() {
-            return listener;
-        }
-
+    private record Registration<T>(KafkaRaftClient.Registration.Ops ops, Listener<T> listener) {
         private enum Ops {
             REGISTER, UNREGISTER
         }
