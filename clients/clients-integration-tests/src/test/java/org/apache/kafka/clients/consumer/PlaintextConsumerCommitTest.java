@@ -475,10 +475,11 @@ public class PlaintextConsumerCommitTest {
             consumer.commitAsync(Map.of(tp1, new OffsetAndMetadata(1L)), callback);
 
             consumer.close(CloseOptions.timeout(Duration.ofMillis(500)));
+
             assertTrue(callback.lastError.isPresent());
             assertEquals(CommitFailedException.class, callback.lastError.get().getClass());
             assertEquals("Failed to commit offsets: Coordinator unknown and consumer is closing", callback.lastError.get().getMessage());
-
+            assertEquals(2, callback.exceptionCount);
         }
     }
 
@@ -605,6 +606,7 @@ public class PlaintextConsumerCommitTest {
 
     private static class CountConsumerCommitCallback implements OffsetCommitCallback {
         private int successCount = 0;
+        private int exceptionCount = 0;
         private Optional<Exception> lastError = Optional.empty();
 
         @Override
@@ -612,6 +614,7 @@ public class PlaintextConsumerCommitTest {
             if (exception == null) {
                 successCount += 1;
             } else {
+                exceptionCount += 1;
                 lastError = Optional.of(exception);
             }
         }
