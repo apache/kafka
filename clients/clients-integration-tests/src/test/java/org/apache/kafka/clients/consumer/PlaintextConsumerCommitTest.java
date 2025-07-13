@@ -491,7 +491,7 @@ public class PlaintextConsumerCommitTest {
         // disabled, or simply because there are no consumed offsets).
 
         // Create offsets topic to ensure coordinator is available during close
-//        cluster.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), Short.parseShort(OFFSETS_TOPIC_REPLICATION));
+        cluster.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), Short.parseShort(OFFSETS_TOPIC_REPLICATION));
 
         try (Producer<byte[], byte[]> producer = cluster.producer(Map.of(ProducerConfig.ACKS_CONFIG, "all"));
              var consumer = createConsumer(GroupProtocol.CONSUMER, false)
