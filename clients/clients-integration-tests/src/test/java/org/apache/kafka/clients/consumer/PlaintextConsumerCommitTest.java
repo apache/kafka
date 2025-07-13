@@ -475,7 +475,7 @@ public class PlaintextConsumerCommitTest {
             consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(1L)), callback);
             consumer.commitAsync(Map.of(tp1, new OffsetAndMetadata(1L)), callback);
 
-            consumer.close(Duration.ofMillis(500));
+            consumer.close(CloseOptions.timeout(Duration.ofMillis(500)));
             assertTrue(callback.lastError.isPresent());
             assertEquals(CommitFailedException.class, callback.lastError.get().getClass());
             assertEquals("Failed to commit offsets: Coordinator unknown and consumer is closing", callback.lastError.get().getMessage());
