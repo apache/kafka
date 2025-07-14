@@ -3983,20 +3983,56 @@ controller.listener.names=CONTROLLER</code></pre>
 
   <p>Every broker and controller must set the <code>controller.quorum.bootstrap.servers</code> property.
 
-  <h4 class="anchor-heading"><a id="kraft_storage" class="anchor-link"></a><a href="#kraft_storage">Provisioning Nodes</a></h4>
+  <h4 class="anchor-heading"><a id="kraft_upgrade" class="anchor-link"></a><a href="#kraft_upgrade">Upgrade</a></h4>
+
+  <p>Apache Kafka 4.1 added support for upgrading a cluster from a static controller configuration to a dynamic controller configuration. Dynamic controller configuration allows users to add controller to and remove controller from the cluster. See the <a href="#kraft_reconfig">Controller membership changes</a> section for more details.</p>
+
+  <p>This feature upgrade is done by upgrading the KRaft feature version and updating the nodes' configuration.</p>
+
+  <h5 class="anchor-heading"><a id="kraft_upgrade_describe" class="anchor-link"></a><a href="#kraft_upgrade_describe">Describe KRaft Version</a></h5>
+
+  <p>Dynamic controller cluster was added in <code>kraft.version=1</code> or <code>release-version 4.1</code>. To determine which kraft feature version the cluster is using you can execute the following CLI command:</p>
+
+  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
+...
+Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0        Epoch: 7
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 4.0-IV3    FinalizedVersionLevel: 4.0-IV3  Epoch: 7</code></pre>
+
+  <p>If the <code>FinalizedVersionLevel</code> for <code>Feature: kraft.version</code> is <code>0</code>, the version needs to be upgraded to at least <code>1</code> to support a dynamic controller cluster.</p>
+
+  <h5 class="anchor-heading"><a id="kraft_upgrade_version" class="anchor-link"></a><a href="#kraft_upgrade_version">Upgrade KRaft Version</a></h5>
+
+  <p>The KRaft feature version can be upgraded to support dynamic controller clusters by using the <code>kafka-feature</code> CLI command. To upgrade all of the feature versions to the latest version:</p>
+
+  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.1</code></pre>
+
+  <p>To upgrade just the KRaft feature version:</p>
+
+  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature kraft.version=1</code></pre>
+
+  <h5 class="anchor-heading"><a id="kraft_upgrade_config" class="anchor-link"></a><a href="#kraft_upgrade_config">Update KRaft Config</a></h5>
+
+  <p>KRaft version 1 deprecated the <code>controller.quorum.voters</code> property and added the <code>controller.quorum.bootstrap.servers</code> property. After checking that the KRaft version has been successfully upgraded to at least version <code>1</code>, remove the <code>controller.quorum.voters</code> property and add the <code>controller.quorum.bootstrap.servers</code> to all of the nodes (controllers and brokers) in the cluster.</p>
+
+  <pre><code class="language-bash">process.roles=...
+node.id=...
+controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.example.com:9093,controller3.example.com:9093
+controller.listener.names=CONTROLLER</code></pre>
+
+  <h4 class="anchor-heading"><a id="kraft_nodes" class="anchor-link"></a><a href="#kraft_nodes">Provisioning Nodes</a></h4>
   <p></p>
   The <code>bin/kafka-storage.sh random-uuid</code> command can be used to generate a cluster ID for your new cluster. This cluster ID must be used when formatting each server in the cluster with the <code>bin/kafka-storage.sh format</code> command.
 
   <p>This is different from how Kafka has operated in the past. Previously, Kafka would format blank storage directories automatically, and also generate a new cluster ID automatically. One reason for the change is that auto-formatting can sometimes obscure an error condition. This is particularly important for the metadata log maintained by the controller and broker servers. If a majority of the controllers were able to start with an empty log directory, a leader might be able to be elected with missing committed data.</p>
 
-  <h5 class="anchor-heading"><a id="kraft_storage_standalone" class="anchor-link"></a><a href="#kraft_storage_standalone">Bootstrap a Standalone Controller</a></h5>
+  <h5 class="anchor-heading"><a id="kraft_nodes_standalone" class="anchor-link"></a><a href="#kraft_nodes_standalone">Bootstrap a Standalone Controller</a></h5>
   The recommended method for creating a new KRaft controller cluster is to bootstrap it with one voter and dynamically <a href="#kraft_reconfig_add">add the rest of the controllers</a>. Bootstrapping the first controller can be done with the following CLI command:
 
   <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;CLUSTER_ID&gt; --standalone --config config/controller.properties</code></pre>
 
   This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum.
 
-  <h5 class="anchor-heading"><a id="kraft_storage_voters" class="anchor-link"></a><a href="#kraft_storage_voters">Bootstrap with Multiple Controllers</a></h5>
+  <h5 class="anchor-heading"><a id="kraft_nodes_voters" class="anchor-link"></a><a href="#kraft_nodes_voters">Bootstrap with Multiple Controllers</a></h5>
   The KRaft cluster metadata partition can also be bootstrapped with more than one voter. This can be done by using the --initial-controllers flag:
 
   <pre><code class="language-bash">CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"
@@ -4013,7 +4049,7 @@ This command is similar to the standalone version but the snapshot at 0000000000
 
 In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the replica id, 3Db5QLSqSZieL3rJBUUegA is the replica directory id, controller-0 is the replica's host and 1234 is the replica's port.
 
-  <h5 class="anchor-heading"><a id="kraft_storage_observers" class="anchor-link"></a><a href="#kraft_storage_observers">Formatting Brokers and New Controllers</a></h5>
+  <h5 class="anchor-heading"><a id="kraft_nodes_observers" class="anchor-link"></a><a href="#kraft_nodes_observers">Formatting Brokers and New Controllers</a></h5>
   When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the <code>kafka-storage.sh format</code> command with the --no-initial-controllers flag.
 
   <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;CLUSTER_ID&gt; --config config/server.properties --no-initial-controllers</code></pre>
@@ -4077,7 +4113,7 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
   use a dynamic controller quorum. This function will be supported in the future release.
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_add" class="anchor-link"></a><a href="#kraft_reconfig_add">Add New Controller</a></h5>
-  If a dynamic controller cluster already exists, it can be expanded by first provisioning a new controller using the <a href="#kraft_storage_observers">kafka-storage.sh tool</a> and starting the controller.
+  If a dynamic controller cluster already exists, it can be expanded by first provisioning a new controller using the <a href="#kraft_nodes_observers">kafka-storage.sh tool</a> and starting the controller.
 
   After starting the controller, the replication to the new controller can be monitored using the <code>bin/kafka-metadata-quorum.sh describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>bin/kafka-metadata-quorum.sh add-controller</code> command.
 
