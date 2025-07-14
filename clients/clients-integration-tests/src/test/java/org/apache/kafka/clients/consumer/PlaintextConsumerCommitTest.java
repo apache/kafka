@@ -464,7 +464,6 @@ public class PlaintextConsumerCommitTest {
             sendRecords(producer, tp, 3, System.currentTimeMillis());
             consumer.assign(List.of(tp));
 
-            // Try without looking up the coordinator first
             var callback = new CountConsumerCommitCallback();
 
             // Close the coordinator before committing because otherwise the commit will fail to find the coordinator.
