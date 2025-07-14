@@ -698,6 +698,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.DELETE_SHARE_GROUP_OFFSETS =>
           new DeleteShareGroupOffsetsRequest.Builder(new DeleteShareGroupOffsetsRequestData())
 
+        case ApiKeys.GET_REPLICA_LOG_INFO =>
+          new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
