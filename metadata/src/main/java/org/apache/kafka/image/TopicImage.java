@@ -52,19 +52,6 @@ public record TopicImage(String name, Uuid id, Map<Integer, PartitionRegistratio
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof TopicImage other)) return false;
-        return name.equals(other.name) &&
-            id.equals(other.id) &&
-            partitions.equals(other.partitions);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, id, partitions);
-    }
-
-    @Override
     public String toString() {
         return new TopicImageNode(this).stringify();
     }

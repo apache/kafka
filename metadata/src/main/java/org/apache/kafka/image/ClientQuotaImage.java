@@ -91,17 +91,6 @@ public record ClientQuotaImage(Map<String, Double> quotas) {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotaImage other)) return false;
-        return quotas.equals(other.quotas);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(quotas);
-    }
-
-    @Override
     public String toString() {
         return new ClientQuotaImageNode(this).stringify();
     }
