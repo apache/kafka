@@ -149,14 +149,12 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
                 if (!(value instanceof BigDecimal decimal))
                     throw new DataException("Invalid type for Decimal, expected BigDecimal but was " + value.getClass());
 
-                switch (config.decimalFormat()) {
-                    case NUMERIC:
-                        return JSON_NODE_FACTORY.numberNode(decimal);
-                    case BASE64:
-                        return JSON_NODE_FACTORY.binaryNode(Decimal.fromLogical(schema, decimal));
-                    default:
+                return switch (config.decimalFormat()) {
+                    case NUMERIC -> JSON_NODE_FACTORY.numberNode(decimal);
+                    case BASE64 -> JSON_NODE_FACTORY.binaryNode(Decimal.fromLogical(schema, decimal));
+                    default ->
                         throw new DataException("Unexpected " + JsonConverterConfig.DECIMAL_FORMAT_CONFIG + ": " + config.decimalFormat());
-                }
+                };
             }
 
             @Override
