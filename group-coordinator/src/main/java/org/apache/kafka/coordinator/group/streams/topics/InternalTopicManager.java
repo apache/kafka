@@ -46,13 +46,13 @@ import java.util.stream.Stream;
 public class InternalTopicManager {
 
     /**
-     * Configures the internal topics for the given topology. Given a topology and the topics image, this method determines the number of
+     * Configures the internal topics for the given topology. Given a topology and the metadata image, this method determines the number of
      * partitions for all internal topics and returns a {@link ConfiguredTopology} object.
      *
      * @param logContext    The log context.
      * @param metadataHash  The metadata hash of the group.
      * @param topology      The topology.
-     * @param metadataImage The topics image.
+     * @param metadataImage The metadata image.
      * @return The configured topology.
      */
     public static ConfiguredTopology configureTopics(LogContext logContext,

@@ -27,7 +27,7 @@ import java.util.Set;
  * Implementations should be thread-safe and immutable.
  */
 public interface CoordinatorMetadataImage {
-    static CoordinatorMetadataImage EMPTY = emptyImage();
+    CoordinatorMetadataImage EMPTY = emptyImage();
 
     Set<Uuid> topicIds();
 
