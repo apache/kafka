@@ -2851,19 +2851,18 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  def sleepMillisToPropagateMetadata(durationMs: Long, partition: TopicPartition): Unit = {
-    // Sleep 1000ms to ensure the first broker's metadata has been updated
-    TimeUnit.MILLISECONDS.sleep(1000)
-    val prior = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).get.id()
-    TestUtils.waitUntilTrue(
-      () => {
-        val allSynced = brokers.forall { broker =>
-          val leaderIdOpt = broker.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).map(_.id())
-          val leaderId = leaderIdOpt.toScala
-          leaderId.contains(prior)
-        }
-        allSynced
-      }, s"Waited more than $durationMs ms, but not all brokers' metadata had updated the leader for partition $partition", durationMs)
+  def sleepMillisToPropagateMetadata(partition: TopicPartition): Unit = {
+    var allSynced: Boolean = false
+
+    while (!allSynced) {
+      val prior = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).get.id()
+
+      allSynced = brokers.forall { broker =>
+        val leaderIdOpt = broker.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).map(_.id())
+        val leaderId = leaderIdOpt.toScala
+        leaderId.contains(prior)
+      }
+    }
   }
 
   @Test
@@ -2925,7 +2924,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 0)
 
     // Now change the preferred leader to 1
-    sleepMillisToPropagateMetadata(10000, partition2);
+    sleepMillisToPropagateMetadata(partition1);
     changePreferredLeader(prefer1)
 
     // meaningful election
@@ -2964,7 +2963,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 1)
 
     // Now change the preferred leader to 2
-    sleepMillisToPropagateMetadata(10000, partition2)
+    sleepMillisToPropagateMetadata(partition1)
+    sleepMillisToPropagateMetadata(partition2)
     changePreferredLeader(prefer2)
 
     // mixed results
@@ -2981,11 +2981,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 2)
 
     // Now change the preferred leader to 1
-    sleepMillisToPropagateMetadata(10000, partition2)
+    sleepMillisToPropagateMetadata(partition1)
+    sleepMillisToPropagateMetadata(partition2)
     changePreferredLeader(prefer1)
     // but shut it down...
     killBroker(1)
-    sleepMillisToPropagateMetadata(10000, partition2)
+    sleepMillisToPropagateMetadata(partition1)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     def assertPreferredLeaderNotAvailable(
