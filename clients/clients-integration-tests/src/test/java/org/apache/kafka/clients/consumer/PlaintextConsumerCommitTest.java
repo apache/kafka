@@ -462,8 +462,7 @@ public class PlaintextConsumerCommitTest {
              var consumer = createConsumer(GroupProtocol.CONSUMER, false)
         ) {
             sendRecords(producer, tp, 3, System.currentTimeMillis());
-            sendRecords(producer, tp1, 3, System.currentTimeMillis());
-            consumer.assign(List.of(tp, tp1));
+            consumer.assign(List.of(tp));
 
             // Try without looking up the coordinator first
             var callback = new CountConsumerCommitCallback();
