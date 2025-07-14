@@ -47,7 +47,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -341,7 +340,7 @@ public class ClientQuotasRequestTest {
     }
 
     @ClusterTest
-    public void testAlterClientQuotasBadIp() throws ExecutionException, InterruptedException {
+    public void testAlterClientQuotasBadIp() {
         ClientQuotaEntity invalidHostPatternEntity = new ClientQuotaEntity(
             Map.of(ClientQuotaEntity.IP, "not a valid host because it has spaces")
         );
@@ -381,17 +380,17 @@ public class ClientQuotasRequestTest {
     // Entities to be matched against.
     private final Map<ClientQuotaEntity, Double> matchUserClientEntities = new HashMap<>() {
         {
-            put(toClientEntity(() -> toUserMap("user-1"), () -> toClientIdMap("client-id-1")), 50.50);
-            put(toClientEntity(() -> toUserMap("user-2"), () -> toClientIdMap("client-id-1")), 51.51);
-            put(toClientEntity(() -> toUserMap("user-3"), () -> toClientIdMap("client-id-2")), 52.52);
-            put(toClientEntity(() -> toUserMap(null), () -> toClientIdMap("client-id-1")), 53.53);
-            put(toClientEntity(() -> toUserMap("user-1"), () -> toClientIdMap(null)), 54.54);
-            put(toClientEntity(() -> toUserMap("user-3"), () -> toClientIdMap(null)), 55.55);
-            put(toClientEntity(() -> toUserMap("user-1")), 56.56);
-            put(toClientEntity(() -> toUserMap("user-2")), 57.57);
-            put(toClientEntity(() -> toUserMap("user-3")), 58.58);
-            put(toClientEntity(() -> toUserMap(null)), 59.59);
-            put(toClientEntity(() -> toClientIdMap("client-id-2")), 60.60);
+            put(toClientEntity(toUserMap("user-1"), toClientIdMap("client-id-1")), 50.50);
+            put(toClientEntity(toUserMap("user-2"), toClientIdMap("client-id-1")), 51.51);
+            put(toClientEntity(toUserMap("user-3"), toClientIdMap("client-id-2")), 52.52);
+            put(toClientEntity(toUserMap(null), toClientIdMap("client-id-1")), 53.53);
+            put(toClientEntity(toUserMap("user-1"), toClientIdMap(null)), 54.54);
+            put(toClientEntity(toUserMap("user-3"), toClientIdMap(null)), 55.55);
+            put(toClientEntity(toUserMap("user-1")), 56.56);
+            put(toClientEntity(toUserMap("user-2")), 57.57);
+            put(toClientEntity(toUserMap("user-3")), 58.58);
+            put(toClientEntity(toUserMap(null)), 59.59);
+            put(toClientEntity(toClientIdMap("client-id-2")), 60.60);
         }
     };
 
@@ -466,13 +465,13 @@ public class ClientQuotasRequestTest {
 
         // Entities not contained in `matchEntityList`.
         List<ClientQuotaEntity> notMatchEntities = List.of(
-            toClientEntity(() -> toUserMap("user-1"), () -> toClientIdMap("client-id-2")),
-            toClientEntity(() -> toUserMap("user-3"), () -> toClientIdMap("client-id-1")),
-            toClientEntity(() -> toUserMap("user-2"), () -> toClientIdMap(null)),
-            toClientEntity(() -> toUserMap("user-4")),
-            toClientEntity(() -> toUserMap(null), () -> toClientIdMap("client-id-2")),
-            toClientEntity(() -> toClientIdMap("client-id-1")),
-            toClientEntity(() -> toClientIdMap("client-id-3"))
+            toClientEntity(toUserMap("user-1"), toClientIdMap("client-id-2")),
+            toClientEntity(toUserMap("user-3"), toClientIdMap("client-id-1")),
+            toClientEntity(toUserMap("user-2"), toClientIdMap(null)),
+            toClientEntity(toUserMap("user-4")),
+            toClientEntity(toUserMap(null), toClientIdMap("client-id-2")),
+            toClientEntity(toClientIdMap("client-id-1")),
+            toClientEntity(toClientIdMap("client-id-3"))
         );
 
         // Verify exact matches of the non-matches returns empty.
@@ -623,7 +622,7 @@ public class ClientQuotasRequestTest {
     }
 
     @ClusterTest
-    public void testClientQuotasSanitized() throws ExecutionException, InterruptedException, TimeoutException {
+    public void testClientQuotasSanitized() throws InterruptedException {
         // An entity with name that must be sanitized when writing to Zookeeper.
         ClientQuotaEntity entity = new ClientQuotaEntity(Map.of(ClientQuotaEntity.USER, "user with spaces"));
 
@@ -637,18 +636,20 @@ public class ClientQuotasRequestTest {
     }
 
     private Map<String, String> toUserMap(String user) {
+        // Uses Collections.singletonMap instead of Map.of to support null user parameter.
         return Collections.singletonMap(ClientQuotaEntity.USER, user);
     }
 
     private Map<String, String> toClientIdMap(String clientId) {
+        // Uses Collections.singletonMap instead of Map.of to support null client-id parameter.
         return Collections.singletonMap(ClientQuotaEntity.CLIENT_ID, clientId);
     }
 
     @SafeVarargs
-    private ClientQuotaEntity toClientEntity(Supplier<Map<String, String>>... suppliers) {
+    private ClientQuotaEntity toClientEntity(Map<String, String>... entries) {
         Map<String, String> entityMap = new HashMap<>();
-        for (Supplier<Map<String, String>> supplier : suppliers) {
-            entityMap.putAll(supplier.get());
+        for (Map<String, String> entry : entries) {
+            entityMap.putAll(entry);
         }
         return new ClientQuotaEntity(entityMap);
     }
