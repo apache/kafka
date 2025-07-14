@@ -618,9 +618,8 @@ public class ConsumerGroupCommand {
                     consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
-            List<TopicPartition> topicPartitionsWithLeader = new ArrayList<>(topicPartitions);
             List<TopicPartition> topicPartitionsWithoutLeader = filterNoneLeaderPartitions(topicPartitions);
-            topicPartitionsWithLeader.removeAll(topicPartitionsWithoutLeader);
+            List<TopicPartition> topicPartitionsWithLeader = topicPartitions.stream().filter(tp -> !topicPartitionsWithoutLeader.contains(tp)).toList();
 
             // prepare data for partitions with leaders
             List<PartitionAssignmentState> existLeaderAssignments = offsetsUtils.getLogEndOffsets(topicPartitionsWithLeader).entrySet().stream().map(logEndOffsetResult -> {
@@ -659,7 +658,7 @@ public class ConsumerGroupCommand {
                         .flatMap(entry -> entry.getValue().partitions().stream()
                                 .filter(partitionInfo -> partitionInfo.leader() == null)
                                 .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
-                        .collect(Collectors.toList());
+                        .toList();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
