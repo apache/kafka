@@ -579,10 +579,12 @@ public class KafkaAdminClient extends AdminClient {
                                            Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
+        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
         Optional<ClientTelemetryReporter> clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+        clientTelemetryReporter.ifPresent(reporters::add);
 
         try {
-            metrics = new Metrics(new MetricConfig(), new LinkedList<>(), time);
+            metrics = new Metrics(new MetricConfig(), reporters, time);
             LogContext logContext = createLogContext(clientId);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
                 client, null, logContext, clientTelemetryReporter);
