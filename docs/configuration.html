@@ -265,6 +265,16 @@
   Below are the supported system properties.
   <ul class="config-list">
     <li>
+      <h4><a id="org.apache.kafka.sasl.oauthbearer.allowed.files"></a><a id="systemproperties_org.apache.kafka.sasl.oauthbearer.allowed.files" href="#systemproperties_org.apache.kafka.sasl.oauthbearer.allowed.files">org.apache.kafka.sasl.oauthbearer.allowed.files</a></h4>
+      <p>This system property is used to determine which files, if any, are allowed to be read by the SASL OAUTHBEARER plugin. This property accepts comma-separated list of files. By default the value is an empty list.
+      <p>If users want to enable some files, users need to explicitly set the system property like below.
+      <p><pre><code class="language-bash">-Dorg.apache.kafka.sasl.oauthbearer.allowed.files=/tmp/token,/tmp/private_key.pem</code></pre>
+      <table><tbody>
+      <tr><th>Since:</th><td>4.1.0</td></tr>
+      <tr><th>Default Value:</th><td></td></tr>
+      </tbody></table>
+    </li>
+    <li>
       <h4><a id="org.apache.kafka.sasl.oauthbearer.allowed.urls"></a><a id="systemproperties_org.apache.kafka.sasl.oauthbearer.allowed.urls" href="#systemproperties_org.apache.kafka.sasl.oauthbearer.allowed.urls">org.apache.kafka.sasl.oauthbearer.allowed.urls</a></h4>
       <p>This system property is used to set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. This property accepts comma-separated list of URLs. By default the value is an empty list.
       <p>If users want to enable some URLs, users need to explicitly set the system property like below.
