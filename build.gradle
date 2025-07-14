@@ -1996,10 +1996,12 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
     implementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':metadata')
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':transaction-coordinator')
+    testImplementation project(':test-common:test-common-util')
 
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine
