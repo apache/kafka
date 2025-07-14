@@ -54,7 +54,9 @@ public class GroupConfigManager implements AutoCloseable {
             throw new InvalidRequestException("Group name can't be empty.");
         }
 
-        Optional.ofNullable(listener).ifPresent(listener -> listener.onGroupConfigUpdate(groupId));
+        if (listener != null) {
+            listener.onGroupConfigUpdate(groupId, newGroupConfig);
+        }
 
         final GroupConfig newConfig = GroupConfig.fromProps(
             defaultConfig.originals(),

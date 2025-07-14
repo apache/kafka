@@ -51,10 +51,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.EMPTY;
@@ -71,6 +73,10 @@ public class StreamsGroup implements Group {
      * The protocol type for streams groups. There is only one protocol type, "streams".
      */
     private static final String PROTOCOL_TYPE = "streams";
+
+    private static final Set<String> PROPERTIES_TO_TIGGER_REBALANCE = Set.of(
+            STREAMS_NUM_STANDBY_REPLICAS_CONFIG
+    );
 
     public enum StreamsGroupState {
         EMPTY("Empty"),
@@ -197,7 +203,7 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
 
     /**
-     * TODO docs
+     * The flag that group should be rebalanced
      */
     private final AtomicBoolean rebalanceRequired;
 
@@ -834,14 +840,24 @@ public class StreamsGroup implements Group {
         return statesFilter.contains(state.get(committedOffset).toLowerCaseString());
     }
 
+    /**
+     * Check if rebalance is required, after config was changed
+     *
+     * @param updatedProperties Properties that was updated
+     */
     @Override
-    public void onGroupConfigChanged() {
-        rebalanceRequired.set(true); // FIXME check config
+    public void onGroupConfigChanged(Properties updatedProperties) {
+        PROPERTIES_TO_TIGGER_REBALANCE.forEach(property -> {
+            if (updatedProperties.containsKey(property)) {
+                rebalanceRequired.set(true);
+            }
+        });
     }
 
     /**
-     * TODO docs
-     * @return
+     * Check if rebalance is required. Reset the flag, set it false.
+     *
+     * @return true - if rebalance is required
      */
     public boolean rebalanceRequired() {
         return rebalanceRequired.getAndSet(false);

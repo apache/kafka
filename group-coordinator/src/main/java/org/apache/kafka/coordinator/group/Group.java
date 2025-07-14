@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -211,7 +212,7 @@ public interface Group {
     }
 
     /**
-     * TODO Add docs
+     * Listener method to trigger some action if config was changed.
      */
-    default void onGroupConfigChanged() {}
+    default void onGroupConfigChanged(Properties updatedProperties) {}
 }

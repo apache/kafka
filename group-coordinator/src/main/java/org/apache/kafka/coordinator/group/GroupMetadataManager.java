@@ -194,6 +194,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
@@ -1913,7 +1914,7 @@ public class GroupMetadataManager {
         // to persist the change, and bump the group epoch later.
         boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(groupId, member, updatedMember, records);
 
-        // todo comment
+        // Check if StreamsGroup has flag rebalanceRequired equals to true
         if (group.rebalanceRequired()) {
             bumpGroupEpoch = true;
         }
@@ -8372,10 +8373,12 @@ public class GroupMetadataManager {
     }
 
     /**
-     * TODO docs
+     * Trigger {@link org.apache.kafka.coordinator.group.Group#onGroupConfigChanged} for selected group id
+     *
+     * @see org.apache.kafka.coordinator.group.Group#onGroupConfigChanged(Properties)
      */
-    public void onGroupConfigUpdate(String groupId) {
-        Optional.ofNullable(groups.get(groupId)).ifPresent(Group::onGroupConfigChanged);
+    public void onGroupConfigUpdate(String groupId, Properties updatedConfig) {
+        Optional.ofNullable(groups.get(groupId)).ifPresent(group -> group.onGroupConfigChanged(updatedConfig));
     }
 
     /**
