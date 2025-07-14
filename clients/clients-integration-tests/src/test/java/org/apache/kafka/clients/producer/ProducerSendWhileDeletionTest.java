@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -42,9 +43,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -155,6 +159,42 @@ public class ProducerSendWhileDeletionTest {
             assertEquals(topic, recordMetadata.topic());
             assertEquals(0, recordMetadata.offset());
         }
+    }
+
+    @ClusterTest
+    public void testSendWhileTopicGetRecreated() {
+        int maxNumTopicRecreationAttempts = 5;
+        var recreateTopicFuture = CompletableFuture.supplyAsync(() -> {
+            var topicIds = new HashSet<Uuid>();
+            while (topicIds.size() < maxNumTopicRecreationAttempts) {
+                try (var admin = cluster.admin()) {
+                    if (admin.listTopics().names().get().contains(topic)) {
+                        admin.deleteTopics(List.of(topic)).all().get();
+                    }
+                    topicIds.add(admin.createTopics(List.of(new NewTopic(topic, 2, (short) 1))).topicId(topic).get());
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+            return topicIds;
+        });
+
+        AtomicInteger numAcks = new AtomicInteger(0);
+        var producerFuture = CompletableFuture.runAsync(() -> {
+            try (var producer = createProducer()) {
+                for (int i = 1; i <= numRecords; i++) {
+                    producer.send(new ProducerRecord<>(topic, null, ("value" + i).getBytes()),
+                            (metadata, exception) -> {
+                                numAcks.incrementAndGet();
+                            });
+                }
+                producer.flush();
+            }
+        });
+        var topicIds = recreateTopicFuture.join();
+        producerFuture.join();
+        assertEquals(maxNumTopicRecreationAttempts, topicIds.size());
+        assertEquals(numRecords, numAcks.intValue());
     }
 
     @ClusterTest

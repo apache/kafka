@@ -21,7 +21,7 @@ package org.apache.kafka.common.config;
  * <p>Keys that can be used to configure a topic. These keys are useful when creating or reconfiguring a
  * topic using the AdminClient.
  *
- * <p>The intended pattern is for broker configs to include a <code>`log.`</code> prefix. For example, to set the default broker
+ * <p>The intended pattern is for broker configs to include a <code>log.</code> prefix. For example, to set the default broker
  * cleanup policy, one would set <code>log.cleanup.policy</code> instead of <code>cleanup.policy</code>. Unfortunately, there are many cases
  * where this pattern is not followed.
  */
@@ -87,13 +87,13 @@ public class TopicConfig {
 
     public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
     public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segment before it gets deleted. " +
-            "Default value is -2, it represents `retention.ms` value is to be used. The effective value should always be less than or equal " +
-            "to `retention.ms` value.";
+            "Default value is -2, it represents <code>retention.ms</code> value is to be used. The effective value should always be less than or equal " +
+            "to <code>retention.ms</code> value.";
 
     public static final String LOCAL_LOG_RETENTION_BYTES_CONFIG = "local.retention.bytes";
     public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
-            "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
-            "less than or equal to `retention.bytes` value.";
+            "deletes the old segments. Default value is -2, it represents <code>retention.bytes</code> value to be used. The effective value should always be " +
+            "less than or equal to <code>retention.bytes</code> value.";
 
     public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
     public static final String REMOTE_LOG_COPY_DISABLE_DOC = "Determines whether tiered data for a topic should become read only," +
@@ -104,7 +104,7 @@ public class TopicConfig {
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
             "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
-            "set `remote.storage.enable` from true to false";
+            "set <code>remote.storage.enable</code> from true to false";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
@@ -165,7 +165,7 @@ public class TopicConfig {
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
         "not in the ISR set to be elected as leader as a last resort, even though doing so may result in data " +
         "loss.<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election" +
-        "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
+        "thread to trigger election periodically (default is 5 minutes). Please run <code>kafka-leader-election.sh</code> with <code>unclean</code> option " +
          "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";

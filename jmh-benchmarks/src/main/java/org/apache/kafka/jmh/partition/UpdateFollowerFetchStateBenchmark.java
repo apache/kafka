@@ -24,9 +24,9 @@ import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.builders.LogManagerBuilder;
 
+import org.apache.kafka.common.PartitionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
@@ -55,7 +55,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -89,8 +88,8 @@ public class UpdateFollowerFetchStateBenchmark {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
         logManager = new LogManagerBuilder().
-            setLogDirs(Collections.singletonList(logDir)).
-            setInitialOfflineDirs(Collections.emptyList()).
+            setLogDirs(List.of(logDir)).
+            setInitialOfflineDirs(List.of()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
             setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
@@ -114,8 +113,7 @@ public class UpdateFollowerFetchStateBenchmark {
         replicas.add(0);
         replicas.add(1);
         replicas.add(2);
-        LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
-            .setControllerEpoch(0)
+        PartitionState partitionState = new PartitionState()
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(replicas)

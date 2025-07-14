@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseGroup;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartition;
@@ -99,27 +100,12 @@ public class OffsetFetchResponse extends AbstractResponse {
                     data.topics().add(newTopic);
 
                     topic.partitions().forEach(partition -> {
-                        OffsetFetchResponsePartition newPartition;
-
-                        if (version < TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION && group.errorCode() != Errors.NONE.code()) {
-                            // Versions prior to version 2 do not support a top level error. Therefore,
-                            // we put it at the partition level.
-                            newPartition = new OffsetFetchResponsePartition()
-                                .setPartitionIndex(partition.partitionIndex())
-                                .setErrorCode(group.errorCode())
-                                .setCommittedOffset(INVALID_OFFSET)
-                                .setMetadata(NO_METADATA)
-                                .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH);
-                        } else {
-                            newPartition = new OffsetFetchResponsePartition()
-                                .setPartitionIndex(partition.partitionIndex())
-                                .setErrorCode(partition.errorCode())
-                                .setCommittedOffset(partition.committedOffset())
-                                .setMetadata(partition.metadata())
-                                .setCommittedLeaderEpoch(partition.committedLeaderEpoch());
-                        }
-
-                        newTopic.partitions().add(newPartition);
+                        newTopic.partitions().add(new OffsetFetchResponsePartition()
+                            .setPartitionIndex(partition.partitionIndex())
+                            .setErrorCode(partition.errorCode())
+                            .setCommittedOffset(partition.committedOffset())
+                            .setMetadata(partition.metadata())
+                            .setCommittedLeaderEpoch(partition.committedLeaderEpoch()));
                     });
                 });
             }
@@ -238,5 +224,32 @@ public class OffsetFetchResponse extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 4;
+    }
+
+    public static OffsetFetchResponseData.OffsetFetchResponseGroup groupError(
+        OffsetFetchRequestData.OffsetFetchRequestGroup group,
+        Errors error,
+        int version
+    ) {
+        if (version >= TOP_LEVEL_ERROR_AND_NULL_TOPICS_MIN_VERSION) {
+            return new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId(group.groupId())
+                .setErrorCode(error.code());
+        } else {
+            return new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId(group.groupId())
+                .setTopics(group.topics().stream().map(topic ->
+                    new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                        .setName(topic.name())
+                        .setPartitions(topic.partitionIndexes().stream().map(partition ->
+                            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                .setPartitionIndex(partition)
+                                .setErrorCode(error.code())
+                                .setCommittedOffset(INVALID_OFFSET)
+                                .setMetadata(NO_METADATA)
+                                .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH)
+                        ).collect(Collectors.toList()))
+                ).collect(Collectors.toList()));
+        }
     }
 }

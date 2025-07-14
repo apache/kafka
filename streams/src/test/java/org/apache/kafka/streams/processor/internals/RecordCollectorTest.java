@@ -1947,7 +1947,7 @@ public class RecordCollectorTest {
             );
             collector.initialize();
 
-            collector.send(topic, "hello", "val", null, 0, null, (Serializer) errorSerializer, stringSerializer, sinkNodeName, context);
+            collector.send(topic, "hello", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
 
             assertNotNull(sourceRawData[0]);
             assertNotNull(sourceRawData[1]);
