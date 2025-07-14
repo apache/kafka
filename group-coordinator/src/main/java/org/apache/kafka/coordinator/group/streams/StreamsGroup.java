@@ -841,7 +841,7 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Check if rebalance is required, after config was changed
+     * Check which property was updated, and set {@link #rebalanceRequired} to true, if needed
      *
      * @param updatedProperties Properties that was updated
      */
