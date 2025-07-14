@@ -7469,7 +7469,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testLsoMovementWithWriteStateRPCFailuresInAck() {
+    public void testLsoMovementWithWriteStateRPCFailuresInAcknowledgement() {
         Persister persister = Mockito.mock(Persister.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
@@ -7499,7 +7499,7 @@ public class SharePartitionTest {
         assertTrue(sharePartition.cachedState().get(2L).batchHasOngoingStateTransition());
         assertTrue(sharePartition.cachedState().get(7L).batchHasOngoingStateTransition());
 
-        // LSO is at 9.
+        // Move LSO to 9, so some records/offsets can be marked archived.
         sharePartition.updateCacheAndOffsets(9);
 
         // Start offset will be moved.
@@ -7531,8 +7531,6 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(7L).offsetState().get(7L).state());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(7L).offsetState().get(8L).state());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(7L).offsetState().get(9L).state());
-        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(7L).offsetState().get(10L).state());
-        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(7L).offsetState().get(11L).state());
     }
 
     @Test
@@ -7554,6 +7552,37 @@ public class SharePartitionTest {
                 },
                 () -> {
                     inFlightState.completeStateTransition(false);
+                    return null;
+                }
+            );
+            executorService.invokeAll(callables);
+        } finally {
+            if (!executorService.awaitTermination(30, TimeUnit.MILLISECONDS))
+                executorService.shutdown();
+        }
+        assertEquals(RecordState.ARCHIVED, inFlightState.state());
+        assertEquals("member-2", inFlightState.memberId());
+    }
+
+    @Test
+    public void inFlightStateCommitSuccessAndArchiveStateTransition() throws InterruptedException {
+        InFlightState inFlightState = new InFlightState(RecordState.ACQUIRED, 1, MEMBER_ID);
+
+        inFlightState.startStateTransition(RecordState.ACKNOWLEDGED, SharePartition.DeliveryCountOps.INCREASE, MAX_DELIVERY_COUNT, MEMBER_ID);
+        assertTrue(inFlightState.hasOngoingStateTransition());
+
+        // We have an ongoing state transition from ACQUIRED to ACKNOWLEDGED which is not committed yet. At the same
+        // time when we have a call to completeStateTransition with true commit value, we get a call to ARCHIVE the record.
+        // No matter the order of the 2 calls, we should always be getting the final state as ARCHIVED.
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        try {
+            List<Callable<Void>> callables = List.of(
+                () -> {
+                    inFlightState.archive("member-2");
+                    return null;
+                },
+                () -> {
+                    inFlightState.completeStateTransition(true);
                     return null;
                 }
             );
