@@ -18,7 +18,8 @@ package kafka.server
 
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
-import org.apache.kafka.server.quota.QuotaType
+import org.apache.kafka.server.quota.{ClientQuotaManager, QuotaType}
+import org.apache.kafka.server.quota.ClientQuotaEntity
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -30,10 +31,13 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testRequestPercentageQuotaViolation(): Unit = {
     val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", Optional.empty())
+    val userEntity: ClientQuotaEntity.ConfigEntity = new ClientQuotaManager.UserEntity("ANONYMOUS")
+    val clientEntity: ClientQuotaEntity.ConfigEntity = new ClientQuotaManager.ClientIdEntity("test-client")
+
     clientRequestQuotaManager.updateQuota(
-      Some(ClientQuotaManager.UserEntity("ANONYMOUS")),
-      Some(ClientQuotaManager.ClientIdEntity("test-client")),
-      Some(Quota.upperBound(1))
+      Optional.of(userEntity),
+      Optional.of(clientEntity),
+      Optional.of(Quota.upperBound(1))
     )
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", QuotaType.REQUEST.toString, ""))
     def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientRequestQuotaManager.NANOS_TO_PERCENTAGE_PER_SECOND
@@ -59,12 +63,12 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
       throttle(clientRequestQuotaManager, "ANONYMOUS", "test-client", throttleTime, callback)
       assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       // After a request is delayed, the callback cannot be triggered immediately
-      clientRequestQuotaManager.throttledChannelReaper.doWork()
+      clientRequestQuotaManager.processThrottledChannelReaperDoWork()
       assertEquals(0, numCallbacks)
       time.sleep(throttleTime)
 
       // Callback can only be triggered after the delay time passes
-      clientRequestQuotaManager.throttledChannelReaper.doWork()
+      clientRequestQuotaManager.processThrottledChannelReaperDoWork()
       assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       assertEquals(1, numCallbacks)
 

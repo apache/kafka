@@ -522,7 +522,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
         boolean pass;
         try (final PrintStream resultStream = new PrintStream(byteArrayOutputStream)) {
-            pass = verifyTAgg(resultStream, inputs, events.get("tagg"), validationPredicate, printResults);
+            pass = true;
+            if (eosEnabled) {
+                // TAGG is computing "Count-by-count", which may produce keys that are not in the input data in ALOS, so we skip validation in this case.
+                pass = verifyTAgg(resultStream, inputs, events.get("tagg"), printResults);
+            }
             pass &= verifySuppressed(resultStream, "min-suppressed", events, printResults);
             pass &= verify(resultStream, "min-suppressed", inputs, events, windowedKey -> {
                 final String unwindowedKey = windowedKey.substring(1, windowedKey.length() - 1).replaceAll("@.*", "");
@@ -534,7 +538,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
             pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue(), Object::equals, printResults, eosEnabled);
             pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum, validationPredicate, printResults, eosEnabled);
             pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L, validationPredicate, printResults, eosEnabled);
-            pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg, validationPredicate, printResults, eosEnabled);
+            if (eosEnabled) {
+                // Average can overcount and undercount in ALOS, so we skip validation in that case.
+                pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg, Object::equals, printResults, eosEnabled);
+            }
         }
         return new VerificationResult(pass, new String(byteArrayOutputStream.toByteArray(), StandardCharsets.UTF_8));
     }
@@ -580,7 +587,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     if (printResults) {
                         resultStream.printf("\t inputEvents=%n%s%n\t" +
                                 "echoEvents=%n%s%n\tmaxEvents=%n%s%n\tminEvents=%n%s%n\tdifEvents=%n%s%n\tcntEvents=%n%s%n\ttaggEvents=%n%s%n",
-                            indent("\t\t", observedInputEvents.get(key)),
+                            indent("\t\t", observedInputEvents.getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("echo", emptyMap()).getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("max", emptyMap()).getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("min", emptyMap()).getOrDefault(key, new LinkedList<>())),
@@ -662,7 +669,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
     private static boolean verifyTAgg(final PrintStream resultStream,
                                       final Map<String, Set<Integer>> allData,
                                       final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents,
-                                      final BiPredicate<Number, Number> validationPredicate,
                                       final boolean printResults) {
         resultStream.println("verifying topic tagg");
         if (taggEvents == null) {
@@ -694,7 +700,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     expectedCount = 0L;
                 }
 
-                if (!validationPredicate.test(expectedCount, entry.getValue().getLast().value())) {
+                if (entry.getValue().getLast().value().longValue() != expectedCount) {
                     resultStream.println("fail: key=" + key + " tagg=" + entry.getValue() + " expected=" + expectedCount);
 
                     if (printResults)
