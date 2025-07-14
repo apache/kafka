@@ -519,7 +519,7 @@ public class MetadataLoaderTest {
      */
     @Test
     public void testKRaftVersionFinalizedLevelMetric() throws Exception {
-        MockFaultHandler faultHandler = new MockFaultHandler("testLoadEmptyBatch");
+        MockFaultHandler faultHandler = new MockFaultHandler("testKRaftVersionFinalizedLevelMetric");
         MockTime time = new MockTime();
         List<MockPublisher> publishers = List.of(new MockPublisher());
         try (MetadataLoader loader = new MetadataLoader.Builder().
@@ -529,6 +529,10 @@ public class MetadataLoaderTest {
             build()) {
             loader.installPublishers(publishers).get();
             loadTestSnapshot(loader, 200);
+            assertThrows(
+                NullPointerException.class,
+                () -> loader.metrics().finalizedFeatureLevel(KRaftVersion.FEATURE_NAME)
+            );
             publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
             MockBatchReader batchReader = new MockBatchReader(
                 300,
