@@ -36,6 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 public class GroupConfigManagerTest {
 
@@ -79,6 +81,20 @@ public class GroupConfigManagerTest {
         GroupConfig config = configOptional.get();
         assertEquals(50000, config.getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
         assertEquals(6000, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
+    }
+
+    @Test
+    public void testConfigUpdateListenerIsCalled() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        configManager.registerListener(groupMetadataManager);
+        String groupId = "foo";
+        Properties props = new Properties();
+        props.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        props.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, 6000);
+
+        configManager.updateGroupConfig(groupId, props);
+
+        verify(groupMetadataManager).onGroupConfigUpdate(groupId, props);
     }
 
     public static GroupConfigManager createConfigManager() {

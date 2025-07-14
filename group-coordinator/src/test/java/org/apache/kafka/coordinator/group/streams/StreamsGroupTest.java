@@ -52,7 +52,9 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,10 +64,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
@@ -1031,5 +1036,45 @@ public class StreamsGroupTest {
         // As soon as the group is empty, clear the shutdown requested state
         streamsGroup.removeMember(memberId2);
         assertEquals(Optional.empty(), streamsGroup.getShutdownRequestMemberId());
+    }
+
+    @ParameterizedTest
+    @MethodSource
+    void testoOnGroupConfigChanged(Properties updatedProperties, boolean expectedFlagState) {
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, "test-group", metricsShard);
+
+        streamsGroup.onGroupConfigChanged(updatedProperties);
+
+        assertEquals(expectedFlagState, streamsGroup.rebalanceRequired());
+    }
+
+    private static Stream<Arguments> testoOnGroupConfigChanged() {
+        return Stream.of(
+                Arguments.of(createProperties(Map.of(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1")), true),
+                Arguments.of(createProperties(Map.of("mock.property", "1")), false)
+        );
+    }
+
+    @Test
+    void testRebalanceRequiredResetFlag() {
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, "test-group", metricsShard);
+
+        streamsGroup.onGroupConfigChanged(createProperties(Map.of(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1")));
+
+        // reset flag
+        assertTrue(streamsGroup.rebalanceRequired());
+        assertFalse(streamsGroup.rebalanceRequired());
+    }
+
+    private static Properties createProperties(Map<String, String> props) {
+        Properties properties = new Properties();
+        properties.putAll(props);
+        return properties;
     }
 }
