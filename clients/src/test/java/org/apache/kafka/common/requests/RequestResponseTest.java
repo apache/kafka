@@ -157,6 +157,8 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.message.GetReplicaLogInfoRequestData;
+import org.apache.kafka.common.message.GetReplicaLogInfoResponseData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -324,7 +326,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 // This class performs tests requests and responses for all API keys
 public class RequestResponseTest {
@@ -496,12 +497,9 @@ public class RequestResponseTest {
         assertFalse(request.toString(true).contains("numPartitions"));
 
         request.clearPartitionRecords();
-        try {
-            request.data();
-            fail("dataOrException should fail after clearPartitionRecords()");
-        } catch (IllegalStateException e) {
-            // OK
-        }
+        assertThrows(IllegalStateException.class,
+            request::data,
+            "DataOrException should fail after clearPartitionRecords()");
 
         // `toString` should behave the same after `clearPartitionRecords`
         assertFalse(request.toString(false).contains("partitionSizes"));
@@ -730,6 +728,14 @@ public class RequestResponseTest {
         deserialized = (FetchRequest) AbstractRequest.parseRequest(FETCH, request.version(),
                 request.serialize()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
+    }
+
+    @Test
+    public void testJoinGroupRequestV0RebalanceTimeout() {
+        final short version = 0;
+        JoinGroupRequest jgr = createJoinGroupRequest(version);
+        JoinGroupRequest jgr2 = JoinGroupRequest.parse(jgr.serialize(), version);
+        assertEquals(jgr2.data().rebalanceTimeoutMs(), jgr.data().rebalanceTimeoutMs());
     }
 
     @Test
@@ -1071,6 +1077,7 @@ public class RequestResponseTest {
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
+            case GET_REPLICA_LOG_INFO: return createGetReplicaLogInfoRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1166,8 +1173,23 @@ public class RequestResponseTest {
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
+            case GET_REPLICA_LOG_INFO: return createGetReplicaLogInfoResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
+    }
+
+    private GetReplicaLogInfoRequest createGetReplicaLogInfoRequest(short version) {
+        GetReplicaLogInfoRequestData data = new GetReplicaLogInfoRequestData()
+                .setTopicPartitions(singletonList(new GetReplicaLogInfoRequestData.TopicPartitions()
+                .setPartitions(singletonList(0))));
+        return new GetReplicaLogInfoRequest.Builder(data).build(version);
+    }
+
+    private GetReplicaLogInfoResponse createGetReplicaLogInfoResponse() {
+        GetReplicaLogInfoResponseData data = new GetReplicaLogInfoResponseData();
+        data.setBrokerEpoch(0);
+        data.setTopicPartitionLogInfoList(singletonList(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()));
+        return new GetReplicaLogInfoResponse(data);
     }
 
     private ConsumerGroupDescribeRequest createConsumerGroupDescribeRequest(short version) {

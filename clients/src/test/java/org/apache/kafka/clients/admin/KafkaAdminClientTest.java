@@ -56,7 +56,6 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.DuplicateVoterException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
@@ -390,10 +389,10 @@ public class KafkaAdminClientTest {
             assertNull(cluster.controller());
         }
         assertEquals("Ek8tjqq1QBWfnaoyHFZqDg", cluster.clusterResource().clusterId());
-        assertEquals(new HashSet<>(asList(
+        assertEquals(Set.of(
             new Node(0, "controller0.com", 9092),
             new Node(1, "controller1.com", 9092),
-            new Node(2, "controller2.com", 9092))), new HashSet<>(cluster.nodes()));
+            new Node(2, "controller2.com", 9092)), new HashSet<>(cluster.nodes()));
     }
 
     @Test
@@ -1592,7 +1591,7 @@ public class KafkaAdminClientTest {
 
             Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
             TopicDescription topicDescription = topicDescriptions.get(topicName0);
-            assertEquals(new HashSet<>(asList(AclOperation.DESCRIBE, AclOperation.ALTER)),
+            assertEquals(Set.of(AclOperation.DESCRIBE, AclOperation.ALTER),
                     topicDescription.authorizedOperations());
         }
     }
@@ -2084,7 +2083,7 @@ public class KafkaAdminClientTest {
                         electionResults, ApiKeys.ELECT_LEADERS.latestVersion()));
                 ElectLeadersResult results = env.adminClient().electLeaders(
                         electionType,
-                        new HashSet<>(asList(topic1, topic2)));
+                        Set.of(topic1, topic2));
                 assertEquals(ClusterAuthorizationException.class, results.partitions().get().get(topic2).get().getClass());
 
                 // Test a call where there are no errors. By mutating the internal of election results
@@ -2096,14 +2095,14 @@ public class KafkaAdminClientTest {
 
                 env.kafkaClient().prepareResponse(new ElectLeadersResponse(0, Errors.NONE.code(), electionResults,
                         ApiKeys.ELECT_LEADERS.latestVersion()));
-                results = env.adminClient().electLeaders(electionType, new HashSet<>(asList(topic1, topic2)));
+                results = env.adminClient().electLeaders(electionType, Set.of(topic1, topic2));
                 assertFalse(results.partitions().get().get(topic1).isPresent());
                 assertFalse(results.partitions().get().get(topic2).isPresent());
 
                 // Now try a timeout
                 results = env.adminClient().electLeaders(
                         electionType,
-                        new HashSet<>(asList(topic1, topic2)),
+                        Set.of(topic1, topic2),
                         new ElectLeadersOptions().timeoutMs(100));
                 TestUtils.assertFutureThrows(TimeoutException.class, results.partitions());
             }
@@ -2127,7 +2126,7 @@ public class KafkaAdminClientTest {
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
                     broker0Resource,
                     broker1Resource)).values();
-            assertEquals(new HashSet<>(asList(broker0Resource, broker1Resource)), result.keySet());
+            assertEquals(Set.of(broker0Resource, broker1Resource), result.keySet());
             result.get(broker0Resource).get();
             result.get(broker1Resource).get();
         }
@@ -2149,7 +2148,7 @@ public class KafkaAdminClientTest {
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
                     brokerResource,
                     brokerLoggerResource)).values();
-            assertEquals(new HashSet<>(asList(brokerResource, brokerLoggerResource)), result.keySet());
+            assertEquals(Set.of(brokerResource, brokerLoggerResource), result.keySet());
             result.get(brokerResource).get();
             result.get(brokerLoggerResource).get();
         }
@@ -2168,7 +2167,7 @@ public class KafkaAdminClientTest {
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
                     topic,
                     topic2)).values();
-            assertEquals(new HashSet<>(asList(topic, topic2)), result.keySet());
+            assertEquals(Set.of(topic, topic2), result.keySet());
             result.get(topic);
             TestUtils.assertFutureThrows(ApiException.class, result.get(topic2));
         }
@@ -2189,7 +2188,7 @@ public class KafkaAdminClientTest {
                             .setConfigs(emptyList())))));
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(singletonList(
                     topic)).values();
-            assertEquals(new HashSet<>(singletonList(topic)), result.keySet());
+            assertEquals(Set.of(topic), result.keySet());
             assertNotNull(result.get(topic).get());
             assertNull(result.get(unrequested));
         }
@@ -2212,7 +2211,7 @@ public class KafkaAdminClientTest {
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
                 resource,
                 resource1)).values();
-            assertEquals(new HashSet<>(asList(resource, resource1)), result.keySet());
+            assertEquals(Set.of(resource, resource1), result.keySet());
             assertNotNull(result.get(resource).get());
             assertNotNull(result.get(resource1).get());
         }
@@ -2239,7 +2238,7 @@ public class KafkaAdminClientTest {
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
                 resource1,
                 resource2)).values();
-            assertEquals(new HashSet<>(asList(resource1, resource2)), result.keySet());
+            assertEquals(Set.of(resource1, resource2), result.keySet());
             assertNotNull(result.get(resource1).get());
             assertNotNull(result.get(resource2).get());
         }
@@ -2905,7 +2904,7 @@ public class KafkaAdminClientTest {
             assertEquals(env.cluster().clusterResource().clusterId(), result2.clusterId().get());
             assertEquals(new HashSet<>(env.cluster().nodes()), new HashSet<>(result2.nodes().get()));
             assertEquals(3, result2.controller().get().id());
-            assertEquals(new HashSet<>(asList(AclOperation.DESCRIBE, AclOperation.ALTER)),
+            assertEquals(Set.of(AclOperation.DESCRIBE, AclOperation.ALTER),
                 result2.authorizedOperations().get());
         }
     }
@@ -7922,7 +7921,7 @@ public class KafkaAdminClientTest {
                     .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
             env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(unknownTpData));
 
-            ListPartitionReassignmentsResult unknownTpResult = env.adminClient().listPartitionReassignments(new HashSet<>(asList(tp1, tp2)));
+            ListPartitionReassignmentsResult unknownTpResult = env.adminClient().listPartitionReassignments(Set.of(tp1, tp2));
             TestUtils.assertFutureThrows(UnknownTopicOrPartitionException.class, unknownTpResult.reassignments());
 
             // 3. Success
@@ -11352,6 +11351,28 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testAlterShareGroupOffsetsWithTopLevelError() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData().setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code()).setErrorMessage("Group authorization failed.");
+
+            TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
+            TopicPartition fooTopicPartition1 = new TopicPartition("foo", 1);
+            TopicPartition barPartition0 = new TopicPartition("bar", 0);
+            TopicPartition zooTopicPartition0 = new TopicPartition("zoo", 0);
+
+            env.kafkaClient().prepareResponse(new AlterShareGroupOffsetsResponse(data));
+            final AlterShareGroupOffsetsResult result = env.adminClient().alterShareGroupOffsets(GROUP_ID, Map.of(fooTopicPartition0, 1L, fooTopicPartition1, 2L, barPartition0, 1L));
+
+            TestUtils.assertFutureThrows(GroupAuthorizationException.class, result.all());
+            TestUtils.assertFutureThrows(GroupAuthorizationException.class, result.partitionResult(fooTopicPartition1));
+            TestUtils.assertFutureThrows(IllegalArgumentException.class, result.partitionResult(zooTopicPartition0));
+        }
+    }
+
+    @Test
     public void testAlterShareGroupOffsetsWithErrorInOnePartition() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -11359,7 +11380,8 @@ public class KafkaAdminClientTest {
 
             AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData().setResponses(
                 new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(List.of(
-                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0), new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(1).setErrorCode(Errors.NON_EMPTY_GROUP.code()).setErrorMessage("The group is not empty"))),
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0),
+                        new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(1).setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()).setErrorMessage("Topic authorization failed."))),
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
                 ).iterator())
             );
@@ -11371,9 +11393,9 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new AlterShareGroupOffsetsResponse(data));
             final AlterShareGroupOffsetsResult result = env.adminClient().alterShareGroupOffsets(GROUP_ID, Map.of(fooTopicPartition0, 1L, fooTopicPartition1, 2L, barPartition0, 1L));
 
-            TestUtils.assertFutureThrows(GroupNotEmptyException.class, result.all());
+            TestUtils.assertFutureThrows(TopicAuthorizationException.class, result.all());
             assertNull(result.partitionResult(fooTopicPartition0).get());
-            TestUtils.assertFutureThrows(GroupNotEmptyException.class, result.partitionResult(fooTopicPartition1));
+            TestUtils.assertFutureThrows(TopicAuthorizationException.class, result.partitionResult(fooTopicPartition1));
             assertNull(result.partitionResult(barPartition0).get());
         }
     }

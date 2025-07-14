@@ -34,7 +34,7 @@ public class SslConfigs {
         + "this config are dependent on the JVM. "
         + "Clients using the defaults for this config and 'ssl.enabled.protocols' will downgrade to 'TLSv1.2' if "
         + "the server does not support 'TLSv1.3'. If this config is set to 'TLSv1.2', however, clients will not use 'TLSv1.3' even "
-        + "if it is one of the values in `ssl.enabled.protocols` and the server only supports 'TLSv1.3'.";
+        + "if it is one of the values in <code>ssl.enabled.protocols</code> and the server only supports 'TLSv1.3'.";
 
     public static final String DEFAULT_SSL_PROTOCOL = "TLSv1.3";
 
@@ -49,12 +49,12 @@ public class SslConfigs {
     public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections. "
         + "The default is 'TLSv1.2,TLSv1.3'. This means that clients and servers will prefer TLSv1.3 if both support it "
         + "and fallback to TLSv1.2 otherwise (assuming both support at least TLSv1.2). This default should be fine for most use "
-        + "cases. Also see the config documentation for `ssl.protocol` to understand how it can impact the TLS version negotiation behavior.";
+        + "cases. Also see the config documentation for <code>ssl.protocol</code> to understand how it can impact the TLS version negotiation behavior.";
     public static final String DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.3";
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
     public static final String SSL_KEYSTORE_TYPE_DOC = "The file format of the key store file. "
-            + "This is optional for client. The values currently supported by the default `ssl.engine.factory.class` are [JKS, PKCS12, PEM].";
+            + "This is optional for client. The values currently supported by the default <code>ssl.engine.factory.class</code> are [JKS, PKCS12, PEM].";
     public static final String DEFAULT_SSL_KEYSTORE_TYPE = "JKS";
 
     public static final String SSL_KEYSTORE_KEY_CONFIG = "ssl.keystore.key";
@@ -84,7 +84,7 @@ public class SslConfigs {
         + "the PEM key specified in 'ssl.keystore.key'.";
 
     public static final String SSL_TRUSTSTORE_TYPE_CONFIG = "ssl.truststore.type";
-    public static final String SSL_TRUSTSTORE_TYPE_DOC = "The file format of the trust store file. The values currently supported by the default `ssl.engine.factory.class` are [JKS, PKCS12, PEM].";
+    public static final String SSL_TRUSTSTORE_TYPE_DOC = "The file format of the trust store file. The values currently supported by the default <code>ssl.engine.factory.class</code> are [JKS, PKCS12, PEM].";
     public static final String DEFAULT_SSL_TRUSTSTORE_TYPE = "JKS";
 
     public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";

@@ -52,6 +52,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -539,8 +540,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
-            log.info("Streams rebalance protocol enabled");
-
             final Optional<StreamsRebalanceData> streamsRebalanceData = Optional.of(
                 initStreamsRebalanceData(
                     processId,
@@ -1138,19 +1137,29 @@ public class StreamThread extends Thread implements ProcessingThread {
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
             if (streamsRebalanceData.isPresent()) {
-                final AsyncKafkaConsumer<byte[], byte[]> consumer = mainConsumer instanceof ConsumerWrapper
-                    ? ((ConsumerWrapper) mainConsumer).consumer()
-                    : (AsyncKafkaConsumer<byte[], byte[]>) mainConsumer;
-                consumer.subscribe(
-                    topologyMetadata.allFullSourceTopicNames(),
-                    new DefaultStreamsRebalanceListener(
-                        log,
-                        time,
-                        streamsRebalanceData.get(),
-                        this,
-                        taskManager
-                    )
-                );
+                if (mainConsumer instanceof ConsumerWrapper) {
+                    ((ConsumerWrapper) mainConsumer).subscribe(
+                        topologyMetadata.allFullSourceTopicNames(),
+                        new DefaultStreamsRebalanceListener(
+                            log,
+                            time,
+                            streamsRebalanceData.get(),
+                            this,
+                            taskManager
+                        )
+                    );
+                } else {
+                    ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
+                        topologyMetadata.allFullSourceTopicNames(),
+                        new DefaultStreamsRebalanceListener(
+                            log,
+                            time,
+                            streamsRebalanceData.get(),
+                            this,
+                            taskManager
+                        )
+                    );
+                }
             } else {
                 mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
             }
@@ -1528,6 +1537,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             for (final StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
                 if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
                     shutdownErrorHook.run();
+                } else if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code()) {
+                    final String errorMsg = String.format("Missing source topics: %s", status.statusDetail());
+                    log.error(errorMsg);
+                    throw new MissingSourceTopicException(errorMsg);
                 }
             }
 

@@ -37,12 +37,11 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
@@ -94,7 +93,7 @@ public class DelegationTokenCommand {
 
     public static DelegationToken createToken(Admin adminClient, DelegationTokenCommandOptions opts) throws ExecutionException, InterruptedException {
         List<KafkaPrincipal> renewerPrincipals = getPrincipals(opts, opts.renewPrincipalsOpt);
-        Long maxLifeTimeMs = opts.maxLifeTime();
+        long maxLifeTimeMs = opts.maxLifeTime();
 
         System.out.println("Calling create token operation with renewers :" + renewerPrincipals + " , max-life-time-period :" + maxLifeTimeMs);
         CreateDelegationTokenOptions createDelegationTokenOptions = new CreateDelegationTokenOptions().maxLifetimeMs(maxLifeTimeMs).renewers(renewerPrincipals);
@@ -142,7 +141,7 @@ public class DelegationTokenCommand {
 
     public static Long renewToken(Admin adminClient, DelegationTokenCommandOptions opts) throws ExecutionException, InterruptedException {
         String hmac = opts.hmac();
-        Long renewTimePeriodMs = opts.renewTimePeriod();
+        long renewTimePeriodMs = opts.renewTimePeriod();
 
         System.out.println("Calling renew token operation with hmac :" + hmac + " , renew-time-period :" + renewTimePeriodMs);
         RenewDelegationTokenResult renewResult = adminClient.renewDelegationToken(Base64.getDecoder().decode(hmac), new RenewDelegationTokenOptions().renewTimePeriodMs(renewTimePeriodMs));
@@ -154,7 +153,7 @@ public class DelegationTokenCommand {
 
     public static void expireToken(Admin adminClient, DelegationTokenCommandOptions opts) throws ExecutionException, InterruptedException {
         String hmac = opts.hmac();
-        Long expiryTimePeriodMs = opts.expiryTimePeriod();
+        long expiryTimePeriodMs = opts.expiryTimePeriod();
 
         System.out.println("Calling expire token operation with hmac :" + hmac + " , expire-time-period :" + expiryTimePeriodMs);
         ExpireDelegationTokenResult renewResult = adminClient.expireDelegationToken(Base64.getDecoder().decode(hmac), new ExpireDelegationTokenOptions().expiryTimePeriodMs(expiryTimePeriodMs));
@@ -299,10 +298,10 @@ public class DelegationTokenCommand {
             }
 
             // check invalid args
-            CommandLineUtils.checkInvalidArgs(parser, options, createOpt, new HashSet<>(Arrays.asList(hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, renewOpt, new HashSet<>(Arrays.asList(renewPrincipalsOpt, maxLifeTimeOpt, expiryTimePeriodOpt, ownerPrincipalsOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, expiryOpt, new HashSet<>(Arrays.asList(renewOpt, maxLifeTimeOpt, renewTimePeriodOpt, ownerPrincipalsOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, new HashSet<>(Arrays.asList(renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, createOpt, Set.of(hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, renewOpt, Set.of(renewPrincipalsOpt, maxLifeTimeOpt, expiryTimePeriodOpt, ownerPrincipalsOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, expiryOpt, Set.of(renewOpt, maxLifeTimeOpt, renewTimePeriodOpt, ownerPrincipalsOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set.of(renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt));
         }
     }
 }

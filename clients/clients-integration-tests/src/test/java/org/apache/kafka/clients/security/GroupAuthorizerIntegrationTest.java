@@ -44,7 +44,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -53,6 +52,7 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.test.TestUtils;
 
 import java.net.InetAddress;
 import java.time.Duration;
@@ -141,7 +141,9 @@ public class GroupAuthorizerIntegrationTest {
     }
 
     private void addAndVerifyAcls(Set<AccessControlEntry> acls, ResourcePattern resource, ClusterInstance clusterInstance) throws InterruptedException {
-        List<AclBinding> aclBindings = acls.stream().map(acl -> new AclBinding(resource, acl)).toList();
+        List<AclBinding> aclBindings = acls.stream()
+                .map(acl -> new AclBinding(resource, acl))
+                .toList();
         Authorizer authorizer = getAuthorizer(clusterInstance);
         authorizer.createAcls(ANONYMOUS_CONTEXT, aclBindings)
                 .forEach(future -> {
@@ -154,6 +156,29 @@ public class GroupAuthorizerIntegrationTest {
         AclBindingFilter aclBindingFilter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
         clusterInstance.waitAcls(aclBindingFilter, acls);
     }
+
+    private void removeAndVerifyAcls(Set<AccessControlEntry> deleteAcls, ResourcePattern resource, ClusterInstance clusterInstance) throws InterruptedException {
+        List<AclBindingFilter> aclBindingFilters = deleteAcls.stream()
+                .map(acl -> new AclBindingFilter(resource.toFilter(), acl.toFilter()))
+                .toList();
+        Authorizer authorizer = getAuthorizer(clusterInstance);
+        authorizer.deleteAcls(ANONYMOUS_CONTEXT, aclBindingFilters)
+                .forEach(future -> {
+                    try {
+                        future.toCompletableFuture().get();
+                    } catch (InterruptedException | ExecutionException e) {
+                        throw new RuntimeException("Failed to delete ACLs", e);
+                    }
+                });
+
+        AclBindingFilter aclBindingFilter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
+        TestUtils.waitForCondition(() -> {
+            Set<AccessControlEntry> remainingAclEntries = new HashSet<>();
+            authorizer.acls(aclBindingFilter).forEach(aclBinding -> remainingAclEntries.add(aclBinding.entry()));
+            return deleteAcls.stream().noneMatch(remainingAclEntries::contains);
+        }, "Failed to verify ACLs deletion");
+    }
+
 
     static final AuthorizableRequestContext ANONYMOUS_CONTEXT = new AuthorizableRequestContext() {
         @Override
@@ -254,16 +279,26 @@ public class GroupAuthorizerIntegrationTest {
     }
 
     @ClusterTest
+    public void testClassicConsumeUnsubscribeWithGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        testConsumeUnsubscribeWithOrWithoutGroupPermission(clusterInstance, GroupProtocol.CLASSIC, true);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumeUnsubscribeWithGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        testConsumeUnsubscribeWithOrWithoutGroupPermission(clusterInstance, GroupProtocol.CONSUMER, true);
+    }
+
+    @ClusterTest
     public void testClassicConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        testConsumeUnsubscribeWithGroupPermission(clusterInstance, GroupProtocol.CLASSIC);
+        testConsumeUnsubscribeWithOrWithoutGroupPermission(clusterInstance, GroupProtocol.CLASSIC, false);
     }
 
     @ClusterTest
     public void testAsyncConsumeUnsubscribeWithoutGroupPermission(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        testConsumeUnsubscribeWithGroupPermission(clusterInstance, GroupProtocol.CONSUMER);
+        testConsumeUnsubscribeWithOrWithoutGroupPermission(clusterInstance, GroupProtocol.CONSUMER, false);
     }
 
-    private void testConsumeUnsubscribeWithGroupPermission(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
+    private void testConsumeUnsubscribeWithOrWithoutGroupPermission(ClusterInstance clusterInstance, GroupProtocol groupProtocol, boolean withGroupPermission) throws InterruptedException, ExecutionException {
         setup(clusterInstance);
         String topic = "topic";
         String group = "group";
@@ -297,6 +332,13 @@ public class GroupAuthorizerIntegrationTest {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(15));
                 return records.count() == 1;
             }, "consumer failed to receive message");
+            if (!withGroupPermission) {
+                removeAndVerifyAcls(
+                        Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                        new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+                        clusterInstance
+                );
+            }
             assertDoesNotThrow(consumer::unsubscribe);
         }
     }

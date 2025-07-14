@@ -63,6 +63,7 @@ import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1838,6 +1839,42 @@ public class KafkaStreamsTest {
         assertThat(didAssertThreadOne.get(), equalTo(true));
         assertThat(didAssertThreadTwo.get(), equalTo(true));
         assertThat(didAssertGlobalThread.get(), equalTo(true));
+    }
+
+    @Test
+    public void shouldThrowIfPatternSubscriptionUsedWithStreamsProtocol() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2018");
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        // Simulate pattern subscription
+        final Topology topology = new Topology();
+        topology.addSource("source", java.util.regex.Pattern.compile("topic-.*"));
+
+        final UnsupportedOperationException ex = assertThrows(
+            UnsupportedOperationException.class,
+            () -> new KafkaStreams(topology, props)
+        );
+        assert ex.getMessage().contains("Pattern subscriptions are not supported with the STREAMS protocol");
+    }
+
+    @Test
+    public void shouldLogWarningIfNonDefaultClientSupplierUsedWithStreamsProtocol() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2018");
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        final Topology topology = new Topology();
+        topology.addSource("source", "topic");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class)) {
+            appender.setClassLogger(KafkaStreams.class, Level.WARN);
+            try (@SuppressWarnings("unused") final KafkaStreams ignored = new KafkaStreams(topology, new StreamsConfig(props), new MockClientSupplier())) {
+                assertTrue(appender.getMessages().stream()
+                    .anyMatch(msg -> msg.contains("A non-default kafka client supplier was supplied. " +
+                        "Note that supplying a custom main consumer is not supported with the STREAMS protocol.")));
+            }
+        }
     }
 
     private Topology getStatefulTopology(final String inputTopic,

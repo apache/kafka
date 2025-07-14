@@ -18,6 +18,7 @@
 package org.apache.kafka.common.test.junit;
 
 import kafka.server.ControllerServer;
+import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -44,7 +45,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.AutoStart;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -84,6 +84,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(types = {Type.KRAFT}, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
@@ -189,9 +190,9 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest(autoStart = AutoStart.NO)
     public void testNoAutoStart() {
-        Assertions.assertThrows(RuntimeException.class, clusterInstance::anyBrokerSocketServer);
+        Assertions.assertThrows(RuntimeException.class, () -> clusterInstance.brokers().values().stream().map(KafkaBroker::socketServer).findFirst());
         clusterInstance.start();
-        assertNotNull(clusterInstance.anyBrokerSocketServer());
+        assertTrue(clusterInstance.brokers().values().stream().map(KafkaBroker::socketServer).findFirst().isPresent());
     }
 
     @ClusterTest
@@ -302,7 +303,7 @@ public class ClusterTestExtensionsTest {
             producer.flush();
             consumer.subscribe(List.of(topic));
             List<ConsumerRecord<String, String>> records = new ArrayList<>();
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100)).forEach(records::add);
                 return records.size() == 1;
             }, "Failed to receive message");
@@ -330,7 +331,7 @@ public class ClusterTestExtensionsTest {
             producer.flush();
             consumer.subscribe(List.of(topic));
             List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100)).forEach(records::add);
                 return records.size() == 1;
             }, "Failed to receive message");
@@ -407,7 +408,7 @@ public class ClusterTestExtensionsTest {
         }
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
             consumer.subscribe(List.of(topic));
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
                 return records.count() == 1;
             }, "Failed to receive message");
@@ -438,7 +439,7 @@ public class ClusterTestExtensionsTest {
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(nonAdminConfig)) {
             consumer.subscribe(List.of(topic));
             AtomicBoolean hasException = new AtomicBoolean(false);
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 if (hasException.get()) {
                     return true;
                 }
@@ -476,7 +477,7 @@ public class ClusterTestExtensionsTest {
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(unknownUserConfig)) {
             consumer.subscribe(List.of(topic));
             AtomicBoolean hasException = new AtomicBoolean(false);
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 if (hasException.get()) {
                     return true;
                 }

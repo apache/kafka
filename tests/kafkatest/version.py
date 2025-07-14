@@ -62,9 +62,6 @@ class KafkaVersion(LooseVersion):
 
         return LooseVersion._cmp(self, other)
 
-    def acl_command_supports_bootstrap_server(self):
-        return self >= V_2_1_0
-
     def topic_command_supports_bootstrap_server(self):
         return self >= V_2_3_0
 
@@ -110,7 +107,7 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("4.1.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("4.2.0-SNAPSHOT")
 
 LATEST_STABLE_TRANSACTION_VERSION = 2
 # This should match the LATEST_PRODUCTION version defined in MetadataVersion.java

@@ -22,9 +22,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.unmodifiableSet;
-import static org.apache.kafka.common.utils.Utils.union;
-
 /**
  * Represents the state of a process in the group coordinator.
  * This includes the capacity of the process, the load on the process, and the tasks assigned to the process.
@@ -34,15 +31,18 @@ public class ProcessState {
     // number of members
     private int capacity;
     private double load;
+    private int taskCount;
+    private int activeTaskCount;
     private final Map<String, Integer> memberToTaskCounts;
     private final Map<String, Set<TaskId>> assignedActiveTasks;
     private final Map<String, Set<TaskId>> assignedStandbyTasks;
-
+    private final Set<TaskId> assignedTasks;
 
     ProcessState(final String processId) {
         this.processId = processId;
         this.capacity = 0;
         this.load = Double.MAX_VALUE;
+        this.assignedTasks = new HashSet<>();
         this.assignedActiveTasks = new HashMap<>();
         this.assignedStandbyTasks = new HashMap<>();
         this.memberToTaskCounts = new HashMap<>();
@@ -57,16 +57,16 @@ public class ProcessState {
         return capacity;
     }
 
-    public int totalTaskCount() {
-        return assignedStandbyTasks().size() + assignedActiveTasks().size();
-    }
-
     public double load() {
         return load;
     }
 
     public Map<String, Integer> memberToTaskCounts() {
         return memberToTaskCounts;
+    }
+
+    public int activeTaskCount() {
+        return activeTaskCount;
     }
 
     public Set<TaskId> assignedActiveTasks() {
@@ -90,7 +90,10 @@ public class ProcessState {
     }
 
     public void addTask(final String memberId, final TaskId taskId, final boolean isActive) {
+        taskCount += 1;
+        assignedTasks.add(taskId);
         if (isActive) {
+            activeTaskCount += 1;
             assignedActiveTasks.putIfAbsent(memberId, new HashSet<>());
             assignedActiveTasks.get(memberId).add(taskId);
         } else {
@@ -110,7 +113,7 @@ public class ProcessState {
         if (capacity <= 0) {
             this.load = -1;
         } else {
-            this.load = (double) totalTaskCount() / capacity;
+            this.load = (double) taskCount / capacity;
         }
     }
 
@@ -120,7 +123,7 @@ public class ProcessState {
     }
 
     public boolean hasCapacity() {
-        return totalTaskCount() < capacity;
+        return this.load < 1.0;
     }
 
     public int compareTo(final ProcessState other) {
@@ -132,18 +135,10 @@ public class ProcessState {
     }
 
     public boolean hasTask(final TaskId taskId) {
-        return assignedActiveTasks().contains(taskId) || assignedStandbyTasks().contains(taskId);    }
-
+        return assignedTasks.contains(taskId);
+    }
 
     Set<TaskId> assignedTasks() {
-        final Set<TaskId> assignedActiveTaskIds = assignedActiveTasks();
-        final Set<TaskId> assignedStandbyTaskIds = assignedStandbyTasks();
-        return unmodifiableSet(
-            union(
-                () -> new HashSet<>(assignedActiveTaskIds.size() + assignedStandbyTaskIds.size()),
-                assignedActiveTaskIds,
-                assignedStandbyTaskIds
-            )
-        );
+        return assignedTasks;
     }
 }

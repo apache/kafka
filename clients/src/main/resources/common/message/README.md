@@ -34,9 +34,7 @@ specifies the versions of the protocol that our code understands.  For example,
 specifying "0-2" indicates that we understand versions 0, 1, and 2.  You must
 always specify the highest message version which is supported.
 
-The only old message versions that are no longer supported are version 0 of
-MetadataRequest and MetadataResponse.  In general, since we adopted KIP-97,
-dropping support for old message versions is no longer allowed without a KIP.
+Dropping support for old message versions is no longer allowed without a KIP.
 Therefore, please be careful not to increase the lower end of the version
 support interval for any message.
 

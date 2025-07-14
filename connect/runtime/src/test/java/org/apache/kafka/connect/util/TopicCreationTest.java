@@ -33,12 +33,11 @@ import org.apache.kafka.connect.transforms.RegexRouter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.TopicConfig.CLEANUP_POLICY_COMPACT;
@@ -136,7 +135,7 @@ public class TopicCreationTest {
         assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
         assertEquals(topicCreation.defaultTopicGroup(), groups.get(DEFAULT_TOPIC_CREATION_GROUP));
         assertEquals(2, topicCreation.topicGroups().size());
-        assertEquals(new HashSet<>(Arrays.asList(FOO_GROUP, BAR_GROUP)), topicCreation.topicGroups().keySet());
+        assertEquals(Set.of(FOO_GROUP, BAR_GROUP), topicCreation.topicGroups().keySet());
         assertEquals(topicCreation.defaultTopicGroup(), topicCreation.findFirstGroup(FOO_TOPIC));
         topicCreation.addTopic(FOO_TOPIC);
         assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
@@ -300,7 +299,7 @@ public class TopicCreationTest {
         // verify topic creation group is instantiated correctly
         Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
         assertEquals(2, groups.size());
-        assertEquals(new HashSet<>(Arrays.asList(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP)), groups.keySet());
+        assertEquals(Set.of(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP), groups.keySet());
 
         // verify topic creation
         TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
@@ -365,7 +364,7 @@ public class TopicCreationTest {
         // verify topic creation group is instantiated correctly
         Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
         assertEquals(2, groups.size());
-        assertEquals(new HashSet<>(Arrays.asList(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP)), groups.keySet());
+        assertEquals(Set.of(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP), groups.keySet());
 
         // verify topic creation
         TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
@@ -442,7 +441,7 @@ public class TopicCreationTest {
         // verify topic creation group is instantiated correctly
         Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
         assertEquals(3, groups.size());
-        assertEquals(new HashSet<>(Arrays.asList(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP, BAR_GROUP)), groups.keySet());
+        assertEquals(Set.of(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP, BAR_GROUP), groups.keySet());
 
         // verify topic creation
         TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
@@ -466,7 +465,7 @@ public class TopicCreationTest {
         assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
         assertTrue(topicCreation.isTopicCreationRequired(BAR_TOPIC));
         assertEquals(2, topicCreation.topicGroups().size());
-        assertEquals(new HashSet<>(Arrays.asList(FOO_GROUP, BAR_GROUP)), topicCreation.topicGroups().keySet());
+        assertEquals(Set.of(FOO_GROUP, BAR_GROUP), topicCreation.topicGroups().keySet());
         assertEquals(fooGroup, topicCreation.findFirstGroup(FOO_TOPIC));
         assertEquals(barGroup, topicCreation.findFirstGroup(BAR_TOPIC));
         topicCreation.addTopic(FOO_TOPIC);
@@ -514,7 +513,7 @@ public class TopicCreationTest {
         assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
         assertEquals(groups.get(DEFAULT_TOPIC_CREATION_GROUP), topicCreation.defaultTopicGroup());
         assertEquals(2, topicCreation.topicGroups().size());
-        assertEquals(new HashSet<>(Arrays.asList(FOO_GROUP, BAR_GROUP)), topicCreation.topicGroups().keySet());
+        assertEquals(Set.of(FOO_GROUP, BAR_GROUP), topicCreation.topicGroups().keySet());
         assertEquals(topicCreation.defaultTopicGroup(), topicCreation.findFirstGroup(FOO_TOPIC));
         topicCreation.addTopic(FOO_TOPIC);
         assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
@@ -574,7 +573,7 @@ public class TopicCreationTest {
         // verify topic creation group is instantiated correctly
         Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
         assertEquals(3, groups.size());
-        assertEquals(new HashSet<>(Arrays.asList(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP, BAR_GROUP)), groups.keySet());
+        assertEquals(Set.of(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP, BAR_GROUP), groups.keySet());
 
         // verify topic creation
         TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
@@ -598,7 +597,7 @@ public class TopicCreationTest {
         assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
         assertTrue(topicCreation.isTopicCreationRequired(BAR_TOPIC));
         assertEquals(2, topicCreation.topicGroups().size());
-        assertEquals(new HashSet<>(Arrays.asList(FOO_GROUP, BAR_GROUP)), topicCreation.topicGroups().keySet());
+        assertEquals(Set.of(FOO_GROUP, BAR_GROUP), topicCreation.topicGroups().keySet());
         assertEquals(fooGroup, topicCreation.findFirstGroup(FOO_TOPIC));
         assertEquals(barGroup, topicCreation.findFirstGroup(BAR_TOPIC));
         topicCreation.addTopic(FOO_TOPIC);

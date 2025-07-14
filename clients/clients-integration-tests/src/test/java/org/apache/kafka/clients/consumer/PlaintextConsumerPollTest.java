@@ -17,17 +17,18 @@
 package org.apache.kafka.clients.consumer;
 
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.ClientsTestUtils.TestConsumerReassignmentListener;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
@@ -559,10 +560,11 @@ public class PlaintextConsumerPollTest {
 
             // Subscribe to different topic. This will trigger the delayed revocation exceeding rebalance timeout and get fenced
             consumer.subscribe(List.of(otherTopic), listener);
-            TestUtils.waitForCondition(() -> {
-                consumer.poll(Duration.ofMillis(100));
-                return rebalanceTimeoutExceeded.get();
-            }, "Timeout waiting for delayed callback to complete");
+            ClientsTestUtils.pollUntilTrue(
+                consumer,
+                rebalanceTimeoutExceeded::get,
+                "Timeout waiting for delayed callback to complete"
+            );
 
             // Verify consumer recovers after being fenced, being able to continue consuming.
             // (The member should automatically rejoin on the next poll, with the new topic as subscription)
