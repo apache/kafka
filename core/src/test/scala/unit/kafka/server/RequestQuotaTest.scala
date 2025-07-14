@@ -295,17 +295,17 @@ class RequestQuotaTest extends BaseRequestTest {
           FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 0, partitionMap)
 
         case ApiKeys.METADATA =>
-          new MetadataRequest.Builder(List(topic).asJava, true)
+          new MetadataRequest.Builder(util.List.of(topic), true)
 
         case ApiKeys.LIST_OFFSETS =>
           val topic = new ListOffsetsTopic()
             .setName(tp.topic)
-            .setPartitions(List(new ListOffsetsPartition()
+            .setPartitions(util.List.of(new ListOffsetsPartition()
               .setPartitionIndex(tp.partition)
               .setTimestamp(0L)
-              .setCurrentLeaderEpoch(15)).asJava)
+              .setCurrentLeaderEpoch(15)))
           ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-            .setTargetTimes(List(topic).asJava)
+            .setTargetTimes(util.List.of(topic))
 
         case ApiKeys.OFFSET_COMMIT =>
           OffsetCommitRequest.Builder.forTopicNames(
@@ -332,15 +332,15 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.OFFSET_FETCH =>
           OffsetFetchRequest.Builder.forTopicNames(
             new OffsetFetchRequestData()
-              .setGroups(List(
+              .setGroups(util.List.of(
                 new OffsetFetchRequestData.OffsetFetchRequestGroup()
                   .setGroupId("test-group")
-                  .setTopics(List(
+                  .setTopics(util.List.of(
                     new OffsetFetchRequestData.OffsetFetchRequestTopics()
                       .setName(tp.topic)
-                      .setPartitionIndexes(List[Integer](tp.partition).asJava)
-                  ).asJava)
-              ).asJava),
+                      .setPartitionIndexes(util.List.of[Integer](tp.partition))
+                  ))
+              )),
             false
           )
 
@@ -394,7 +394,7 @@ class RequestQuotaTest extends BaseRequestTest {
           )
 
         case ApiKeys.DESCRIBE_GROUPS =>
-          new DescribeGroupsRequest.Builder(new DescribeGroupsRequestData().setGroups(List("test-group").asJava))
+          new DescribeGroupsRequest.Builder(new DescribeGroupsRequestData().setGroups(util.List.of("test-group")))
 
         case ApiKeys.LIST_GROUPS =>
           new ListGroupsRequest.Builder(new ListGroupsRequestData())
@@ -441,14 +441,14 @@ class RequestQuotaTest extends BaseRequestTest {
           val epochs = new OffsetForLeaderTopicCollection()
           epochs.add(new OffsetForLeaderTopic()
             .setTopic(tp.topic())
-            .setPartitions(List(new OffsetForLeaderPartition()
+            .setPartitions(util.List.of(new OffsetForLeaderPartition()
               .setPartition(tp.partition())
               .setLeaderEpoch(0)
-              .setCurrentLeaderEpoch(15)).asJava))
+              .setCurrentLeaderEpoch(15))))
           OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs)
 
         case ApiKeys.ADD_PARTITIONS_TO_TXN =>
-          AddPartitionsToTxnRequest.Builder.forClient("test-transactional-id", 1, 0, List(tp).asJava)
+          AddPartitionsToTxnRequest.Builder.forClient("test-transactional-id", 1, 0, util.List.of(tp))
 
         case ApiKeys.ADD_OFFSETS_TO_TXN =>
           new AddOffsetsToTxnRequest.Builder(new AddOffsetsToTxnRequestData()
@@ -476,7 +476,7 @@ class RequestQuotaTest extends BaseRequestTest {
             "test-txn-group",
             2,
             0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava,
+            util.Map.of[TopicPartition, TxnOffsetCommitRequest.CommittedOffset],
             true
           )
 
@@ -604,7 +604,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new DescribeClientQuotasRequest.Builder(ClientQuotaFilter.all())
 
         case ApiKeys.ALTER_CLIENT_QUOTAS =>
-          new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
+          new AlterClientQuotasRequest.Builder(util.List.of, false)
 
         case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS =>
           new DescribeUserScramCredentialsRequest.Builder(new DescribeUserScramCredentialsRequestData())
@@ -639,7 +639,7 @@ class RequestQuotaTest extends BaseRequestTest {
             "client-id",
             0
           )
-          val embedRequestData = new AlterClientQuotasRequest.Builder(List.empty.asJava, false).build()
+          val embedRequestData = new AlterClientQuotasRequest.Builder(util.List.of, false).build()
             .serializeWithHeader(requestHeader)
           new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
             InetAddress.getByName("192.168.1.1").getAddress)
@@ -649,9 +649,9 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.DESCRIBE_PRODUCERS =>
           new DescribeProducersRequest.Builder(new DescribeProducersRequestData()
-            .setTopics(List(new DescribeProducersRequestData.TopicRequest()
+            .setTopics(util.List.of(new DescribeProducersRequestData.TopicRequest()
               .setName("test-topic")
-              .setPartitionIndexes(List(1, 2, 3).map(Int.box).asJava)).asJava))
+              .setPartitionIndexes(util.List.of[Integer](1, 2, 3)))))
 
         case ApiKeys.BROKER_REGISTRATION =>
           new BrokerRegistrationRequest.Builder(new BrokerRegistrationRequestData())
@@ -664,7 +664,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.DESCRIBE_TRANSACTIONS =>
           new DescribeTransactionsRequest.Builder(new DescribeTransactionsRequestData()
-            .setTransactionalIds(List("test-transactional-id").asJava))
+            .setTransactionalIds(util.List.of("test-transactional-id")))
 
         case ApiKeys.LIST_TRANSACTIONS =>
           new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
@@ -909,9 +909,12 @@ object RequestQuotaTest {
 
   class KraftTestAuthorizer extends StandardAuthorizer {
     override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
-      actions.asScala.map { _ =>
-        if (requestContext.principal != UnauthorizedPrincipal) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED
-      }.asJava
+      val results = new util.ArrayList[AuthorizationResult]()
+      actions.forEach(_ => {
+        val result = if (requestContext.principal != UnauthorizedPrincipal) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED
+        results.add(result)
+      })
+      results
     }
   }
 
