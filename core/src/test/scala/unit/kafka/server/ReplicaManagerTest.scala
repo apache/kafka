@@ -3603,6 +3603,7 @@ class ReplicaManagerTest {
     val tidp1 = new TopicIdPartition(topicId, tp1)
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false))
+    when(replicaManager.logManager.getOrCreateLog(tp0, isNew = false, isFuture = false, Optional.empty(), None).topicId()).thenReturn(Optional.of(topicId))
 
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
