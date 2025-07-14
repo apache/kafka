@@ -48,12 +48,12 @@ public class RoundRobinPartitioner implements Partitioner {
     /**
      * Compute the partition for the given record.
      *
-     * @param topic      The topic name
-     * @param key        The key to partition on (or null if no key)
-     * @param keyBytes   serialized key to partition on (or null if no key)
-     * @param value      The value to partition on or null
+     * @param topic The topic name
+     * @param key The key to partition on (or null if no key)
+     * @param keyBytes serialized key to partition on (or null if no key)
+     * @param value The value to partition on or null
      * @param valueBytes serialized value to partition on or null
-     * @param cluster    The current cluster metadata
+     * @param cluster The current cluster metadata
      */
     @Override
     public int partition(
