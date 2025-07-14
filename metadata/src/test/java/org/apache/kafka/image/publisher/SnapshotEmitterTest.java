@@ -21,10 +21,10 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.FakeSnapshotWriter;
 import org.apache.kafka.image.MetadataImageTest;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import org.junit.jupiter.api.Test;
@@ -124,6 +124,11 @@ public class SnapshotEmitterTest {
         @Override
         public KRaftVersion kraftVersion() {
             return KRaftVersion.KRAFT_VERSION_0;
+        }
+
+        @Override
+        public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
+            // nothing to do
         }
 
         @Override

@@ -60,6 +60,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
+import static org.apache.kafka.common.requests.ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1143,6 +1144,60 @@ public class StreamsMembershipManagerTest {
         testLeaveGroupWhenNotInGroup(membershipManager::leaveGroupOnClose);
     }
 
+    @Test
+    public void testIgnoreLeaveResponseWhenNotLeavingGroup() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        final CompletableFuture<Void> onTasksAssignedCallbackExecutedSetup =
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of());
+        acknowledging(onTasksAssignedCallbackExecutedSetup);
+        stable();
+
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+        final CompletableFuture<Void> onTasksRevokedCallbackExecutedSetup =
+            verifyOnTasksRevokedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks);
+        onTasksRevokedCallbackExecutedSetup.complete(null);
+
+        // Send leave request, transitioning to UNSUBSCRIBED state
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+
+        // Receive a previous heartbeat response, which should be ignored
+        membershipManager.onHeartbeatSuccess(new StreamsGroupHeartbeatResponse(
+            new StreamsGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(MEMBER_EPOCH)
+        ));
+        assertFalse(leaveResult.isDone());
+
+        // Receive a leave heartbeat response, which should unblock the consumer
+        membershipManager.onHeartbeatSuccess(new StreamsGroupHeartbeatResponse(
+            new StreamsGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+        ));
+        assertTrue(leaveResult.isDone());
+
+        // Consumer unblocks and updates subscription
+        membershipManager.onSubscriptionUpdated();
+        membershipManager.onConsumerPoll();
+
+        membershipManager.onHeartbeatSuccess(new StreamsGroupHeartbeatResponse(
+            new StreamsGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+        ));
+
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        assertEquals(0, membershipManager.memberEpoch());
+    }
+
     private void testLeaveGroupWhenNotInGroup(final Supplier<CompletableFuture<Void>> leaveGroup) {
         final CompletableFuture<Void> future = leaveGroup.get();
 
@@ -1216,10 +1271,18 @@ public class StreamsMembershipManagerTest {
         assertEquals(onGroupLeft, onGroupLeftAfterRevocationCallback);
         membershipManager.onHeartbeatRequestGenerated();
         verifyInStateUnsubscribed(membershipManager);
+
+        // Don't unblock unsubscribe if this is not a leave group response
         membershipManager.onHeartbeatSuccess(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0), MEMBER_EPOCH + 1));
+
+        assertFalse(onGroupLeft.isDone());
+        verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
+
+        // Unblock unsubscribe when this is not a leave group response
+        membershipManager.onHeartbeatSuccess(makeHeartbeatResponse(List.of(), List.of(), List.of(), LEAVE_GROUP_MEMBER_EPOCH));
+
         assertTrue(onGroupLeft.isDone());
         assertFalse(onGroupLeft.isCompletedExceptionally());
-        verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
     }
 
     @Test
@@ -1252,10 +1315,18 @@ public class StreamsMembershipManagerTest {
         assertFalse(onGroupLeft.isDone());
         membershipManager.onHeartbeatRequestGenerated();
         verifyInStateUnsubscribed(membershipManager);
+
+        // Don't unblock unsubscribe if this is not a leave group response
         membershipManager.onHeartbeatSuccess(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0), MEMBER_EPOCH + 1));
+
+        assertFalse(onGroupLeft.isDone());
+        verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
+
+        // Unblock unsubscribe when this is not a leave group response
+        membershipManager.onHeartbeatSuccess(makeHeartbeatResponse(List.of(), List.of(), List.of(), LEAVE_GROUP_MEMBER_EPOCH));
+
         assertTrue(onGroupLeft.isDone());
         assertFalse(onGroupLeft.isCompletedExceptionally());
-        verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
     }
 
     @Test

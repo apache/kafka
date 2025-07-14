@@ -47,6 +47,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
+import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -994,12 +995,14 @@ public class ShareConsumeRequestManagerTest {
 
         // Verify the builder data for node0.
         assertEquals(1, builder1.data().topics().size());
-        assertEquals(tip0.topicId(), builder1.data().topics().get(0).topicId());
-        assertEquals(1, builder1.data().topics().get(0).partitions().size());
-        assertEquals(0, builder1.data().topics().get(0).partitions().get(0).partitionIndex());
-        assertEquals(1, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().size());
-        assertEquals(0L, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).firstOffset());
-        assertEquals(2L, builder1.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).lastOffset());
+        ShareFetchRequestData.FetchTopic fetchTopic = builder1.data().topics().stream().findFirst().get();
+        assertEquals(tip0.topicId(), fetchTopic.topicId());
+        assertEquals(1, fetchTopic.partitions().size());
+        ShareFetchRequestData.FetchPartition fetchPartition = fetchTopic.partitions().stream().findFirst().get();
+        assertEquals(0, fetchPartition.partitionIndex());
+        assertEquals(1, fetchPartition.acknowledgementBatches().size());
+        assertEquals(0L, fetchPartition.acknowledgementBatches().get(0).firstOffset());
+        assertEquals(2L, fetchPartition.acknowledgementBatches().get(0).lastOffset());
 
         assertEquals(1, builder1.data().forgottenTopicsData().size());
         assertEquals(tip0.topicId(), builder1.data().forgottenTopicsData().get(0).topicId());
@@ -1008,9 +1011,10 @@ public class ShareConsumeRequestManagerTest {
 
         // Verify the builder data for node1.
         assertEquals(1, builder2.data().topics().size());
-        assertEquals(tip1.topicId(), builder2.data().topics().get(0).topicId());
-        assertEquals(1, builder2.data().topics().get(0).partitions().size());
-        assertEquals(1, builder2.data().topics().get(0).partitions().get(0).partitionIndex());
+        fetchTopic = builder2.data().topics().stream().findFirst().get();
+        assertEquals(tip1.topicId(), fetchTopic.topicId());
+        assertEquals(1, fetchTopic.partitions().size());
+        assertEquals(1, fetchTopic.partitions().stream().findFirst().get().partitionIndex());
     }
 
     @Test
@@ -1049,9 +1053,10 @@ public class ShareConsumeRequestManagerTest {
         ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
 
         assertEquals(1, builder.data().topics().size());
-        assertEquals(tip1.topicId(), builder.data().topics().get(0).topicId());
-        assertEquals(1, builder.data().topics().get(0).partitions().size());
-        assertEquals(1, builder.data().topics().get(0).partitions().get(0).partitionIndex());
+        ShareFetchRequestData.FetchTopic fetchTopic = builder.data().topics().stream().findFirst().get();
+        assertEquals(tip1.topicId(), fetchTopic.topicId());
+        assertEquals(1, fetchTopic.partitions().size());
+        assertEquals(1, fetchTopic.partitions().stream().findFirst().get().partitionIndex());
         assertEquals(0, builder.data().forgottenTopicsData().size());
     }
 
@@ -1402,8 +1407,49 @@ public class ShareConsumeRequestManagerTest {
 
         shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), Collections.emptyMap());
 
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(1, builder.data().topics().size());
+        // We should not add the acknowledgements as part of the request.
+        assertEquals(0, builder.data().topics().find(tip0.topicId()).partitions().find(0).acknowledgementBatches().size());
+
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+    }
+
+    @Test
+    public void testPiggybackAcknowledgementsOnInitialShareSessionErrorSubscriptionChange() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(singleton(tp0));
         sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
 
+        fetchRecords();
+
+        // Simulate a broker restart, but no leader change, this resets share session epoch to 0.
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+        client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.SHARE_SESSION_NOT_FOUND));
+        networkClientDelegate.poll(time.timer(0));
+
+        // Simulate a metadata update with no topics in the response.
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Collections.emptyMap(),
+                        tp -> validLeaderEpoch, null, false));
+
+        // The acknowledgements for the initial fetch from tip0 are processed now and sent to the background thread.
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), Collections.emptyMap());
+
+        assertEquals(0, completedAcknowledgements.size());
+
+        // Next fetch would not include any acknowledgements.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(0, pollResult.unsentRequests.size());
+
+        // We should fail any waiting acknowledgements for tip-0 as it would have a share session epoch equal to 0.
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
         assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }

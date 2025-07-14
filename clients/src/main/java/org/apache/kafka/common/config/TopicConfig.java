@@ -21,7 +21,7 @@ package org.apache.kafka.common.config;
  * <p>Keys that can be used to configure a topic. These keys are useful when creating or reconfiguring a
  * topic using the AdminClient.
  *
- * <p>The intended pattern is for broker configs to include a <code>`log.`</code> prefix. For example, to set the default broker
+ * <p>The intended pattern is for broker configs to include a <code>log.</code> prefix. For example, to set the default broker
  * cleanup policy, one would set <code>log.cleanup.policy</code> instead of <code>cleanup.policy</code>. Unfortunately, there are many cases
  * where this pattern is not followed.
  */
@@ -87,13 +87,13 @@ public class TopicConfig {
 
     public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
     public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segment before it gets deleted. " +
-            "Default value is -2, it represents `retention.ms` value is to be used. The effective value should always be less than or equal " +
-            "to `retention.ms` value.";
+            "Default value is -2, it represents <code>retention.ms</code> value is to be used. The effective value should always be less than or equal " +
+            "to <code>retention.ms</code> value.";
 
     public static final String LOCAL_LOG_RETENTION_BYTES_CONFIG = "local.retention.bytes";
     public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
-            "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
-            "less than or equal to `retention.bytes` value.";
+            "deletes the old segments. Default value is -2, it represents <code>retention.bytes</code> value to be used. The effective value should always be " +
+            "less than or equal to <code>retention.bytes</code> value.";
 
     public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
     public static final String REMOTE_LOG_COPY_DISABLE_DOC = "Determines whether tiered data for a topic should become read only," +
@@ -104,17 +104,19 @@ public class TopicConfig {
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
             "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
-            "set `remote.storage.enable` from true to false";
+            "set <code>remote.storage.enable</code> from true to false";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
         "The largest record batch size allowed by Kafka (after compression if compression is enabled).";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
-    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently " +
-        "Kafka adds an index entry to its offset index. The default setting ensures that we index a " +
-        "message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
-        "position in the log but makes the index larger. You probably don't need to change this.";
+    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently Kafka " +
+            "adds entries to its offset index and, conditionally, to its time index. " +
+            "The default setting ensures that we index a message roughly every 4096 bytes. " +
+            "More frequent indexing allows reads to jump closer to the exact position in the log " +
+            "but results in larger index files. You probably don't need to change this." +
+            "<p> Note: the time index will be inserted only when the timestamp is greater than the last indexed timestamp.</p>";
 
     public static final String FILE_DELETE_DELAY_MS_CONFIG = "file.delete.delay.ms";
     public static final String FILE_DELETE_DELAY_MS_DOC = "The time to wait before deleting a file from the " +
@@ -163,14 +165,17 @@ public class TopicConfig {
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
         "not in the ISR set to be elected as leader as a last resort, even though doing so may result in data " +
         "loss.<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election" +
-        "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
+        "thread to trigger election periodically (default is 5 minutes). Please run <code>kafka-leader-election.sh</code> with <code>unclean</code> option " +
          "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
-    public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
-        "this configuration specifies the minimum number of replicas that must acknowledge " +
-        "a write for the write to be considered successful. If this minimum cannot be met, " +
-        "then the producer will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
+    public static final String MIN_IN_SYNC_REPLICAS_DOC = "Specifies the <i>minimum</i> number of in-sync replicas (including the leader) " +
+        "required for a write to succeed when a producer sets <code>acks</code> to \"all\" (or \"-1\"). In the <code>acks=all</code> " +
+        "case, every in-sync replica must acknowledge a write for it to be considered successful. E.g., if a topic has " +
+        "<code>replication.factor</code> of 3 and the ISR set includes all three replicas, then all three replicas must acknowledge an " +
+        "<code>acks=all</code> write for it to succeed, even if <code>min.insync.replicas</code> happens to be less than 3. " +
+        "If <code>acks=all</code> and the current ISR set contains fewer than <code>min.insync.replicas</code> members, then the producer " +
+        "will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
         "Regardless of the <code>acks</code> setting, the messages will not be visible to the consumers until " +
         "they are replicated to all in-sync replicas and the <code>min.insync.replicas</code> condition is met.<br> " +
         "When used together, <code>min.insync.replicas</code> and <code>acks</code> allow you to enforce greater durability guarantees. " +

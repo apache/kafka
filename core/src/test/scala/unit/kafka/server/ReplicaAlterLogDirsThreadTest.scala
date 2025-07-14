@@ -18,7 +18,6 @@ package kafka.server
 
 import kafka.cluster.Partition
 import kafka.log.LogManager
-import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.ReplicaAlterLogDirsThread.ReassignmentState
 import kafka.server.metadata.KRaftMetadataCache
@@ -30,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.common
+import org.apache.kafka.server.{PartitionFetchState, ReplicaState, common}
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
@@ -574,13 +573,13 @@ class ReplicaAlterLogDirsThreadTest {
       null,
       config.replicaFetchBackoffMs)
 
-    val result = thread.leader.fetchEpochEndOffsets(Map(
-      t1p0 -> new OffsetForLeaderPartition()
+    val result = thread.leader.fetchEpochEndOffsets(java.util.Map.of(
+      t1p0, new OffsetForLeaderPartition()
         .setPartition(t1p0.partition)
         .setLeaderEpoch(leaderEpochT1p0),
-      t1p1 -> new OffsetForLeaderPartition()
+      t1p1, new OffsetForLeaderPartition()
         .setPartition(t1p1.partition)
-        .setLeaderEpoch(leaderEpochT1p1)))
+        .setLeaderEpoch(leaderEpochT1p1))).asScala
 
     val expected = Map(
       t1p0 -> new EpochEndOffset()
@@ -636,13 +635,13 @@ class ReplicaAlterLogDirsThreadTest {
       null,
       config.replicaFetchBackoffMs)
 
-    val result = thread.leader.fetchEpochEndOffsets(Map(
-      t1p0 -> new OffsetForLeaderPartition()
+    val result = thread.leader.fetchEpochEndOffsets(java.util.Map.of(
+      t1p0, new OffsetForLeaderPartition()
         .setPartition(t1p0.partition)
         .setLeaderEpoch(leaderEpoch),
-      t1p1 -> new OffsetForLeaderPartition()
+      t1p1, new OffsetForLeaderPartition()
         .setPartition(t1p1.partition)
-        .setLeaderEpoch(leaderEpoch)))
+        .setLeaderEpoch(leaderEpoch))).asScala
 
     val expected = Map(
       t1p0 -> new EpochEndOffset()
@@ -1083,14 +1082,15 @@ class ReplicaAlterLogDirsThreadTest {
       t1p0 -> initialFetchState(0L, leaderEpoch),
       t1p1 -> initialFetchState(0L, leaderEpoch)))
 
-    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.leader.buildFetch(Map(
-      t1p0 -> PartitionFetchState(Some(topicId), 150, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty),
-      t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty)))
-
-    assertTrue(fetchRequestOpt.isDefined)
+    val result = thread.leader.buildFetch(java.util.Map.of(
+      t1p0, new PartitionFetchState(Optional.of(topicId), 150, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.FETCHING, Optional.empty),
+      t1p1, new PartitionFetchState(Optional.of(topicId), 160, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.FETCHING, Optional.empty)))
+    val fetchRequestOpt = result.result
+    val partitionsWithError = result.partitionsWithError
+    assertTrue(fetchRequestOpt.isPresent)
     val fetchRequest = fetchRequestOpt.get.fetchRequest
     assertFalse(fetchRequest.fetchData.isEmpty)
-    assertFalse(partitionsWithError.nonEmpty)
+    assertTrue(partitionsWithError.isEmpty)
     val request = fetchRequest.build()
     assertEquals(0, request.minBytes)
     val fetchInfos = request.fetchData(topicNames.asJava).asScala.toSeq
@@ -1138,39 +1138,54 @@ class ReplicaAlterLogDirsThreadTest {
       t1p1 -> initialFetchState(0L, leaderEpoch)))
 
     // one partition is ready and one is truncating
-    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.leader.buildFetch(Map(
-        t1p0 -> PartitionFetchState(Some(topicId), 150, None, leaderEpoch, state = Fetching, lastFetchedEpoch = Optional.empty),
-        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, state = Truncating, lastFetchedEpoch = Optional.empty)))
+    val result1 = thread.leader.buildFetch(java.util.Map.of(
+      t1p0, new PartitionFetchState(Optional.of(topicId), 150, Optional.empty(), leaderEpoch, Optional.empty(),
+        ReplicaState.FETCHING, Optional.empty()),
+      t1p1, new PartitionFetchState(Optional.of(topicId), 160, Optional.empty(), leaderEpoch, Optional.empty(),
+        ReplicaState.TRUNCATING, Optional.empty())
+    ))
+    val fetchRequestOpt1 = result1.result
+    val partitionsWithError1 = result1.partitionsWithError
 
-    assertTrue(fetchRequestOpt.isDefined)
-    val fetchRequest = fetchRequestOpt.get
-    assertFalse(fetchRequest.partitionData.isEmpty)
-    assertFalse(partitionsWithError.nonEmpty)
+    assertTrue(fetchRequestOpt1.isPresent)
+    val fetchRequest = fetchRequestOpt1.get
+    assertFalse(fetchRequest.fetchRequest.fetchData.isEmpty)
+    assertTrue(partitionsWithError1.isEmpty)
     val fetchInfos = fetchRequest.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos.length)
     assertEquals(t1p0, fetchInfos.head._1.topicPartition, "Expected fetch request for non-truncating partition")
     assertEquals(150, fetchInfos.head._2.fetchOffset)
 
     // one partition is ready and one is delayed
-    val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.leader.buildFetch(Map(
-        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, state = Fetching, lastFetchedEpoch = Optional.empty),
-        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = Optional.empty)))
+    val result2 = thread.leader.buildFetch(java.util.Map.of(
+      t1p0, new PartitionFetchState(Optional.of(topicId), 140, Optional.empty(), leaderEpoch, Optional.empty(),
+        ReplicaState.FETCHING, Optional.empty()),
+      t1p1, new PartitionFetchState(Optional.of(topicId), 160, Optional.empty(), leaderEpoch, Optional.of(5000L),
+        ReplicaState.FETCHING, Optional.empty())
+    ))
+    val fetchRequest2Opt = result2.result
+    val partitionsWithError2 = result2.partitionsWithError
 
-    assertTrue(fetchRequest2Opt.isDefined)
+    assertTrue(fetchRequest2Opt.isPresent)
     val fetchRequest2 = fetchRequest2Opt.get
-    assertFalse(fetchRequest2.partitionData.isEmpty)
-    assertFalse(partitionsWithError2.nonEmpty)
+    assertFalse(fetchRequest2.fetchRequest.fetchData().isEmpty)
+    assertTrue(partitionsWithError2.isEmpty())
     val fetchInfos2 = fetchRequest2.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos2.length)
     assertEquals(t1p0, fetchInfos2.head._1.topicPartition, "Expected fetch request for non-delayed partition")
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
 
     // both partitions are delayed
-    val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.leader.buildFetch(Map(
-        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = Optional.empty),
-        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = Optional.empty)))
+    val result3 = thread.leader.buildFetch(java.util.Map.of(
+      t1p0, new PartitionFetchState(Optional.of(topicId), 140, Optional.empty(), leaderEpoch, Optional.of(5000L),
+        ReplicaState.FETCHING, Optional.empty()),
+      t1p1, new PartitionFetchState(Optional.of(topicId), 160, Optional.empty(), leaderEpoch, Optional.of(5000L),
+        ReplicaState.FETCHING, Optional.empty())
+    ))
+    val fetchRequest3Opt = result3.result
+    val partitionsWithError3 = result3.partitionsWithError
     assertTrue(fetchRequest3Opt.isEmpty, "Expected no fetch requests since all partitions are delayed")
-    assertFalse(partitionsWithError3.nonEmpty)
+    assertTrue(partitionsWithError3.isEmpty())
   }
 
   def stub(logT1p0: UnifiedLog, logT1p1: UnifiedLog, futureLog: UnifiedLog, partition: Partition,

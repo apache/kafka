@@ -54,7 +54,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -100,7 +99,7 @@ public class AuthorizerBenchmark {
         // most map entries. In such cases, we rely on the filtering based on `String.startsWith`
         // to return the matching ACLs. Using a more efficient data structure (e.g. a prefix
         // tree) should improve performance significantly.
-        actions = Collections.singletonList(new Action(AclOperation.WRITE,
+        actions = List.of(new Action(AclOperation.WRITE,
             new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix + 95, PatternType.LITERAL),
             1, true, true));
         authorizeContext = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(),

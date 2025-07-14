@@ -33,11 +33,7 @@ public class DescribeShareGroupOffsetsRequest extends AbstractRequest {
         private final DescribeShareGroupOffsetsRequestData data;
 
         public Builder(DescribeShareGroupOffsetsRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(DescribeShareGroupOffsetsRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS, enableUnstableLastVersion);
+            super(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS);
             this.data = data;
         }
 

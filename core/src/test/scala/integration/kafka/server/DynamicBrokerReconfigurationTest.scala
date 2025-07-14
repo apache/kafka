@@ -24,7 +24,7 @@ import java.lang.management.ManagementFactory
 import java.security.KeyStore
 import java.time.Duration
 import java.util
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import java.util.concurrent._
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
@@ -59,8 +59,10 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.MetadataLogConfig
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
+import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.quota.{ClientQuotaEntity, ClientQuotaManager}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions._
@@ -495,7 +497,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, updatedMaxConnections)
     properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, connectionsIpsOverride)
 
-    TestUtils.incrementalAlterConfigs(servers, adminClients.head, properties, true)
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, properties, perBrokerConfig = true)
 
     servers.foreach(_.shutdown())
     servers.foreach(_.awaitShutdown())
@@ -653,7 +655,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       "Config not updated in LogManager")
 
     val log = servers.head.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
-    TestUtils.waitUntilTrue(() => log.config.segmentSize == 1048576, "Existing topic config using defaults not updated")
+    TestUtils.waitUntilTrue(() => log.config.segmentSize() == 1048576, "Existing topic config using defaults not updated")
     val KafkaConfigToLogConfigName: Map[String, String] =
       ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
     props.asScala.foreach { case (k, v) =>
@@ -741,7 +743,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     consumer.commitSync()
 
     def partitionInfo: TopicPartitionInfo =
-      adminClients.head.describeTopics(Collections.singleton(topic)).topicNameValues().get(topic).get().partitions().get(0)
+      adminClients.head.describeTopics(util.Set.of(topic)).topicNameValues().get(topic).get().partitions().get(0)
 
     val partitionInfo0 = partitionInfo
     assertEquals(partitionInfo0.replicas.get(0), partitionInfo0.leader)
@@ -918,7 +920,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def verifyMarkPartitionsForTruncation(): Unit = {
     val leaderId = 0
     val topicDescription = adminClients.head.
-      describeTopics(java.util.Arrays.asList(topic)).
+      describeTopics(java.util.List.of(topic)).
       allTopicNames().
       get(3, TimeUnit.MINUTES).get(topic)
     val partitions = topicDescription.partitions().asScala.
@@ -935,7 +937,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
         assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
         val thread = fetcherThreads.head._2
         assertEquals(Some(truncationOffset), thread.fetchState(tp).map(_.fetchOffset))
-        assertEquals(Some(Truncating), thread.fetchState(tp).map(_.state))
+        assertEquals(Some(ReplicaState.TRUNCATING), thread.fetchState(tp).map(_.state))
       }
     }
   }
@@ -963,9 +965,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val clientId = "test-client-1"
     servers.foreach { server =>
       server.quotaManagers.produce.updateQuota(
-        None,
-        Some(ClientQuotaManager.ClientIdEntity(clientId)),
-        Some(Quota.upperBound(10000000))
+        Optional.empty,
+        Optional.of(new ClientQuotaManager.ClientIdEntity(clientId): ClientQuotaEntity.ConfigEntity),
+        Optional.of(Quota.upperBound(10000000))
       )
     }
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol, clientId)
@@ -1046,18 +1048,18 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       .map(_.asInstanceOf[DataPlaneAcceptor]).toSeq
 
     // add new PLAINTEXT listener
-    client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.LISTENERS_CONFIG,
+    client.incrementalAlterConfigs(util.Map.of(broker0Resource,
+      util.List.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.LISTENERS_CONFIG,
         s"PLAINTEXT://localhost:0, $SecureInternal://localhost:0, $SecureExternal://localhost:0"), AlterConfigOp.OpType.SET)
-      ).asJavaCollection).asJava).all().get()
+      ))).all().get()
 
     TestUtils.waitUntilTrue(() => acceptors.size == 3, s"failed to add new DataPlaneAcceptor")
 
     // remove PLAINTEXT listener
-    client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.LISTENERS_CONFIG,
+    client.incrementalAlterConfigs(util.Map.of(broker0Resource,
+      util.List.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.LISTENERS_CONFIG,
         s"$SecureInternal://localhost:0, $SecureExternal://localhost:0"), AlterConfigOp.OpType.SET)
-      ).asJavaCollection).asJava).all().get()
+      ))).all().get()
 
     TestUtils.waitUntilTrue(() => acceptors.size == 2,
       s"failed to remove DataPlaneAcceptor. current: ${acceptors.map(_.endPoint.toString).mkString(",")}")
@@ -1212,11 +1214,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
     val cert1 = load(trustStore1Props).getCertificate("kafka")
     val cert2 = load(trustStore2Props).getCertificate("kafka")
-    val certs = Map("kafka1" -> cert1, "kafka2" -> cert2)
+    val certs = util.Map.of("kafka1", cert1, "kafka2", cert2)
 
     val combinedStorePath = TestUtils.tempFile("truststore", ".jks").getAbsolutePath
     val password = trustStore1Props.get(SSL_TRUSTSTORE_PASSWORD_CONFIG).asInstanceOf[Password]
-    TestSslUtils.createTrustStore(combinedStorePath, password, certs.asJava)
+    TestSslUtils.createTrustStore(combinedStorePath, password, certs)
     val newStoreProps = new Properties
     newStoreProps.put(SSL_TRUSTSTORE_LOCATION_CONFIG, combinedStorePath)
     newStoreProps.put(SSL_TRUSTSTORE_PASSWORD_CONFIG, password)
@@ -1380,7 +1382,7 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
 
   private def tempPropertiesFile(properties: Properties): File = TestUtils.tempPropertiesFile(properties.asScala)
 
-  private abstract class ClientBuilder[T]() {
+  private abstract class ClientBuilder[T] {
     protected var _bootstrapServers: Option[String] = None
     protected var _listenerName: String = SecureExternal
     protected var _securityProtocol = SecurityProtocol.SASL_SSL
@@ -1413,7 +1415,7 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
     private var _retries = Int.MaxValue
     private var _acks = -1
     private var _requestTimeoutMs = 30000
-    private val defaultLingerMs = 5;
+    private val defaultLingerMs = 5
     private var _deliveryTimeoutMs = 30000 + defaultLingerMs
 
     def maxRetries(retries: Int): ProducerBuilder = { _retries = retries; this }
@@ -1457,7 +1459,7 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
       val consumer = new KafkaConsumer[String, String](consumerProps, new StringDeserializer, new StringDeserializer)
       consumers += consumer
 
-      consumer.subscribe(Collections.singleton(_topic))
+      consumer.subscribe(util.Set.of(_topic))
       if (_autoOffsetReset == "latest")
         awaitInitialPositions(consumer)
       consumer
@@ -1598,7 +1600,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   }
 
   override def reconfigurableConfigs(): util.Set[String] = {
-    Set(PollingIntervalProp).asJava
+    util.Set.of(PollingIntervalProp)
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {

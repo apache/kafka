@@ -140,4 +140,13 @@ public class FollowerStateTest {
         assertEquals(leaderId, state.leaderId());
         assertEquals(leaderEndpoints, state.leaderEndpoints());
     }
+
+    @Test
+    public void testHasUpdatedLeader() {
+        FollowerState state = newFollowerState(Set.of(0, 1, 2));
+
+        assertFalse(state.hasUpdatedLeader());
+        state.setHasUpdatedLeader();
+        assertTrue(state.hasUpdatedLeader());
+    }
 }

@@ -41,7 +41,6 @@ public class GroupConfigTest {
     private static final boolean SHARE_GROUP_ENABLE = true;
     private static final int SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS = 200;
     private static final int SHARE_GROUP_DELIVERY_COUNT_LIMIT = 5;
-    private static final short SHARE_GROUP_MAX_GROUPS = 10;
     private static final int SHARE_GROUP_RECORD_LOCK_DURATION_MS = 30000;
     private static final int SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS = 15000;
     private static final int SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS = 60000;
@@ -284,6 +283,6 @@ public class GroupConfigTest {
 
     private ShareGroupConfig createShareGroupConfig() {
         return ShareGroupConfigTest.createShareGroupConfig(SHARE_GROUP_ENABLE, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS, SHARE_GROUP_DELIVERY_COUNT_LIMIT,
-            SHARE_GROUP_MAX_GROUPS, SHARE_GROUP_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS);
+            SHARE_GROUP_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS);
     }
 }

@@ -3753,6 +3753,24 @@ public class RemoteLogManagerTest {
         }
     }
 
+    @Test
+    void testUpdateRemoteStorageReaderThreads() {
+        assertEquals(10, remoteLogManager.readerThreadPoolSize());
+        remoteLogManager.resizeReaderThreadPool(6);
+        assertEquals(6, remoteLogManager.readerThreadPoolSize());
+        remoteLogManager.resizeReaderThreadPool(12);
+        assertEquals(12, remoteLogManager.readerThreadPoolSize());
+    }
+
+    @Test
+    void testUpdateRemoteStorageFollowerThreads() {
+        assertEquals(2, remoteLogManager.followerThreadPoolSize());
+        remoteLogManager.resizeFollowerThreadPool(6);
+        assertEquals(6, remoteLogManager.followerThreadPoolSize());
+        remoteLogManager.resizeFollowerThreadPool(4);
+        assertEquals(4, remoteLogManager.followerThreadPoolSize());
+    }
+
     private void appendRecordsToFile(File file, int nRecords, int nRecordsPerBatch) throws IOException {
         byte magic = RecordBatch.CURRENT_MAGIC_VALUE;
         Compression compression = Compression.NONE;

@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -131,7 +132,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer, Monitorabl
         Map<Endpoint, CompletableFuture<Void>> result = new HashMap<>();
         for (Endpoint endpoint : serverInfo.endpoints()) {
             if (serverInfo.earlyStartListeners().contains(
-                    endpoint.listenerName().orElse(""))) {
+                    endpoint.listener())) {
                 result.put(endpoint, CompletableFuture.completedFuture(null));
             } else {
                 result.put(endpoint, initialLoadFuture);
@@ -230,21 +231,21 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer, Monitorabl
         private AuthorizerMetrics(PluginMetrics metrics) {
             authorizationAllowedSensor = metrics.addSensor("authorizer-authorization-allowed");
             authorizationAllowedSensor.add(
-                    metrics.metricName("authorization-allowed-rate-per-minute", "The number of authorization allowed per minute", Map.of()),
+                    metrics.metricName("authorization-allowed-rate-per-minute", "The number of authorization allowed per minute", new LinkedHashMap<>()),
                     new Rate(TimeUnit.MINUTES, new WindowedCount()));
 
             authorizationDeniedSensor = metrics.addSensor("authorizer-authorization-denied");
             authorizationDeniedSensor.add(
-                    metrics.metricName("authorization-denied-rate-per-minute", "The number of authorization denied per minute", Map.of()),
+                    metrics.metricName("authorization-denied-rate-per-minute", "The number of authorization denied per minute", new LinkedHashMap<>()),
                     new Rate(TimeUnit.MINUTES, new WindowedCount()));
 
             authorizationRequestSensor = metrics.addSensor("authorizer-authorization-request");
             authorizationRequestSensor.add(
-                    metrics.metricName("authorization-request-rate-per-minute", "The number of authorization request per minute", Map.of()),
+                    metrics.metricName("authorization-request-rate-per-minute", "The number of authorization request per minute", new LinkedHashMap<>()),
                     new Rate(TimeUnit.MINUTES, new WindowedCount()));
 
             metrics.addMetric(
-                    metrics.metricName("acls-total-count", "The number of acls defined", Map.of()),
+                    metrics.metricName("acls-total-count", "The number of acls defined", new LinkedHashMap<>()),
                     (Gauge<Integer>) (config, now) -> aclCount());
         }
 

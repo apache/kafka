@@ -88,10 +88,10 @@ public class QuorumControllerIntegrationTestUtils {
                 .setName(MetadataVersion.FEATURE_NAME)
                 .setMinSupportedVersion(minVersion.featureLevel())
                 .setMaxSupportedVersion(maxVersion.featureLevel()));
-        featureMaxVersions.entrySet().forEach(entry -> {
+        featureMaxVersions.forEach((key, value) -> {
             features.add(new BrokerRegistrationRequestData.Feature()
-                .setName(entry.getKey())
-                .setMaxSupportedVersion(entry.getValue())
+                .setName(key)
+                .setMaxSupportedVersion(value)
                 .setMinSupportedVersion((short) 0));
         });
         return features;

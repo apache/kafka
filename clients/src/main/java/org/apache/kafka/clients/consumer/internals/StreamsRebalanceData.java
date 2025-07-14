@@ -17,7 +17,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -117,6 +119,31 @@ public class StreamsRebalanceData {
                 '}';
         }
 
+    }
+    public static class EndpointPartitions {
+        private final List<TopicPartition> activePartitions;
+        private final List<TopicPartition> standbyPartitions;
+
+        public EndpointPartitions(final List<TopicPartition> activePartitions,
+                                  final List<TopicPartition> standbyPartitions) {
+            this.activePartitions = activePartitions;
+            this.standbyPartitions = standbyPartitions;
+        }
+
+        public List<TopicPartition> activePartitions() {
+            return new ArrayList<>(activePartitions);
+        }
+
+        public List<TopicPartition> standbyPartitions() {
+            return new ArrayList<>(standbyPartitions);
+        }
+        @Override
+        public String toString() {
+            return "EndpointPartitions {"
+                    + "activePartitions=" + activePartitions
+                    + ", standbyPartitions=" + standbyPartitions
+                    + '}';
+        }
     }
 
     public static class Assignment {
@@ -296,9 +323,11 @@ public class StreamsRebalanceData {
 
     private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(Assignment.EMPTY);
 
-    private final AtomicReference<Map<HostInfo, List<TopicPartition>>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
+    private final AtomicReference<Map<HostInfo, EndpointPartitions>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
 
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+
+    private final AtomicReference<List<StreamsGroupHeartbeatResponseData.Status>> statuses = new AtomicReference<>(List.of());
 
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
@@ -338,19 +367,32 @@ public class StreamsRebalanceData {
         return reconciledAssignment.get();
     }
 
-    public void setPartitionsByHost(final Map<HostInfo, List<TopicPartition>> partitionsByHost) {
+    public void setPartitionsByHost(final Map<HostInfo, EndpointPartitions> partitionsByHost) {
         this.partitionsByHost.set(partitionsByHost);
     }
 
-    public Map<HostInfo, List<TopicPartition>> partitionsByHost() {
+    public Map<HostInfo, EndpointPartitions> partitionsByHost() {
         return partitionsByHost.get();
     }
 
+    /** For the current stream thread to request a shutdown of all Streams clients belonging to the same application. */
     public void requestShutdown() {
         shutdownRequested.set(true);
     }
 
+    /** True if the current stream thread requested a shutdown of all Streams clients belonging to the same application. */
     public boolean shutdownRequested() {
         return shutdownRequested.get();
     }
+
+    /** Updated whenever the status of the streams group is updated. */
+    public void setStatuses(final List<StreamsGroupHeartbeatResponseData.Status> s) {
+        statuses.set(s);
+    }
+
+    /** For communicating the current status of the group to the stream thread */
+    public List<StreamsGroupHeartbeatResponseData.Status> statuses() {
+        return statuses.get();
+    }
+
 }

@@ -2815,9 +2815,8 @@ public class CoordinatorRuntimeTest {
         assertTrue(write1.isDone());
         assertTrue(write2.isDone());
 
-        // All timer tasks have been cancelled. TimerTask entries are not removed in MockTimer.
-        assertEquals(2, timer.size());
-        timer.taskQueue().forEach(taskEntry -> assertTrue(taskEntry.cancelled()));
+        // All timer tasks have been cancelled. Hence,they have been removed in MockTimer.
+        assertEquals(0, timer.size());
     }
 
     @Test
@@ -2885,9 +2884,8 @@ public class CoordinatorRuntimeTest {
         assertEquals(1, runtime.contextOrThrow(TP).coordinator.lastCommittedOffset());
         assertTrue(write1.isDone());
 
-        // All timer tasks have been cancelled. TimerTask entries are not removed in MockTimer.
-        assertEquals(1, timer.size());
-        timer.taskQueue().forEach(taskEntry -> assertTrue(taskEntry.cancelled()));
+        // All timer tasks have been cancelled. Hence, they have been removed in MockTimer.
+        assertEquals(0, timer.size());
     }
 
     @Test
