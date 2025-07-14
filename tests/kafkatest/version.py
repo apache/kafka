@@ -62,9 +62,6 @@ class KafkaVersion(LooseVersion):
 
         return LooseVersion._cmp(self, other)
 
-    def acl_command_supports_bootstrap_server(self):
-        return self >= V_2_1_0
-
     def topic_command_supports_bootstrap_server(self):
         return self >= V_2_3_0
 

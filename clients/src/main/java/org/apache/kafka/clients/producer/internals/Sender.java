@@ -565,7 +565,7 @@ public class Sender implements Runnable {
     /**
      * Handle a produce response
      */
-    private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
+    private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, Map<Uuid, String> topicNames, long now) {
         RequestHeader requestHeader = response.requestHeader();
         int correlationId = requestHeader.correlationId();
         if (response.wasTimedOut()) {
@@ -595,9 +595,6 @@ public class Sender implements Runnable {
                 // This will be set by completeBatch.
                 Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
                 produceResponse.data().responses().forEach(r -> r.partitionResponses().forEach(p -> {
-                    // Version 13 drop topic name and add support to topic id. However, metadata can be used to map topic id to topic name.
-                    String topicName = metadata.topicNames().getOrDefault(r.topicId(), r.name());
-                    TopicPartition tp = new TopicPartition(topicName, p.index());
                     ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(
                             Errors.forCode(p.errorCode()),
                             p.baseOffset(),
@@ -609,7 +606,20 @@ public class Sender implements Runnable {
                                 .collect(Collectors.toList()),
                             p.errorMessage(),
                             p.currentLeader());
+
+                    // Version 13 drop topic name and add support to topic id.
+                    // We need to find batch based on topic id and partition index only as
+                    // topic name in the response will be empty.
+                    // For older versions, topic id is zero, and we will find the batch based on the topic name.
+                    TopicPartition tp = (!r.topicId().equals(Uuid.ZERO_UUID) && topicNames.containsKey(r.topicId())) ?
+                            new TopicPartition(topicNames.get(r.topicId()), p.index()) :
+                            new TopicPartition(r.name(), p.index());
+
                     ProducerBatch batch = batches.get(tp);
+                    if (batch == null) {
+                        throw new IllegalStateException("Can't find batch created for topic id " + r.topicId() +
+                                " topic name " + r.name() + " partition " + p.index() + " using " + topicNames);
+                    }
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
                 }));
 
@@ -892,7 +902,11 @@ public class Sender implements Runnable {
                         .setTopicData(tpd),
                 useTransactionV1Version
         );
-        RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
+        // Fetch topic names from metadata outside callback as topic ids may change during the callback
+        // for example if topic was recreated.
+        Map<Uuid, String> topicNames = metadata.topicNames();
+
+        RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, topicNames, time.milliseconds());
 
         String nodeId = Integer.toString(destination);
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
