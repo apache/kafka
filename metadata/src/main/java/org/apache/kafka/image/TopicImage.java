@@ -27,7 +27,6 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 
 
 /**
