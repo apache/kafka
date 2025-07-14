@@ -3646,8 +3646,8 @@ class ReplicaManagerTest {
       assertEquals(2, capturedFetchInfos.size, "Should have 2 remote storage fetch info calls")
 
       val capturedTopicPartitions = capturedFetchInfos.map(_.topicIdPartition.topicPartition).toSet
-      assertTrue(capturedTopicPartitions.contains(tp0), "Should contain tp0")
-      assertTrue(capturedTopicPartitions.contains(tp1), "Should contain tp1")
+      assertTrue(capturedTopicPartitions.contains(tp0), "Should contain " + tp0)
+      assertTrue(capturedTopicPartitions.contains(tp1), "Should contain " + tp1)
 
       // Verify the fetch info details are correct for both partitions
       capturedFetchInfos.foreach { fetchInfo =>
@@ -3673,8 +3673,8 @@ class ReplicaManagerTest {
 
       // Verify that response contains both tidp0 and tidp1 and have no errors
       val responseTopicIdPartitions = responseData.map(_._1).toSet
-      assertTrue(responseTopicIdPartitions.contains(tidp0), "Response should contain tidp0")
-      assertTrue(responseTopicIdPartitions.contains(tidp1), "Response should contain tidp1")
+      assertTrue(responseTopicIdPartitions.contains(tidp0), "Response should contain " + tidp0)
+      assertTrue(responseTopicIdPartitions.contains(tidp1), "Response should contain " + tidp1)
       responseData.foreach { case (_, fetchPartitionData) =>
         assertEquals(Errors.NONE, fetchPartitionData.error)
       }
