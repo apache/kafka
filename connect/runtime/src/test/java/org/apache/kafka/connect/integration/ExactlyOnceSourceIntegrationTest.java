@@ -456,7 +456,7 @@ public class ExactlyOnceSourceIntegrationTest {
         assertEquals(expectedOffsetSeqnos, actualOffsetSeqnos.subList(0, expectedOffsetSeqnos.size()),
                 "Committed offsets should match connector-defined transaction boundaries");
 
-        List<Long> expectedRecordSeqnos = LongStream.range(1, MINIMUM_MESSAGES + 1).boxed().collect(Collectors.toList());
+        List<Long> expectedRecordSeqnos = LongStream.range(1, MINIMUM_MESSAGES + 1).boxed().toList();
         long priorBoundary = 1;
         long nextBoundary = 2;
         while (priorBoundary < expectedRecordSeqnos.get(expectedRecordSeqnos.size() - 1)) {
@@ -1023,7 +1023,7 @@ public class ExactlyOnceSourceIntegrationTest {
         parsedValues.replaceAll((task, values) -> {
             Long committedValue = lastCommittedValues.get(task);
             assertNotNull(committedValue, "No committed offset found for task " + task);
-            return values.stream().filter(v -> v <= committedValue).collect(Collectors.toList());
+            return values.stream().filter(v -> v <= committedValue).toList();
         });
         assertSeqnos(parsedValues, numTasks);
     }

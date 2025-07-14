@@ -69,7 +69,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
@@ -737,9 +736,9 @@ public class TopicAdminTest {
                         .setPartitionIndex(pInfo.partition())
                         .setLeaderId(pInfo.leader().id())
                         .setLeaderEpoch(234)
-                        .setReplicaNodes(Arrays.stream(pInfo.replicas()).map(Node::id).collect(Collectors.toList()))
-                        .setIsrNodes(Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).collect(Collectors.toList()))
-                        .setOfflineReplicas(Arrays.stream(pInfo.offlineReplicas()).map(Node::id).collect(Collectors.toList()));
+                        .setReplicaNodes(Arrays.stream(pInfo.replicas()).map(Node::id).toList())
+                        .setIsrNodes(Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).toList())
+                        .setOfflineReplicas(Arrays.stream(pInfo.offlineReplicas()).map(Node::id).toList());
                 pms.add(pm);
             }
             MetadataResponseTopic tm = new MetadataResponseTopic()
@@ -958,8 +957,8 @@ public class TopicAdminTest {
                                 .map(e -> new DescribeConfigsResponseData.DescribeConfigsResourceResult()
                                         .setName(e.getKey())
                                         .setValue(e.getValue()))
-                                .collect(Collectors.toList())))
-                .collect(Collectors.toList());
+                                .toList()))
+                .toList();
         return new DescribeConfigsResponse(new DescribeConfigsResponseData().setThrottleTimeMs(1000).setResults(results));
     }
 

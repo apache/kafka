@@ -412,7 +412,7 @@ public class ConnectorPluginsResourceTest {
                 ).flatMap(Collection::stream)
                 .map(PluginInfo::new)
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
         List<PluginInfo> actualConnectorPlugins = new ArrayList<>(connectorPluginsResource.listConnectorPlugins(false));
         Comparator<PluginInfo> compare = Comparator.comparing(PluginInfo::className)
                 .thenComparing(PluginInfo::type)

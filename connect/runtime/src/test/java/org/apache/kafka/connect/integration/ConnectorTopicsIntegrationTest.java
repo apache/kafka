@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
@@ -258,7 +257,7 @@ public class ConnectorTopicsIntegrationTest {
         }
         List<TopicPartition> partitions = partitionInfos.stream()
                 .map(info -> new TopicPartition(info.topic(), info.partition()))
-                .collect(Collectors.toList());
+                .toList();
         verifiableConsumer.assign(partitions);
 
         // Based on the implementation of {@link org.apache.kafka.connect.util.KafkaBasedLog#readToLogEnd}

@@ -29,7 +29,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -282,7 +281,7 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStarts(expectedStarts))
-                .collect(Collectors.toList())
+                .toList()
                 : List.of();
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
@@ -291,7 +290,7 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStarts(expectedTasksStarts.get(task.taskId())))
-                .collect(Collectors.toList())
+                .toList()
                 : List.of();
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
@@ -344,7 +343,7 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStops(expectedStops))
-                .collect(Collectors.toList())
+                .toList()
                 : List.of();
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
@@ -353,7 +352,7 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStops(expectedTasksStops.get(task.taskId())))
-                .collect(Collectors.toList())
+                .toList()
                 : List.of();
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }

@@ -533,7 +533,7 @@ public class AbstractWorkerSourceTaskTest {
         assertEquals(List.of(TOPIC, OTHER_TOPIC), newTopicCaptor.getAllValues()
             .stream()
             .map(NewTopic::name)
-            .collect(Collectors.toList()));
+            .toList());
     }
 
     @Test

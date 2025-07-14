@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import jakarta.ws.rs.core.Response;
 
@@ -154,7 +153,7 @@ public class StandaloneWorkerIntegrationTest {
             assertTrue(affectedLoggers.contains(namespace));
             List<String> invalidAffectedLoggers = affectedLoggers.stream()
                     .filter(l -> !l.startsWith(namespace))
-                    .collect(Collectors.toList());
+                    .toList();
             assertEquals(
                     List.of(),
                     invalidAffectedLoggers,

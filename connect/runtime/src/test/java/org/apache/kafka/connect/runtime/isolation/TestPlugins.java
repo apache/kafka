@@ -372,7 +372,7 @@ public class TestPlugins {
                 .filter(Objects::nonNull)
                 .map(TestPlugin::className)
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public static Function<ClassLoader, LoaderSwap> noOpLoaderSwap() {
@@ -458,7 +458,7 @@ public class TestPlugins {
                     .map(Path::toFile)
                     .filter(file -> file.getName().endsWith(".java"))
                     .map(file -> replacements.isEmpty() ? file : copyAndReplace(file, replacements))
-                    .collect(Collectors.toList());
+                    .toList();
         }
 
         StringWriter writer = new StringWriter();
