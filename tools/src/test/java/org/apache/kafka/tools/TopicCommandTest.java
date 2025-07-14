@@ -392,7 +392,7 @@ public class TopicCommandTest {
                     "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
 
             adminClient.deleteTopics(Collections.singletonList(testTopicName));
-            clusterInstance.waitForTopic(testTopicName, 0);
+            clusterInstance.waitTopicDeletion(testTopicName);
             Assertions.assertTrue(adminClient.listTopics().names().get().isEmpty(),
                     "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
         }
@@ -425,7 +425,7 @@ public class TopicCommandTest {
             Assertions.assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
 
             adminClient.deleteTopics(Collections.singletonList(testTopicName));
-            clusterInstance.waitForTopic(testTopicName, 0);
+            clusterInstance.waitTopicDeletion(testTopicName);
             Assertions.assertTrue(adminClient.listTopics().names().get().isEmpty(),
                     "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
         }
@@ -1427,12 +1427,12 @@ public class TopicCommandTest {
 
     private void checkReplicaDistribution(Map<Integer, List<Integer>> assignment,
                                           Map<Integer, String> brokerRackMapping,
-                                          Integer numBrokers,
-                                          Integer numPartitions,
-                                          Integer replicationFactor,
-                                          Boolean verifyRackAware,
-                                          Boolean verifyLeaderDistribution,
-                                          Boolean verifyReplicasDistribution) {
+                                          int numBrokers,
+                                          int numPartitions,
+                                          int replicationFactor,
+                                          boolean verifyRackAware,
+                                          boolean verifyLeaderDistribution,
+                                          boolean verifyReplicasDistribution) {
         // always verify that no broker will be assigned for more than one replica
         assignment.forEach((partition, assignedNodes) -> assertEquals(new HashSet<>(assignedNodes).size(), assignedNodes.size(),
                 "More than one replica is assigned to same broker for the same partition"));

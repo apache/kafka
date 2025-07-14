@@ -215,7 +215,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     server2.startup()
     updateProducer()
     // check if leader moves to the other server
-    leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader))
+    leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader), timeout = 30000L)
     assertEquals(1, leader, "Leader must move to broker 1")
 
     assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))
