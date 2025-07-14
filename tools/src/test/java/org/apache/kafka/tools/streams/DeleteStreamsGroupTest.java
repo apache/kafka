@@ -408,8 +408,8 @@ public class DeleteStreamsGroupTest {
 
             assertTrue(output.contains("Deletion of requested streams groups ('" + appId + "') was successful."),
                 "The streams group could not be deleted as expected");
-            assertTrue(output.contains("Retrieving internal topics is not supported by the broker version. " +
-                "Use 'kafka-topics.sh' to list and delete the group's internal topics."));
+            assertTrue(output.contains("Retrieving internal topics is not supported by the broker version. "));
+            assertTrue(output.contains("Use 'kafka-topics.sh' to delete the group's internal topics."));
             assertEquals(1, result.size());
             assertTrue(result.containsKey(appId));
             assertNull(result.get(appId), "The streams group could not be deleted as expected");
