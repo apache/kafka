@@ -39,17 +39,11 @@ import java.util.Objects;
  *
  * This class is thread-safe.
  */
-public final class ClientQuotaImage {
+public record ClientQuotaImage(Map<String, Double> quotas) {
     public static final ClientQuotaImage EMPTY = new ClientQuotaImage(Map.of());
 
-    private final Map<String, Double> quotas;
-
-    public ClientQuotaImage(Map<String, Double> quotas) {
-        this.quotas = Collections.unmodifiableMap(quotas);
-    }
-
-    public Map<String, Double> quotas() {
-        return this.quotas;
+    public ClientQuotaImage {
+        quotas = Collections.unmodifiableMap(quotas);
     }
 
     public void write(

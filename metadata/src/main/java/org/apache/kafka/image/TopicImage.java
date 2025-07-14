@@ -35,31 +35,9 @@ import java.util.Objects;
  *
  * This class is thread-safe.
  */
-public final class TopicImage {
-    private final String name;
-
-    private final Uuid id;
-
-    private final Map<Integer, PartitionRegistration> partitions;
-
-    public TopicImage(String name,
-                      Uuid id,
-                      Map<Integer, PartitionRegistration> partitions) {
-        this.name = name;
-        this.id = id;
-        this.partitions = Collections.unmodifiableMap(partitions);
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public Uuid id() {
-        return id;
-    }
-
-    public Map<Integer, PartitionRegistration> partitions() {
-        return partitions;
+public record TopicImage(String name, Uuid id, Map<Integer, PartitionRegistration> partitions) {
+    public TopicImage {
+        partitions = Collections.unmodifiableMap(partitions);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
