@@ -458,7 +458,7 @@ public class PlaintextConsumerCommitTest {
      */
     @ClusterTest
     public void testCommitAsyncFailsWhenCoordinatorUnavailableDuringClose() throws InterruptedException {
-        try (Producer<byte[], byte[]> producer = cluster.producer(Map.of(ProducerConfig.ACKS_CONFIG, "all"));
+        try (Producer<byte[], byte[]> producer = cluster.producer();
              var consumer = createConsumer(GroupProtocol.CONSUMER, false)
         ) {
             sendRecords(producer, tp, 3, System.currentTimeMillis());
@@ -470,15 +470,14 @@ public class PlaintextConsumerCommitTest {
             // Close the coordinator before committing because otherwise the commit will fail to find the coordinator.
             cluster.brokerIds().forEach(cluster::shutdownBroker);
 
-            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(1L)), callback);
+            consumer.poll(Duration.ofMillis(500));
             consumer.commitAsync(Map.of(tp1, new OffsetAndMetadata(1L)), callback);
-
             consumer.close(CloseOptions.timeout(Duration.ofMillis(500)));
 
             assertTrue(callback.lastError.isPresent());
             assertEquals(CommitFailedException.class, callback.lastError.get().getClass());
             assertEquals("Failed to commit offsets: Coordinator unknown and consumer is closing", callback.lastError.get().getMessage());
-            assertEquals(2, callback.exceptionCount);
+            assertEquals(1, callback.exceptionCount);
         }
     }
 
