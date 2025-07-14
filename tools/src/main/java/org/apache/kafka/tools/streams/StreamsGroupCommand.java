@@ -497,7 +497,7 @@ public class StreamsGroupCommand {
                                                 printError("Deleting internal topics for group '" + groupId + "' failed because the topics do not exist.", Optional.empty());
                                             } else if (e.getCause() instanceof UnsupportedVersionException) {
                                                 printError("Deleting internal topics is not supported by the broker version.\n" +
-                                                    "Topics: (" + String.join(",", internalTopics) + ").\n" +
+                                                    "Internal topics: (" + String.join(",", internalTopics) + ").\n" +
                                                     "Use 'kafka-topics.sh' to delete the group's internal topics.", Optional.of(e.getCause()));
                                             } else {
                                                 printError("Deleting internal topics for group '" + groupId + "' failed due to " + e.getMessage(), Optional.of(e));
@@ -838,11 +838,11 @@ public class StreamsGroupCommand {
                             .filter(topic -> groupIds.stream().anyMatch(groupId -> isInferredInternalTopic(topic, groupId)))
                             .collect(Collectors.toList());
                         printError("Retrieving internal topics is not supported by the broker version.\n" +
-                            "Internal Topics: (" + String.join(",", internalTopics) + ").\n" +
+                            "Internal topics: (" + String.join(",", internalTopics) + ").\n" +
                             "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
                     } catch (InterruptedException | ExecutionException ex) {
                         printError("Retrieving internal topics is not supported by the broker version. " +
-                            "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
+                            "Use 'kafka-topics.sh' to delete the group's internal topics.", Optional.of(e.getCause()));
                     }
                 } else {
                     printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
