@@ -128,7 +128,9 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                 stats.readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes() > 0;
 
                 MemoryRecords memoryRecords = toReadableMemoryRecords(tp, fetchDataInfo.records, buffer);
-                buffer = memoryRecords.buffer();
+                if (fetchDataInfo.records instanceof FileRecords) {
+                    buffer = memoryRecords.buffer();
+                }
 
                 ReplayResult replayResult = processMemoryRecords(tp, log, memoryRecords, coordinator, stats, currentOffset, previousHighWatermark);
                 currentOffset = replayResult.nextOffset;
