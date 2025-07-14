@@ -14,8 +14,8 @@
 # limitations under the License.
 
 # The base image of openjdk:17 is typically oraclelinux:8-slim, which doesn't include apt-get. 
-# Therefore, use openjdk:17-buster instead.
-ARG jdk_version=openjdk:17-buster
+# Therefore, use openjdk:17-bullseye instead.
+ARG jdk_version=openjdk:17-bullseye
 FROM $jdk_version AS build-native-image
 
 WORKDIR /build
