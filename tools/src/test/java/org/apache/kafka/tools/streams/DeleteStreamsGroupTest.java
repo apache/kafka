@@ -413,9 +413,18 @@ public class DeleteStreamsGroupTest {
             assertTrue(output.contains("Use 'kafka-topics.sh' to delete the group's internal topics."));
             // Validate the list of internal topics in error message
             assertTrue(output.contains("Internal topics:"));
-            assertTrue(output.contains("aggregated_value-changelog"));
-            assertTrue(output.contains("aggregated_value-repartition"));
-            assertTrue(output.contains("count-repartition"));
+            assertTrue(
+                output.matches("(?s).*" + APP_ID_PREFIX + "-[a-zA-Z0-9]{10}-aggregated_value-changelog.*"),
+                "The internal topic names are not retrieved correctly."
+            );
+            assertTrue(
+                output.matches("(?s).*" + APP_ID_PREFIX + "-[a-zA-Z0-9]{10}-aggregated_value-repartition.*"),
+                "The internal topic names are not retrieved correctly."
+            );
+            assertTrue(
+                output.matches("(?s).*" + APP_ID_PREFIX + "-[a-zA-Z0-9]{10}-count-repartition.*"),
+                "The internal topic names are not retrieved correctly."
+            );
 
             assertEquals(1, result.size());
             assertTrue(result.containsKey(appId));
