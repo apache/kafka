@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.common.UnitTestFeatureVersion.FV0.UT_FV0_0;
 
@@ -93,14 +92,14 @@ public enum Feature {
 
         TEST_AND_PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
             !feature.name.startsWith("unit." + TestFeatureVersion.FEATURE_NAME)
-        ).collect(Collectors.toList());
+        ).toList();
 
         PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
             !feature.name.equals(TEST_VERSION.featureName()) &&
             !feature.name.startsWith("unit." + TestFeatureVersion.FEATURE_NAME)
-        ).collect(Collectors.toList());
+        ).toList();
         PRODUCTION_FEATURE_NAMES = PRODUCTION_FEATURES.stream().map(feature ->
-                feature.name).collect(Collectors.toList());
+                feature.name).toList();
 
         validateDefaultValueAndLatestProductionValue(TEST_VERSION);
         for (Feature feature : PRODUCTION_FEATURES) {

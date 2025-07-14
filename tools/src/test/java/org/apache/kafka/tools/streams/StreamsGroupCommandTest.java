@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -174,7 +175,7 @@ public class StreamsGroupCommandTest {
             null);
         resultMap.put(firstGroup, exp);
         when(result.all()).thenReturn(KafkaFuture.completedFuture(resultMap));
-        when(ADMIN_CLIENT.describeStreamsGroups(ArgumentMatchers.anyCollection())).thenReturn(result);
+        when(ADMIN_CLIENT.describeStreamsGroups(ArgumentMatchers.anyCollection(),  any(DescribeStreamsGroupsOptions.class))).thenReturn(result);
 
         StreamsGroupCommandOptions streamsGroupCommandOptions = new StreamsGroupCommandOptions(
             new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", firstGroup, "--describe"});
