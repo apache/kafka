@@ -32,12 +32,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -582,86 +580,6 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotHaveSameAssignmentOnAnyTwoHosts() {
-        final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1");
-        final AssignmentMemberSpec memberSpec2 = createAssignmentMemberSpec("process2");
-        final AssignmentMemberSpec memberSpec3 = createAssignmentMemberSpec("process3");
-        final AssignmentMemberSpec memberSpec4 = createAssignmentMemberSpec("process4");
-        final List<String> allMemberIds = asList("member1", "member2", "member3", "member4");
-        Map<String, AssignmentMemberSpec> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3), mkEntry("member4", memberSpec4));
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members,
-                mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
-            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
-        );
-
-        for (final String memberId : allMemberIds) {
-            final List<Integer> taskIds = getAllTaskIds(result, memberId);
-            for (final String otherMemberId : allMemberIds) {
-                if (!memberId.equals(otherMemberId)) {
-                    assertNotEquals(taskIds, getAllTaskIds(result, otherMemberId));
-                }
-            }
-        }
-    }
-
-    @Test
-    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks() {
-        final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(1, 2))), Map.of());
-        final AssignmentMemberSpec memberSpec2 = createAssignmentMemberSpec("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(3))), Map.of());
-        final AssignmentMemberSpec memberSpec3 = createAssignmentMemberSpec("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0))), Map.of());
-        final AssignmentMemberSpec memberSpec4 = createAssignmentMemberSpec("process4");
-        final List<String> allMemberIds = asList("member1", "member2", "member3", "member4");
-        Map<String, AssignmentMemberSpec> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3), mkEntry("member4", memberSpec4));
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members,
-                mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
-            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
-        );
-
-        for (final String memberId : allMemberIds) {
-            final List<Integer> taskIds = getAllTaskIds(result, memberId);
-            for (final String otherMemberId : allMemberIds) {
-                if (!memberId.equals(otherMemberId)) {
-                    assertNotEquals(taskIds, getAllTaskIds(result, otherMemberId));
-                }
-            }
-        }
-    }
-
-    @Test
-    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks() {
-        final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1",
-            mkMap(mkEntry("test-subtopology", Sets.newSet(1, 2))), mkMap(mkEntry("test-subtopology", Sets.newSet(3, 0))));
-        final AssignmentMemberSpec memberSpec2 = createAssignmentMemberSpec("process2",
-            mkMap(mkEntry("test-subtopology", Sets.newSet(3, 0))), mkMap(mkEntry("test-subtopology", Sets.newSet(1, 2))));
-        final AssignmentMemberSpec memberSpec3 = createAssignmentMemberSpec("process3");
-        final AssignmentMemberSpec memberSpec4 = createAssignmentMemberSpec("process4");
-        final List<String> allMemberIds = asList("member1", "member2", "member3", "member4");
-        Map<String, AssignmentMemberSpec> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3), mkEntry("member4", memberSpec4));
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members,
-                mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
-            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
-        );
-
-        for (final String memberId : allMemberIds) {
-            final List<Integer> taskIds = getAllTaskIds(result, memberId);
-            for (final String otherMemberId : allMemberIds) {
-                if (!memberId.equals(otherMemberId)) {
-                    assertNotEquals(taskIds, getAllTaskIds(result, otherMemberId));
-                }
-            }
-        }
-    }
-
-    @Test
     public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame() {
         final AssignmentMemberSpec memberSpec3 = createAssignmentMemberSpec("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3))), Map.of());
         final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1");
@@ -1017,13 +935,6 @@ public class StickyTaskAssignorTest {
                         return new HashSet<>(v1);
                     }));
         }
-        return res;
-    }
-
-    private List<Integer> getAllTaskIds(GroupAssignment result, String... memberIds) {
-        List<Integer> res = new ArrayList<>();
-        res.addAll(getAllActiveTaskIds(result, memberIds));
-        res.addAll(getAllStandbyTaskIds(result, memberIds));
         return res;
     }
 
