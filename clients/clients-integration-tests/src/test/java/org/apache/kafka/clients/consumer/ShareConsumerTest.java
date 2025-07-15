@@ -850,7 +850,7 @@ public class ShareConsumerTest {
     public void testExplicitOverrideAcknowledgeCorruptedMessage() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-            ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                 "group1",
                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT),
                 null,
@@ -864,13 +864,9 @@ public class ShareConsumerTest {
             producer.send(record3);
             producer.flush();
 
-            shareConsumer1.subscribe(Set.of(tp.topic()));
+            shareConsumer.subscribe(Set.of(tp.topic()));
 
-            Map<TopicPartition, Set<Long>> partitionOffsetsMap1 = new HashMap<>();
-            Map<TopicPartition, Exception> partitionExceptionMap1 = new HashMap<>();
-            shareConsumer1.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
-
-            ConsumerRecords<byte[], byte[]> records = shareConsumer1.poll(Duration.ofSeconds(60));
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofSeconds(60));
             assertEquals(2, records.count());
             Iterator<ConsumerRecord<byte[], byte[]>> iterator = records.iterator();
 
@@ -878,23 +874,93 @@ public class ShareConsumerTest {
             ConsumerRecord<byte[], byte[]> secondRecord = iterator.next();
             assertEquals(0L, firstRecord.offset());
             assertEquals(1L, secondRecord.offset());
-            shareConsumer1.acknowledge(firstRecord);
-            shareConsumer1.acknowledge(secondRecord);
+            shareConsumer.acknowledge(firstRecord);
+            shareConsumer.acknowledge(secondRecord);
 
-            RecordDeserializationException rde = assertThrows(RecordDeserializationException.class, () -> shareConsumer1.poll(Duration.ofSeconds(60)));
+            RecordDeserializationException rde = assertThrows(RecordDeserializationException.class, () -> shareConsumer.poll(Duration.ofSeconds(60)));
             assertEquals(2, rde.offset());
-            shareConsumer1.commitSync();
+            shareConsumer.commitSync();
 
             // The corrupted record was automatically released, so we can still obtain it.
-            rde = assertThrows(RecordDeserializationException.class, () -> shareConsumer1.poll(Duration.ofSeconds(60)));
+            rde = assertThrows(RecordDeserializationException.class, () -> shareConsumer.poll(Duration.ofSeconds(60)));
             assertEquals(2, rde.offset());
 
             // Reject this record
-            shareConsumer1.acknowledge(rde.topicPartition().topic(), rde.topicPartition().partition(), rde.offset(), AcknowledgeType.REJECT);
-            shareConsumer1.commitSync();
+            shareConsumer.acknowledge(rde.topicPartition().topic(), rde.topicPartition().partition(), rde.offset(), AcknowledgeType.REJECT);
+            shareConsumer.commitSync();
 
-            records = shareConsumer1.poll(Duration.ZERO);
+            records = shareConsumer.poll(Duration.ZERO);
             assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testExplicitAcknowledgeOffsetThrowsNotException() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofSeconds(60));
+            assertEquals(1, records.count());
+            ConsumerRecord<byte[], byte[]> consumedRecord = records.records(tp).get(0);
+            assertEquals(0L, consumedRecord.offset());
+
+            assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(tp.topic(), tp.partition(), consumedRecord.offset(), AcknowledgeType.ACCEPT));
+
+            shareConsumer.acknowledge(consumedRecord);
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testExplicitAcknowledgeOffsetThrowsParametersError() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT),
+                null,
+                mockErrorDeserializer(2))) {
+
+            ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            producer.send(record1);
+            producer.send(record2);
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofSeconds(60));
+            assertEquals(1, records.count());
+            Iterator<ConsumerRecord<byte[], byte[]>> iterator = records.iterator();
+
+            ConsumerRecord<byte[], byte[]> firstRecord = iterator.next();
+            assertEquals(0L, firstRecord.offset());
+            shareConsumer.acknowledge(firstRecord);
+
+            final RecordDeserializationException rde = assertThrows(RecordDeserializationException.class, () -> shareConsumer.poll(Duration.ofSeconds(60)));
+            assertEquals(1, rde.offset());
+
+            assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge("foo", rde.topicPartition().partition(), rde.offset(), AcknowledgeType.REJECT));
+            assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(rde.topicPartition().topic(), 1, rde.offset(), AcknowledgeType.REJECT));
+            assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(rde.topicPartition().topic(), tp2.partition(), 0, AcknowledgeType.REJECT));
+
+            // Reject this record
+            shareConsumer.acknowledge(rde.topicPartition().topic(), rde.topicPartition().partition(), rde.offset(), AcknowledgeType.REJECT);
+            shareConsumer.commitSync();
+
+            records = shareConsumer.poll(Duration.ZERO);
+            assertEquals(0, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
