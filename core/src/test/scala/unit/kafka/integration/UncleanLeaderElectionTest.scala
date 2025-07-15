@@ -123,7 +123,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   private def disableEligibleLeaderReplicas(): Unit = {
     if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_1_IV0)) {
       admin.updateFeatures(
-        util.Map.of("eligible.leader.replicas.version", new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
+        java.util.Map.of("eligible.leader.replicas.version", new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
         new UpdateFeaturesOptions()).all().get()
     }
   }
