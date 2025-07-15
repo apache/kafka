@@ -1479,16 +1479,15 @@ public final class Utils {
         } catch (ClassCastException e) {
             throw new ConfigException("One or more keys is not a string.");
         }
-        Map<String, Object> props = new HashMap<>();
+        Map<String, Object> map = new HashMap<>();
         while (enumeration.hasMoreElements()) {
             String key = (String) enumeration.nextElement();
             // properties.get(key) returns null for defaults, but properties.getProperty(key) returns null for
             // non-string values. A combination of the two methods is used to cover all cases
             Object value = (properties.get(key) != null) ? properties.get(key) : properties.getProperty(key);
-            System.out.printf("%s %s%n", key, value);
-            props.put(key, value);
+            map.put(key, value);
         }
-        return props;
+        return map;
     }
 
     /**
