@@ -3118,6 +3118,7 @@ public class CoordinatorRuntimeTest {
 
         ByteBuffer cachedBuffer = ctx.bufferSupplier.get(1);
         assertEquals(INITIAL_BUFFER_SIZE, cachedBuffer.capacity());
+        // ctx.bufferSupplier.get(1); will clear cachedBuffer in bufferSupplier. Use release to put it back to bufferSupplier
         ctx.bufferSupplier.release(cachedBuffer);
 
         // Reduce max message size below initial buffer size.
