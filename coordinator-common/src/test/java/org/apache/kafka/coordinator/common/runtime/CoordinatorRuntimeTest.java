@@ -3047,6 +3047,10 @@ public class CoordinatorRuntimeTest {
         // This will catch any exceptions thrown including RecordTooLargeException.
         assertFalse(write1.isCompletedExceptionally());
 
+        int batchSize = mockWriter.entries(TP).get(0).sizeInBytes();
+        int maxBatchSize = mockWriter.config(TP).maxMessageSize();
+        assertTrue(INITIAL_BUFFER_SIZE < batchSize && batchSize <= maxBatchSize);
+
         // Verify that the next buffer retrieved from the bufferSupplier is the expanded buffer.
         assertTrue(ctx.bufferSupplier.get(1).capacity() > INITIAL_BUFFER_SIZE);
     }
@@ -3108,6 +3112,10 @@ public class CoordinatorRuntimeTest {
         // This will catch any exceptions thrown including RecordTooLargeException.
         assertFalse(write1.isCompletedExceptionally());
 
+        int batchSize = mockWriter.entries(TP).get(0).sizeInBytes();
+        int maxBatchSize = mockWriter.config(TP).maxMessageSize();
+        assertTrue(INITIAL_BUFFER_SIZE < batchSize && batchSize <= maxBatchSize);
+
         ByteBuffer cachedBuffer = ctx.bufferSupplier.get(1);
         assertEquals(INITIAL_BUFFER_SIZE, cachedBuffer.capacity());
         ctx.bufferSupplier.release(cachedBuffer);
@@ -3116,7 +3124,6 @@ public class CoordinatorRuntimeTest {
         mockWriter.updateConfig(new LogConfig(
             Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(INITIAL_BUFFER_SIZE - 66))));
         assertEquals(INITIAL_BUFFER_SIZE - 66, mockWriter.config(TP).maxMessageSize());
-        assertTrue(mockWriter.config(TP).maxMessageSize() < INITIAL_BUFFER_SIZE);
 
         // Write #2.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
@@ -3136,8 +3143,6 @@ public class CoordinatorRuntimeTest {
         // Verify that the cached buffer size is equals to new maxMessageSize that less than INITIAL_BUFFER_SIZE.
         assertEquals(mockWriter.config(TP).maxMessageSize(), ctx.bufferSupplier.get(1).capacity());
     }
-
-
 
     @Test
     public void testScheduleWriteOperationWithBatching() throws ExecutionException, InterruptedException, TimeoutException {
