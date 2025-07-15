@@ -3114,7 +3114,7 @@ public class CoordinatorRuntimeTest {
 
         int batchSize = mockWriter.entries(TP).get(0).sizeInBytes();
         int maxBatchSize = mockWriter.config(TP).maxMessageSize();
-        assertTrue(INITIAL_BUFFER_SIZE < batchSize && batchSize <= maxBatchSize);
+        assertTrue(batchSize < INITIAL_BUFFER_SIZE && INITIAL_BUFFER_SIZE <= maxBatchSize);
 
         ByteBuffer cachedBuffer = ctx.bufferSupplier.get(1);
         assertEquals(INITIAL_BUFFER_SIZE, cachedBuffer.capacity());
