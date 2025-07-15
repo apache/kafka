@@ -60,7 +60,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -123,7 +122,7 @@ public class PartitionCreationBench {
         ConfigRepository configRepository = new MockConfigRepository();
         this.logManager = new LogManagerBuilder().
             setLogDirs(files).
-            setInitialOfflineDirs(Collections.emptyList()).
+            setInitialOfflineDirs(List.of()).
             setConfigRepository(configRepository).
             setInitialDefaultConfig(createLogConfig()).
             setCleanerConfig(cleanerConfig).

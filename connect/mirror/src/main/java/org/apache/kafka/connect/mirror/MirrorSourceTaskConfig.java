@@ -19,7 +19,6 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,7 +35,7 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
     Set<TopicPartition> taskTopicPartitions() {
         List<String> fields = getList(TASK_TOPIC_PARTITIONS);
         if (fields == null || fields.isEmpty()) {
-            return Collections.emptySet();
+            return Set.of();
         }
         return fields.stream()
             .map(MirrorUtils::decodeTopicPartition)
