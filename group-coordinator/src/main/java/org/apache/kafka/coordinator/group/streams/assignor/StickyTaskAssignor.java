@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -90,8 +89,6 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
         localState.totalCapacity = groupSpec.members().size();
         localState.tasksPerMember = computeTasksPerMember(localState.allTasks, localState.totalCapacity);
-
-        localState.taskPairs = new TaskPairs(localState.allTasks * (localState.allTasks - 1) / 2);
 
         localState.processIdToState = new HashMap<>();
         localState.activeTaskToPrevMember = new HashMap<>();
@@ -175,7 +172,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             final Member prevMember = localState.activeTaskToPrevMember.get(task);
             if (prevMember != null && hasUnfulfilledQuota(prevMember)) {
                 localState.processIdToState.get(prevMember.processId).addTask(prevMember.memberId, task, true);
-                updateHelpers(prevMember, task, true);
+                updateHelpers(prevMember, true);
                 it.remove();
             }
         }
@@ -187,7 +184,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             final Member prevMember = findMemberWithLeastLoad(prevMembers, task, true);
             if (prevMember != null && hasUnfulfilledQuota(prevMember)) {
                 localState.processIdToState.get(prevMember.processId).addTask(prevMember.memberId, task, true);
-                updateHelpers(prevMember, task, true);
+                updateHelpers(prevMember, true);
                 it.remove();
             }
         }
@@ -204,7 +201,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
             localState.processIdToState.get(member.processId).addTask(member.memberId, task, true);
             it.remove();
-            updateHelpers(member, task, true);
+            updateHelpers(member, true);
 
         }
     }
@@ -221,20 +218,10 @@ public class StickyTaskAssignor implements TaskAssignor {
         if (members == null || members.isEmpty()) {
             return null;
         }
-        Set<Member> rightPairs = members.stream()
-            .filter(member  -> localState.taskPairs.hasNewPair(taskId, localState.processIdToState.get(member.processId).assignedTasks()))
-            .collect(Collectors.toSet());
-        if (rightPairs.isEmpty()) {
-            rightPairs = members;
-        }
-        Optional<ProcessState> processWithLeastLoad = rightPairs.stream()
+        Optional<ProcessState> processWithLeastLoad = members.stream()
             .map(member  -> localState.processIdToState.get(member.processId))
             .min(Comparator.comparingDouble(ProcessState::load));
 
-        // processWithLeastLoad must be present at this point, but we do a double check
-        if (processWithLeastLoad.isEmpty()) {
-            return null;
-        }
         // if the same exact former member is needed
         if (returnSameMember) {
             return localState.standbyTaskToPrevMember.get(taskId).stream()
@@ -275,8 +262,7 @@ public class StickyTaskAssignor implements TaskAssignor {
 
                 // prev active task
                 Member prevMember = localState.activeTaskToPrevMember.get(task);
-                if (prevMember != null && availableProcesses.contains(prevMember.processId) && isLoadBalanced(prevMember.processId)
-                    && localState.taskPairs.hasNewPair(task, localState.processIdToState.get(prevMember.processId).assignedTasks())) {
+                if (prevMember != null && availableProcesses.contains(prevMember.processId) && isLoadBalanced(prevMember.processId)) {
                     standby = prevMember;
                 }
 
@@ -304,7 +290,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                     }
                 }
                 localState.processIdToState.get(standby.processId).addTask(standby.memberId, task, false);
-                updateHelpers(standby, task, false);
+                updateHelpers(standby, false);
             }
 
         }
@@ -323,10 +309,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         return process.hasCapacity() || isLeastLoadedProcess;
     }
 
-    private void updateHelpers(final Member member, final TaskId taskId, final boolean isActive) {
-        // add all pair combinations: update taskPairs
-        localState.taskPairs.addPairs(taskId, localState.processIdToState.get(member.processId).assignedTasks());
-
+    private void updateHelpers(final Member member, final boolean isActive) {
         if (isActive) {
             // update task per process
             maybeUpdateTasksPerMember(localState.processIdToState.get(member.processId).activeTaskCount());
@@ -344,75 +327,6 @@ public class StickyTaskAssignor implements TaskAssignor {
         return tasksPerMember;
     }
 
-    private static class TaskPairs {
-        private final Set<Pair> pairs;
-        private final int maxPairs;
-
-        TaskPairs(final int maxPairs) {
-            this.maxPairs = maxPairs;
-            this.pairs = new HashSet<>(maxPairs);
-        }
-
-        boolean hasNewPair(final TaskId task1,
-                           final Set<TaskId> taskIds) {
-            if (pairs.size() == maxPairs) {
-                return false;
-            }
-            if (taskIds.size() == 0) {
-                return true;
-            }
-            for (final TaskId taskId : taskIds) {
-                if (!pairs.contains(pair(task1, taskId))) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        void addPairs(final TaskId taskId, final Set<TaskId> assigned) {
-            for (final TaskId id : assigned) {
-                if (!id.equals(taskId))
-                    pairs.add(pair(id, taskId));
-            }
-        }
-
-        Pair pair(final TaskId task1, final TaskId task2) {
-            if (task1.compareTo(task2) < 0) {
-                return new Pair(task1, task2);
-            }
-            return new Pair(task2, task1);
-        }
-
-
-        private static class Pair {
-            private final TaskId task1;
-            private final TaskId task2;
-
-            Pair(final TaskId task1, final TaskId task2) {
-                this.task1 = task1;
-                this.task2 = task2;
-            }
-
-            @Override
-            public boolean equals(final Object o) {
-                if (this == o) {
-                    return true;
-                }
-                if (o == null || getClass() != o.getClass()) {
-                    return false;
-                }
-                final Pair pair = (Pair) o;
-                return Objects.equals(task1, pair.task1) &&
-                    Objects.equals(task2, pair.task2);
-            }
-
-            @Override
-            public int hashCode() {
-                return Objects.hash(task1, task2);
-            }
-        }
-    }
-
     static class Member {
         private final String processId;
         private final String memberId;
@@ -425,7 +339,6 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     private static class LocalState {
         // helper data structures:
-        private TaskPairs taskPairs;
         Map<TaskId, Member> activeTaskToPrevMember;
         Map<TaskId, Set<Member>> standbyTaskToPrevMember;
         Map<String, ProcessState> processIdToState;
