@@ -87,7 +87,6 @@ class MetadataVersionTest {
         assertEquals(IBP_4_1_IV0, MetadataVersion.fromVersionString("4.1-IV0"));
         assertEquals(IBP_4_1_IV1, MetadataVersion.fromVersionString("4.1-IV1"));
 
-        // 4.2-IV1 is the latest production version in the 4.2 line
         assertEquals(IBP_4_2_IV0, MetadataVersion.fromVersionString("4.2-IV0"));
         assertEquals(IBP_4_2_IV1, MetadataVersion.fromVersionString("4.2-IV1"));
     }
