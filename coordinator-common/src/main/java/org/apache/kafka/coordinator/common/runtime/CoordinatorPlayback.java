@@ -69,5 +69,5 @@ public interface CoordinatorPlayback<U> {
      *
      * @param offset The offset of the new high watermark.
      */
-    void updateLastCommittedOffset(Long offset);
+    void updateLastCommittedOffset(long offset);
 }
