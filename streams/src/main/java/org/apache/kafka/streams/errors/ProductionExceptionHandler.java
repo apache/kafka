@@ -24,24 +24,6 @@ import org.apache.kafka.common.Configurable;
  * Kafka should be handled.
  */
 public interface ProductionExceptionHandler extends Configurable {
-    /**
-     * Inspect a record that we attempted to produce, and the exception that resulted
-     * from attempting to produce it and determine to continue or stop processing.
-     *
-     * @param record
-     *     The record that failed to produce.
-     * @param exception
-     *     The exception that occurred during production.
-     *
-     * @return Whether to continue or stop processing, or retry the failed operation.
-     *
-     * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ProducerRecord, Exception)} instead.
-     */
-    @Deprecated
-    default ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
-                                                      final Exception exception) {
-        throw new UnsupportedOperationException();
-    }
 
     /**
      * Inspect a record that we attempted to produce, and the exception that resulted
@@ -59,7 +41,7 @@ public interface ProductionExceptionHandler extends Configurable {
     default ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
                                                       final ProducerRecord<byte[], byte[]> record,
                                                       final Exception exception) {
-        return handle(record, exception);
+        throw new UnsupportedOperationException();
     }
 
     /**
