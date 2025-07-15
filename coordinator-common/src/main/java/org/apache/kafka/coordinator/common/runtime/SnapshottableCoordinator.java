@@ -138,7 +138,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      * @param offset The new last written offset.
      */
     @Override
-    public synchronized void updateLastWrittenOffset(Long offset) {
+    public synchronized void updateLastWrittenOffset(long offset) {
         if (offset <= lastWrittenOffset) {
             throw new IllegalStateException("New last written offset " + offset + " of " + tp +
                 " must be greater than " + lastWrittenOffset + ".");
@@ -157,7 +157,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      * @param offset The new last committed offset.
      */
     @Override
-    public synchronized void updateLastCommittedOffset(Long offset) {
+    public synchronized void updateLastCommittedOffset(long offset) {
         if (offset < lastCommittedOffset) {
             throw new IllegalStateException("New committed offset " + offset + " of " + tp +
                 " must be greater than or equal to " + lastCommittedOffset + ".");
