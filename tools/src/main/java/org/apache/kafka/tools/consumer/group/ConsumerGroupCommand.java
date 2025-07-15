@@ -41,6 +41,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -1000,6 +1001,9 @@ public class ConsumerGroupCommand {
         }
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+            // ensure all partitions have leader, otherwise throw a runtime exception
+            checkAllTopicPartitionsHaveLeader(partitionsToReset);
+
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return offsetsUtils.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
@@ -1022,6 +1026,21 @@ public class ConsumerGroupCommand {
 
             CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
+        }
+
+        private void checkAllTopicPartitionsHaveLeader(Collection<TopicPartition> partitionsToReset) {
+            List<TopicPartition> partitionsWithoutLeader = filterNoneLeaderPartitions(partitionsToReset);
+            if (!partitionsWithoutLeader.isEmpty()) {
+                // append the TopicPartition list string
+                StringBuilder partitionStr = new StringBuilder();
+                for (TopicPartition topicPartition : partitionsWithoutLeader) {
+                    partitionStr.append(topicPartition.toString()).append(",");
+                }
+                partitionStr.deleteCharAt(partitionStr.length() - 1);
+
+                // throw exception
+                throw new LeaderNotAvailableException("The partitions \"" + partitionStr + "\" have no leader");
+            }
         }
 
         String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> assignments) {
