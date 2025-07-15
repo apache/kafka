@@ -28,6 +28,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.MockConsumerInterceptor;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
@@ -469,10 +470,16 @@ public class PlaintextConsumerCommitTest {
             // Close the coordinator before committing because otherwise the commit will fail to find the coordinator.
             cluster.brokerIds().forEach(cluster::shutdownBroker);
 
-            consumer.poll(Duration.ofMillis(500));
-            consumer.commitAsync(Map.of(tp1, new OffsetAndMetadata(1L)), callback);
-            consumer.close(CloseOptions.timeout(Duration.ofMillis(500)));
+            TestUtils.waitForCondition(() -> cluster.aliveBrokers().isEmpty(), "All brokers should be shut down");
 
+            consumer.poll(Duration.ofMillis(500));
+            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(1L)), callback);
+
+            long startTime = System.currentTimeMillis();
+            consumer.close(CloseOptions.timeout(Duration.ofMillis(500)));
+            long closeDuration = System.currentTimeMillis() - startTime;
+
+            assertTrue(closeDuration < 1000, "The closing process for the consumer was too long: " + closeDuration + " ms");
             assertTrue(callback.lastError.isPresent());
             assertEquals(CommitFailedException.class, callback.lastError.get().getClass());
             assertEquals("Failed to commit offsets: Coordinator unknown and consumer is closing", callback.lastError.get().getMessage());
