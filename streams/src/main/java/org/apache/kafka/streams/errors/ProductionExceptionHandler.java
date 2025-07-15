@@ -48,26 +48,6 @@ public interface ProductionExceptionHandler extends Configurable {
      * Handles serialization exception and determine if the process should continue. The default implementation is to
      * fail the process.
      *
-     * @param record
-     *     The record that failed to serialize.
-     * @param exception
-     *     The exception that occurred during serialization.
-     *
-     * @return Whether to continue or stop processing, or retry the failed operation.
-     *
-     * @deprecated Since 3.9. Use {@link #handleSerializationException(ErrorHandlerContext, ProducerRecord, Exception, SerializationExceptionOrigin)} instead.
-     */
-    @SuppressWarnings({"rawtypes", "unused"})
-    @Deprecated
-    default ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
-                                                                            final Exception exception) {
-        return ProductionExceptionHandlerResponse.FAIL;
-    }
-
-    /**
-     * Handles serialization exception and determine if the process should continue. The default implementation is to
-     * fail the process.
-     *
      * @param context
      *     The error handler context metadata.
      * @param record
@@ -84,7 +64,7 @@ public interface ProductionExceptionHandler extends Configurable {
                                                                             final ProducerRecord record,
                                                                             final Exception exception,
                                                                             final SerializationExceptionOrigin origin) {
-        return handleSerializationException(record, exception);
+        return ProductionExceptionHandlerResponse.FAIL;
     }
 
     enum ProductionExceptionHandlerResponse {
