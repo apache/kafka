@@ -2851,6 +2851,19 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
+  /**
+   * Waits until the metadata for the given partition has fully propagated
+   * and become consistent across all brokers.
+   *
+   * This method repeatedly checks the leader information for the specified
+   * TopicPartition in each broker's metadata cache. It compares all brokers'
+   * views against the leader reported by the head broker. The loop continues
+   * until all brokers agree on the same leader, ensuring metadata consistency.
+   *
+   * This is useful in integration tests where operations such as
+   * preferred leader election or other metadata updates require
+   * propagation time before assertions can be made reliably.
+   */
   def sleepMillisToPropagateMetadata(partition: TopicPartition): Unit = {
     var allSynced: Boolean = false
 
