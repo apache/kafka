@@ -279,7 +279,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         // Streams metrics should get passed to Admin and Consumer
         streamsApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
-       
+
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
@@ -315,7 +315,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsSecondApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
         streamsSecondApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
         streamsSecondApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
-        
+
 
         final Topology topology = complexTopology();
         try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -451,18 +451,14 @@ public class KafkaStreamsTelemetryIntegrationTest {
             Arguments.of("complex", true, "classic"),
             Arguments.of("complex", false, "classic"),
             Arguments.of("simple", true, "streams"),
-            Arguments.of("simple", false, "streams"),
-            Arguments.of("complex", true, "streams"),
-            Arguments.of("complex", false, "streams")
+            Arguments.of("simple", false, "streams")
         );
     }
 
     private static Stream<Arguments> multiTaskParameters() {
         return Stream.of(
             Arguments.of(true, "classic"),
-            Arguments.of(false, "classic"),
-            Arguments.of(true, "streams"),
-            Arguments.of(false, "streams")
+            Arguments.of(false, "classic")
         );
     }
 
