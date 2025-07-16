@@ -9820,10 +9820,6 @@ class KafkaApisTest extends Logging {
                            fromPrivilegedListener: Boolean = false,
                            requestHeader: Option[RequestHeader] = None,
                            requestMetrics: RequestChannelMetrics = requestChannelMetrics): RequestChannel.Request = {
-    // DelegationTokens require the context authenticated to be non SecurityProtocol.PLAINTEXT
-    // and have a non KafkaPrincipal.ANONYMOUS principal. This test is done before the check
-    // for forwarding because after forwarding the context will have a different context.
-    // We validate the context authenticated failure case in other integration tests.
     buildRequest(request, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"), InetAddress.getLocalHost, listenerName,
       fromPrivilegedListener, requestHeader, requestMetrics)
   }
@@ -9840,6 +9836,10 @@ class KafkaApisTest extends Logging {
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
+    // DelegationTokens require the context authenticated to be non SecurityProtocol.PLAINTEXT
+    // and have a non KafkaPrincipal.ANONYMOUS principal. This test is done before the check
+    // for forwarding because after forwarding the context will have a different context.
+    // We validate the context authenticated failure case in other integration tests.
     val context = new RequestContext(header, "1", clientAddress, Optional.empty(),
       principal, listenerName, SecurityProtocol.SSL,
       ClientInformation.EMPTY, fromPrivilegedListener, Optional.of(kafkaPrincipalSerde))
