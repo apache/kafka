@@ -36,8 +36,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.Action;
-
 import org.apache.kafka.server.authorizer.AuthorizationResult;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
