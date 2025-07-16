@@ -47,6 +47,7 @@ import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,6 +60,7 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -1052,6 +1054,64 @@ public class DescribeConsumerGroupTest {
             }
         }
     }
+
+    /**
+     * The config `OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG` needs to be set to a value greater than 1 to ensure the
+     * normal invocation of APIs such as `FIND_COORDINATOR` when a broker has shutdown
+     */
+    @Timeout(60)
+    @ClusterTest(brokers = 3, serverProperties = {@ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")})
+    public void testDescribeConsumerGroupWithoutLeaders(ClusterInstance clusterInstance) throws Exception {
+        int brokerNum = 3;
+        this.clusterInstance = clusterInstance;
+
+        // define topic and group, then send 5 records to each partition
+        String topic = TOPIC_PREFIX + UUID.randomUUID();
+        String group = GROUP_PREFIX + UUID.randomUUID();
+        clusterInstance.createTopic(topic, brokerNum, (short) 1);
+        for (int i = 0; i < brokerNum; i++) {
+            sendRecords(topic, i, 5);
+        }
+
+        // append the command
+        List<String> cgcArgs = List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--all-topics");
+
+        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, topic, Map.of());
+             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]));
+             Admin admin = clusterInstance.admin()
+        ) {
+            // shutdown the target broker
+            int noneLeaderPartition = 2;
+            int shutdownBrokerId = clusterInstance.getLeaderBrokerId(new TopicPartition(topic, noneLeaderPartition));
+            clusterInstance.shutdownBroker(shutdownBrokerId);
+
+            TestUtils.waitForCondition(() -> {
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                String[] lines = res.getKey().trim().split("\n");
+                if (lines.length != 4 || !res.getValue().isEmpty()) {
+                    return false;
+                }
+
+                // get the client data, such as `consumerId,host,clientId`, to append the expected output
+                ConsumerGroupDescription consumerGroupDescription = admin.describeConsumerGroups(Set.of(group)).describedGroups().get(group).get();
+                MemberDescription memberDescription = consumerGroupDescription.members().iterator().next();
+                String consumerId = memberDescription.consumerId();
+                String host = memberDescription.host();
+                String clientId = memberDescription.clientId();
+
+                // the expected output
+                List<String> partition0content = List.of(group, topic, "0", "5", "5", "0", consumerId, host, clientId);
+                List<String> partition1content = List.of(group, topic, "1", "5", "5", "0", consumerId, host, clientId);
+                List<String> partition2content = List.of(group, topic, "2", "-", "-", "-", consumerId, host, clientId);
+
+                return checkArgsHeaderOutput(cgcArgs, lines[0])
+                        && Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(partition0content)
+                        && Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(partition1content)
+                        && Arrays.stream(lines[3].trim().split("\\s+")).toList().equals(partition2content);
+            }, "Expected 3 data rows excluding the header and no error in describe groups when a broker shutdown.");
+        }
+    }
+
 
     @Test
     public void testDescribeWithUnrecognizedNewConsumerOption() {
