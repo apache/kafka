@@ -33,7 +33,6 @@ Usage:
 
 from datetime import date
 import argparse
-from distutils.dir_util import copy_tree
 import os
 import shutil
 import re
@@ -66,7 +65,7 @@ if __name__ == '__main__':
     if os.path.exists(new_dir):
         shutil.rmtree(new_dir)
     os.makedirs(new_dir)
-    copy_tree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.kafka_version, args.image_type))
-    copy_tree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.kafka_version, args.image_type, 'resources'))
+    shutil.copytree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.kafka_version, args.image_type), dirs_exist_ok=True)
+    shutil.copytree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.kafka_version, args.image_type, 'resources'), dirs_exist_ok=True)
     remove_args_and_hardcode_values(
         os.path.join(new_dir, args.kafka_version, args.image_type, 'Dockerfile'), args.kafka_version, kafka_url)
