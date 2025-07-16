@@ -1031,13 +1031,7 @@ public class ConsumerGroupCommand {
         private void checkAllTopicPartitionsHaveLeader(Collection<TopicPartition> partitionsToReset) {
             List<TopicPartition> partitionsWithoutLeader = filterNoneLeaderPartitions(partitionsToReset);
             if (!partitionsWithoutLeader.isEmpty()) {
-                // append the TopicPartition list string
-                StringBuilder partitionStr = new StringBuilder();
-                for (TopicPartition topicPartition : partitionsWithoutLeader) {
-                    partitionStr.append(topicPartition.toString()).append(",");
-                }
-                partitionStr.deleteCharAt(partitionStr.length() - 1);
-
+                String partitionStr = partitionsWithoutLeader.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
                 // throw exception
                 throw new LeaderNotAvailableException("The partitions \"" + partitionStr + "\" have no leader");
             }

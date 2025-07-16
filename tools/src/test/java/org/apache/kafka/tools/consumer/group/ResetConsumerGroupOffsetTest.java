@@ -37,8 +37,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -663,7 +661,6 @@ public class ResetConsumerGroupOffsetTest {
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
-    @Timeout(60)
     @ClusterTest(brokers = 3, serverProperties = {@ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")})
     public void testResetOffsetsWithPartitionNoneLeader(ClusterInstance cluster) throws Exception {
         String group = generateRandomGroupId();
