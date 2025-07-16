@@ -18,8 +18,6 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
-import org.apache.kafka.streams.processor.ProcessorContext;
 
 /**
  * Interface that specifies how an exception from source node deserialization
@@ -27,30 +25,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
  */
 public interface DeserializationExceptionHandler extends Configurable {
 
-    /**
-     * Inspect a record and the exception received.
-     *
-     * <p> Note, that the passed in {@link ProcessorContext} only allows to access metadata like the task ID.
-     * However, it cannot be used to emit records via {@link ProcessorContext#forward(Object, Object)};
-     * calling {@code forward()} (and some other methods) would result in a runtime exception.
-     *
-     * @param context
-     *     Processor context.
-     * @param record
-     *     Record that failed deserialization.
-     * @param exception
-     *     The actual exception.
-     *
-     * @return Whether to continue or stop processing.
-     *
-     * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)} instead.
-     */
-    @Deprecated
-    default DeserializationHandlerResponse handle(final ProcessorContext context,
-                                                  final ConsumerRecord<byte[], byte[]> record,
-                                                  final Exception exception) {
-        throw new UnsupportedOperationException();
-    }
 
     /**
      * Inspect a record and the exception received.
@@ -67,7 +41,7 @@ public interface DeserializationExceptionHandler extends Configurable {
     default DeserializationHandlerResponse handle(final ErrorHandlerContext context,
                                                   final ConsumerRecord<byte[], byte[]> record,
                                                   final Exception exception) {
-        return handle(((DefaultErrorHandlerContext) context).processorContext().orElse(null), record, exception);
+        throw new UnsupportedOperationException();
     }
 
     /**
