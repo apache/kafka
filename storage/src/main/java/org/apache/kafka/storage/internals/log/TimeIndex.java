@@ -215,7 +215,7 @@ public class TimeIndex extends AbstractIndex {
 
     @Override
     public boolean resize(int newSize) throws IOException {
-        return inLockThrows(() -> {
+        return inLock(() -> {
             if (super.resize(newSize)) {
                 this.lastEntry = lastEntryFromIndexFile();
                 return true;
