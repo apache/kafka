@@ -88,7 +88,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         noTimestampsIter.close();
     }
 
-    private static class DualColumnFamilyAccessor implements ColumnFamilyAccessor {
+    private class DualColumnFamilyAccessor implements ColumnFamilyAccessor {
         private final ColumnFamilyHandle oldColumnFamily;
         private final ColumnFamilyHandle newColumnFamily;
 
@@ -404,7 +404,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
     }
 
-    private static class RocksDBDualCFRangeIterator extends RocksDBDualCFIterator {
+    private class RocksDBDualCFRangeIterator extends RocksDBDualCFIterator {
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
