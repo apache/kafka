@@ -575,9 +575,8 @@ public class ClientQuotaManager {
             return;
         }
 
-        boolean isActive = (quotaCallback instanceof DefaultQuotaCallback defaultCallback)
-                ? defaultCallback.getActiveQuotasEntities().contains(quotaEntity)
-                : true;
+        boolean isActive = !(quotaCallback instanceof DefaultQuotaCallback defaultCallback) ||
+            defaultCallback.getActiveQuotasEntities().contains(quotaEntity);
 
         int activeQuotaType;
         if (quotaEntity.userEntity() != null && quotaEntity.clientIdEntity() != null) {

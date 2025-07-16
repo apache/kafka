@@ -36,7 +36,7 @@ public class SocketServerConfigsTest {
                 new ListenerName("SASL_PLAINTEXT"), SecurityProtocol.SASL_PLAINTEXT,
                 new ListenerName("SASL_SSL"), SecurityProtocol.SASL_SSL
         );
-        assertEquals(expected, SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO);
+        assertEquals(SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO, expected);
     }
 
     @Test

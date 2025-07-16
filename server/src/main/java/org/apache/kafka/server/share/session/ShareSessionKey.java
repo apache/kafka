@@ -21,21 +21,10 @@ import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
-public class ShareSessionKey {
-    private final String groupId;
-    private final Uuid memberId;
-
+public record ShareSessionKey(String groupId, Uuid memberId) {
     public ShareSessionKey(String groupId, Uuid memberId) {
         this.groupId = Objects.requireNonNull(groupId);
         this.memberId = Objects.requireNonNull(memberId);
-    }
-
-    public String groupId() {
-        return groupId;
-    }
-
-    public Uuid memberId() {
-        return memberId;
     }
 
     @Override
@@ -57,8 +46,8 @@ public class ShareSessionKey {
 
     public String toString() {
         return "ShareSessionKey(" +
-                " groupId=" + groupId +
-                ", memberId=" + memberId +
-                ")";
+            " groupId=" + groupId +
+            ", memberId=" + memberId +
+            ")";
     }
 }

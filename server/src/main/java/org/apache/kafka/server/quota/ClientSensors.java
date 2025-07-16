@@ -25,14 +25,10 @@ import java.util.Objects;
 /**
  * Represents the sensors aggregated per client
  */
-public final class ClientSensors {
-    private final Map<String, String> metricTags;
-    private final Sensor quotaSensor;
-    private final Sensor throttleTimeSensor;
-
+public record ClientSensors(Map<String, String> metricTags, Sensor quotaSensor, Sensor throttleTimeSensor) {
     /**
-     * @param metricTags quota metric tags for the client
-     * @param quotaSensor sensor that tracks the quota
+     * @param metricTags         quota metric tags for the client
+     * @param quotaSensor        sensor that tracks the quota
      * @param throttleTimeSensor sensor that tracks the throttle time
      */
     public ClientSensors(Map<String, String> metricTags,
@@ -43,24 +39,12 @@ public final class ClientSensors {
         this.throttleTimeSensor = Objects.requireNonNull(throttleTimeSensor);
     }
 
-    public Map<String, String> metricTags() {
-        return metricTags;
-    }
-
-    public Sensor quotaSensor() {
-        return quotaSensor;
-    }
-
-    public Sensor throttleTimeSensor() {
-        return throttleTimeSensor;
-    }
-
     @Override
     public String toString() {
         return "ClientSensors{" +
-                "metricTags=" + metricTags +
-                ", quotaSensor=" + quotaSensor +
-                ", throttleTimeSensor=" + throttleTimeSensor +
-                '}';
+            "metricTags=" + metricTags +
+            ", quotaSensor=" + quotaSensor +
+            ", throttleTimeSensor=" + throttleTimeSensor +
+            '}';
     }
 }

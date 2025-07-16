@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.kafka.server.config;
+
 public class ClientQuotaManagerConfig {
     public final int numQuotaSamples;
     public final int quotaWindowSizeSeconds;
