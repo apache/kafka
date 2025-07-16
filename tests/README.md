@@ -55,7 +55,7 @@ image_name="ducker-ak-openjdk:17" bash tests/docker/run_tests.sh
 ```
 bash tests/docker/ducker-ak up -j '<JDK_IMAGE>'; tests/docker/run_tests.sh
 ```
-  You can customize the OpenJDK base image using the `-j` or `--jdk` parameter. The default is `openjdk:17-bullseye`.
+  You can customize the OpenJDK base image using the `-j` or `--jdk` parameter, otherwise a default value will be used.
 * Remove ducker-ak containers
 ```
 bash tests/docker/ducker-ak down -f
