@@ -3787,7 +3787,23 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private record Registration<T>(KafkaRaftClient.Registration.Ops ops, Listener<T> listener) {
+    private static final class Registration<T> {
+        private final Ops ops;
+        private final Listener<T> listener;
+
+        private Registration(Ops ops, Listener<T> listener) {
+            this.ops = ops;
+            this.listener = listener;
+        }
+
+        private Ops ops() {
+            return ops;
+        }
+
+        private Listener<T> listener() {
+            return listener;
+        }
+
         private enum Ops {
             REGISTER, UNREGISTER
         }
